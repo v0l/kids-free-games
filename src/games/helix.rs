@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -159,6 +160,7 @@ impl Helix {
                 }
                 _ if self.streak >= SMASH_FLOORS => {
                     sfx::play(Sfx::Boom);
+                    feel::impact(Impact::Medium);
                     self.floors[i].broken = 0.001;
                     self.pass_floor();
                     self.streak = 0;
@@ -265,6 +267,7 @@ impl Game for Helix {
                     }
                     Some(Seg::Danger) => {
                         sfx::play(Sfx::Hit);
+                        feel::impact(Impact::Large);
                         self.state = State::Dead;
                         self.end_t = 0.0;
                         self.best.offer(self.score);
@@ -525,13 +528,8 @@ impl Game for Helix {
                 },
             );
         }
-        score_text(
-            &self.score.to_string(),
-            view.w / 2.0,
-            100.0,
-            64.0 * self.bump.scale(0.3),
-            1.0,
-        );
+        big_score(view, &self.score.to_string(), 100.0, self.bump.t);
+        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         match self.state {
             State::Ready => text_shadow(
                 "Drag sideways to spin the tower",

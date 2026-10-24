@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -210,6 +211,7 @@ impl Fruit {
 
     fn explode(&mut self, at: Vec2) {
         sfx::play(Sfx::Boom);
+        feel::impact(Impact::Large);
         self.shake.add(1.0);
         self.flash = 1.0;
         self.fx.emit(
@@ -291,7 +293,8 @@ impl Fruit {
                 Color::from_rgba(255, 140, 60, 255),
                 54.0,
             );
-            sfx::play(Sfx::Right);
+            sfx::play_step(Sfx::Right, combo.saturating_sub(3) as usize);
+            feel::impact(Impact::Medium);
             self.fx.sparkle(centre, Color::from_rgba(255, 220, 60, 255));
             self.shake.add(0.25);
         }

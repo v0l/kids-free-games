@@ -1,4 +1,5 @@
 pub mod engine;
+pub mod feel;
 pub mod fx;
 pub mod games;
 pub mod learn;
@@ -52,6 +53,7 @@ pub fn begin_frame_safe(px: safe::Insets) -> View {
 
 pub async fn run() {
     sfx::load().await;
+    macroquad::experimental::coroutines::start_coroutine(sfx::load_music());
     let mut tracker = InputTracker::default();
     let mut app = menu::App::new();
     let mut safe_area = safe::SafeArea::default();
@@ -62,7 +64,7 @@ pub async fn run() {
         let dt = get_frame_time().min(1.0 / 20.0);
         app.update(&input, &view, dt);
         app.draw(&view);
-        sfx::flush(get_time());
+        sfx::flush(get_time(), get_frame_time().min(0.1));
         next_frame().await;
     }
 }

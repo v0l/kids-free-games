@@ -1,5 +1,6 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -284,6 +285,7 @@ impl Crossy {
         self.dead_t = 0.0;
         self.best.offer(self.score);
         self.shake.add(if how == Death::Train { 0.9 } else { 0.55 });
+        feel::impact(Impact::Large);
     }
 
     pub fn step(&mut self, dt: f32) {
@@ -628,20 +630,8 @@ impl Game for Crossy {
             }
         }
         self.fx.draw();
-        score_text(
-            &self.score.to_string(),
-            view.w / 2.0,
-            54.0,
-            72.0 * self.bump.scale(0.3),
-            1.0,
-        );
-        text_shadow(
-            &format!("Best {}", self.best.0),
-            view.w - 100.0,
-            40.0,
-            30.0,
-            WHITE,
-        );
+        big_score(view, &self.score.to_string(), 60.0, self.bump.t);
+        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         if self.idle > EAGLE_TIME - 2.5 && self.state == State::Playing {
             let k = (self.idle - (EAGLE_TIME - 2.5)) / 2.5;
             text_shadow(

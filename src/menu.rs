@@ -1,7 +1,8 @@
 use crate::engine::draw_circle;
+use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
-use crate::games::{self, Entry};
+use crate::games::{self, Entry, Kind};
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
@@ -26,6 +27,8 @@ pub struct App {
     curtain: f32,
     home_press: f32,
     fx: Particles,
+    feel: crate::feel::Feel,
+    focus: Option<usize>,
 }
 
 const LAUNCH_TIME: f32 = 0.22;
@@ -33,6 +36,8 @@ const LAUNCH_TIME: f32 = 0.22;
 pub fn mute_rect(view: &View) -> Rect {
     Rect::new(view.w - 74.0, 12.0, 60.0, 48.0)
 }
+
+pub const MUSIC: Rect = HOME;
 
 fn draw_mute(view: &View, scroll: f32) {
     let r = mute_rect(view);
@@ -121,30 +126,79 @@ pub fn header(view: &View) -> Header {
     }
 }
 
-pub fn tile_rects(view: &View, count: usize) -> Vec<Rect> {
+pub const LABEL_H: f32 = 46.0;
+pub const SCROLL_ROOM: f32 = 1.3;
+
+pub struct Layout {
+    pub tiles: Vec<Rect>,
+    pub labels: Vec<(Rect, Kind)>,
+}
+
+fn sections(kinds: &[Kind]) -> Vec<(Kind, usize)> {
+    let mut out: Vec<(Kind, usize)> = vec![];
+    for k in kinds {
+        match out.last_mut() {
+            Some((last, n)) if last == k => *n += 1,
+            _ => out.push((*k, 1)),
+        }
+    }
+    out
+}
+
+pub fn layout(view: &View, kinds: &[Kind]) -> Layout {
     let pad = 22.0;
-    let top = header(view).bottom + pad;
+    let top = header(view).bottom + pad * 0.5;
+    let secs = sections(kinds);
+    let label_space = secs.len() as f32 * LABEL_H;
     let fit = |cols: usize| {
-        let rows = count.div_ceil(cols);
+        let rows: usize = secs.iter().map(|(_, n)| n.div_ceil(cols)).sum();
         let by_w = (view.w - pad * (cols as f32 + 1.0)) / cols as f32;
-        let by_h = ((view.h - top - pad) / rows as f32 - pad) / 1.18;
+        let by_h = ((view.h * SCROLL_ROOM - top - label_space - pad) / rows as f32 - pad) / 1.18;
         by_w.min(by_h)
     };
     let cols = (2..=6).max_by(|a, b| fit(*a).total_cmp(&fit(*b))).unwrap();
     let tw = fit(cols);
     let th = tw * 1.18;
     let left = (view.w - cols as f32 * tw - (cols as f32 - 1.0) * pad) / 2.0;
-    (0..count)
-        .map(|i| {
+    let mut y = top;
+    let mut tiles = vec![];
+    let mut labels = vec![];
+    for (kind, n) in secs {
+        labels.push((Rect::new(left, y, view.w - left * 2.0, LABEL_H), kind));
+        y += LABEL_H;
+        for i in 0..n {
             let (c, r) = (i % cols, i / cols);
-            Rect::new(
+            tiles.push(Rect::new(
                 left + c as f32 * (tw + pad),
-                top + r as f32 * (th + pad),
+                y + r as f32 * (th + pad),
                 tw,
                 th,
-            )
+            ));
+        }
+        y += n.div_ceil(cols) as f32 * (th + pad);
+    }
+    Layout { tiles, labels }
+}
+
+pub fn next_focus(tiles: &[Rect], from: usize, dir: Dir) -> usize {
+    let c = tiles[from].center();
+    let d = dir.delta().as_vec2();
+    tiles
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i != from)
+        .filter_map(|(i, r)| {
+            let v = r.center() - c;
+            let along = v.dot(d);
+            if along <= 1.0 {
+                return None;
+            }
+            let across = (v - d * along).length();
+            Some((i, along + across * 2.0))
         })
-        .collect()
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .map(|(i, _)| i)
+        .unwrap_or(from)
 }
 
 impl App {
@@ -165,6 +219,8 @@ impl App {
             curtain: 0.0,
             home_press: 0.0,
             fx: Particles::default(),
+            feel: crate::feel::Feel::default(),
+            focus: None,
         }
     }
 
@@ -182,13 +238,29 @@ impl App {
         self.pressed_tile = None;
     }
 
+    fn kinds(&self) -> Vec<Kind> {
+        self.entries.iter().map(|e| e.kind).collect()
+    }
+
+    pub fn layout(&self, view: &View) -> Layout {
+        layout(view, &self.kinds())
+    }
+
     fn max_scroll(&self, view: &View) -> f32 {
-        let rects = tile_rects(view, self.entries.len());
+        let rects = self.layout(view).tiles;
         let bottom = rects.last().map(|r| r.y + r.h + 30.0).unwrap_or(0.0);
         (bottom - view.h).max(0.0)
     }
 
     pub fn update(&mut self, input: &Input, view: &View, dt: f32) {
+        for (i, c) in crate::feel::take() {
+            self.feel.hit(i, c);
+        }
+        let game_dt = self.feel.game_dt(dt);
+        sfx::music(match &self.current {
+            Some((i, _)) => self.entries[*i].kind.mood(),
+            None => sfx::Mood::Menu,
+        });
         self.t += dt;
         self.since_menu += dt;
         self.curtain = (self.curtain - dt * 5.0).max(0.0);
@@ -205,11 +277,11 @@ impl App {
                 20.0,
                 dt,
             );
-            if input.tapped_in(HOME) || is_key_pressed(KeyCode::Escape) {
+            if input.tapped_in(HOME) || input.back {
                 self.go_home();
                 return;
             }
-            game.update(input, view, dt);
+            game.update(input, view, game_dt);
             return;
         }
         if let Some((i, t)) = &mut self.launch {
@@ -227,10 +299,43 @@ impl App {
             sfx::play(Sfx::Tap);
             return;
         }
-        let rects = tile_rects(view, self.entries.len());
+        if input.tapped_in(MUSIC) {
+            sfx::toggle_music();
+            sfx::play(Sfx::Tap);
+            return;
+        }
+        let rects = self.layout(view).tiles;
+        if let Some(d) = input.key_dir {
+            let next = match self.focus {
+                None => 0,
+                Some(f) => next_focus(&rects, f, d),
+            };
+            if Some(next) != self.focus {
+                sfx::play(Sfx::Click);
+            }
+            self.focus = Some(next);
+            let r = rects[next];
+            if r.y - self.scroll < header(view).bottom {
+                self.scroll = r.y - header(view).bottom - LABEL_H;
+            } else if r.y + r.h - self.scroll > view.h - 16.0 {
+                self.scroll = r.y + r.h - view.h + 16.0;
+            }
+        }
+        if input.action {
+            if let Some(i) = self.focus {
+                self.launch = Some((i, 0.0));
+                sfx::play(Sfx::Pop);
+                let r = rects[i];
+                self.fx.sparkle(
+                    vec2(r.center().x, r.center().y - self.scroll),
+                    self.entries[i].color,
+                );
+            }
+        }
         let hit =
             |p: Vec2, scroll: f32| rects.iter().position(|r| r.contains(p + vec2(0.0, scroll)));
         if input.pressed {
+            self.focus = None;
             self.drag_from = Some((input.pos, self.scroll));
             self.dragged = false;
             self.pressed_tile = hit(input.pos, self.scroll);
@@ -381,6 +486,8 @@ impl App {
     pub fn draw(&self, view: &View) {
         if let Some((_, game)) = &self.current {
             game.draw(view);
+            set_view_camera(view, Vec2::ZERO);
+            self.feel.draw(view);
             self.draw_home_button();
             self.draw_curtain(view);
             return;
@@ -388,11 +495,17 @@ impl App {
         self.draw_backdrop(view);
         self.draw_title(view);
         draw_mute(view, self.scroll);
-        for (i, (r, e)) in tile_rects(view, self.entries.len())
-            .iter()
-            .zip(&self.entries)
-            .enumerate()
-        {
+        draw_music(self.scroll);
+        let lay = self.layout(view);
+        for (r, kind) in &lay.labels {
+            let r = Rect::new(r.x, r.y - self.scroll, r.w, r.h);
+            if r.y > view.h || r.y + r.h < 0.0 {
+                continue;
+            }
+            let a = ((self.since_menu - 0.1) / 0.25).clamp(0.0, 1.0);
+            draw_section_label(r, *kind, a);
+        }
+        for (i, (r, e)) in lay.tiles.iter().zip(&self.entries).enumerate() {
             let r = Rect::new(r.x, r.y - self.scroll, r.w, r.h);
             if r.y > view.h || r.y + r.h < 0.0 {
                 continue;
@@ -402,8 +515,9 @@ impl App {
             if intro <= 0.0 {
                 continue;
             }
-            let bob = (self.t * 2.0 + i as f32 * 0.7).sin() * 4.0;
-            let mut scale = intro * (1.0 - self.press[i] * 0.08);
+            let focused = self.focus == Some(i);
+            let bob = (self.t * 2.0 + i as f32 * 0.7).sin() * 2.0;
+            let mut scale = intro * (1.0 - self.press[i] * 0.08) * if focused { 1.06 } else { 1.0 };
             if let Some((li, lt)) = self.launch {
                 if li == i {
                     scale *= 1.0 + ease_out_back(lt / LAUNCH_TIME) * 0.15;
@@ -418,15 +532,22 @@ impl App {
                 r.w * scale,
                 r.h * scale,
             );
-            draw_tile(r, e, self.t + i as f32 * 0.4);
+            if focused {
+                let g = 6.0 + (self.t * 5.0).sin() * 2.0;
+                round_rect(
+                    Rect::new(r.x - g, r.y - g, r.w + g * 2.0, r.h + g * 2.0 + r.w * 0.03),
+                    r.w * 0.14 + g,
+                    WHITE,
+                );
+            }
+            draw_tile(r, e, (focused || self.press[i] > 0.01).then_some(self.t));
         }
         self.fx.draw();
         if let Some((i, lt)) = self.launch {
             let k =
                 ease_out_cubic(((lt - LAUNCH_TIME * 0.4) / (LAUNCH_TIME * 0.6)).clamp(0.0, 1.0));
             if k > 0.0 {
-                let rects = tile_rects(view, self.entries.len());
-                let c = rects[i].center() - vec2(0.0, self.scroll);
+                let c = lay.tiles[i].center() - vec2(0.0, self.scroll);
                 let rad = k * view.full().w.hypot(view.full().h);
                 draw_circle(c.x, c.y, rad, self.entries[i].color);
             }
@@ -450,7 +571,69 @@ impl App {
     }
 }
 
-fn draw_tile(r: Rect, e: &Entry, t: f32) {
+fn draw_section_label(r: Rect, kind: Kind, a: f32) {
+    let (text, color) = match kind {
+        Kind::Arcade => ("Play", Color::from_rgba(255, 255, 255, 255)),
+        Kind::Learn => ("Learn", Color::from_rgba(255, 250, 200, 255)),
+    };
+    let size = 30.0;
+    let w = measure_width(text, size);
+    let cy = r.y + r.h / 2.0 + 4.0;
+    text_outline(
+        text,
+        r.x + 6.0 + w / 2.0,
+        cy,
+        size,
+        with_alpha(color, a),
+        with_alpha(Color::from_rgba(150, 50, 90, 255), a),
+    );
+    let x0 = r.x + w + 24.0;
+    round_rect(
+        Rect::new(x0, cy - 2.0, (r.x + r.w - x0).max(0.0), 4.0),
+        2.0,
+        Color::new(1.0, 1.0, 1.0, 0.35 * a),
+    );
+}
+
+fn draw_music(scroll: f32) {
+    let r = Rect::new(MUSIC.x, MUSIC.y - scroll, MUSIC.w, MUSIC.h);
+    round_rect(
+        Rect::new(r.x, r.y + 4.0, r.w, r.h),
+        14.0,
+        Color::from_rgba(0, 0, 0, 50),
+    );
+    round_rect(r, 14.0, with_alpha(WHITE, 0.94));
+    let c = r.center();
+    let col = Color::from_rgba(80, 80, 110, 255);
+    draw_ellipse(c.x - 9.0, c.y + 9.0, 7.0, 5.5, -20.0, col);
+    draw_ellipse(c.x + 9.0, c.y + 5.0, 7.0, 5.5, -20.0, col);
+    draw_rectangle(c.x - 4.0, c.y - 14.0, 3.5, 23.0, col);
+    draw_rectangle(c.x + 14.0, c.y - 18.0, 3.5, 23.0, col);
+    draw_triangle(
+        vec2(c.x - 4.0, c.y - 14.0),
+        vec2(c.x + 17.5, c.y - 18.0),
+        vec2(c.x + 17.5, c.y - 11.0),
+        col,
+    );
+    draw_triangle(
+        vec2(c.x - 4.0, c.y - 14.0),
+        vec2(c.x - 4.0, c.y - 7.0),
+        vec2(c.x + 17.5, c.y - 11.0),
+        col,
+    );
+    if !sfx::music_on() {
+        draw_line(
+            c.x - 18.0,
+            c.y + 16.0,
+            c.x + 20.0,
+            c.y - 18.0,
+            4.0,
+            Color::from_rgba(230, 70, 80, 255),
+        );
+    }
+}
+
+fn draw_tile(r: Rect, e: &Entry, shine: Option<f32>) {
     let rad = r.w * 0.14;
     round_rect(
         Rect::new(r.x + 2.0, r.y + r.w * 0.05, r.w, r.h),
@@ -468,7 +651,9 @@ fn draw_tile(r: Rect, e: &Entry, t: f32) {
     let inner = Rect::new(ir.x + ir.w * 0.1, ir.y + ir.h * 0.1, ir.w * 0.8, ir.h * 0.8);
     (e.icon)(inner);
     gloss(ir, rad * 0.75);
-    shine_sweep(ir, t);
+    if let Some(t) = shine {
+        shine_sweep(ir, t);
+    }
     let size = (r.w * 0.86 / text_size(e.name, 10.0).width * 10.0).min(r.w * 0.14);
     text_center(
         e.name,
@@ -506,7 +691,7 @@ mod tests {
                 h.title_band,
                 h.tag
             );
-            let tiles = tile_rects(&v, 17);
+            let tiles = App::new().layout(&v).tiles;
             assert!(
                 h.bottom <= tiles[0].y - 8.0,
                 "tagline bottom {} touches tiles at {} in {v:?}",
@@ -530,13 +715,122 @@ mod tests {
             View::fit(390.0, 844.0),
         ] {
             let app = App::new();
-            let rects = tile_rects(&v, app.entries.len());
+            let rects = app.layout(&v).tiles;
             let ms = app.max_scroll(&v);
             for r in rects {
                 assert!(r.x >= 0.0 && r.x + r.w <= v.w);
                 assert!(r.y + r.h - ms <= v.h);
             }
         }
+    }
+
+    #[test]
+    fn sections_split_play_from_learn_without_overlap() {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+        ] {
+            let app = App::new();
+            let lay = app.layout(&v);
+            assert_eq!(
+                lay.labels.iter().map(|l| l.1).collect::<Vec<_>>(),
+                vec![Kind::Arcade, Kind::Learn]
+            );
+            let learn = lay.labels[1].0;
+            for (r, e) in lay.tiles.iter().zip(&app.entries) {
+                match e.kind {
+                    Kind::Arcade => {
+                        assert!(r.y + r.h <= learn.y, "{} under the Learn label", e.name)
+                    }
+                    Kind::Learn => assert!(r.y >= learn.y + learn.h, "{} above its label", e.name),
+                }
+                for (l, _) in &lay.labels {
+                    let apart = r.y >= l.y + l.h || r.y + r.h <= l.y;
+                    assert!(apart, "{} overlaps a label in {v:?}", e.name);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn sections_keep_tiles_big_on_an_ipad() {
+        for v in [View::ipad_landscape(), View::ipad_portrait()] {
+            let tiles = App::new().layout(&v).tiles;
+            assert!(
+                tiles[0].w >= v.w.min(v.h) * 0.16,
+                "tiles shrank to {} in {v:?}",
+                tiles[0].w
+            );
+        }
+    }
+
+    #[test]
+    fn arrow_keys_walk_the_grid() {
+        let v = View::ipad_landscape();
+        let tiles = App::new().layout(&v).tiles;
+        assert_eq!(next_focus(&tiles, 0, Dir::Right), 1);
+        assert_eq!(next_focus(&tiles, 1, Dir::Left), 0);
+        assert_eq!(next_focus(&tiles, 0, Dir::Left), 0);
+        let below = next_focus(&tiles, 0, Dir::Down);
+        assert!(tiles[below].y > tiles[0].y);
+        assert!((tiles[below].x - tiles[0].x).abs() < 1.0);
+        assert_eq!(next_focus(&tiles, below, Dir::Up), 0);
+    }
+
+    #[test]
+    fn keyboard_alone_can_launch_a_game() {
+        let v = View::ipad_landscape();
+        let mut app = App::new();
+        app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
+        assert_eq!(app.focus, Some(0));
+        app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
+        assert_eq!(app.focus, Some(1));
+        app.update(
+            &Input {
+                action: true,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        for _ in 0..30 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert_eq!(app.current.as_ref().map(|c| c.0), Some(1));
+    }
+
+    #[test]
+    fn menu_asks_for_menu_music_and_games_for_their_mood() {
+        let v = View::ipad_landscape();
+        let mut app = App::new();
+        app.update(&Input::default(), &v, 1.0 / 60.0);
+        assert_eq!(sfx::wanted_music(), Some(sfx::Mood::Menu));
+        let learn = app
+            .entries
+            .iter()
+            .position(|e| e.kind == Kind::Learn)
+            .unwrap();
+        app.open(learn);
+        app.update(&Input::default(), &v, 1.0 / 60.0);
+        assert_eq!(sfx::wanted_music(), Some(sfx::Mood::Learn));
+        app.open(0);
+        app.update(&Input::default(), &v, 1.0 / 60.0);
+        assert_eq!(sfx::wanted_music(), Some(sfx::Mood::Arcade));
+    }
+
+    #[test]
+    fn a_large_impact_freezes_the_game_briefly() {
+        let v = View::ipad_landscape();
+        let mut app = App::new();
+        app.open(0);
+        crate::feel::impact(crate::feel::Impact::Large);
+        app.update(&Input::default(), &v, 1.0 / 60.0);
+        assert!(app.feel.frozen());
+        for _ in 0..12 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert!(!app.feel.frozen());
     }
 
     #[test]

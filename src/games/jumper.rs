@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -592,6 +593,7 @@ impl Game for Jumper {
                     self.state = State::Fallen;
                     self.best.offer(self.score);
                     sfx::play(Sfx::Whoosh);
+                    feel::impact(Impact::Medium);
                     self.shake.add(0.6);
                 }
             }
@@ -671,13 +673,14 @@ impl Game for Jumper {
         self.particles.draw();
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
-        score_text(
+        chip(
+            view,
+            Side::Left,
+            "HEIGHT",
             &self.score.to_string(),
-            HUD_LEFT + 50.0,
-            50.0,
-            50.0,
             self.score_bump.t,
         );
+        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         match self.state {
             State::Ready => overlay(
                 view,

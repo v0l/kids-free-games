@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::learn::*;
 use crate::sfx::{self, Sfx};
@@ -259,6 +260,12 @@ impl Count {
                     Step::Up | Step::Cleared => Sfx::Win,
                     _ => Sfx::Right,
                 });
+                if step == Step::Same {
+                    sfx::play_step(Sfx::Right, self.ladder.streak as usize * 2);
+                }
+                if matches!(step, Step::Up | Step::Cleared) {
+                    feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
+                }
                 self.particles.sparkle(at, gold);
                 self.particles.emit(
                     at,

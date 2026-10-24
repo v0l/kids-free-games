@@ -424,6 +424,80 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Side {
+    Left,
+    Right,
+}
+
+pub const CHIP_Y: f32 = 12.0;
+pub const CHIP_H: f32 = 48.0;
+const CHIP_LABEL: f32 = 20.0;
+const CHIP_VALUE: f32 = 34.0;
+const CHIP_PAD: f32 = 16.0;
+pub const INK: Color = Color::new(0.16, 0.12, 0.24, 1.0);
+
+pub fn chip_rect(view: &View, side: Side, label: &str, value: &str) -> Rect {
+    let w = chip_width(label, value);
+    let x = match side {
+        Side::Left => HUD_LEFT,
+        Side::Right => view.w - 14.0 - w,
+    };
+    Rect::new(x, CHIP_Y, w, CHIP_H)
+}
+
+pub fn chip_width(label: &str, value: &str) -> f32 {
+    let lw = if label.is_empty() {
+        0.0
+    } else {
+        crate::outline::measure(FONT_BYTES, label, CHIP_LABEL) + 10.0
+    };
+    CHIP_PAD * 2.0 + lw + crate::outline::measure(FONT_BYTES, value, CHIP_VALUE)
+}
+
+pub fn chip(view: &View, side: Side, label: &str, value: &str, bump: f32) -> Rect {
+    let r = chip_rect(view, side, label, value);
+    let k = 1.0 + 0.18 * (1.0 - ease_out_cubic(bump));
+    round_rect(
+        Rect::new(r.x, r.y + 4.0, r.w, r.h),
+        r.h / 2.0,
+        Color::new(0.0, 0.0, 0.0, 0.18),
+    );
+    round_rect(r, r.h / 2.0, with_alpha(INK, 0.7));
+    round_rect(
+        Rect::new(r.x + 3.0, r.y + 3.0, r.w - 6.0, r.h * 0.42),
+        r.h / 2.0,
+        Color::new(1.0, 1.0, 1.0, 0.08),
+    );
+    let mut x = r.x + CHIP_PAD;
+    if !label.is_empty() {
+        let lw = crate::outline::measure(FONT_BYTES, label, CHIP_LABEL);
+        text_center(
+            label,
+            x + lw / 2.0,
+            r.y + r.h / 2.0 + 1.0,
+            CHIP_LABEL,
+            Color::new(1.0, 1.0, 1.0, 0.72),
+        );
+        x += lw + 10.0;
+    }
+    let vw = crate::outline::measure(FONT_BYTES, value, CHIP_VALUE);
+    text_outline(
+        value,
+        x + vw / 2.0,
+        r.y + r.h / 2.0,
+        CHIP_VALUE * k,
+        WHITE,
+        INK,
+    );
+    r
+}
+
+pub fn big_score(view: &View, value: &str, y: f32, bump: f32) {
+    let k = 1.0 + 0.3 * (1.0 - ease_out_cubic(bump));
+    text_outline(value, view.w / 2.0, y, 76.0 * k, WHITE, INK);
+}
+
 pub fn vignette(view: &View, strength: f32) {
     let f = view.full();
     let inset = view.w.min(view.h) * 0.22;

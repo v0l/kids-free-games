@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -234,6 +235,7 @@ impl Snake {
                 }
                 Event::Crashed(p) => {
                     sfx::play(Sfx::Hit);
+                    feel::impact(Impact::Large);
                     let at = center(p);
                     self.shake.add(0.8);
                     self.particles.emit(
@@ -360,12 +362,14 @@ impl Game for Snake {
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
         vignette(view, 0.5);
-        let apples = format!("Apples {}", self.score);
-        let aw = text_size(&apples, 40.0).width;
-        score_text(&apples, HUD_LEFT + aw / 2.0, 42.0, 40.0, self.bump.t);
-        let best = format!("Best {}", self.best.0);
-        let bw = text_size(&best, 36.0).width;
-        score_text(&best, view.w - 30.0 - bw / 2.0, 42.0, 36.0, 1.0);
+        chip(
+            view,
+            Side::Left,
+            "APPLES",
+            &self.score.to_string(),
+            self.bump.t,
+        );
+        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         match self.state {
             State::Ready => overlay(
                 view,

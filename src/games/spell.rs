@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::learn::{tall, ui_scale, PRAISE};
 use crate::sfx::{self, Sfx};
@@ -287,7 +288,7 @@ impl Spell {
                 self.shake.add(0.2);
             }
             Place::Right | Place::Done => {
-                sfx::play(Sfx::Pop);
+                sfx::play_step(Sfx::Pop, slot);
                 self.slide[i] = 0.0;
                 if slot < self.pop.len() {
                     self.pop[slot] = 1.0;
@@ -441,6 +442,7 @@ impl Game for Spell {
                     self.advance();
                     if let Phase::Finished(_) = self.phase {
                         sfx::play(Sfx::Win);
+                        feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
                         self.fx.confetti(view);
                     }
                 }

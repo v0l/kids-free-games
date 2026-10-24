@@ -1,4 +1,5 @@
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -484,7 +485,13 @@ impl Merge {
                     ..Default::default()
                 },
             );
-            sfx::play(if v >= 128 { Sfx::Coin } else { Sfx::Pop });
+            sfx::play_step(
+                if v >= 128 { Sfx::Coin } else { Sfx::Pop },
+                v.ilog2().saturating_sub(2) as usize,
+            );
+            if v >= 256 {
+                feel::impact(Impact::Medium);
+            }
             self.popups.add(
                 at - vec2(0.0, g.cell * 0.3),
                 format!("+{v}"),

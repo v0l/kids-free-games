@@ -1,5 +1,6 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -212,7 +213,8 @@ impl Memory {
         for e in std::mem::take(&mut self.events) {
             match e {
                 Event::Match(a, b) => {
-                    sfx::play(Sfx::Right);
+                    let matched = self.cards.iter().filter(|c| c.1 == Face::Matched).count() / 2;
+                    sfx::play_step(Sfx::Right, matched.saturating_sub(1));
                     for i in [a, b] {
                         let c = rects[i].center();
                         let col = hsv(self.cards[i].0 as f32 / PAIRS as f32, 0.6, 1.0);
@@ -231,6 +233,7 @@ impl Memory {
                 }
                 Event::Win => {
                     sfx::play(Sfx::Win);
+                    feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
                     self.celebrated = 0.0
                 }
             }
@@ -302,16 +305,15 @@ impl Game for Memory {
             draw_circle(x, y, 10.0 + f * 3.0, Color::new(1.0, 1.0, 1.0, 0.12));
             draw_circle_lines(x, y, 10.0 + f * 3.0, 2.0, Color::new(1.0, 1.0, 1.0, 0.2));
         }
-        text("Moves", HUD_LEFT, 50.0, 30.0, with_alpha(WHITE, 0.85));
-        score_text(
+        chip(
+            view,
+            Side::Left,
+            "MOVES",
             &self.moves.to_string(),
-            HUD_LEFT + 118.0,
-            38.0,
-            44.0,
             self.moves_bump.t,
         );
         if let Some(b) = self.best {
-            text_shadow(&format!("Best {b}"), view.w - 100.0, 40.0, 34.0, WHITE);
+            chip(view, Side::Right, "BEST", &b.to_string(), 1.0);
         }
         let sh = self.shake.offset();
         for (i, r) in Self::layout(view).iter().enumerate() {

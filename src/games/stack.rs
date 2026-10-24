@@ -1,5 +1,6 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -210,17 +211,14 @@ impl Stack {
                 });
                 self.crumble(self.moving.x, self.moving.w, y, self.moving.hue);
                 sfx::play(Sfx::Crunch);
+                feel::impact(Impact::Medium);
                 self.shake.add(0.6);
                 self.state = State::Over;
                 self.best.offer(self.score);
                 return;
             }
             Drop::Perfect => {
-                sfx::play(if self.streak >= 2 {
-                    Sfx::LevelUp
-                } else {
-                    Sfx::Right
-                });
+                sfx::play_step(Sfx::Right, self.streak as usize);
                 self.streak += 1;
                 let b = block.unwrap();
                 let at = vec2(b.x + b.w / 2.0, y + BLOCK_H / 2.0);
@@ -352,13 +350,8 @@ impl Game for Stack {
         self.fx.draw();
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
-        score_text(
-            &self.score.to_string(),
-            view.w / 2.0,
-            90.0,
-            96.0,
-            self.bump.t,
-        );
+        big_score(view, &self.score.to_string(), 90.0, self.bump.t);
+        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         if self.score == 0 && self.state == State::Playing {
             let bob = (self.time * 4.0).sin() * 4.0;
             text_shadow(

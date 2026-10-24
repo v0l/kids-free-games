@@ -1,5 +1,6 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -418,9 +419,11 @@ impl Paper {
             );
             if d.victim == 0 {
                 sfx::play(Sfx::Hit);
+                feel::impact(Impact::Large);
                 self.shake.add(0.9);
             } else if d.killer == Some(0) {
                 sfx::play(Sfx::Crunch);
+                feel::impact(Impact::Medium);
                 self.shake.add(0.35);
                 self.bump.kick();
                 self.popups.add(

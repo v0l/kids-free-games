@@ -1,5 +1,6 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -437,6 +438,11 @@ impl Game for Blocks {
         if self.lines > lines_before {
             let n = self.lines - lines_before;
             sfx::play(if n >= 4 { Sfx::Win } else { Sfx::LevelUp });
+            feel::impact(if n >= 4 {
+                Impact::Large
+            } else {
+                Impact::Medium
+            });
             let word = ["", "Nice!", "Double!", "Triple!", "AMAZING!"][n.min(4) as usize];
             self.pops.add(
                 o + vec2(cell * W as f32 / 2.0, cell * H as f32 * 0.4),

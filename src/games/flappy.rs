@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -129,6 +130,7 @@ impl Flappy {
 
     fn die(&mut self, view: &View) {
         sfx::play(Sfx::Hit);
+        feel::impact(Impact::Large);
         self.state = State::Dead;
         self.dead_t = 0.0;
         self.best.offer(self.score);
@@ -218,7 +220,7 @@ impl Game for Flappy {
                     }
                 }
                 if let Some(at) = scored_at {
-                    sfx::play(Sfx::Score);
+                    sfx::play_step(Sfx::Score, self.score as usize % 8);
                     self.fx.sparkle(at, Color::from_rgba(255, 210, 40, 255));
                     self.popups.add(
                         vec2(bird.x + 50.0, self.y - 40.0),
@@ -259,13 +261,8 @@ impl Game for Flappy {
                 with_alpha(WHITE, self.flash * 0.8),
             );
         }
-        score_text(
-            &self.score.to_string(),
-            view.w / 2.0,
-            80.0,
-            84.0,
-            self.bump.t,
-        );
+        big_score(view, &self.score.to_string(), 80.0, self.bump.t);
+        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         match self.state {
             State::Ready => {
                 let bob = (self.t * 4.0).sin() * 4.0;

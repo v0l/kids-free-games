@@ -1,5 +1,6 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
+use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -232,7 +233,7 @@ impl Breakout {
                     points,
                     combo,
                 } => {
-                    sfx::play(Sfx::Pop);
+                    sfx::play_step(Sfx::Pop, combo.saturating_sub(1) as usize);
                     let col = brick_color(row);
                     self.particles.emit(
                         at,
@@ -277,6 +278,7 @@ impl Breakout {
                 }
                 Event::Lost(at) => {
                     sfx::play(Sfx::Wrong);
+                    feel::impact(Impact::Medium);
                     self.shake.add(0.7);
                     self.particles.emit(
                         at,
@@ -465,16 +467,20 @@ impl Game for Breakout {
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
         vignette(view, 0.6);
-        let score = format!("Score {}", self.score);
-        let sw = text_size(&score, 38.0).width;
-        score_text(&score, HUD_LEFT + sw / 2.0, 40.0, 38.0, self.bump.t);
+        chip(
+            view,
+            Side::Left,
+            "SCORE",
+            &self.score.to_string(),
+            self.bump.t,
+        );
         text_outline(
             &format!("Level {}", self.level),
             view.w / 2.0,
-            34.0,
-            34.0,
+            CHIP_Y + CHIP_H / 2.0,
+            30.0,
             Color::from_rgba(200, 200, 255, 255),
-            Color::from_rgba(40, 30, 60, 255),
+            INK,
         );
         if self.combo >= 2 && self.state == State::Playing {
             let pulse = 1.0 + 0.06 * (self.clock * 14.0).sin();

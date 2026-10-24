@@ -131,6 +131,7 @@ pub struct Input {
     pub left: bool,
     pub right: bool,
     pub action: bool,
+    pub back: bool,
 }
 
 impl Input {
@@ -224,6 +225,7 @@ impl InputTracker {
             left: is_key_down(KeyCode::Left) || is_key_down(KeyCode::A),
             right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
             action: is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter),
+            back: is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Backspace),
         }
     }
 }
