@@ -157,22 +157,24 @@ async fn main() {
     let all = games::all();
     let mut game = (which > 0).then(|| {
         let e = &all[which as usize - 1];
+        set_accent(e.color);
         let mut g = (e.make)();
         for f in 0..frames {
             g.update(&scripted(e.name, f, &view), &view, 1.0 / 60.0);
+            tick_overlay(1.0 / 60.0);
         }
         g
     });
     let mut app = App::new();
+    for _ in 0..90 {
+        app.update(&Input::default(), &view, 1.0 / 60.0);
+    }
     loop {
         let view = begin_frame();
         match &mut game {
             Some(g) => g.draw(&view),
             None if which < 0 => app_icon(&view),
-            None => {
-                app.update(&Input::default(), &view, 0.0);
-                app.draw(&view);
-            }
+            None => app.draw(&view),
         }
         next_frame().await;
     }

@@ -1,4 +1,5 @@
 pub mod engine;
+pub mod fx;
 pub mod games;
 pub mod menu;
 

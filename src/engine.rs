@@ -207,7 +207,7 @@ thread_local! {
     static FONT: std::cell::OnceCell<Option<Font>> = const { std::cell::OnceCell::new() };
 }
 
-static FONT_BYTES: &[u8] = include_bytes!("../assets/Fredoka.ttf");
+static FONT_BYTES: &[u8] = include_bytes!("../assets/Fredoka-SemiBold.ttf");
 
 fn font() -> Option<Font> {
     FONT.with(|f| {
@@ -253,23 +253,42 @@ pub fn text_center(s: &str, cx: f32, cy: f32, size: f32, color: Color) {
 }
 
 pub fn text_shadow(s: &str, cx: f32, cy: f32, size: f32, color: Color) {
-    let off = (size * 0.06).max(2.0);
-    text_center(s, cx + off, cy + off, size, Color::new(0.0, 0.0, 0.0, 0.35));
-    text_center(s, cx, cy, size, color);
+    let outline = if color.r + color.g + color.b > 2.2 {
+        Color::from_rgba(40, 30, 60, 255)
+    } else {
+        Color::new(1.0, 1.0, 1.0, 0.9)
+    };
+    crate::fx::text_outline(s, cx, cy, size, color, with_alpha(outline, color.a));
 }
 
 pub fn round_rect(r: Rect, radius: f32, color: Color) {
-    let rad = radius.min(r.w / 2.0).min(r.h / 2.0);
+    let rad = radius.min(r.w / 2.0).min(r.h / 2.0).max(0.0);
     draw_rectangle(r.x + rad, r.y, r.w - 2.0 * rad, r.h, color);
     draw_rectangle(r.x, r.y + rad, rad, r.h - 2.0 * rad, color);
     draw_rectangle(r.x + r.w - rad, r.y + rad, rad, r.h - 2.0 * rad, color);
-    for (cx, cy) in [
-        (r.x + rad, r.y + rad),
-        (r.x + r.w - rad, r.y + rad),
-        (r.x + rad, r.y + r.h - rad),
-        (r.x + r.w - rad, r.y + r.h - rad),
+    if rad <= 0.0 {
+        return;
+    }
+    let segs = ((rad * 0.5) as usize).clamp(3, 12);
+    for (c, start) in [
+        (vec2(r.x + rad, r.y + rad), std::f32::consts::PI),
+        (vec2(r.x + r.w - rad, r.y + rad), std::f32::consts::PI * 1.5),
+        (vec2(r.x + r.w - rad, r.y + r.h - rad), 0.0),
+        (
+            vec2(r.x + rad, r.y + r.h - rad),
+            std::f32::consts::FRAC_PI_2,
+        ),
     ] {
-        draw_circle(cx, cy, rad, color);
+        for k in 0..segs {
+            let a0 = start + std::f32::consts::FRAC_PI_2 * k as f32 / segs as f32;
+            let a1 = start + std::f32::consts::FRAC_PI_2 * (k + 1) as f32 / segs as f32;
+            draw_triangle(
+                c,
+                c + vec2(a0.cos(), a0.sin()) * rad,
+                c + vec2(a1.cos(), a1.sin()) * rad,
+                color,
+            );
+        }
     }
 }
 
@@ -285,37 +304,53 @@ pub fn button(r: Rect, label: &str, color: Color, enabled: bool) {
         darker(color, 0.65),
     );
     round_rect(r, 14.0, color);
+    crate::fx::gloss(r, 14.0);
     let size = (r.h * 0.42).min(r.w / (label.len().max(1) as f32 * 0.5));
-    text_center(label, r.x + r.w / 2.0, r.y + r.h / 2.0, size, WHITE);
+    text_shadow(label, r.x + r.w / 2.0, r.y + r.h / 2.0, size, WHITE);
 }
 
 pub fn overlay(view: &View, title: &str, lines: &[&str]) {
-    draw_rectangle(0.0, 0.0, view.w, view.h, Color::new(0.0, 0.0, 0.0, 0.45));
-    let pw = 560.0f32.min(view.w - 40.0);
-    let ph = 170.0 + lines.len() as f32 * 48.0;
-    let r = Rect::new((view.w - pw) / 2.0, (view.h - ph) / 2.0, pw, ph);
-    round_rect(
-        Rect::new(r.x, r.y + 8.0, r.w, r.h),
-        28.0,
-        Color::new(0.0, 0.0, 0.0, 0.3),
-    );
-    round_rect(r, 28.0, WHITE);
-    text_center(
-        title,
-        r.x + pw / 2.0,
-        r.y + 70.0,
-        64.0,
-        Color::from_rgba(60, 60, 90, 255),
-    );
-    for (i, l) in lines.iter().enumerate() {
-        text_center(
-            l,
-            r.x + pw / 2.0,
-            r.y + 140.0 + i as f32 * 48.0,
-            36.0,
-            Color::from_rgba(90, 90, 120, 255),
-        );
-    }
+    let key = title.to_string();
+    let age = OVERLAY.with(|o| {
+        let mut o = o.borrow_mut();
+        o.seen = true;
+        if o.title != key {
+            o.title = key;
+            o.age = 0.0;
+        }
+        o.age
+    });
+    let accent = ACCENT.with(|a| a.get());
+    crate::fx::panel(view, title, lines, age, accent);
+}
+
+#[derive(Default)]
+struct OverlayClock {
+    title: String,
+    age: f32,
+    seen: bool,
+}
+
+thread_local! {
+    static OVERLAY: std::cell::RefCell<OverlayClock> = std::cell::RefCell::new(OverlayClock::default());
+    static ACCENT: Cell<Color> = const { Cell::new(Color::new(0.95, 0.45, 0.4, 1.0)) };
+}
+
+pub fn set_accent(c: Color) {
+    ACCENT.with(|a| a.set(c));
+}
+
+pub fn tick_overlay(dt: f32) {
+    OVERLAY.with(|o| {
+        let mut o = o.borrow_mut();
+        if o.seen {
+            o.age += dt;
+        } else {
+            o.title.clear();
+            o.age = 0.0;
+        }
+        o.seen = false;
+    });
 }
 
 pub fn darker(c: Color, k: f32) -> Color {
