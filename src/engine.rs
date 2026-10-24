@@ -240,8 +240,8 @@ fn font() -> Option<Font> {
         f.get_or_init(|| {
             let font = load_ttf_font_from_bytes(FONT_BYTES).ok()?;
             let chars: Vec<char> = (32u8..127).map(char::from).collect();
-            for size in [24.0, 32.0, 40.0, 56.0, 72.0] {
-                font.populate_font_cache(&chars, font_params(size).0);
+            for px in GLYPH_SIZES {
+                font.populate_font_cache(&chars, px as u16);
             }
             Some(font)
         })
@@ -253,14 +253,17 @@ pub fn set_text_scale(scale: f32) {
     TEXT_SCALE.with(|s| s.set(scale));
 }
 
-const GLYPH_STEP: f32 = 1.12;
+const GLYPH_SIZES: [f32; 7] = [24.0, 36.0, 52.0, 72.0, 100.0, 140.0, 200.0];
 
 fn font_params(size: f32) -> (u16, f32) {
     let scale = TEXT_SCALE.with(|s| s.get());
-    let want = (size * scale).clamp(4.0, 400.0);
-    let bucket = (want.ln() / GLYPH_STEP.ln()).round();
-    let px = GLYPH_STEP.powf(bucket).round().clamp(4.0, 400.0) as u16;
-    (px, size / px as f32)
+    let want = (size * scale).max(1.0);
+    let px = GLYPH_SIZES
+        .iter()
+        .copied()
+        .find(|g| *g >= want * 0.9)
+        .unwrap_or(GLYPH_SIZES[GLYPH_SIZES.len() - 1]);
+    (px as u16, size / px)
 }
 
 pub fn text_size(s: &str, size: f32) -> TextDimensions {
@@ -629,6 +632,27 @@ mod tests {
     }
 
     #[test]
+    fn panel_pop_in_does_not_rasterise_new_glyph_sizes() {
+        for scale in [1.0, 1.33, 2.625] {
+            set_text_scale(scale);
+            let mut sizes: Vec<u16> = vec![];
+            for frame in 0..60 {
+                let s = crate::fx::ease_out_back(frame as f32 / 120.0 / 0.45).max(0.01);
+                for base in [58.0, 36.0, 30.0, 32.0] {
+                    sizes.push(font_params(base * s).0);
+                }
+            }
+            for px in sizes {
+                assert!(
+                    GLYPH_SIZES.contains(&(px as f32)),
+                    "scale {scale}: {px}px is not prewarmed and rasterises mid-animation"
+                );
+            }
+        }
+        set_text_scale(1.0);
+    }
+
+    #[test]
     fn animated_text_reuses_a_few_glyph_sizes() {
         set_text_scale(2.625);
         let bounce = |i: usize| 72.0 * (1.0 + 0.35 * (i as f32 / 2000.0));
@@ -636,15 +660,25 @@ mod tests {
         sizes.sort();
         sizes.dedup();
         assert!(
-            sizes.len() <= 4,
+            sizes.len() <= 2,
             "{} distinct glyph sizes for one bouncing label",
             sizes.len()
         );
         for i in 0..2000 {
-            let size = 20.0 + i as f32 * 0.05;
+            let size = 8.0 + i as f32 * 0.05;
             let (px, k) = font_params(size);
             assert!((px as f32 * k - size).abs() < 1e-3);
-            assert!((px as f32 / (size * 2.625) - 1.0).abs() < 0.07);
+            let want = size * 2.625;
+            if want >= 24.0 && want <= 200.0 {
+                assert!(
+                    px as f32 >= want * 0.9,
+                    "{want}px drawn from a {px}px glyph would blur"
+                );
+                assert!(
+                    px as f32 <= want * 1.6,
+                    "{want}px drawn from a {px}px glyph wastes atlas"
+                );
+            }
         }
         set_text_scale(1.0);
     }

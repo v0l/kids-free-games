@@ -310,19 +310,11 @@ impl Popups {
 }
 
 pub fn text_outline(s: &str, cx: f32, cy: f32, size: f32, fill: Color, outline: Color) {
-    let o = (size * 0.07).max(1.5);
-    for (dx, dy) in [
-        (-o, 0.0),
-        (o, 0.0),
-        (0.0, -o),
-        (0.0, o),
-        (-o * 0.7, -o * 0.7),
-        (o * 0.7, -o * 0.7),
-        (-o * 0.7, o * 0.7),
-        (o * 0.7, o * 0.7),
-        (0.0, o * 1.6),
-    ] {
-        text_center(s, cx + dx, cy + dy, size, outline);
+    let o = (size * 0.055).max(1.5);
+    text_center(s, cx, cy + o * 1.5, size, outline);
+    for k in 0..8 {
+        let a = (k as f32 + 0.5) / 8.0 * std::f32::consts::TAU;
+        text_center(s, cx + a.cos() * o, cy + a.sin() * o, size, outline);
     }
     text_center(s, cx, cy, size, fill);
 }
@@ -381,8 +373,8 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
     let band = Rect::new(r.x, r.y, r.w, 96.0 * s);
     round_rect(band, 34.0 * s, accent);
     draw_rectangle(band.x, band.y + band.h - 34.0 * s, band.w, 34.0 * s, accent);
-    for i in 0..6 {
-        let x = band.x + band.w * (i as f32 + 0.5) / 6.0;
+    for i in [0.07, 0.15, 0.85, 0.93] {
+        let x = band.x + band.w * i;
         draw_circle(x, band.y + band.h * 0.3, 6.0 * s, with_alpha(WHITE, 0.15));
     }
     let wob = (age * 3.0).sin() * 0.03;
