@@ -1,11 +1,13 @@
 pub mod blocks;
 pub mod breakout;
+pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
 pub mod helix;
 pub mod hotel;
 pub mod jumper;
+pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
@@ -115,6 +117,20 @@ pub fn all() -> Vec<Entry> {
             color: Color::from_rgba(110, 90, 210, 255),
             make: || Box::new(blocks::Blocks::new()),
             icon: blocks::icon,
+        },
+        Entry {
+            name: "Math Pop",
+            like: "Math games for kids",
+            color: Color::from_rgba(235, 100, 170, 255),
+            make: || Box::new(mathpop::MathPop::new()),
+            icon: mathpop::icon,
+        },
+        Entry {
+            name: "Count It",
+            like: "Counting games for kids",
+            color: Color::from_rgba(250, 170, 60, 255),
+            make: || Box::new(count::Count::new()),
+            icon: count::icon,
         },
     ]
 }

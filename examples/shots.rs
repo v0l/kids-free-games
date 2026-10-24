@@ -1,5 +1,5 @@
 use kids_games::engine::*;
-use kids_games::games;
+use kids_games::games::{self, count, mathpop};
 use kids_games::{begin_frame, menu::App, window_conf};
 use macroquad::prelude::*;
 
@@ -92,6 +92,26 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                     oy + (k / cols) as f32 * size + size / 2.0,
                 ),
             );
+        }
+        "Math Pop" if f == 60 || f == 110 => {
+            tap(&mut i, mathpop::balloon_rest(view, (f - 60) / 50));
+        }
+        "Count It" if f > 20 && f.is_multiple_of(25) => {
+            let buttons = count::button_rects(view, 3);
+            let area = count::play_area(view);
+            let k = f / 25;
+            if k.is_multiple_of(5) {
+                tap(&mut i, buttons[(k / 5) % 3].center());
+            } else {
+                let g = (k % 5) as f32;
+                tap(
+                    &mut i,
+                    vec2(
+                        area.x + area.w * (0.15 + 0.2 * g),
+                        area.y + area.h * (0.3 + 0.2 * (k % 2) as f32),
+                    ),
+                );
+            }
         }
         "Hotel Hop" if f.is_multiple_of(45) => {
             let top = 80.0;
