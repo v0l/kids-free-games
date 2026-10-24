@@ -1,0 +1,10 @@
+{
+  "name": "Kids Free Games",
+  "short_name": "Kids Games",
+  "display": "fullscreen",
+  "orientation": "any",
+  "background_color": "#ffb478",
+  "theme_color": "#ffb478",
+  "start_url": ".",
+  "icons": [{ "src": "icon.png", "sizes": "512x512", "type": "image/png" }]
+}

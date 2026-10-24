@@ -1,0 +1,29 @@
+[package]
+name = "kids_games"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+macroquad = "0.4"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true
+
+[package.metadata.android]
+package_name = "io.v0l.kids_games"
+label = "Kids Games"
+version_code = 1
+version_name = "0.1.0"
+android_version = 31
+target_sdk_version = 31
+min_sdk_version = 26
+build_targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]
+fullscreen = true
+res = "android/res"
+icon = "@mipmap/ic_launcher"
+
+[package.metadata.android.activity_attributes]
+"android:screenOrientation" = "fullSensor"
+"android:exported" = "true"
