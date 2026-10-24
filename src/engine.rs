@@ -387,18 +387,22 @@ pub fn hsv(h: f32, s: f32, v: f32) -> Color {
 }
 
 pub fn sky(view: &View, top: Color, bottom: Color) {
-    let bands = 24;
-    let bh = view.h / bands as f32;
-    for i in 0..bands {
-        let t = i as f32 / (bands - 1) as f32;
-        let c = Color::new(
-            top.r + (bottom.r - top.r) * t,
-            top.g + (bottom.g - top.g) * t,
-            top.b + (bottom.b - top.b) * t,
-            1.0,
-        );
-        draw_rectangle(0.0, i as f32 * bh, view.w, bh + 1.0, c);
-    }
+    gradient_rect(Rect::new(0.0, 0.0, view.w, view.h), top, bottom);
+}
+
+pub fn gradient_rect(r: Rect, top: Color, bottom: Color) {
+    use macroquad::models::{draw_mesh, Mesh, Vertex};
+    let v = |x: f32, y: f32, c: Color| Vertex::new2(vec3(x, y, 0.0), Vec2::ZERO, c);
+    draw_mesh(&Mesh {
+        vertices: vec![
+            v(r.x, r.y, top),
+            v(r.x + r.w, r.y, top),
+            v(r.x + r.w, r.y + r.h, bottom),
+            v(r.x, r.y + r.h, bottom),
+        ],
+        indices: vec![0, 1, 2, 0, 2, 3],
+        texture: None,
+    });
 }
 
 pub fn cloud(x: f32, y: f32, s: f32, color: Color) {

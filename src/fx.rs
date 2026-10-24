@@ -1,4 +1,5 @@
 use crate::engine::*;
+use macroquad::models::{draw_mesh, Mesh, Vertex};
 use macroquad::prelude::*;
 
 pub fn ease_out_back(t: f32) -> f32 {
@@ -425,19 +426,36 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
 }
 
 pub fn vignette(view: &View, strength: f32) {
-    let steps = 10;
-    for i in 0..steps {
-        let k = i as f32 / steps as f32;
-        let inset = k * view.w.min(view.h) * 0.12;
-        draw_rectangle_lines(
-            inset,
-            inset,
-            view.w - inset * 2.0,
-            view.h - inset * 2.0,
-            view.w.min(view.h) * 0.012 + 2.0,
-            Color::new(0.0, 0.0, 0.05, strength * (1.0 - k) * 0.25),
-        );
+    let inset = view.w.min(view.h) * 0.22;
+    let edge = Color::new(0.0, 0.0, 0.05, strength * 0.45);
+    let clear = Color::new(0.0, 0.0, 0.05, 0.0);
+    let outer = [
+        vec2(0.0, 0.0),
+        vec2(view.w, 0.0),
+        vec2(view.w, view.h),
+        vec2(0.0, view.h),
+    ];
+    let inner = [
+        vec2(inset, inset),
+        vec2(view.w - inset, inset),
+        vec2(view.w - inset, view.h - inset),
+        vec2(inset, view.h - inset),
+    ];
+    let mut vertices = vec![];
+    for k in 0..4 {
+        vertices.push(Vertex::new2(outer[k].extend(0.0), Vec2::ZERO, edge));
+        vertices.push(Vertex::new2(inner[k].extend(0.0), Vec2::ZERO, clear));
     }
+    let mut indices = vec![];
+    for k in 0..4u16 {
+        let (o0, i0, o1, i1) = (k * 2, k * 2 + 1, ((k + 1) % 4) * 2, ((k + 1) % 4) * 2 + 1);
+        indices.extend_from_slice(&[o0, o1, i1, o0, i1, i0]);
+    }
+    draw_mesh(&Mesh {
+        vertices,
+        indices,
+        texture: None,
+    });
 }
 
 pub fn soft_shadow(c: Vec2, rx: f32, ry: f32, alpha: f32) {
