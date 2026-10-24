@@ -1,6 +1,7 @@
 pub mod engine;
 pub mod fx;
 pub mod games;
+pub mod learn;
 pub mod menu;
 pub mod safe;
 
