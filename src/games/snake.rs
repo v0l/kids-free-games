@@ -1,5 +1,3 @@
-use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -164,6 +162,10 @@ impl Snake {
 
     fn die(&mut self) {
         self.state = State::Dead;
+        sfx::play(Sfx::Lose);
+        if self.score > self.best.0 && self.best.0 > 0 {
+            sfx::say(sfx::Say::Best);
+        }
         self.best.offer(self.score);
     }
 
@@ -299,8 +301,10 @@ impl Game for Snake {
                 if let Some(d) = input.dir() {
                     self.turn(d);
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                 } else if input.tap() {
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                 }
             }
             State::Playing => {
@@ -326,7 +330,6 @@ impl Game for Snake {
     }
 
     fn draw(&self, view: &View) {
-        clear_background(Color::from_rgba(70, 120, 60, 255));
         let (cell, o) = self.layout(view);
         let off = self.shake.offset();
         set_view_camera(view, vec2(off.x, off.y));
@@ -336,32 +339,34 @@ impl Game for Snake {
             cell * self.size.x as f32,
             cell * self.size.y as f32,
         );
-        round_rect(
-            Rect::new(board.x - 6.0, board.y - 2.0, board.w + 12.0, board.h + 18.0),
-            18.0,
-            Color::from_rgba(40, 80, 40, 255),
-        );
-        round_rect(
-            Rect::new(board.x - 6.0, board.y - 6.0, board.w + 12.0, board.h + 12.0),
-            18.0,
-            Color::from_rgba(95, 150, 70, 255),
-        );
+        draw_meadow(view, board);
         for y in 0..self.size.y {
             for x in 0..self.size.x {
                 let c = if (x + y) % 2 == 0 {
-                    Color::from_rgba(170, 215, 80, 255)
+                    Color::from_rgba(170, 220, 80, 255)
                 } else {
-                    Color::from_rgba(160, 205, 72, 255)
+                    Color::from_rgba(155, 208, 66, 255)
                 };
                 draw_rectangle(o.x + x as f32 * cell, o.y + y as f32 * cell, cell, cell, c);
             }
         }
+        art::nine(
+            "frame",
+            Rect::new(
+                board.x - 12.0,
+                board.y - 12.0,
+                board.w + 24.0,
+                board.h + 24.0,
+            ),
+            14.0,
+            0.9,
+            WHITE,
+        );
         self.draw_apple(o, cell);
         self.draw_snake(o, cell);
         self.particles.draw();
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
-        vignette(view, 0.5);
         chip(
             view,
             Side::Left,
@@ -374,7 +379,7 @@ impl Game for Snake {
             State::Ready => overlay(
                 view,
                 "Snake",
-                &["Swipe to steer", "Eat apples, don't bite yourself"],
+                &["Swipe to steer", "Eat fruit, don't bite yourself"],
             ),
             State::Dead => {
                 let s = format!("Apples {}   Best {}", self.score, self.best.0);
@@ -385,6 +390,56 @@ impl Game for Snake {
     }
 }
 
+mod art {
+    crate::sprites!("snake");
+}
+
+const FRUIT: [&str; 6] = [
+    "apple",
+    "orange",
+    "pear",
+    "strawberry",
+    "lemon",
+    "watermelon",
+];
+const SCENERY: [&str; 7] = [
+    "tuft1", "flower1", "tuft2", "flower2", "flower4", "tuft3", "flower3",
+];
+
+fn draw_meadow(view: &View, board: Rect) {
+    let f = view.full();
+    let side = f.w.max(f.h);
+    art::sprite(
+        "bg",
+        Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
+    );
+    let mut i = 0usize;
+    let mut x = f.x + 10.0;
+    while x < f.x + f.w {
+        for y in [f.y + 6.0, f.y + f.h - 26.0] {
+            let n = (i * 7 + 3) % SCENERY.len();
+            let at = vec2(x + (i * 13 % 17) as f32, y + (i * 5 % 11) as f32);
+            if !board.contains(at) {
+                art::sprite_at(SCENERY[n], at, 26.0, Default::default());
+            }
+            i += 1;
+        }
+        x += 46.0;
+    }
+    let mut y = f.y + 40.0;
+    while y < f.y + f.h - 40.0 {
+        for x in [f.x + 4.0, f.x + f.w - 30.0] {
+            let n = (i * 5 + 1) % SCENERY.len();
+            let at = vec2(x + (i * 7 % 9) as f32, y + (i * 11 % 13) as f32);
+            if !board.contains(at) {
+                art::sprite_at(SCENERY[n], at, 26.0, Default::default());
+            }
+            i += 1;
+        }
+        y += 46.0;
+    }
+}
+
 impl Snake {
     fn draw_apple(&self, o: Vec2, cell: f32) {
         let f = o + self.food.as_vec2() * cell + vec2(cell, cell) / 2.0;
@@ -392,46 +447,20 @@ impl Snake {
         let bob = (self.clock * 4.0).sin() * cell * 0.03;
         let drop = (1.0 - ease_out_cubic(self.food_age / 0.35)) * cell * 0.8;
         let squash = 1.0 + (self.clock * 4.0).sin() * 0.03;
-        let r = cell * 0.4 * pop;
-        soft_shadow(f + vec2(0.0, cell * 0.38), r * 0.9, r * 0.3, 0.6);
+        let h = cell * 1.3 * pop;
+        soft_shadow(f + vec2(0.0, cell * 0.38), h * 0.4, h * 0.13, 0.6);
         let c = f + vec2(0.0, bob - drop);
-        draw_ellipse(
-            c.x,
-            c.y + 2.0,
-            r * squash,
-            r / squash,
-            0.0,
-            Color::from_rgba(200, 40, 40, 255),
-        );
-        draw_ellipse(
-            c.x,
-            c.y + 2.0 + r * 0.25,
-            r * 0.85,
-            r * 0.55,
-            0.0,
-            Color::from_rgba(170, 25, 40, 255),
-        );
-        draw_circle(
-            c.x - r * 0.3,
-            c.y - r * 0.15,
-            r * 0.25,
-            with_alpha(WHITE, 0.65),
-        );
-        draw_line(
-            c.x,
-            c.y - r * 0.8,
-            c.x + r * 0.1,
-            c.y - r * 1.3,
-            3.0,
-            Color::from_rgba(100, 60, 30, 255),
-        );
-        draw_ellipse(
-            c.x + r * 0.35,
-            c.y - r * 1.05,
-            r * 0.38,
-            r * 0.2,
-            -25.0,
-            Color::from_rgba(60, 160, 50, 255),
+        let name = FRUIT[self.score as usize % FRUIT.len()];
+        let s = art::size(name);
+        let w = h * s.x / s.y.max(1.0);
+        art::sprite(
+            name,
+            Rect::new(
+                c.x - w * squash / 2.0,
+                c.y - h / squash / 2.0,
+                w * squash,
+                h / squash,
+            ),
         );
     }
 
@@ -439,10 +468,11 @@ impl Snake {
         let chain = self.chain(self.frac());
         let n = chain.len();
         let size = self.size.as_vec2();
-        let base = if self.state == State::Dead {
-            Color::from_rgba(110, 130, 190, 255)
+        let dead = self.state == State::Dead;
+        let base = if dead {
+            Color::from_rgba(150, 165, 215, 255)
         } else {
-            Color::from_rgba(70, 115, 230, 255)
+            WHITE
         };
         let bulge_pos: Vec<f32> = self
             .bulges
@@ -455,51 +485,51 @@ impl Snake {
                 .iter()
                 .map(|p| bulge_scale(i, *p))
                 .fold(1.0, f32::max);
-            cell * 0.46 * k * swell
+            cell * 0.52 * k * swell
         };
         let visible =
             |p: Vec2| p.x > -1.0 && p.y > -1.0 && p.x < size.x + 1.0 && p.y < size.y + 1.0;
         let shifts = [-1.0f32, 0.0, 1.0];
-        for pass in 0..3 {
+        let navy = Color::from_rgba(22, 30, 120, 255);
+        for pass in 0..2 {
             for sx in shifts {
                 for sy in shifts {
                     let shift = vec2(sx * size.x, sy * size.y);
-                    for i in (0..n).rev() {
+                    for i in (1..n).rev() {
                         let p = chain[i] + shift;
                         if !visible(p) {
                             continue;
                         }
-                        let r = radius(i);
-                        let c = o + (p + vec2(0.5, 0.5)) * cell;
-                        let stripe = if i % 2 == 0 { 1.0 } else { 0.93 };
-                        let (grow, col) = match pass {
-                            0 => (1.14, darker(base, 0.6)),
-                            1 => (1.0, darker(base, stripe)),
-                            _ => (
-                                0.0,
-                                Color::from_vec(base.to_vec() * 0.5 + vec4(0.5, 0.5, 0.5, 0.5)),
-                            ),
-                        };
-                        if pass < 2 {
-                            if i + 1 < n {
-                                let q = o + (chain[i + 1] + shift + vec2(0.5, 0.5)) * cell;
-                                draw_line(
-                                    c.x,
-                                    c.y,
-                                    q.x,
-                                    q.y,
-                                    2.0 * r.min(radius(i + 1)) * grow,
-                                    col,
+                        let from = o + (p + vec2(0.5, 0.5)) * cell;
+                        let to = o + (chain[i - 1] + shift + vec2(0.5, 0.5)) * cell;
+                        let (r0, r1) = (radius(i), radius(i - 1));
+                        let steps = 4;
+                        for k in 0..steps {
+                            let t = k as f32 / steps as f32;
+                            let c = from + (to - from) * t;
+                            let r = r0 + (r1 - r0) * t;
+                            let stripe = if i % 2 == 0 { 1.0 } else { 0.92 };
+                            if pass == 0 {
+                                art::sprite_at(
+                                    "body",
+                                    c,
+                                    r * 2.0 * 1.16,
+                                    crate::art::Draw {
+                                        tint: if dead { darker(base, 0.4) } else { navy },
+                                        ..Default::default()
+                                    },
+                                );
+                            } else {
+                                art::sprite_at(
+                                    "body",
+                                    c,
+                                    r * 2.0,
+                                    crate::art::Draw {
+                                        tint: darker(base, stripe),
+                                        ..Default::default()
+                                    },
                                 );
                             }
-                            draw_circle(c.x, c.y, r * grow, col);
-                        } else if i % 2 == 0 {
-                            draw_circle(
-                                c.x - r * 0.25,
-                                c.y - r * 0.35,
-                                r * 0.28,
-                                with_alpha(col, 0.28),
-                            );
                         }
                     }
                 }
@@ -507,11 +537,11 @@ impl Snake {
         }
         let head = o + (chain[0] + vec2(0.5, 0.5)) * cell;
         let fwd = self.dir.delta().as_vec2();
-        let side = vec2(-fwd.y, fwd.x);
         let r = radius(0);
-        if self.state != State::Dead {
+        if !dead {
             let len = tongue_len(self.clock) * cell * 0.75;
             if len > 1.0 {
+                let side = vec2(-fwd.y, fwd.x);
                 let red = Color::from_rgba(230, 50, 80, 255);
                 let base_p = head + fwd * r * 0.8;
                 let tip = base_p + fwd * len;
@@ -522,58 +552,93 @@ impl Snake {
                 }
             }
         }
-        draw_circle(head.x, head.y, r * 1.08, darker(base, 0.6));
-        draw_circle(head.x, head.y, r * 0.98, base);
-        draw_circle(
-            head.x - r * 0.25,
-            head.y - r * 0.4,
-            r * 0.3,
-            with_alpha(WHITE, 0.25),
+        let turn = fwd.x.atan2(-fwd.y) + std::f32::consts::PI;
+        let wob = if dead {
+            (self.dead_age * 20.0).sin() * 0.12
+        } else {
+            0.0
+        };
+        art::sprite_at(
+            "head",
+            head,
+            r * 3.0,
+            crate::art::Draw {
+                rotation: turn + wob,
+                tint: if dead {
+                    Color::from_rgba(190, 200, 235, 255)
+                } else {
+                    WHITE
+                },
+                ..Default::default()
+            },
         );
-        for s in [-1.0, 1.0] {
-            let e = head + fwd * cell * 0.12 + side * s * cell * 0.22;
-            draw_circle(e.x, e.y, cell * 0.17, WHITE);
-            if self.state == State::Dead {
-                let k = cell * 0.08;
-                draw_line(e.x - k, e.y - k, e.x + k, e.y + k, 2.5, BLACK);
-                draw_line(e.x - k, e.y + k, e.x + k, e.y - k, 2.5, BLACK);
-            } else {
-                draw_circle(e.x + fwd.x * 2.5, e.y + fwd.y * 2.5, cell * 0.085, BLACK);
-                draw_circle(
-                    e.x + fwd.x * 2.5 - 1.0,
-                    e.y + fwd.y * 2.5 - 1.5,
-                    cell * 0.03,
-                    WHITE,
-                );
-            }
-        }
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(170, 215, 80, 255));
-    let c = Color::from_rgba(70, 115, 230, 255);
+    let side = r.w.max(r.h);
+    art::sprite("bg", Rect::new(r.x, r.y + r.h - side, side, side));
+    let navy = Color::from_rgba(22, 30, 120, 255);
+    let y = r.y + r.h * 0.66;
     for i in 0..5 {
-        draw_circle(
-            r.x + r.w * (0.2 + i as f32 * 0.12),
-            r.y + r.h * 0.6,
-            r.w * 0.09,
-            c,
+        let c = vec2(
+            r.x + r.w * (0.14 + i as f32 * 0.115),
+            y + (i as f32 * 1.3).sin() * r.h * 0.05,
         );
+        art::sprite_at(
+            "body",
+            c,
+            r.h * 0.27,
+            crate::art::Draw {
+                tint: navy,
+                ..Default::default()
+            },
+        );
+        art::sprite_at("body", c, r.h * 0.23, Default::default());
     }
-    draw_circle(r.x + r.w * 0.72, r.y + r.h * 0.6, r.w * 0.11, c);
-    draw_circle(r.x + r.w * 0.74, r.y + r.h * 0.55, r.w * 0.04, WHITE);
-    draw_circle(
-        r.x + r.w * 0.75,
-        r.y + r.h * 0.3,
-        r.w * 0.09,
-        Color::from_rgba(200, 40, 40, 255),
+    art::sprite_at(
+        "head",
+        vec2(r.x + r.w * 0.7, y - r.h * 0.02),
+        r.h * 0.4,
+        crate::art::Draw {
+            rotation: -std::f32::consts::FRAC_PI_2,
+            ..Default::default()
+        },
+    );
+    art::sprite_at(
+        "apple",
+        vec2(r.x + r.w * 0.8, r.y + r.h * 0.3),
+        r.h * 0.26,
+        Default::default(),
     );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn snake_sprites_all_exist() {
+        let have = art::names();
+        let mut want = vec!["bg", "frame", "head", "body"];
+        want.extend(FRUIT);
+        want.extend(SCENERY);
+        for n in want {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn crashing_plays_the_lose_jingle() {
+        let mut s = Snake::new();
+        s.wrap = false;
+        s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)]
+            .into_iter()
+            .collect();
+        crate::sfx::take_pending();
+        s.tick();
+        assert!(crate::sfx::take_pending().contains(&Sfx::Lose));
+    }
 
     #[test]
     fn eating_grows_and_scores() {
