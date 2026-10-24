@@ -48,6 +48,15 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             }
         }
         "Stack Tower" if f % 50 == 49 => tap(&mut i, c),
+        "Helix Drop" => {
+            if f == 1 {
+                i.pressed = true;
+            }
+            if f > 5 {
+                i.down = true;
+                i.pos = vec2(c.x + (f as f32 * 0.05).sin() * 300.0, c.y);
+            }
+        }
         "Road Hopper" if f.is_multiple_of(30) && f < 200 => i.swipe = Some(Dir::Up),
         "Brick Breaker" => {
             if f == 2 {

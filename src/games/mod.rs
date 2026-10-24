@@ -2,6 +2,7 @@ pub mod breakout;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
+pub mod helix;
 pub mod hotel;
 pub mod jumper;
 pub mod memory;
@@ -99,6 +100,13 @@ pub fn all() -> Vec<Entry> {
             color: Color::from_rgba(100, 190, 80, 255),
             make: || Box::new(crossy::Crossy::new()),
             icon: crossy::icon,
+        },
+        Entry {
+            name: "Helix Drop",
+            like: "Helix Jump",
+            color: Color::from_rgba(255, 130, 70, 255),
+            make: || Box::new(helix::Helix::new()),
+            icon: helix::icon,
         },
     ]
 }
