@@ -165,27 +165,29 @@ impl Row {
     }
 
     pub fn hits(&self, x: f32) -> bool {
+        let c = x + 0.5;
         match self.lane {
-            Lane::Road { .. } => self
-                .things
-                .iter()
-                .any(|t| x + 0.35 > *t && x - 0.35 < *t + self.len),
+            Lane::Road { .. } => self.things.iter().any(|t| {
+                c + CHICKEN_HALF > *t + CAR_INSET && c - CHICKEN_HALF < *t + self.len - CAR_INSET
+            }),
             Lane::Rail { .. } => self
                 .things
                 .iter()
-                .any(|t| x + 0.4 > *t && x - 0.4 < *t + 12.0),
+                .any(|t| c + CHICKEN_HALF > *t && c - CHICKEN_HALF < *t + TRAIN_LEN),
             _ => false,
         }
     }
 
     pub fn log_under(&self, x: f32) -> Option<usize> {
-        self.things
-            .iter()
-            .position(|t| x > *t - 0.15 && x < *t + self.len + 0.15)
+        let c = x + 0.5;
+        self.things.iter().position(|t| c > *t && c < *t + self.len)
     }
 }
 
 const ROW_PX: f32 = 72.0;
+const CHICKEN_HALF: f32 = 0.3;
+const CAR_INSET: f32 = 0.06;
+const TRAIN_LEN: f32 = 12.0;
 
 impl Default for Crossy {
     fn default() -> Self {
@@ -596,7 +598,7 @@ impl Game for Crossy {
                 Lane::Rail { .. } => {
                     for t in &r.things {
                         let x = ox + t * cell;
-                        let rr = Rect::new(x, y - 26.0, 12.0 * cell, 52.0);
+                        let rr = Rect::new(x, y - 26.0, TRAIN_LEN * cell, 52.0);
                         round_rect(rr, 10.0, Color::from_rgba(220, 60, 60, 255));
                         for k in 0..11 {
                             draw_rectangle(
@@ -860,6 +862,63 @@ mod tests {
         settle(&mut g);
         assert_eq!(g.state, State::Dead);
         assert_eq!(g.death, Some(Death::Car));
+    }
+
+    fn road_with_car_at(t: f32) -> Row {
+        Row {
+            lane: Lane::Road {
+                speed: 0.0,
+                gap: 4.0,
+            },
+            things: vec![t],
+            trees: vec![],
+            len: 1.2,
+            hue: 0.0,
+        }
+    }
+
+    #[test]
+    fn car_that_passed_behind_the_chicken_does_not_hit() {
+        let r = road_with_car_at(2.9);
+        assert!(
+            !r.hits(4.0),
+            "car drawn at 2.9..4.1 is clear of a chicken in cell 4"
+        );
+    }
+
+    #[test]
+    fn car_nose_touching_the_chicken_hits() {
+        let r = road_with_car_at(4.55);
+        assert!(
+            r.hits(4.0),
+            "car drawn from 4.55 overlaps a chicken centred at 4.5"
+        );
+    }
+
+    #[test]
+    fn standing_on_the_drawn_part_of_a_log_is_safe() {
+        let r = Row {
+            lane: Lane::River {
+                speed: 0.0,
+                gap: 4.0,
+            },
+            things: vec![4.6],
+            trees: vec![],
+            len: 2.0,
+            hue: 0.0,
+        };
+        assert!(
+            r.log_under(4.2).is_some(),
+            "chicken centred at 4.7 stands on a log drawn 4.6..6.6"
+        );
+        assert!(
+            r.log_under(3.9).is_none(),
+            "chicken centred at 4.4 is in the water before the log"
+        );
+        assert!(
+            r.log_under(6.3).is_none(),
+            "chicken centred at 6.8 is past the log end at 6.6"
+        );
     }
 
     #[test]
