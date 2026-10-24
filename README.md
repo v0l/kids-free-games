@@ -2,7 +2,9 @@
 
 Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, Android, the web and desktop. No ads, no purchases, no accounts, no network.
 
-Written in Rust with [macroquad](https://macroquad.rs), so one codebase builds for every platform. Everything is drawn in code; the only asset is the Fredoka font (`assets/`, SIL OFL).
+Written in Rust with [macroquad](https://macroquad.rs), so one codebase builds for every platform.
+
+Art and sound effects are from [Kenney](https://kenney.nl) (CC0). Music is Carnival Rides, Summer Park and Happy Lullaby from [OpenGameArt](https://opengameart.org) (CC0). The font is Fredoka (SIL OFL). Sprite sheets and the sound pack are built into `assets/` by `scripts/assets.py` from the manifests in `art/` and `sound.txt`; see `art/README.md`.
 
 See [GAMES.md](GAMES.md) for the list of popular games and which ones are done.
 
