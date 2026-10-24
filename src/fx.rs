@@ -360,22 +360,6 @@ impl Bump {
     }
 }
 
-pub struct Banner {
-    pub title: String,
-    pub lines: Vec<String>,
-    pub age: f32,
-}
-
-impl Banner {
-    pub fn new(title: impl Into<String>, lines: &[&str]) -> Self {
-        Self {
-            title: title.into(),
-            lines: lines.iter().map(|s| s.to_string()).collect(),
-            age: 0.0,
-        }
-    }
-}
-
 pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) {
     let fade = ease_out_cubic(age / 0.3);
     draw_rectangle(
