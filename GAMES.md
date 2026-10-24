@@ -15,12 +15,12 @@ The games kids actually play on iPads and phones, what they are like in the stor
 | Doodle Jump | Tilt or tap to bounce up platforms | Sky Jumper | Done |
 | Memory / Pairs games | Flip cards to find pairs | Memory Match | Done |
 | Subway Surfers, Temple Run | 3D lane runner | | Not yet |
-| Crossy Road | Hop across roads and rivers | | Not yet |
-| Helix Jump | Drop a ball through a spinning tower | | Not yet |
+| Crossy Road | Hop across roads, rivers and rails | Road Hopper | Done |
+| Helix Jump | Drop a ball through a spinning tower | Helix Drop | Done |
 | Hole.io | Grow a hole that swallows a city | | Not yet |
 | Color Bump / Ball sort puzzles | Physics and sorting puzzles | | Not yet |
 | Cut the Rope | Physics puzzle | | Not yet |
-| Tetris clones | Falling blocks | | Not yet |
+| Tetris clones | Falling blocks | Block Drop | Done |
 | Minecraft-like sandbox | Block building | | Out of scope |
 
 None of the games here have ads, purchases, accounts, network access or tracking. Nothing leaves the device.
