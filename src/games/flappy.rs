@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const GRAVITY: f32 = 1500.0;
@@ -105,6 +106,7 @@ impl Flappy {
     }
 
     fn flap(&mut self, view: &View) {
+        sfx::play(Sfx::Flap);
         self.vy = FLAP;
         self.kick = 1.0;
         let at = vec2(Self::bird_x(view) - BIRD_R * 0.8, self.y + BIRD_R * 0.3);
@@ -126,6 +128,7 @@ impl Flappy {
     }
 
     fn die(&mut self, view: &View) {
+        sfx::play(Sfx::Hit);
         self.state = State::Dead;
         self.dead_t = 0.0;
         self.best.offer(self.score);
@@ -215,6 +218,7 @@ impl Game for Flappy {
                     }
                 }
                 if let Some(at) = scored_at {
+                    sfx::play(Sfx::Score);
                     self.fx.sparkle(at, Color::from_rgba(255, 210, 40, 255));
                     self.popups.add(
                         vec2(bird.x + 50.0, self.y - 40.0),
@@ -519,6 +523,19 @@ pub fn icon(r: Rect) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flapping_and_crashing_make_sounds() {
+        let v = View::ipad_landscape();
+        let mut g = Flappy::new();
+        crate::sfx::take_pending();
+        g.update(&Input::press_at(vec2(500.0, 500.0)), &v, 1.0 / 60.0);
+        assert!(crate::sfx::take_pending().contains(&Sfx::Flap));
+        for _ in 0..240 {
+            g.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert!(crate::sfx::take_pending().contains(&Sfx::Hit));
+    }
 
     fn step(g: &mut Flappy, input: &Input, n: usize) {
         let v = View::ipad_landscape();

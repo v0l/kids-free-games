@@ -1,5 +1,6 @@
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const SLIDE: f32 = 0.12;
@@ -483,6 +484,7 @@ impl Merge {
                     ..Default::default()
                 },
             );
+            sfx::play(if v >= 128 { Sfx::Coin } else { Sfx::Pop });
             self.popups.add(
                 at - vec2(0.0, g.cell * 0.3),
                 format!("+{v}"),
@@ -493,10 +495,12 @@ impl Merge {
                 self.shake.add(0.15 + v.ilog2() as f32 * 0.03);
             }
             if v >= 2048 {
+                sfx::play(Sfx::Win);
                 self.particles.confetti(view);
             }
         }
         if self.over {
+            sfx::play(Sfx::Wrong);
             self.shake.add(0.5);
         }
     }

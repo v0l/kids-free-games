@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
 use crate::games::{self, Entry};
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const HOME: Rect = Rect {
@@ -28,6 +29,65 @@ pub struct App {
 }
 
 const LAUNCH_TIME: f32 = 0.35;
+
+pub fn mute_rect(view: &View) -> Rect {
+    Rect::new(view.w - 74.0, 12.0, 60.0, 48.0)
+}
+
+fn draw_mute(view: &View, scroll: f32) {
+    let r = mute_rect(view);
+    let r = Rect::new(r.x, r.y - scroll, r.w, r.h);
+    round_rect(
+        Rect::new(r.x, r.y + 4.0, r.w, r.h),
+        14.0,
+        Color::from_rgba(0, 0, 0, 50),
+    );
+    round_rect(r, 14.0, with_alpha(WHITE, 0.94));
+    let c = r.center();
+    let col = Color::from_rgba(80, 80, 110, 255);
+    draw_rectangle(c.x - 16.0, c.y - 6.0, 8.0, 12.0, col);
+    draw_triangle(
+        vec2(c.x - 9.0, c.y - 6.0),
+        vec2(c.x + 2.0, c.y - 15.0),
+        vec2(c.x + 2.0, c.y + 15.0),
+        col,
+    );
+    draw_triangle(
+        vec2(c.x - 9.0, c.y - 6.0),
+        vec2(c.x - 9.0, c.y + 6.0),
+        vec2(c.x + 2.0, c.y + 15.0),
+        col,
+    );
+    if sfx::muted() {
+        draw_line(
+            c.x + 7.0,
+            c.y - 8.0,
+            c.x + 19.0,
+            c.y + 8.0,
+            4.0,
+            Color::from_rgba(230, 70, 80, 255),
+        );
+        draw_line(
+            c.x + 19.0,
+            c.y - 8.0,
+            c.x + 7.0,
+            c.y + 8.0,
+            4.0,
+            Color::from_rgba(230, 70, 80, 255),
+        );
+    } else {
+        for (k, rad) in [8.0, 15.0].iter().enumerate() {
+            let a = 0.7 - k as f32 * 0.05;
+            let mut prev = c + vec2(4.0 + rad * (-a).cos(), rad * (-a).sin());
+            for j in 1..=8 {
+                let t = -a + 2.0 * a * j as f32 / 8.0;
+                let p = c + vec2(4.0 + rad * t.cos(), rad * t.sin());
+                draw_line(prev.x, prev.y, p.x, p.y, 3.0, col);
+                prev = p;
+            }
+        }
+    }
+}
 
 pub fn tile_rects(view: &View, count: usize) -> Vec<Rect> {
     let pad = 22.0;
@@ -83,6 +143,7 @@ impl App {
     }
 
     fn go_home(&mut self) {
+        sfx::play(Sfx::Whoosh);
         self.current = None;
         self.since_menu = 0.0;
         self.curtain = 1.0;
@@ -124,8 +185,14 @@ impl App {
             if *t >= LAUNCH_TIME {
                 let i = *i;
                 self.launch = None;
+                sfx::play(Sfx::Whoosh);
                 self.open(i);
             }
+            return;
+        }
+        if input.tapped_in(mute_rect(view)) {
+            sfx::toggle_mute();
+            sfx::play(Sfx::Tap);
             return;
         }
         let rects = tile_rects(view, self.entries.len());
@@ -152,6 +219,7 @@ impl App {
                     hit(input.pos, self.scroll).filter(|i| Some(*i) == self.pressed_tile)
                 {
                     self.launch = Some((i, 0.0));
+                    sfx::play(Sfx::Pop);
                     let r = rects[i];
                     self.fx.sparkle(
                         vec2(r.center().x, r.center().y - self.scroll),
@@ -287,6 +355,7 @@ impl App {
         }
         self.draw_backdrop(view);
         self.draw_title(view);
+        draw_mute(view, self.scroll);
         for (i, (r, e)) in tile_rects(view, self.entries.len())
             .iter()
             .zip(&self.entries)

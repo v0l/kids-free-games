@@ -3,6 +3,7 @@ use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
 use crate::learn::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const LEVEL_NAMES: [&str; 5] = [
@@ -278,6 +279,11 @@ impl MathPop {
         let gold = Color::from_rgba(255, 220, 70, 255);
         match tap {
             Tap::Right(step) => {
+                sfx::play(Sfx::Pop);
+                sfx::play(match step {
+                    Step::Up | Step::Cleared => Sfx::Win,
+                    _ => Sfx::Right,
+                });
                 self.particles.emit(
                     c,
                     &[color, WHITE, gold],
@@ -325,10 +331,12 @@ impl MathPop {
                 }
             }
             Tap::Wrong => {
+                sfx::play(Sfx::Wrong);
                 self.popups
                     .add(c, "Try again", Color::from_rgba(255, 170, 90, 255), 48.0);
             }
             Tap::Reveal => {
+                sfx::play(Sfx::Wrong);
                 let text = format!("It's {}", self.question.answer);
                 self.popups
                     .add(c, text, Color::from_rgba(255, 170, 90, 255), 48.0);

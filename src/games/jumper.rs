@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const GRAVITY: f32 = 1300.0;
@@ -263,8 +264,12 @@ impl Jumper {
         for l in std::mem::take(&mut self.landings) {
             let at = vec2(l.pos.x, l.pos.y - self.cam);
             match l.kind {
-                Kind::Crumble => self.crumble(l.pos),
+                Kind::Crumble => {
+                    sfx::play(Sfx::Crunch);
+                    self.crumble(l.pos)
+                }
                 Kind::Spring => {
+                    sfx::play(Sfx::LevelUp);
                     self.boings.push((l.pos, 0.0));
                     self.shake.add(0.2);
                     self.popups.add(
@@ -277,12 +282,16 @@ impl Jumper {
                         .sparkle(at - vec2(0.0, 24.0), Color::from_rgba(255, 90, 90, 255));
                     self.dust(at);
                 }
-                _ => self.dust(at),
+                _ => {
+                    sfx::play(Sfx::Jump);
+                    self.dust(at)
+                }
             }
         }
         let steps = self.score / 100;
         if steps > self.milestone {
             self.milestone = steps;
+            sfx::play(Sfx::Score);
             self.score_bump.kick();
             self.popups.add(
                 vec2(view.w / 2.0, 120.0),
@@ -582,6 +591,7 @@ impl Game for Jumper {
                 if self.pos.y - HERO_R > self.cam + view.h {
                     self.state = State::Fallen;
                     self.best.offer(self.score);
+                    sfx::play(Sfx::Whoosh);
                     self.shake.add(0.6);
                 }
             }

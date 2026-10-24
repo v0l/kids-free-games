@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const BLOCK_H: f32 = 40.0;
@@ -208,12 +209,18 @@ impl Stack {
                     color: hsv(self.moving.hue, 0.5, 0.95),
                 });
                 self.crumble(self.moving.x, self.moving.w, y, self.moving.hue);
+                sfx::play(Sfx::Crunch);
                 self.shake.add(0.6);
                 self.state = State::Over;
                 self.best.offer(self.score);
                 return;
             }
             Drop::Perfect => {
+                sfx::play(if self.streak >= 2 {
+                    Sfx::LevelUp
+                } else {
+                    Sfx::Right
+                });
                 self.streak += 1;
                 let b = block.unwrap();
                 let at = vec2(b.x + b.w / 2.0, y + BLOCK_H / 2.0);
@@ -239,6 +246,7 @@ impl Stack {
                 );
             }
             Drop::Trimmed(cut) => {
+                sfx::play(Sfx::Tap);
                 self.streak = 0;
                 let b = block.unwrap();
                 let cx = if self.moving.x < b.x {

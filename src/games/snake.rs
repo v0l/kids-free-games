@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 use std::collections::VecDeque;
 
@@ -219,6 +220,7 @@ impl Snake {
         for e in std::mem::take(&mut self.events) {
             match e {
                 Event::Ate(p) => {
+                    sfx::play(Sfx::Crunch);
                     let at = center(p);
                     self.particles
                         .sparkle(at, Color::from_rgba(230, 60, 60, 255));
@@ -231,6 +233,7 @@ impl Snake {
                     self.bump.kick();
                 }
                 Event::Crashed(p) => {
+                    sfx::play(Sfx::Hit);
                     let at = center(p);
                     self.shake.add(0.8);
                     self.particles.emit(

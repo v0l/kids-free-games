@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const COLS: i32 = 9;
@@ -272,6 +273,12 @@ impl Crossy {
         if self.state == State::Dead {
             return;
         }
+        sfx::play(match how {
+            Death::Water => Sfx::Splash,
+            Death::Train => Sfx::Boom,
+            Death::Eagle => Sfx::Whoosh,
+            _ => Sfx::Hit,
+        });
         self.state = State::Dead;
         self.death = Some(how);
         self.dead_t = 0.0;
@@ -361,6 +368,7 @@ impl Game for Crossy {
                 );
                 if let Some(d) = d {
                     if self.try_hop(d) {
+                        sfx::play(Sfx::Tap);
                         let (cell, ox) = self.col_x(view);
                         let p = self.player_pos();
                         self.fx.puff(

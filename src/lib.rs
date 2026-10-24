@@ -4,6 +4,7 @@ pub mod games;
 pub mod learn;
 pub mod menu;
 pub mod safe;
+pub mod sfx;
 
 use engine::*;
 use macroquad::miniquad;
@@ -49,6 +50,7 @@ pub fn begin_frame_safe(px: safe::Insets) -> View {
 }
 
 pub async fn run() {
+    sfx::load().await;
     let mut tracker = InputTracker::default();
     let mut app = menu::App::new();
     let mut safe_area = safe::SafeArea::default();
@@ -59,6 +61,7 @@ pub async fn run() {
         let dt = get_frame_time().min(1.0 / 20.0);
         app.update(&input, &view, dt);
         app.draw(&view);
+        sfx::flush(get_time());
         next_frame().await;
     }
 }

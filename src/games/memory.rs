@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const PAIRS: usize = 8;
@@ -211,6 +212,7 @@ impl Memory {
         for e in std::mem::take(&mut self.events) {
             match e {
                 Event::Match(a, b) => {
+                    sfx::play(Sfx::Right);
                     for i in [a, b] {
                         let c = rects[i].center();
                         let col = hsv(self.cards[i].0 as f32 / PAIRS as f32, 0.6, 1.0);
@@ -222,11 +224,15 @@ impl Memory {
                         .add(mid, "Match!", Color::from_rgba(255, 220, 70, 255), 44.0);
                 }
                 Event::Miss(a, b) => {
+                    sfx::play(Sfx::Wrong);
                     self.wobble[a] = 1.0;
                     self.wobble[b] = 1.0;
                     self.shake.add(0.3);
                 }
-                Event::Win => self.celebrated = 0.0,
+                Event::Win => {
+                    sfx::play(Sfx::Win);
+                    self.celebrated = 0.0
+                }
             }
         }
     }

@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const ROWS: usize = 6;
@@ -231,6 +232,7 @@ impl Breakout {
                     points,
                     combo,
                 } => {
+                    sfx::play(Sfx::Pop);
                     let col = brick_color(row);
                     self.particles.emit(
                         at,
@@ -256,10 +258,12 @@ impl Breakout {
                     }
                 }
                 Event::PaddleHit(at) => {
+                    sfx::play(Sfx::Bounce);
                     self.paddle_age = 0.0;
                     self.particles.puff(vec2(at.x, at.y + BALL_R), WHITE);
                 }
                 Event::WallHit(at) => {
+                    sfx::play(Sfx::Tick);
                     self.particles.emit(
                         at,
                         &[Color::from_rgba(200, 220, 255, 255)],
@@ -272,6 +276,7 @@ impl Breakout {
                     );
                 }
                 Event::Lost(at) => {
+                    sfx::play(Sfx::Wrong);
                     self.shake.add(0.7);
                     self.particles.emit(
                         at,
@@ -285,6 +290,7 @@ impl Breakout {
                     );
                 }
                 Event::LevelCleared => {
+                    sfx::play(Sfx::Win);
                     self.shake.add(0.4);
                     self.particles.confetti(view);
                 }

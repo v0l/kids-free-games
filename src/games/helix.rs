@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 use std::f32::consts::TAU;
 
@@ -157,6 +158,7 @@ impl Helix {
                     self.pass_floor();
                 }
                 _ if self.streak >= SMASH_FLOORS => {
+                    sfx::play(Sfx::Boom);
                     self.floors[i].broken = 0.001;
                     self.pass_floor();
                     self.streak = 0;
@@ -170,6 +172,7 @@ impl Helix {
                     return Some(Seg::Danger);
                 }
                 Seg::Solid => {
+                    sfx::play(Sfx::Bounce);
                     self.y = fy;
                     self.vy = BOUNCE;
                     self.streak = 0;
@@ -261,6 +264,7 @@ impl Game for Helix {
                         );
                     }
                     Some(Seg::Danger) => {
+                        sfx::play(Sfx::Hit);
                         self.state = State::Dead;
                         self.end_t = 0.0;
                         self.best.offer(self.score);
@@ -277,6 +281,7 @@ impl Game for Helix {
                     _ => {}
                 }
                 if self.passed > before {
+                    sfx::play(Sfx::Swish);
                     let col = hsv(self.floors[before].hue, 0.6, 1.0);
                     self.fx.emit(
                         ball_screen,
@@ -299,6 +304,7 @@ impl Game for Helix {
                     }
                 }
                 if self.passed >= self.floors.len() {
+                    sfx::play(Sfx::Win);
                     self.state = State::Won;
                     self.end_t = 0.0;
                     self.best.offer(self.score);

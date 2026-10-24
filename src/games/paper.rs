@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 use std::collections::VecDeque;
 
@@ -416,8 +417,10 @@ impl Paper {
                 },
             );
             if d.victim == 0 {
+                sfx::play(Sfx::Hit);
                 self.shake.add(0.9);
             } else if d.killer == Some(0) {
+                sfx::play(Sfx::Crunch);
                 self.shake.add(0.35);
                 self.bump.kick();
                 self.popups.add(
@@ -458,6 +461,7 @@ impl Paper {
             if id == 0 {
                 let pct = *n as f32 / self.owner.len() as f32 * 100.0;
                 if pct >= 0.1 {
+                    sfx::play(Sfx::Coin);
                     self.popups.add(
                         at - vec2(0.0, cell * 1.4),
                         format!("+{pct:.1}%"),
@@ -582,6 +586,7 @@ impl Game for Paper {
             self.state = State::Lost;
         } else if share >= 0.5 {
             self.state = State::Won;
+            sfx::play(Sfx::Win);
             self.screen_fx.confetti(view);
         }
     }

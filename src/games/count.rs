@@ -3,6 +3,7 @@ use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
 use crate::learn::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const RANGES: [(i32, i32); 5] = [(1, 5), (3, 8), (5, 10), (8, 15), (11, 20)];
@@ -254,6 +255,10 @@ impl Count {
         let at = button_rects(view, self.question.options.len())[slot].center();
         match tap {
             Tap::Right(step) => {
+                sfx::play(match step {
+                    Step::Up | Step::Cleared => Sfx::Win,
+                    _ => Sfx::Right,
+                });
                 self.particles.sparkle(at, gold);
                 self.particles.emit(
                     at,
@@ -301,11 +306,13 @@ impl Count {
                 }
             }
             Tap::Wrong => {
+                sfx::play(Sfx::Wrong);
                 self.shake.add(0.25);
                 self.popups
                     .add(at - vec2(0.0, 90.0), "Try again", orange, 48.0);
             }
             Tap::Reveal => {
+                sfx::play(Sfx::Wrong);
                 self.shake.add(0.25);
                 let text = format!("It's {}", self.question.count);
                 self.popups.add(at - vec2(0.0, 90.0), text, orange, 48.0);
@@ -361,6 +368,7 @@ impl Game for Count {
                     .position(|p| p.distance(input.pos) <= r * 1.15);
                 if let Some(i) = hit {
                     if self.tick_object(i) {
+                        sfx::play(Sfx::Tick);
                         let col = hsv(i as f32 * 0.13, 0.5, 1.0);
                         self.particles.sparkle(points[i], col);
                     }

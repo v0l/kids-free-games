@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const ROOMS: usize = 12;
@@ -365,6 +366,7 @@ impl Hotel {
         for e in std::mem::take(&mut self.events) {
             match e {
                 Event::Built(i) => {
+                    sfx::play(Sfx::LevelUp);
                     self.pop[i].kick();
                     self.particles.sparkle(rects[i].center(), gold);
                     self.particles
@@ -373,6 +375,7 @@ impl Hotel {
                     self.popups.add(rects[i].center(), "Built!", gold, 40.0);
                 }
                 Event::Upgraded(i) => {
+                    sfx::play(Sfx::LevelUp);
                     self.pop[i].kick();
                     let up = Self::upgrade_rect(rects[i]).center();
                     self.particles.sparkle(up, gold);
@@ -380,9 +383,11 @@ impl Hotel {
                     self.popups.add(up, "Upgrade!", gold, 34.0);
                 }
                 Event::Seated { room, look } => {
+                    sfx::play(Sfx::Tap);
                     self.walkers.push(Walker { room, look, t: 0.0 });
                 }
                 Event::Tip(i) => {
+                    sfx::play(Sfx::Right);
                     let at = vec2(
                         rects[i].x + rects[i].w * 0.62,
                         rects[i].y + rects[i].h * 0.38,
@@ -392,6 +397,7 @@ impl Hotel {
                     self.fly_coins(at, 1);
                 }
                 Event::CleanStarted(i) => {
+                    sfx::play(Sfx::Swish);
                     self.particles.emit(
                         rects[i].center(),
                         &[
@@ -408,11 +414,13 @@ impl Hotel {
                     );
                 }
                 Event::Cleaned(i) => {
+                    sfx::play(Sfx::Pop);
                     self.pop[i].kick();
                     self.particles
                         .sparkle(rects[i].center(), Color::from_rgba(150, 220, 255, 255));
                 }
                 Event::Denied(i, price) => {
+                    sfx::play(Sfx::Wrong);
                     self.shake.add(0.15);
                     self.popups.add(
                         rects[i].center(),
@@ -422,6 +430,7 @@ impl Hotel {
                     );
                 }
                 Event::Left(n) => {
+                    sfx::play(Sfx::Wrong);
                     self.shake.add(0.25);
                     self.popups.add(
                         vec2(lobby.x + lobby.w / 2.0, lobby.y + 90.0),
@@ -470,6 +479,7 @@ impl Hotel {
         }
         self.flying.retain(|c| c.t < 1.0);
         if landed > 0 {
+            sfx::play(Sfx::Coin);
             self.coin_bump.kick();
             self.particles
                 .sparkle(target, Color::from_rgba(255, 220, 90, 255));

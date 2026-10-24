@@ -2,6 +2,7 @@ use crate::engine::draw_circle;
 use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const GRAVITY: f32 = 900.0;
@@ -208,6 +209,7 @@ impl Fruit {
     }
 
     fn explode(&mut self, at: Vec2) {
+        sfx::play(Sfx::Boom);
         self.shake.add(1.0);
         self.flash = 1.0;
         self.fx.emit(
@@ -253,6 +255,7 @@ impl Fruit {
                     self.explode(t.pos);
                 }
                 Kind::Fruit(f) => {
+                    sfx::play(Sfx::Slice);
                     combo += 1;
                     centre += t.pos;
                     self.score += 1;
@@ -288,6 +291,7 @@ impl Fruit {
                 Color::from_rgba(255, 140, 60, 255),
                 54.0,
             );
+            sfx::play(Sfx::Right);
             self.fx.sparkle(centre, Color::from_rgba(255, 220, 60, 255));
             self.shake.add(0.25);
         }
@@ -369,6 +373,7 @@ impl Game for Fruit {
                     !gone
                 });
                 if missed > 0 {
+                    sfx::play(Sfx::Wrong);
                     self.heart_bump.kick();
                     self.shake.add(0.2);
                 }

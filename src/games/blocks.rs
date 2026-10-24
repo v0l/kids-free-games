@@ -1,6 +1,7 @@
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::fx::*;
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const W: usize = 10;
@@ -197,6 +198,7 @@ impl Blocks {
         };
         self.lock = 0.0;
         if !fits(&self.cells, &self.piece) {
+            sfx::play(Sfx::Wrong);
             self.state = State::Over;
             self.over_t = 0.0;
             self.best.offer(self.score);
@@ -246,6 +248,7 @@ impl Blocks {
         let g = self.ghost();
         self.score += (g.y - self.piece.y).max(0) as u32 * 2;
         self.piece = g;
+        sfx::play(Sfx::Hit);
         self.shake.add(0.25);
         self.place();
     }
@@ -433,6 +436,7 @@ impl Game for Blocks {
         }
         if self.lines > lines_before {
             let n = self.lines - lines_before;
+            sfx::play(if n >= 4 { Sfx::Win } else { Sfx::LevelUp });
             let word = ["", "Nice!", "Double!", "Triple!", "AMAZING!"][n.min(4) as usize];
             self.pops.add(
                 o + vec2(cell * W as f32 / 2.0, cell * H as f32 * 0.4),

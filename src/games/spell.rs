@@ -3,6 +3,7 @@ use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
 use crate::learn::{tall, ui_scale, PRAISE};
+use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
 pub const ROUND: usize = 8;
@@ -265,6 +266,7 @@ impl Spell {
             return;
         }
         if let Some(i) = self.board.hint() {
+            sfx::play(Sfx::Tick);
             if self.hint_on != Some(i) {
                 self.board.hints += 1;
             }
@@ -280,10 +282,12 @@ impl Spell {
         let r = self.board.place(i);
         match r {
             Place::Wrong => {
+                sfx::play(Sfx::Wrong);
                 self.wobble[i] = 1.0;
                 self.shake.add(0.2);
             }
             Place::Right | Place::Done => {
+                sfx::play(Sfx::Pop);
                 self.slide[i] = 0.0;
                 if slot < self.pop.len() {
                     self.pop[slot] = 1.0;
@@ -300,6 +304,7 @@ impl Spell {
             let perfect = self.board.perfect();
             self.results.push(perfect);
             self.phase = Phase::Won(0.0);
+            sfx::play(Sfx::Right);
             let msg = if perfect {
                 "Perfect!"
             } else {
@@ -435,6 +440,7 @@ impl Game for Spell {
                 if t > WIN_TIME || (t > 0.6 && input.pressed) {
                     self.advance();
                     if let Phase::Finished(_) = self.phase {
+                        sfx::play(Sfx::Win);
                         self.fx.confetti(view);
                     }
                 }
@@ -1445,6 +1451,18 @@ mod tests {
         assert_eq!(g.phase, Phase::Playing);
         g.advance();
         assert!(matches!(g.phase, Phase::Finished(_)));
+    }
+
+    #[test]
+    fn right_and_wrong_letters_sound_different() {
+        let mut g = Spell::with_deck(vec!["cat"]);
+        g.board = Board::with_tiles("cat", vec!['z', 'c', 'a', 't']);
+        let l = layout(&View::ipad_landscape(), 3, 4);
+        crate::sfx::take_pending();
+        g.tap_tile(0, &l);
+        assert_eq!(crate::sfx::take_pending(), vec![Sfx::Wrong]);
+        g.tap_tile(1, &l);
+        assert_eq!(crate::sfx::take_pending(), vec![Sfx::Pop]);
     }
 
     #[test]
