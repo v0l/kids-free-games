@@ -1,4 +1,3 @@
-use super::flappy::set_view_camera;
 use crate::engine::*;
 use crate::fx::*;
 use macroquad::prelude::*;

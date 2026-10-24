@@ -353,6 +353,15 @@ pub fn tick_overlay(dt: f32) {
     });
 }
 
+pub fn set_view_camera(view: &View, shift: Vec2) {
+    set_camera(&Camera2D::from_display_rect(Rect::new(
+        -shift.x,
+        view.h - shift.y,
+        view.w,
+        -view.h,
+    )));
+}
+
 pub fn darker(c: Color, k: f32) -> Color {
     Color::new(c.r * k, c.g * k, c.b * k, c.a)
 }

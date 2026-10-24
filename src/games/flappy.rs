@@ -33,15 +33,6 @@ pub fn bird_scale(vy: f32, kick: f32) -> Vec2 {
     vec2(len, 1.0 / len)
 }
 
-pub fn set_view_camera(view: &View, shift: Vec2) {
-    set_camera(&Camera2D::from_display_rect(Rect::new(
-        -shift.x,
-        view.h - shift.y,
-        view.w,
-        -view.h,
-    )));
-}
-
 pub struct Flappy {
     pub state: State,
     pub y: f32,
