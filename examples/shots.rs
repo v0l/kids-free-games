@@ -48,7 +48,7 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             }
         }
         "Stack Tower" if f % 50 == 49 => tap(&mut i, c),
-        "Road Hopper" if f % 30 == 0 && f < 200 => i.swipe = Some(Dir::Up),
+        "Road Hopper" if f.is_multiple_of(30) && f < 200 => i.swipe = Some(Dir::Up),
         "Brick Breaker" => {
             if f == 2 {
                 i.released = true;
