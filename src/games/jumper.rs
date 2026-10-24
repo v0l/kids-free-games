@@ -1,5 +1,3 @@
-use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -13,6 +11,8 @@ pub const PLAT_W: f32 = 120.0;
 pub const PLAT_H: f32 = 22.0;
 pub const HERO_R: f32 = 26.0;
 pub const MOVE: f32 = 520.0;
+pub const SPRING_H: f32 = 30.0;
+const HERO_H: f32 = 84.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -28,6 +28,16 @@ pub struct Plat {
     pub y: f32,
     pub kind: Kind,
     pub broken: bool,
+}
+
+impl Plat {
+    pub fn top(&self) -> f32 {
+        if self.kind == Kind::Spring {
+            self.y - SPRING_H
+        } else {
+            self.y
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -219,20 +229,21 @@ impl Jumper {
                 }
                 let over =
                     self.pos.x + HERO_R * 0.6 > p.x && self.pos.x - HERO_R * 0.6 < p.x + PLAT_W;
-                if over && old_feet <= p.y + 2.0 && feet >= p.y {
+                let top = p.top();
+                if over && old_feet <= top + 2.0 && feet >= top {
                     if p.kind == Kind::Crumble {
                         p.broken = true;
                         self.landings.push(Landing {
-                            pos: vec2(p.x + PLAT_W / 2.0, p.y),
+                            pos: vec2(p.x + PLAT_W / 2.0, top),
                             kind: Kind::Crumble,
                         });
                         continue;
                     }
                     self.landings.push(Landing {
-                        pos: vec2(self.pos.x, p.y),
+                        pos: vec2(self.pos.x, top),
                         kind: p.kind,
                     });
-                    self.pos.y = p.y - HERO_R;
+                    self.pos.y = top - HERO_R;
                     self.vel.y = if p.kind == Kind::Spring { SPRING } else { JUMP };
                     self.squish = 1.0;
                     break;
@@ -258,7 +269,9 @@ impl Default for Jumper {
     }
 }
 
-const PLAT_GREEN: Color = Color::new(0.43, 0.78, 0.31, 1.0);
+mod art {
+    crate::sprites!("jumper");
+}
 
 impl Jumper {
     fn react(&mut self, view: &View) {
@@ -386,176 +399,127 @@ impl Jumper {
     fn boing_age(&self, p: &Plat) -> Option<f32> {
         self.boings
             .iter()
-            .find(|(w, _)| (w.y - p.y).abs() < 1.0 && (w.x - (p.x + PLAT_W / 2.0)).abs() < PLAT_W)
+            .find(|(w, _)| {
+                (w.y - p.top()).abs() < 1.0 && (w.x - (p.x + PLAT_W / 2.0)).abs() < PLAT_W
+            })
             .map(|b| b.1)
     }
 
     fn background(&self, view: &View) {
-        for k in 0..7 {
-            let f = k as f32;
-            let span = view.h + 240.0;
-            let x = (f * 211.0) % (view.w + 120.0) - 60.0;
-            let y = parallax_y(f * 157.0, self.cam, 0.12, span);
-            let s = 0.8 + (f * 0.37) % 0.9;
-            cloud(
-                x + (self.t * (4.0 + f)) % 40.0,
-                y,
-                s,
-                Color::new(0.82, 0.9, 1.0, 0.6),
-            );
+        let f = view.full();
+        let climb = (-self.cam / 24000.0).clamp(0.0, 1.0);
+        let mix = |a: [f32; 3], b: [f32; 3]| {
+            Color::new(
+                a[0] + (b[0] - a[0]) * climb,
+                a[1] + (b[1] - a[1]) * climb,
+                a[2] + (b[2] - a[2]) * climb,
+                1.0,
+            )
+        };
+        sky(
+            view,
+            mix([0.30, 0.62, 0.95], [0.10, 0.14, 0.42]),
+            mix([0.62, 0.86, 1.0], [0.30, 0.38, 0.70]),
+        );
+        let side = view.w.max(view.h * 0.8);
+        let night = 1.0 - climb * 0.55;
+        for (name, factor, base) in [
+            ("hills_far", 0.08, [0.80, 0.92, 0.95]),
+            ("hills_mid", 0.16, [0.62, 0.86, 0.78]),
+            ("hills_near", 0.3, [0.46, 0.80, 0.62]),
+        ] {
+            let tint = Color::new(base[0] * night, base[1] * night, base[2] * night, 1.0);
+            let bottom = view.h + view.inset.bottom - self.cam * factor;
+            if bottom - side > f.y + f.h {
+                continue;
+            }
+            let off = (self.t * 3.0 * factor).rem_euclid(side);
+            let mut x = f.x - off;
+            while x < f.x + f.w {
+                art::sprite_ex(
+                    name,
+                    Rect::new(x, bottom - side, side + 1.0, side),
+                    crate::art::Draw {
+                        tint,
+                        ..Default::default()
+                    },
+                );
+                x += side;
+            }
         }
-        let ink = Color::from_rgba(150, 160, 210, 120);
         for k in 0..9 {
             let f = k as f32;
-            let span = view.h + 160.0;
-            let x = (f * 263.0 + 40.0) % (view.w - 80.0) + 40.0;
-            let y = parallax_y(f * 131.0, self.cam, 0.3, span);
-            match k % 3 {
-                0 => star(vec2(x, y), 16.0, self.t * 0.3 + f, ink),
-                1 => {
-                    draw_circle_lines(x, y, 14.0, 3.0, ink);
-                    draw_circle_lines(x, y, 6.0, 2.0, ink);
-                }
-                _ => {
-                    for z in 0..4 {
-                        let a = vec2(x + z as f32 * 14.0, y + if z % 2 == 0 { 0.0 } else { 12.0 });
-                        let b = vec2(a.x + 14.0, y + if z % 2 == 0 { 12.0 } else { 0.0 });
-                        draw_line(a.x, a.y, b.x, b.y, 3.0, ink);
-                    }
-                }
-            }
+            let span = view.h + 260.0;
+            let x = (f * 211.0) % (view.w + 120.0) - 60.0;
+            let y = parallax_y(f * 157.0, self.cam, 0.14 + (f % 3.0) * 0.06, span);
+            let w = 130.0 + (f * 53.0) % 110.0;
+            crate::ui::cloud(
+                k,
+                vec2(x + (self.t * (4.0 + f)) % 40.0, y),
+                w,
+                Color::new(1.0, 1.0, 1.0, 0.85 - climb * 0.35),
+            );
         }
     }
 
     fn draw_plat(&self, p: &Plat, y: f32) {
-        let c = match p.kind {
-            Kind::Solid | Kind::Spring => PLAT_GREEN,
-            Kind::Moving(_) => Color::from_rgba(90, 160, 240, 255),
-            Kind::Crumble => Color::from_rgba(170, 120, 70, 255),
+        let name = match p.kind {
+            Kind::Solid | Kind::Spring => "grass",
+            Kind::Moving(_) => "stone",
+            Kind::Crumble => "wood_cracked",
         };
-        let r = Rect::new(p.x, y, PLAT_W, PLAT_H);
-        soft_shadow(
-            vec2(p.x + PLAT_W / 2.0, y + PLAT_H + 8.0),
-            PLAT_W * 0.45,
-            6.0,
-            0.5,
-        );
-        round_rect(
-            Rect::new(p.x, y + 4.0, PLAT_W, PLAT_H),
-            10.0,
-            darker(c, 0.7),
-        );
-        round_rect(r, 10.0, c);
-        gloss(r, 10.0);
-        match p.kind {
-            Kind::Solid | Kind::Spring => {
-                for k in 0..4 {
-                    let gx = p.x + 18.0 + k as f32 * 28.0;
-                    draw_triangle(
-                        vec2(gx - 4.0, y + 2.0),
-                        vec2(gx + 4.0, y + 2.0),
-                        vec2(gx, y - 6.0),
-                        darker(c, 0.85),
-                    );
-                }
-            }
-            Kind::Moving(v) => {
-                for k in 0..3 {
-                    let ax = p.x + 30.0 + k as f32 * 30.0;
-                    let d = v.signum() * 6.0;
-                    draw_triangle(
-                        vec2(ax - d, y + 5.0),
-                        vec2(ax - d, y + PLAT_H - 5.0),
-                        vec2(ax + d, y + PLAT_H / 2.0),
-                        with_alpha(WHITE, 0.55),
-                    );
-                }
-            }
-            Kind::Crumble => {
-                draw_line(p.x + 40.0, y, p.x + 50.0, y + PLAT_H, 3.0, darker(c, 0.6));
-                draw_line(p.x + 80.0, y, p.x + 72.0, y + PLAT_H, 3.0, darker(c, 0.6));
-                draw_line(
-                    p.x + 50.0,
-                    y + 8.0,
-                    p.x + 60.0,
-                    y + 4.0,
-                    2.0,
-                    darker(c, 0.6),
-                );
-            }
-        }
+        let w = PLAT_W + 12.0;
+        let h = w * art::size(name).y / art::size(name).x;
+        art::sprite(name, Rect::new(p.x - 6.0, y - 3.0, w, h));
         if p.kind == Kind::Spring {
             let ext = self.boing_age(p).map_or(1.0, spring_extension);
-            let sx = p.x + PLAT_W / 2.0 - 14.0;
-            let height = 30.0 * ext;
-            for k in 0..3 {
-                let yy = y - 6.0 - (k as f32 / 2.0) * (height - 12.0);
-                draw_line(sx, yy, sx + 28.0, yy + 4.0, 4.0, GRAY);
-                draw_line(
-                    sx + 28.0,
-                    yy + 4.0,
-                    sx,
-                    yy - 4.0 - height * 0.1,
-                    3.0,
-                    LIGHTGRAY,
-                );
-            }
-            let cap = Rect::new(sx - 4.0, y - 6.0 - height, 36.0, 8.0);
-            round_rect(cap, 4.0, Color::from_rgba(240, 80, 80, 255));
-            gloss(cap, 4.0);
+            let frame = if ext < 0.7 {
+                "spring_in"
+            } else if ext > 1.04 {
+                "spring_out"
+            } else {
+                "spring"
+            };
+            let sw = 56.0;
+            let sh = sw * art::size(frame).y / art::size(frame).x;
+            art::sprite(
+                frame,
+                Rect::new(p.x + PLAT_W / 2.0 - sw / 2.0, y + 2.0 - sh, sw, sh),
+            );
+        }
+    }
+
+    fn hero_frame(&self) -> &'static str {
+        if self.state == State::Fallen {
+            "bunny_hurt"
+        } else if self.squish > 0.6 {
+            "bunny_ready"
+        } else if self.vel.y < 0.0 {
+            "bunny_jump"
+        } else {
+            "bunny_stand"
         }
     }
 
     fn draw_hero(&self, view: &View, c: Vec2) {
         let (sx, sy) = squash_stretch(self.squish, self.vel.y);
-        let anchor = c.y + HERO_R;
+        let frame = self.hero_frame();
+        let unit = HERO_H / art::size("bunny_stand").y;
+        let w = art::size(frame).x * unit * sx;
+        let h = art::size(frame).y * unit * sy;
+        let anchor = c.y + HERO_R + 2.0;
         for dx in [0.0, -view.w, view.w] {
             let cx = c.x + dx;
-            if cx < -HERO_R * 2.0 || cx > view.w + HERO_R * 2.0 {
+            if cx < -w || cx > view.w + w {
                 continue;
             }
-            let cy = anchor - HERO_R * sy;
-            let body = Color::from_rgba(250, 200, 50, 255);
-            draw_ellipse(cx, cy, HERO_R * sx, HERO_R * sy, 0.0, darker(body, 0.85));
-            draw_ellipse(
-                cx,
-                cy - 1.5,
-                HERO_R * sx * 0.96,
-                HERO_R * sy * 0.96,
-                0.0,
-                body,
-            );
-            draw_ellipse(
-                cx - HERO_R * sx * 0.3,
-                cy - HERO_R * sy * 0.45,
-                HERO_R * sx * 0.35,
-                HERO_R * sy * 0.2,
-                -0.5,
-                with_alpha(WHITE, 0.35),
-            );
-            draw_rectangle(
-                cx - HERO_R * 0.8 * sx,
-                cy + HERO_R * 0.4 * sy,
-                HERO_R * 1.6 * sx,
-                HERO_R * 0.35 * sy,
-                Color::from_rgba(90, 160, 80, 255),
-            );
-            for s in [-1.0f32, 1.0] {
-                let e = vec2(cx + self.face * 8.0 * sx + s * 9.0 * sx, cy - 6.0 * sy);
-                draw_circle(e.x, e.y, 7.0, WHITE);
-                draw_circle(
-                    e.x + self.face * 2.5,
-                    e.y + if self.vel.y > 0.0 { 2.0 } else { -2.0 },
-                    3.5,
-                    BLACK,
-                );
-            }
-            draw_rectangle(
-                cx + self.face * HERO_R * 0.7 * sx - 6.0,
-                cy + 2.0 * sy,
-                12.0 + self.face * 6.0,
-                8.0,
-                Color::from_rgba(240, 150, 40, 255),
+            art::sprite_ex(
+                frame,
+                Rect::new(cx - w / 2.0, anchor - h, w, h),
+                crate::art::Draw {
+                    flip_x: self.face < 0.0,
+                    ..Default::default()
+                },
             );
         }
     }
@@ -584,6 +548,7 @@ impl Game for Jumper {
             State::Ready => {
                 if input.tap() {
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                 }
             }
             State::Playing => {
@@ -591,8 +556,12 @@ impl Game for Jumper {
                 self.fill(view);
                 if self.pos.y - HERO_R > self.cam + view.h {
                     self.state = State::Fallen;
+                    if self.score > self.best.0 && self.best.0 > 0 {
+                        sfx::say(sfx::Say::Best);
+                    }
                     self.best.offer(self.score);
                     sfx::play(Sfx::Whoosh);
+                    sfx::play(Sfx::Lose);
                     feel::impact(Impact::Medium);
                     self.shake.add(0.6);
                 }
@@ -601,6 +570,7 @@ impl Game for Jumper {
                 if input.tap() {
                     self.reset(view);
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                 }
             }
         }
@@ -609,23 +579,6 @@ impl Game for Jumper {
     }
 
     fn draw(&self, view: &View) {
-        clear_background(Color::from_rgba(250, 247, 235, 255));
-        let grid = 36.0;
-        let off = (-self.cam).rem_euclid(grid);
-        for i in 0..((view.h / grid) as i32 + 2) {
-            let y = i as f32 * grid + off - grid;
-            draw_line(0.0, y, view.w, y, 1.0, Color::from_rgba(220, 225, 240, 255));
-        }
-        for i in 0..((view.w / grid) as i32 + 1) {
-            draw_line(
-                i as f32 * grid,
-                0.0,
-                i as f32 * grid,
-                view.h,
-                1.0,
-                Color::from_rgba(230, 232, 245, 255),
-            );
-        }
         self.background(view);
         let sh = self.shake.offset();
         set_view_camera(view, vec2(sh.x, sh.y));
@@ -637,15 +590,18 @@ impl Game for Jumper {
         for c in &self.crumbs {
             let fade = 1.0 - (c.age / CRUMB_LIFE).powi(2);
             let at = vec2(c.pos.x, c.pos.y - self.cam);
-            draw_rectangle_ex(
-                at.x,
-                at.y,
-                c.size.x,
-                c.size.y,
-                DrawRectangleParams {
+            art::sprite_ex(
+                "crumb",
+                Rect::new(
+                    at.x - c.size.x * 0.7,
+                    at.y - c.size.y * 0.7,
+                    c.size.x * 1.4,
+                    c.size.y * 1.4,
+                ),
+                crate::art::Draw {
                     rotation: c.angle,
-                    offset: vec2(0.5, 0.5),
-                    color: Color::new(0.67, 0.47, 0.27, fade),
+                    tint: Color::new(1.0, 1.0, 1.0, fade),
+                    ..Default::default()
                 },
             );
         }
@@ -655,9 +611,12 @@ impl Game for Jumper {
                 .plats
                 .iter()
                 .filter(|p| {
-                    !p.broken && p.y - self.cam > c.y && p.x - 4.0 < c.x && c.x < p.x + PLAT_W + 4.0
+                    !p.broken
+                        && p.top() - self.cam > c.y
+                        && p.x - 4.0 < c.x
+                        && c.x < p.x + PLAT_W + 4.0
                 })
-                .map(|p| p.y - self.cam)
+                .map(|p| p.top() - self.cam)
                 .fold(f32::MAX, f32::min);
             if ground < f32::MAX {
                 let near = 1.0 - ((ground - c.y) / 260.0).clamp(0.0, 1.0);
@@ -701,27 +660,44 @@ impl Game for Jumper {
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(250, 247, 235, 255));
-    for (i, (px, py)) in [(0.1, 0.8), (0.5, 0.55), (0.2, 0.3)].iter().enumerate() {
-        draw_rectangle(
-            r.x + r.w * px,
-            r.y + r.h * py,
-            r.w * 0.35,
-            r.h * 0.07,
-            if i == 1 {
-                Color::from_rgba(90, 160, 240, 255)
-            } else {
-                Color::from_rgba(110, 200, 80, 255)
-            },
-        );
-    }
-    draw_circle(
-        r.x + r.w * 0.65,
-        r.y + r.h * 0.35,
-        r.w * 0.14,
-        Color::from_rgba(250, 200, 50, 255),
+    gradient_rect(
+        r,
+        Color::from_rgba(125, 205, 255, 255),
+        Color::from_rgba(205, 240, 255, 255),
     );
-    draw_circle(r.x + r.w * 0.69, r.y + r.h * 0.32, r.w * 0.04, WHITE);
+    let side = r.w.max(r.h);
+    art::sprite("hills_mid", Rect::new(r.x, r.y + r.h - side, r.w, side));
+    art::sprite("hills_near", Rect::new(r.x, r.y + r.h - side, r.w, side));
+    crate::ui::cloud(
+        1,
+        vec2(r.x + r.w * 0.78, r.y + r.h * 0.18),
+        r.w * 0.34,
+        WHITE,
+    );
+    art::sprite_w(
+        "grass",
+        vec2(r.x + r.w * 0.24, r.y + r.h * 0.72),
+        r.w * 0.46,
+        Default::default(),
+    );
+    art::sprite_w(
+        "stone",
+        vec2(r.x + r.w * 0.76, r.y + r.h * 0.5),
+        r.w * 0.46,
+        Default::default(),
+    );
+    art::sprite_w(
+        "spring",
+        vec2(r.x + r.w * 0.24, r.y + r.h * 0.6),
+        r.w * 0.16,
+        Default::default(),
+    );
+    art::sprite_at(
+        "bunny_jump",
+        vec2(r.x + r.w * 0.6, r.y + r.h * 0.28),
+        r.h * 0.4,
+        Default::default(),
+    );
 }
 
 #[cfg(test)]
@@ -737,9 +713,61 @@ mod tests {
             kind,
             broken: false,
         }];
-        j.pos = vec2(460.0, 500.0 - HERO_R - 5.0);
+        j.pos = vec2(460.0, j.plats[0].top() - HERO_R - 5.0);
         j.vel = vec2(0.0, 400.0);
         (j, v)
+    }
+
+    #[test]
+    fn jumper_sprites_all_exist() {
+        let have = art::names();
+        for n in [
+            "hills_far",
+            "hills_mid",
+            "hills_near",
+            "grass",
+            "stone",
+            "wood_cracked",
+            "spring",
+            "spring_in",
+            "spring_out",
+            "bunny_stand",
+            "bunny_jump",
+            "bunny_ready",
+            "bunny_hurt",
+            "crumb",
+        ] {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn landing_on_a_spring_stops_at_its_top_not_the_platform() {
+        let v = View::ipad_landscape();
+        let mut j = Jumper::new();
+        j.plats = vec![Plat {
+            x: 400.0,
+            y: 500.0,
+            kind: Kind::Spring,
+            broken: false,
+        }];
+        j.pos = vec2(460.0, 500.0 - SPRING_H - HERO_R - 4.0);
+        j.vel = vec2(0.0, 400.0);
+        j.physics(0.0, &v, 1.0 / 30.0);
+        assert_eq!(j.vel.y, SPRING);
+        assert_eq!(j.pos.y, 500.0 - SPRING_H - HERO_R);
+        assert_eq!(j.landings[0].pos.y, 500.0 - SPRING_H);
+    }
+
+    #[test]
+    fn hero_frame_follows_motion() {
+        let mut j = Jumper::new();
+        j.vel.y = -300.0;
+        assert_eq!(j.hero_frame(), "bunny_jump");
+        j.vel.y = 300.0;
+        assert_eq!(j.hero_frame(), "bunny_stand");
+        j.state = State::Fallen;
+        assert_eq!(j.hero_frame(), "bunny_hurt");
     }
 
     #[test]
@@ -779,7 +807,7 @@ mod tests {
         j.physics(0.0, &v, 1.0 / 30.0);
         assert_eq!(j.landings.len(), 1);
         assert_eq!(j.landings[0].kind, Kind::Spring);
-        assert_eq!(j.landings[0].pos.y, 500.0);
+        assert_eq!(j.landings[0].pos.y, 500.0 - SPRING_H);
     }
 
     #[test]

@@ -1,0 +1,15 @@
+hills_far      | jumper-pack/PNG/Background/bg_layer2.png | solo max=1024 keep
+hills_mid      | jumper-pack/PNG/Background/bg_layer3.png | solo max=1024 keep
+hills_near     | jumper-pack/PNG/Background/bg_layer4.png | solo max=1024 keep
+grass          | jumper-pack/PNG/Environment/ground_grass.png | max=300
+stone          | jumper-pack/PNG/Environment/ground_stone.png | max=300
+wood_cracked   | jumper-pack/PNG/Environment/ground_wood_broken.png | max=300
+spring         | jumper-pack/PNG/Items/spring.png | max=120
+spring_in      | jumper-pack/PNG/Items/spring_in.png | max=120
+spring_out     | jumper-pack/PNG/Items/spring_out.png | max=120
+bunny_stand    | jumper-pack/PNG/Players/bunny1_stand.png | max=200
+bunny_jump     | jumper-pack/PNG/Players/bunny1_jump.png | max=200
+bunny_ready    | jumper-pack/PNG/Players/bunny1_ready.png | max=200
+bunny_hurt     | jumper-pack/PNG/Players/bunny1_hurt.png | max=200
+crumb          | jumper-pack/PNG/Particles/particle_brown.png | max=48
+carrot         | jumper-pack/PNG/Items/carrot.png | max=96
