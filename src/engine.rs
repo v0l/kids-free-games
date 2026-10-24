@@ -406,6 +406,24 @@ pub fn set_view_camera(view: &View, shift: Vec2) {
     )));
 }
 
+pub fn clip_px(view: &View, r: Rect, dpi: f32) -> (i32, i32, i32, i32) {
+    let k = view.scale * dpi;
+    let x = ((r.x + view.inset.left) * k).floor();
+    let y = ((r.y + view.inset.top) * k).floor();
+    let w = (r.w * k).ceil().max(0.0);
+    let h = (r.h * k).ceil().max(0.0);
+    (x as i32, y as i32, w as i32, h as i32)
+}
+
+pub fn clip(view: &View, r: Rect) {
+    let px = clip_px(view, r, screen_dpi_scale());
+    unsafe { get_internal_gl().quad_gl.scissor(Some(px)) };
+}
+
+pub fn unclip() {
+    unsafe { get_internal_gl().quad_gl.scissor(None) };
+}
+
 pub fn darker(c: Color, k: f32) -> Color {
     Color::new(c.r * k, c.g * k, c.b * k, c.a)
 }
@@ -591,6 +609,23 @@ impl Best {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn clip_rects_land_on_screen_pixels_past_the_cutout() {
+        let v = View::fit_safe(
+            2400.0,
+            1080.0,
+            crate::safe::Insets {
+                left: 120.0,
+                ..Default::default()
+            },
+        );
+        let (x, y, w, h) = clip_px(&v, Rect::new(0.0, 0.0, v.w, v.h), 1.0);
+        assert_eq!((x, y), (120, 0));
+        assert!((w - 2280).abs() <= 1 && (h - 1080).abs() <= 1);
+        let (_, _, w2, _) = clip_px(&v, Rect::new(10.0, 10.0, 100.0, 50.0), 2.0);
+        assert_eq!(w2, (100.0 * v.scale * 2.0).ceil() as i32);
+    }
 
     #[test]
     fn safe_area_shrinks_the_layout_and_offsets_touches() {

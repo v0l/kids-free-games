@@ -1,5 +1,4 @@
 use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
 use crate::games::{self, Entry, Kind};
@@ -41,57 +40,13 @@ pub const MUSIC: Rect = HOME;
 
 fn draw_mute(view: &View, scroll: f32) {
     let r = mute_rect(view);
-    let r = Rect::new(r.x, r.y - scroll, r.w, r.h);
-    round_rect(
-        Rect::new(r.x, r.y + 4.0, r.w, r.h),
-        14.0,
-        Color::from_rgba(0, 0, 0, 50),
-    );
-    round_rect(r, 14.0, with_alpha(WHITE, 0.94));
-    let c = r.center();
-    let col = Color::from_rgba(80, 80, 110, 255);
-    draw_rectangle(c.x - 16.0, c.y - 6.0, 8.0, 12.0, col);
-    draw_triangle(
-        vec2(c.x - 9.0, c.y - 6.0),
-        vec2(c.x + 2.0, c.y - 15.0),
-        vec2(c.x + 2.0, c.y + 15.0),
-        col,
-    );
-    draw_triangle(
-        vec2(c.x - 9.0, c.y - 6.0),
-        vec2(c.x - 9.0, c.y + 6.0),
-        vec2(c.x + 2.0, c.y + 15.0),
-        col,
-    );
-    if sfx::muted() {
-        draw_line(
-            c.x + 7.0,
-            c.y - 8.0,
-            c.x + 19.0,
-            c.y + 8.0,
-            4.0,
-            Color::from_rgba(230, 70, 80, 255),
-        );
-        draw_line(
-            c.x + 19.0,
-            c.y - 8.0,
-            c.x + 7.0,
-            c.y + 8.0,
-            4.0,
-            Color::from_rgba(230, 70, 80, 255),
-        );
+    let r = Rect::new(r.x + 4.0, r.y - 4.0 - scroll, r.h + 8.0, r.h + 8.0);
+    let icon = if sfx::muted() {
+        "icon_audio_off"
     } else {
-        for (k, rad) in [8.0, 15.0].iter().enumerate() {
-            let a = 0.7 - k as f32 * 0.05;
-            let mut prev = c + vec2(4.0 + rad * (-a).cos(), rad * (-a).sin());
-            for j in 1..=8 {
-                let t = -a + 2.0 * a * j as f32 / 8.0;
-                let p = c + vec2(4.0 + rad * t.cos(), rad * t.sin());
-                draw_line(prev.x, prev.y, p.x, p.y, 3.0, col);
-                prev = p;
-            }
-        }
-    }
+        "icon_audio"
+    };
+    crate::ui::round_button(r, icon, crate::ui::Tone::Blue, 0.0);
 }
 
 pub struct Header {
@@ -375,74 +330,88 @@ impl App {
     }
 
     fn draw_home_button(&self) {
-        let s = 1.0 - self.home_press * 0.12;
-        let r = Rect::new(
-            HOME.center().x - HOME.w * s / 2.0,
-            HOME.center().y - HOME.h * s / 2.0,
-            HOME.w * s,
-            HOME.h * s,
-        );
-        round_rect(
-            Rect::new(r.x, r.y + 4.0, r.w, r.h),
-            14.0,
-            Color::from_rgba(0, 0, 0, 60),
-        );
-        round_rect(r, 14.0, with_alpha(WHITE, 0.94));
-        let c = r.center();
-        let col = Color::from_rgba(80, 80, 110, 255);
-        draw_triangle(
-            vec2(c.x - 16.0 * s, c.y - 1.0),
-            vec2(c.x + 16.0 * s, c.y - 1.0),
-            vec2(c.x, c.y - 16.0 * s),
-            col,
-        );
-        draw_rectangle(c.x - 11.0 * s, c.y - 2.0, 22.0 * s, 16.0 * s, col);
-        draw_rectangle(c.x - 4.0 * s, c.y + 5.0 * s, 8.0 * s, 9.0 * s, WHITE);
+        let r = Rect::new(HOME.x, HOME.y - 4.0, HOME.h + 8.0, HOME.h + 8.0);
+        crate::ui::round_button(r, "icon_home", crate::ui::Tone::Yellow, self.home_press);
     }
 
     fn draw_backdrop(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(255, 190, 110, 255),
-            Color::from_rgba(255, 120, 165, 255),
+        let f = view.full();
+        art::sprite("sky", f);
+        let par = |k: f32| self.scroll * k;
+        let band = |name: &str, bottom: f32, h: f32, drift: f32, tint: Color| {
+            let sz = art::size(name);
+            let w = h * sz.x / sz.y;
+            let off = drift.rem_euclid(w);
+            let mut x = f.x - off;
+            while x < f.x + f.w {
+                art::sprite_ex(
+                    name,
+                    Rect::new(x, bottom - h, w + 1.0, h),
+                    crate::art::Draw {
+                        tint,
+                        ..Default::default()
+                    },
+                );
+                x += w;
+            }
+        };
+        let sun = vec2(view.w * 0.86, 110.0 - par(0.2));
+        art::sprite_at(
+            "sun",
+            sun,
+            120.0,
+            crate::art::Draw {
+                rotation: (self.t * 0.6).sin() * 0.08,
+                ..Default::default()
+            },
         );
-        let rays = 14;
-        let c = vec2(view.w / 2.0, -view.h * 0.15 - self.scroll * 0.3);
-        let len = view.w.max(view.h) * 1.6;
-        for k in 0..rays {
-            let a0 = self.t * 0.08 + k as f32 * std::f32::consts::TAU / rays as f32;
-            let a1 = a0 + std::f32::consts::TAU / rays as f32 * 0.5;
-            draw_triangle(
-                c,
-                c + vec2(a0.cos(), a0.sin()) * len,
-                c + vec2(a1.cos(), a1.sin()) * len,
-                Color::new(1.0, 1.0, 1.0, 0.06),
+        let ground = f.y + f.h - par(0.1);
+        band(
+            "clouds",
+            ground - f.h * 0.28,
+            f.h * 0.36,
+            self.t * 8.0,
+            WHITE,
+        );
+        band("mountains", ground - f.h * 0.14, f.h * 0.3, 0.0, WHITE);
+        band(
+            "hills2",
+            ground - f.h * 0.05,
+            f.h * 0.22,
+            0.0,
+            Color::new(0.85, 0.95, 0.8, 1.0),
+        );
+        band(
+            "hills",
+            ground + 4.0,
+            f.h * 0.2,
+            120.0,
+            Color::new(0.75, 0.9, 0.65, 1.0),
+        );
+        for k in 0..3 {
+            let x = (f.x - 120.0 + self.t * (22.0 + k as f32 * 9.0) + k as f32 * 420.0)
+                .rem_euclid(f.w + 240.0)
+                + f.x
+                - 120.0;
+            let y = 70.0 + k as f32 * 70.0 - par(0.3);
+            crate::ui::cloud(
+                k + 2,
+                vec2(x, y),
+                150.0 + k as f32 * 40.0,
+                with_alpha(WHITE, 0.95),
             );
         }
-        for k in 0..18 {
-            let seed = k as f32 * 12.9898;
-            let x = (seed.sin() * 43758.545).fract().abs() * view.w;
-            let speed = 12.0 + (k % 5) as f32 * 6.0;
-            let y = view.h + 40.0 - (self.t * speed + k as f32 * 97.0).rem_euclid(view.h + 120.0);
-            let wob = (self.t * 1.3 + k as f32).sin() * 14.0;
-            let r = 6.0 + (k % 4) as f32 * 5.0;
-            let col = [
-                Color::new(1.0, 1.0, 1.0, 0.22),
-                Color::new(1.0, 0.95, 0.6, 0.25),
-                Color::new(0.7, 0.9, 1.0, 0.22),
-            ][k % 3];
-            if k % 2 == 0 {
-                draw_circle(x + wob, y, r, col);
-                draw_circle(
-                    x + wob - r * 0.3,
-                    y - r * 0.3,
-                    r * 0.3,
-                    Color::new(1.0, 1.0, 1.0, 0.25),
-                );
-            } else {
-                star(vec2(x + wob, y), r * 1.2, self.t * 0.6 + k as f32, col);
-            }
-        }
+        let px = (self.t * 70.0).rem_euclid(f.w + 400.0) + f.x - 200.0;
+        let py = 170.0 + (self.t * 2.0).sin() * 14.0 - par(0.35);
+        art::sprite_at(
+            "plane",
+            vec2(px, py),
+            42.0,
+            crate::art::Draw {
+                rotation: (self.t * 2.0).cos() * 0.08,
+                ..Default::default()
+            },
+        );
     }
 
     fn draw_title(&self, view: &View) {
@@ -473,13 +442,13 @@ impl App {
         let tag = "No ads. No tracking. Just play.";
         let a = ((self.since_menu - 0.15) / 0.25).clamp(0.0, 1.0);
         let r = Rect::new(h.tag.x, h.tag.y - self.scroll, h.tag.w, h.tag.h);
-        round_rect(r, r.h / 2.0, Color::new(1.0, 1.0, 1.0, 0.35 * a));
+        crate::ui::nine("panel", r, 14.0, r.h / 64.0, with_alpha(WHITE, 0.9 * a));
         text_center(
             tag,
             view.w / 2.0,
             r.y + r.h / 2.0,
             TAG_SIZE,
-            with_alpha(Color::from_rgba(130, 40, 70, 255), a),
+            with_alpha(crate::ui::BODY, a),
         );
     }
 
@@ -540,7 +509,12 @@ impl App {
                     WHITE,
                 );
             }
-            draw_tile(r, e, (focused || self.press[i] > 0.01).then_some(self.t));
+            draw_tile(
+                view,
+                r,
+                e,
+                (focused || self.press[i] > 0.01).then_some(self.t),
+            );
         }
         self.fx.draw();
         if let Some((i, lt)) = self.launch {
@@ -572,96 +546,97 @@ impl App {
 }
 
 fn draw_section_label(r: Rect, kind: Kind, a: f32) {
-    let (text, color) = match kind {
-        Kind::Arcade => ("Play", Color::from_rgba(255, 255, 255, 255)),
-        Kind::Learn => ("Learn", Color::from_rgba(255, 250, 200, 255)),
+    let (text, tone, sprite) = match kind {
+        Kind::Arcade => ("Play", crate::ui::Tone::Red, "bunny"),
+        Kind::Learn => ("Learn", crate::ui::Tone::Green, "bunny2"),
     };
     let size = 30.0;
-    let w = measure_width(text, size);
-    let cy = r.y + r.h / 2.0 + 4.0;
+    let w = measure_width(text, size) + 90.0;
+    let pill = Rect::new(r.x, r.y + 4.0, w, r.h - 6.0);
+    crate::ui::nine(
+        match tone {
+            crate::ui::Tone::Red => "btn_red",
+            _ => "btn_green",
+        },
+        pill,
+        18.0,
+        pill.h / 64.0,
+        with_alpha(WHITE, a),
+    );
+    art::sprite_at(
+        sprite,
+        vec2(pill.x + 30.0, pill.y + pill.h * 0.42),
+        pill.h * 1.15,
+        crate::art::Draw {
+            tint: with_alpha(WHITE, a),
+            ..Default::default()
+        },
+    );
     text_outline(
         text,
-        r.x + 6.0 + w / 2.0,
-        cy,
+        pill.x + 52.0 + (w - 60.0) / 2.0,
+        pill.y + pill.h * 0.44,
         size,
-        with_alpha(color, a),
-        with_alpha(Color::from_rgba(150, 50, 90, 255), a),
+        with_alpha(WHITE, a),
+        with_alpha(darker(tone_color(tone), 0.6), a),
     );
-    let x0 = r.x + w + 24.0;
-    round_rect(
-        Rect::new(x0, cy - 2.0, (r.x + r.w - x0).max(0.0), 4.0),
-        2.0,
-        Color::new(1.0, 1.0, 1.0, 0.35 * a),
-    );
+}
+
+fn tone_color(t: crate::ui::Tone) -> Color {
+    match t {
+        crate::ui::Tone::Red => Color::from_rgba(230, 60, 80, 255),
+        _ => Color::from_rgba(40, 180, 110, 255),
+    }
 }
 
 fn draw_music(scroll: f32) {
-    let r = Rect::new(MUSIC.x, MUSIC.y - scroll, MUSIC.w, MUSIC.h);
-    round_rect(
-        Rect::new(r.x, r.y + 4.0, r.w, r.h),
-        14.0,
-        Color::from_rgba(0, 0, 0, 50),
+    let r = Rect::new(
+        MUSIC.x,
+        MUSIC.y - 4.0 - scroll,
+        MUSIC.h + 8.0,
+        MUSIC.h + 8.0,
     );
-    round_rect(r, 14.0, with_alpha(WHITE, 0.94));
-    let c = r.center();
-    let col = Color::from_rgba(80, 80, 110, 255);
-    draw_ellipse(c.x - 9.0, c.y + 9.0, 7.0, 5.5, -20.0, col);
-    draw_ellipse(c.x + 9.0, c.y + 5.0, 7.0, 5.5, -20.0, col);
-    draw_rectangle(c.x - 4.0, c.y - 14.0, 3.5, 23.0, col);
-    draw_rectangle(c.x + 14.0, c.y - 18.0, 3.5, 23.0, col);
-    draw_triangle(
-        vec2(c.x - 4.0, c.y - 14.0),
-        vec2(c.x + 17.5, c.y - 18.0),
-        vec2(c.x + 17.5, c.y - 11.0),
-        col,
-    );
-    draw_triangle(
-        vec2(c.x - 4.0, c.y - 14.0),
-        vec2(c.x - 4.0, c.y - 7.0),
-        vec2(c.x + 17.5, c.y - 11.0),
-        col,
-    );
-    if !sfx::music_on() {
-        draw_line(
-            c.x - 18.0,
-            c.y + 16.0,
-            c.x + 20.0,
-            c.y - 18.0,
-            4.0,
-            Color::from_rgba(230, 70, 80, 255),
-        );
-    }
+    let icon = if sfx::music_on() {
+        "icon_music"
+    } else {
+        "icon_music_off"
+    };
+    crate::ui::round_button(r, icon, crate::ui::Tone::Blue, 0.0);
 }
 
-fn draw_tile(r: Rect, e: &Entry, shine: Option<f32>) {
-    let rad = r.w * 0.14;
-    round_rect(
-        Rect::new(r.x + 2.0, r.y + r.w * 0.05, r.w, r.h),
-        rad,
-        Color::from_rgba(120, 30, 70, 60),
+fn draw_tile(view: &View, r: Rect, e: &Entry, shine: Option<f32>) {
+    let k = r.w / 160.0;
+    crate::ui::nine(
+        "panel",
+        Rect::new(r.x + 3.0 * k, r.y + 8.0 * k, r.w, r.h),
+        14.0,
+        2.0 * k,
+        Color::new(0.1, 0.2, 0.3, 0.25),
     );
-    round_rect(
-        Rect::new(r.x, r.y + r.w * 0.03, r.w, r.h),
-        rad,
-        darker(e.color, 0.7),
-    );
-    round_rect(r, rad, WHITE);
-    let ir = Rect::new(r.x + r.w * 0.07, r.y + r.w * 0.07, r.w * 0.86, r.w * 0.86);
-    round_rect(ir, rad * 0.75, e.color);
-    let inner = Rect::new(ir.x + ir.w * 0.1, ir.y + ir.h * 0.1, ir.w * 0.8, ir.h * 0.8);
-    (e.icon)(inner);
-    gloss(ir, rad * 0.75);
+    crate::ui::nine("panel", r, 14.0, 2.0 * k, WHITE);
+    let pad = r.w * 0.07;
+    let ir = Rect::new(r.x + pad, r.y + pad, r.w - pad * 2.0, r.w - pad * 2.0);
+    round_rect(ir, 12.0 * k, e.color);
+    clip(view, ir);
+    (e.icon)(ir);
+    unclip();
     if let Some(t) = shine {
         shine_sweep(ir, t);
     }
-    let size = (r.w * 0.86 / text_size(e.name, 10.0).width * 10.0).min(r.w * 0.14);
-    text_center(
+    let label = Rect::new(r.x, ir.y + ir.h, r.w, r.y + r.h - ir.y - ir.h - 6.0 * k);
+    let size = (r.w * 0.86 / measure_width(e.name, 10.0) * 10.0).min(r.w * 0.15);
+    text_outline(
         e.name,
-        r.x + r.w / 2.0,
-        ir.y + ir.h + (r.y + r.h - ir.y - ir.h) / 2.0,
+        label.center().x,
+        label.center().y,
         size,
-        darker(e.color, 0.6),
+        WHITE,
+        darker(e.color, 0.55),
     );
+}
+
+mod art {
+    crate::sprites!("menu");
 }
 
 impl Default for App {
