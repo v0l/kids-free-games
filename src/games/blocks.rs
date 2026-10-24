@@ -1,4 +1,3 @@
-use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -21,6 +20,24 @@ const SHAPES: [[(i32, i32); 4]; 7] = [
     [(1, 0), (0, 1), (1, 1), (2, 1)],
     [(0, 0), (1, 0), (1, 1), (2, 1)],
 ];
+
+const SPRITES: [&str; 7] = [
+    "blk_i", "blk_j", "blk_l", "blk_o", "blk_s", "blk_t", "blk_z",
+];
+
+const TINTS: [(u8, u8, u8); 7] = [
+    (255, 255, 255),
+    (120, 130, 255),
+    (255, 255, 255),
+    (255, 255, 255),
+    (255, 255, 255),
+    (255, 255, 255),
+    (255, 255, 255),
+];
+
+mod art {
+    crate::sprites!("blocks");
+}
 
 const COLORS: [(u8, u8, u8); 7] = [
     (80, 210, 240),
@@ -259,6 +276,10 @@ impl Blocks {
             if y < 0 {
                 self.state = State::Over;
                 self.over_t = 0.0;
+                sfx::play(Sfx::Lose);
+                if self.score > self.best.0 && self.best.0 > 0 {
+                    sfx::say(sfx::Say::Best);
+                }
                 self.best.offer(self.score);
                 return;
             }
@@ -320,15 +341,48 @@ impl Blocks {
     }
 }
 
-fn block(x: f32, y: f32, s: f32, c: Color) {
-    let r = Rect::new(x + 1.0, y + 1.0, s - 2.0, s - 2.0);
-    round_rect(r, s * 0.18, darker(c, 0.7));
-    round_rect(Rect::new(r.x, r.y, r.w, r.h - s * 0.12), s * 0.18, c);
-    round_rect(
-        Rect::new(r.x + s * 0.15, r.y + s * 0.12, r.w - s * 0.3, s * 0.18),
-        s * 0.09,
-        Color::new(1.0, 1.0, 1.0, 0.35),
+pub fn sprite_for(kind: u8) -> &'static str {
+    SPRITES[kind as usize % 7]
+}
+
+fn block(x: f32, y: f32, s: f32, kind: u8, wash: f32) {
+    let (r, g, b) = TINTS[kind as usize % 7];
+    let k = |v: u8| v as f32 / 255.0;
+    art::sprite_ex(
+        sprite_for(kind),
+        Rect::new(x + 0.5, y + 0.5, s - 1.0, s - 1.0),
+        crate::art::Draw {
+            tint: Color::new(k(r), k(g), k(b), 1.0),
+            ..Default::default()
+        },
     );
+    if wash > 0.0 {
+        round_rect(
+            Rect::new(x + 1.0, y + 1.0, s - 2.0, s - 2.0),
+            s * 0.12,
+            Color::new(1.0, 1.0, 1.0, wash * 0.9),
+        );
+    }
+}
+
+fn tile_screen(view: &View, name: &str, size: f32, tint: Color) {
+    let f = view.full();
+    let mut y = f.y;
+    while y < f.y + f.h {
+        let mut x = f.x;
+        while x < f.x + f.w {
+            art::sprite_ex(
+                name,
+                Rect::new(x, y, size + 0.5, size + 0.5),
+                crate::art::Draw {
+                    tint,
+                    ..Default::default()
+                },
+            );
+            x += size;
+        }
+        y += size;
+    }
 }
 
 impl Game for Blocks {
@@ -462,12 +516,7 @@ impl Game for Blocks {
             Color::from_rgba(40, 40, 90, 255),
             Color::from_rgba(90, 50, 130, 255),
         );
-        for k in 0..30 {
-            let x = ((k * 97) % 1000) as f32 / 1000.0 * view.w;
-            let y = ((k * 61) % 1000) as f32 / 1000.0 * view.h;
-            let tw = 0.3 + 0.3 * (self.t * 2.0 + k as f32).sin();
-            draw_circle(x, y, 1.5 + (k % 3) as f32, Color::new(1.0, 1.0, 1.0, tw));
-        }
+        tile_screen(view, "quilt", 96.0, Color::new(0.5, 0.42, 0.9, 0.14));
         let (cell, o, side) = Self::layout(view);
         let sh = self.shake.offset();
         let o = o + sh + vec2(0.0, self.land * 3.0);
@@ -483,15 +532,22 @@ impl Game for Blocks {
             12.0,
             Color::from_rgba(50, 45, 95, 255),
         );
-        for x in 1..W {
-            draw_line(
-                o.x + x as f32 * cell,
-                o.y,
-                o.x + x as f32 * cell,
-                o.y + bh,
-                1.0,
-                Color::new(1.0, 1.0, 1.0, 0.05),
-            );
+        for y in 0..H {
+            for x in 0..W {
+                art::sprite_ex(
+                    "cell",
+                    Rect::new(
+                        o.x + x as f32 * cell,
+                        o.y + y as f32 * cell,
+                        cell + 0.5,
+                        cell + 0.5,
+                    ),
+                    crate::art::Draw {
+                        tint: Color::new(0.2, 0.17, 0.42, 1.0),
+                        ..Default::default()
+                    },
+                );
+            }
         }
         let flash = self
             .clearing
@@ -500,18 +556,13 @@ impl Game for Blocks {
         for y in 0..H {
             for x in 0..W {
                 if let Some(k) = self.cells[y][x] {
-                    let mut c = piece_color(k);
+                    let mut wash = 0.0;
                     let mut s = cell;
                     if let Some((rows, p)) = &flash {
                         if rows.contains(&y) {
                             let d = (x as f32 - 4.5).abs() / 5.0;
                             let k2 = ((p - d * 0.4) / 0.6).clamp(0.0, 1.0);
-                            c = Color::new(
-                                c.r + (1.0 - c.r) * k2,
-                                c.g + (1.0 - c.g) * k2,
-                                c.b + (1.0 - c.b) * k2,
-                                1.0,
-                            );
+                            wash = k2;
                             s = cell * (1.0 - k2 * 0.9);
                         }
                     }
@@ -520,14 +571,14 @@ impl Game for Blocks {
                         o.x + x as f32 * cell + off,
                         o.y + y as f32 * cell + off,
                         s,
-                        c,
+                        k,
+                        wash,
                     );
                 }
             }
         }
         if self.state == State::Playing && self.clearing.is_none() {
             let g = self.ghost();
-            let c = piece_color(self.piece.kind);
             for (x, y) in g.cells() {
                 if y >= 0 {
                     let r = Rect::new(
@@ -536,13 +587,25 @@ impl Game for Blocks {
                         cell - 6.0,
                         cell - 6.0,
                     );
-                    round_rect(r, cell * 0.18, with_alpha(c, 0.18));
-                    draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, with_alpha(c, 0.5));
+                    art::sprite_ex(
+                        sprite_for(self.piece.kind),
+                        Rect::new(r.x - 3.0, r.y - 3.0, cell, cell),
+                        crate::art::Draw {
+                            tint: Color::new(1.0, 1.0, 1.0, 0.28),
+                            ..Default::default()
+                        },
+                    );
                 }
             }
             for (x, y) in self.piece.cells() {
                 if y >= 0 {
-                    block(o.x + x as f32 * cell, o.y + y as f32 * cell, cell, c);
+                    block(
+                        o.x + x as f32 * cell,
+                        o.y + y as f32 * cell,
+                        cell,
+                        self.piece.kind,
+                        0.0,
+                    );
                 }
             }
         }
@@ -582,7 +645,8 @@ impl Game for Blocks {
                         },
                     panel_y + 60.0 + y as f32 * s + bob,
                     s,
-                    piece_color(self.next),
+                    self.next,
+                    0.0,
                 );
             }
             for (k, (label, v)) in [
@@ -637,16 +701,32 @@ impl Game for Blocks {
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(50, 45, 95, 255));
+    gradient_rect(
+        r,
+        Color::from_rgba(60, 50, 120, 255),
+        Color::from_rgba(30, 25, 70, 255),
+    );
     let s = r.w / 5.0;
+    for y in 0..5 {
+        for x in 0..5 {
+            art::sprite_ex(
+                "cell",
+                Rect::new(r.x + x as f32 * s, r.y + y as f32 * s, s, s),
+                crate::art::Draw {
+                    tint: Color::new(0.2, 0.17, 0.42, 1.0),
+                    ..Default::default()
+                },
+            );
+        }
+    }
     for (x, y, k) in [
-        (0, 4, 1),
-        (1, 4, 1),
-        (2, 4, 1),
-        (3, 4, 4),
-        (4, 4, 4),
-        (0, 3, 1),
-        (3, 3, 4),
+        (0, 4, 0),
+        (1, 4, 0),
+        (2, 4, 0),
+        (3, 4, 3),
+        (4, 4, 3),
+        (0, 3, 0),
+        (3, 3, 3),
         (4, 3, 2),
         (2, 3, 6),
         (4, 2, 2),
@@ -655,13 +735,24 @@ pub fn icon(r: Rect) {
         (0, 1, 5),
         (2, 1, 5),
     ] {
-        block(r.x + x as f32 * s, r.y + y as f32 * s, s, piece_color(k));
+        block(r.x + x as f32 * s, r.y + y as f32 * s, s, k, 0.0);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn blocks_sprites_all_exist() {
+        let have = art::names();
+        for n in SPRITES.iter().chain(&["quilt", "cell"]) {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+        for k in 0..7 {
+            assert_eq!(sprite_for(k), SPRITES[k as usize]);
+        }
+    }
 
     fn empty() -> Blocks {
         let mut g = Blocks::new();

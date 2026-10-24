@@ -1,4 +1,3 @@
-use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -171,7 +170,8 @@ impl Row {
         let c = x + 0.5;
         match self.lane {
             Lane::Road { .. } => self.things.iter().any(|t| {
-                c + CHICKEN_HALF > *t + CAR_INSET && c - CHICKEN_HALF < *t + self.len - CAR_INSET
+                let (a, b) = car_span(*t, self.len);
+                c + CHICKEN_HALF > a && c - CHICKEN_HALF < b
             }),
             Lane::Rail { .. } => self
                 .things
@@ -188,8 +188,28 @@ impl Row {
 }
 
 const ROW_PX: f32 = 72.0;
+const HOPPER_H: f32 = 62.0;
 const CHICKEN_HALF: f32 = 0.3;
-const CAR_INSET: f32 = 0.06;
+const CAR_INSET: f32 = 0.05;
+const CARS: [&str; 9] = [
+    "car_red",
+    "car_red2",
+    "car_blue",
+    "car_blue2",
+    "car_green",
+    "car_green2",
+    "car_yellow",
+    "car_yellow2",
+    "car_black",
+];
+
+pub fn car_span(t: f32, len: f32) -> (f32, f32) {
+    (t + CAR_INSET, t + len - CAR_INSET)
+}
+
+mod art {
+    crate::sprites!("crossy");
+}
 const TRAIN_LEN: f32 = 12.0;
 
 impl Default for Crossy {
@@ -280,6 +300,10 @@ impl Crossy {
             Death::Eagle => Sfx::Whoosh,
             _ => Sfx::Hit,
         });
+        sfx::play(Sfx::Lose);
+        if self.score > self.best.0 && self.best.0 > 0 {
+            sfx::say(sfx::Say::Best);
+        }
         self.state = State::Dead;
         self.death = Some(how);
         self.dead_t = 0.0;
@@ -354,6 +378,7 @@ impl Game for Crossy {
                 self.step(dt);
                 if input.tap() || input.dir().is_some() {
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                     self.try_hop(input.dir().unwrap_or(Dir::Up));
                 }
             }
@@ -423,204 +448,171 @@ impl Game for Crossy {
     }
 
     fn draw(&self, view: &View) {
-        clear_background(Color::from_rgba(120, 200, 90, 255));
         let shake = self.shake.offset();
         let (cell, ox) = self.col_x(view);
         let ox = ox + shake.x;
         let first = (self.cam - 4.0).floor().max(0.0) as usize;
         let last = (self.cam + view.h / ROW_PX + 2.0) as usize;
+        let f = view.full();
+        let row0 = self.screen_y(0.0, view) + shake.y + ROW_PX / 2.0;
+        tiled("grass", f, row0, f.y + f.h + ROW_PX - row0, WHITE);
         for i in (first..last.min(self.rows.len())).rev() {
             let r = &self.rows[i];
             let y = self.screen_y(i as f32, view) + shake.y;
             let top = y - ROW_PX / 2.0;
+            let above_road = self
+                .rows
+                .get(i + 1)
+                .is_some_and(|n| matches!(n.lane, Lane::Road { .. }));
             match r.lane {
                 Lane::Grass => {
-                    let c = if i % 2 == 0 {
-                        Color::from_rgba(140, 215, 100, 255)
-                    } else {
-                        Color::from_rgba(128, 205, 92, 255)
-                    };
-                    draw_rectangle(view.full().x, top, view.full().w, ROW_PX, c);
-                    for k in 0..6 {
-                        let gx = ((i * 37 + k * 71) % 100) as f32 / 100.0 * view.w;
-                        draw_circle(gx, top + 12.0 + (k * 13 % 40) as f32, 3.0, darker(c, 0.85));
-                    }
+                    let k = if i % 2 == 0 { 1.0 } else { 0.93 };
+                    tiled("grass", f, top, ROW_PX, Color::new(k, k, k, 1.0));
                 }
                 Lane::Road { .. } => {
-                    draw_rectangle(
-                        view.full().x,
-                        top,
-                        view.full().w,
-                        ROW_PX,
-                        Color::from_rgba(80, 84, 96, 255),
-                    );
-                    let next_road = self
-                        .rows
-                        .get(i + 1)
-                        .is_some_and(|n| matches!(n.lane, Lane::Road { .. }));
-                    if next_road {
-                        for k in 0..((view.w / 60.0) as i32 + 1) {
-                            draw_rectangle(
-                                k as f32 * 60.0 + 10.0,
-                                top - 3.0,
-                                32.0,
-                                6.0,
-                                Color::from_rgba(230, 230, 230, 200),
-                            );
+                    tiled("road", f, top, ROW_PX, WHITE);
+                    if !above_road {
+                        tiled("kerb_top", f, top, 14.0, WHITE);
+                    } else {
+                        for k in 0..((f.w / 60.0) as i32 + 2) {
+                            fill_dash(f.x + k as f32 * 60.0 + 10.0, top - 3.0);
                         }
+                    }
+                    let below_is_road = i > 0 && matches!(self.rows[i - 1].lane, Lane::Road { .. });
+                    if !below_is_road {
+                        tiled("kerb_bottom", f, top + ROW_PX - 14.0, 14.0, WHITE);
                     }
                 }
                 Lane::River { .. } => {
-                    draw_rectangle(
-                        view.full().x,
-                        top,
-                        view.full().w,
-                        ROW_PX,
-                        Color::from_rgba(80, 170, 240, 255),
-                    );
-                    for k in 0..((view.w / 50.0) as i32 + 2) {
+                    tiled("water", f, top, ROW_PX, Color::new(0.5, 0.78, 1.0, 1.0));
+                    for k in 0..((f.w / 50.0) as i32 + 2) {
                         let wx = (k as f32 * 50.0 + self.t * 20.0 + i as f32 * 13.0)
-                            .rem_euclid(view.w + 50.0)
-                            - 25.0;
+                            .rem_euclid(f.w + 50.0)
+                            - 25.0
+                            + f.x;
                         draw_rectangle(
                             wx,
                             top + 20.0 + (k % 3) as f32 * 14.0,
                             18.0,
                             3.0,
-                            Color::new(1.0, 1.0, 1.0, 0.35),
+                            Color::new(1.0, 1.0, 1.0, 0.4),
                         );
                     }
                 }
                 Lane::Rail { .. } => {
-                    draw_rectangle(
-                        view.full().x,
-                        top,
-                        view.full().w,
-                        ROW_PX,
-                        Color::from_rgba(150, 130, 110, 255),
-                    );
-                    for k in 0..((view.w / 26.0) as i32 + 1) {
-                        draw_rectangle(
-                            k as f32 * 26.0,
-                            top + 14.0,
-                            12.0,
-                            ROW_PX - 28.0,
-                            Color::from_rgba(110, 80, 60, 255),
+                    tiled("sand", f, top, ROW_PX, WHITE);
+                    let sleeper = ROW_PX - 22.0;
+                    for k in 0..((f.w / 26.0) as i32 + 2) {
+                        art::sprite_ex(
+                            "log",
+                            Rect::new(
+                                f.x + k as f32 * 26.0 + 6.0 - sleeper / 2.0 + 7.0,
+                                y - 7.0,
+                                sleeper,
+                                14.0,
+                            ),
+                            crate::art::Draw {
+                                rotation: std::f32::consts::FRAC_PI_2,
+                                tint: Color::new(0.8, 0.65, 0.55, 1.0),
+                                ..Default::default()
+                            },
                         );
                     }
-                    draw_rectangle(
-                        view.full().x,
-                        top + 22.0,
-                        view.full().w,
-                        5.0,
-                        Color::from_rgba(190, 190, 200, 255),
-                    );
-                    draw_rectangle(
-                        view.full().x,
-                        top + ROW_PX - 27.0,
-                        view.full().w,
-                        5.0,
-                        Color::from_rgba(190, 190, 200, 255),
-                    );
+                    for dy in [-14.0, 8.0] {
+                        let mut x = f.x;
+                        while x < f.x + f.w {
+                            art::sprite("rail_bar", Rect::new(x, y + dy, 210.0, 7.0));
+                            x += 210.0;
+                        }
+                    }
                     let lit = r.warning() && (self.t * 8.0).sin() > 0.0;
                     let px = ox - 30.0;
-                    draw_rectangle(px, top - 20.0, 6.0, 46.0, DARKGRAY);
-                    draw_circle(
-                        px + 3.0,
-                        top - 22.0,
-                        10.0,
-                        if lit {
-                            RED
-                        } else {
-                            Color::from_rgba(90, 30, 30, 255)
+                    crate::ui::sprite_at(
+                        "round_white",
+                        vec2(px, top + 6.0),
+                        30.0,
+                        crate::art::Draw {
+                            tint: if lit {
+                                RED
+                            } else {
+                                Color::from_rgba(120, 60, 60, 255)
+                            },
+                            ..Default::default()
                         },
                     );
                 }
             }
             for c in &r.trees {
                 let tx = ox + (*c as f32 + 0.5) * cell;
-                soft_shadow(vec2(tx, y + 18.0), cell * 0.4, 10.0, 0.5);
-                draw_rectangle(tx - 6.0, y, 12.0, 18.0, Color::from_rgba(120, 80, 50, 255));
-                draw_circle(tx, y - 8.0, cell * 0.36, Color::from_rgba(50, 150, 70, 255));
-                draw_circle(
-                    tx - 6.0,
-                    y - 16.0,
-                    cell * 0.22,
-                    Color::from_rgba(80, 180, 90, 255),
-                );
+                soft_shadow(vec2(tx, y + 20.0), cell * 0.38, 9.0, 0.45);
+                let (name, h) = match (*c as usize + i) % 3 {
+                    0 => ("bush", cell * 0.95),
+                    1 => ("bush_small", cell * 0.85),
+                    _ => ("rock", cell * 0.6),
+                };
+                art::sprite_at(name, vec2(tx, y - 2.0), h, Default::default());
             }
             match r.lane {
                 Lane::Road { speed, .. } => {
-                    for t in &r.things {
-                        let x = ox + t * cell;
-                        let w = r.len * cell;
-                        let body = hsv(r.hue, 0.65, 0.95);
-                        let rr = Rect::new(x + 4.0, y - 22.0, w - 8.0, 44.0);
-                        round_rect(
-                            Rect::new(rr.x, rr.y + 8.0, rr.w, rr.h),
-                            10.0,
-                            Color::new(0.0, 0.0, 0.0, 0.25),
-                        );
-                        round_rect(rr, 10.0, body);
-                        let cab = if speed > 0.0 {
-                            Rect::new(rr.x + rr.w * 0.45, rr.y + 6.0, rr.w * 0.35, rr.h - 12.0)
+                    for (k, t) in r.things.iter().enumerate() {
+                        let (a, b) = car_span(*t, r.len);
+                        let cx = ox + (a + b) / 2.0 * cell;
+                        let len_px = (b - a) * cell;
+                        let name = if r.len > 1.5 {
+                            ["bus", "coach"][(r.hue * 2.0) as usize % 2]
                         } else {
-                            Rect::new(rr.x + rr.w * 0.2, rr.y + 6.0, rr.w * 0.35, rr.h - 12.0)
+                            CARS[((r.hue * 9.0) as usize + k) % 9]
                         };
-                        round_rect(cab, 6.0, Color::from_rgba(200, 235, 255, 255));
-                        gloss(rr, 10.0);
-                        let fx = if speed > 0.0 {
-                            rr.x + rr.w - 4.0
+                        let s = art::size(name);
+                        let (long_side, other) = if r.len > 1.5 {
+                            (len_px, len_px * s.y / s.x)
                         } else {
-                            rr.x + 4.0
+                            (len_px, len_px * s.x / s.y)
                         };
-                        draw_circle(fx, rr.y + 10.0, 4.0, Color::from_rgba(255, 250, 180, 255));
-                        draw_circle(
-                            fx,
-                            rr.y + rr.h - 10.0,
-                            4.0,
-                            Color::from_rgba(255, 250, 180, 255),
-                        );
+                        soft_shadow(vec2(cx, y + other * 0.4), long_side * 0.45, 8.0, 0.4);
+                        if r.len > 1.5 {
+                            art::sprite_ex(
+                                name,
+                                Rect::new(cx - long_side / 2.0, y - other / 2.0, long_side, other),
+                                crate::art::Draw {
+                                    flip_x: speed < 0.0,
+                                    ..Default::default()
+                                },
+                            );
+                        } else {
+                            art::sprite_ex(
+                                name,
+                                Rect::new(cx - other / 2.0, y - long_side / 2.0, other, long_side),
+                                crate::art::Draw {
+                                    rotation: std::f32::consts::FRAC_PI_2 * speed.signum(),
+                                    ..Default::default()
+                                },
+                            );
+                        }
                     }
                 }
                 Lane::River { .. } => {
                     for t in &r.things {
                         let x = ox + t * cell;
                         let w = r.len * cell;
-                        let rr = Rect::new(x + 3.0, y - 22.0, w - 6.0, 44.0);
-                        round_rect(rr, 20.0, Color::from_rgba(140, 90, 55, 255));
-                        round_rect(
-                            Rect::new(rr.x, rr.y, rr.w, 16.0),
-                            8.0,
-                            Color::from_rgba(170, 115, 70, 255),
+                        art::nine(
+                            "log",
+                            Rect::new(x + 3.0, y - 24.0, w - 6.0, 48.0),
+                            24.0,
+                            0.8,
+                            WHITE,
                         );
-                        for k in 1..(r.len as i32 * 2) {
-                            draw_line(
-                                rr.x + k as f32 * cell / 2.0,
-                                rr.y + 20.0,
-                                rr.x + k as f32 * cell / 2.0 + 10.0,
-                                rr.y + 30.0,
-                                2.0,
-                                Color::from_rgba(110, 70, 40, 255),
-                            );
-                        }
                     }
                 }
                 Lane::Rail { .. } => {
                     for t in &r.things {
-                        let x = ox + t * cell;
-                        let rr = Rect::new(x, y - 26.0, TRAIN_LEN * cell, 52.0);
-                        round_rect(rr, 10.0, Color::from_rgba(220, 60, 60, 255));
-                        for k in 0..11 {
-                            draw_rectangle(
-                                rr.x + 12.0 + k as f32 * cell,
-                                rr.y + 10.0,
-                                cell * 0.6,
-                                16.0,
-                                Color::from_rgba(200, 235, 255, 255),
-                            );
+                        for k in 0..6 {
+                            let w = 2.0 * cell - 8.0;
+                            let name = if k == 0 { "coach" } else { "windows" };
+                            let h = w * art::size(name).y / art::size(name).x;
+                            let x = ox + (t + k as f32 * 2.0) * cell + 4.0;
+                            art::sprite(name, Rect::new(x, y - h / 2.0, w, h));
                         }
-                        gloss(rr, 10.0);
                     }
                 }
                 _ => {}
@@ -669,6 +661,27 @@ impl Game for Crossy {
     }
 }
 
+fn tiled(name: &str, f: Rect, top: f32, h: f32, tint: Color) {
+    let s = art::size(name);
+    let w = h.max(ROW_PX) * s.x / s.y;
+    let mut x = f.x;
+    while x < f.x + f.w {
+        art::sprite_ex(
+            name,
+            Rect::new(x, top, w + 1.0, h),
+            crate::art::Draw {
+                tint,
+                ..Default::default()
+            },
+        );
+        x += w;
+    }
+}
+
+fn fill_dash(x: f32, y: f32) {
+    draw_rectangle(x, y, 32.0, 6.0, Color::from_rgba(240, 240, 240, 210));
+}
+
 impl Crossy {
     fn draw_chicken(&self, view: &View, cell: f32, ox: f32, shake: Vec2) {
         let p = self.player_pos();
@@ -694,91 +707,49 @@ impl Crossy {
             let s = 1.0 - (self.hop * std::f32::consts::PI).sin() * 0.12;
             (s, 2.0 - s)
         };
-        let w = 34.0 * sx;
-        let h = 38.0 * sy;
-        round_rect(
-            Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h),
-            10.0 * sx.min(sy),
-            WHITE,
-        );
-        round_rect(
-            Rect::new(c.x - w / 2.0, c.y + h * 0.1, w, h * 0.4),
-            8.0 * sx.min(sy),
-            Color::from_rgba(235, 235, 235, 255),
-        );
-        if flat {
-            return;
-        }
-        draw_rectangle(
-            c.x - 5.0,
-            c.y - h / 2.0 - 8.0,
-            10.0,
-            10.0,
-            Color::from_rgba(240, 60, 60, 255),
-        );
-        let look = match self.facing {
-            Dir::Left => -1.0,
-            Dir::Right => 1.0,
-            _ => 0.0,
-        };
-        let up = if self.facing == Dir::Down { 6.0 } else { -4.0 };
-        for s in [-1.0, 1.0] {
-            draw_circle(c.x + s * 8.0 + look * 4.0, c.y + up - 6.0, 4.0, BLACK);
-        }
-        draw_triangle(
-            vec2(c.x + look * 10.0 - 6.0, c.y + up),
-            vec2(c.x + look * 10.0 + 6.0, c.y + up),
-            vec2(c.x + look * 18.0, c.y + up + 8.0),
-            Color::from_rgba(255, 160, 40, 255),
+        let h = HOPPER_H * sy;
+        let w = HOPPER_H * art::size("hopper").x / art::size("hopper").y * sx;
+        let bottom = c.y + 24.0;
+        art::sprite_ex(
+            "hopper",
+            Rect::new(c.x - w / 2.0, bottom - h, w, h),
+            crate::art::Draw {
+                flip_x: self.facing == Dir::Left,
+                ..Default::default()
+            },
         );
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(
-        r.x,
-        r.y,
-        r.w,
-        r.h * 0.33,
-        Color::from_rgba(140, 215, 100, 255),
+    let band = r.h / 3.0;
+    art::sprite("grass", Rect::new(r.x, r.y, r.w, band + 1.0));
+    art::sprite("road", Rect::new(r.x, r.y + band, r.w, band + 1.0));
+    art::sprite("grass", Rect::new(r.x, r.y + band * 2.0, r.w, band));
+    art::sprite_at(
+        "bush",
+        vec2(r.x + r.w * 0.16, r.y + band * 0.55),
+        band * 0.95,
+        Default::default(),
     );
-    draw_rectangle(
-        r.x,
-        r.y + r.h * 0.33,
-        r.w,
+    art::sprite_ex(
+        "car_blue",
+        Rect::new(
+            r.x + r.w * 0.34 - r.w * 0.09,
+            r.y + band * 1.5 - r.w * 0.22,
+            r.w * 0.18,
+            r.w * 0.44,
+        ),
+        crate::art::Draw {
+            rotation: std::f32::consts::FRAC_PI_2,
+            ..Default::default()
+        },
+    );
+    art::sprite_at(
+        "hopper",
+        vec2(r.x + r.w * 0.66, r.y + r.h * 0.8),
         r.h * 0.34,
-        Color::from_rgba(80, 84, 96, 255),
-    );
-    draw_rectangle(
-        r.x,
-        r.y + r.h * 0.67,
-        r.w,
-        r.h * 0.33,
-        Color::from_rgba(140, 215, 100, 255),
-    );
-    round_rect(
-        Rect::new(r.x + r.w * 0.05, r.y + r.h * 0.38, r.w * 0.4, r.h * 0.22),
-        6.0,
-        Color::from_rgba(80, 160, 250, 255),
-    );
-    let c = vec2(r.x + r.w * 0.65, r.y + r.h * 0.78);
-    round_rect(
-        Rect::new(c.x - r.w * 0.12, c.y - r.h * 0.14, r.w * 0.24, r.h * 0.26),
-        6.0,
-        WHITE,
-    );
-    draw_rectangle(
-        c.x - 3.0,
-        c.y - r.h * 0.2,
-        6.0,
-        6.0,
-        Color::from_rgba(240, 60, 60, 255),
-    );
-    draw_triangle(
-        vec2(c.x - 4.0, c.y),
-        vec2(c.x + 4.0, c.y),
-        vec2(c.x, c.y + 6.0),
-        Color::from_rgba(255, 160, 40, 255),
+        Default::default(),
     );
 }
 
@@ -805,6 +776,50 @@ mod tests {
         for _ in 0..12 {
             g.step(1.0 / 60.0);
         }
+    }
+
+    #[test]
+    fn crossy_sprites_all_exist() {
+        let have = art::names();
+        let mut names = vec![
+            "grass",
+            "sand",
+            "road",
+            "kerb_top",
+            "kerb_bottom",
+            "water",
+            "bush",
+            "bush_small",
+            "rock",
+            "bus",
+            "coach",
+            "windows",
+            "log",
+            "rail_bar",
+            "hopper",
+        ];
+        names.extend(CARS);
+        for n in names {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn hitbox_follows_the_drawn_car_body() {
+        let (a, b) = car_span(2.0, 1.2);
+        assert!((a - 2.05).abs() < 1e-5 && (b - 3.15).abs() < 1e-5);
+        let road = Row {
+            lane: Lane::Road {
+                speed: 1.0,
+                gap: 4.0,
+            },
+            things: vec![2.0],
+            trees: vec![],
+            len: 1.2,
+            hue: 0.0,
+        };
+        assert!(road.hits(2.0));
+        assert!(!road.hits(3.5));
     }
 
     #[test]

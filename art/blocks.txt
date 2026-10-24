@@ -1,0 +1,9 @@
+blk_i          | puzzle-pack-2/PNG/Tiles blue/tileBlue_03.png | max=96
+blk_j          | puzzle-pack-2/PNG/Tiles grey/tileGrey_03.png | max=96
+blk_l          | puzzle-pack-2/PNG/Tiles orange/tileOrange_02.png | max=96
+blk_o          | puzzle-pack-2/PNG/Tiles yellow/tileYellow_03.png | max=96
+blk_s          | puzzle-pack-2/PNG/Tiles green/tileGreen_03.png | max=96
+blk_t          | puzzle-pack-2/PNG/Tiles pink/tilePink_03.png | max=96
+blk_z          | puzzle-pack-2/PNG/Tiles red/tileRed_03.png | max=96
+quilt          | puzzle-pack-2/PNG/Back tiles/BackTile_05.png | solo max=128 keep
+cell           | puzzle-pack-2/PNG/Back tiles/BackTile_06.png | max=64 keep
