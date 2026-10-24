@@ -143,29 +143,45 @@ pub fn choices(correct: i32, pool: Vec<i32>, total: usize) -> Vec<i32> {
     options
 }
 
+pub fn ui_scale(view: &View) -> f32 {
+    (view.h / view.w).clamp(1.0, 1.6)
+}
+
+pub fn tall(view: &View) -> bool {
+    view.h > view.w
+}
+
+pub fn hud_bottom(view: &View) -> f32 {
+    30.0 + 64.0 * ui_scale(view)
+}
+
 pub fn hud(view: &View, ladder: &Ladder, label: &str, accent: Color, bump: &Bump) {
-    let tw = text_size(label, 28.0).width + 44.0;
-    let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0);
+    let k = ui_scale(view);
+    let tw = text_size(label, 28.0 * k).width + 44.0 * k;
+    let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0 * k);
     round_rect(
         Rect::new(chip.x, chip.y + 4.0, chip.w, chip.h),
-        23.0,
+        chip.h / 2.0,
         Color::new(0.0, 0.0, 0.0, 0.18),
     );
-    round_rect(chip, 23.0, with_alpha(WHITE, 0.94));
+    round_rect(chip, chip.h / 2.0, with_alpha(WHITE, 0.94));
     text_center(
         label,
         chip.x + chip.w / 2.0,
         chip.y + chip.h / 2.0,
-        28.0,
+        28.0 * k,
         darker(accent, 0.6),
     );
     for i in 0..ladder.levels {
         let from_right = (ladder.levels - 1 - i) as f32;
-        let c = vec2(view.w - 52.0 - from_right * 44.0, 41.0);
+        let c = vec2(
+            view.w - 30.0 - 22.0 * k - from_right * 44.0 * k,
+            chip.y + chip.h / 2.0,
+        );
         let have = i < ladder.stars;
         star(
             c + vec2(0.0, 2.0),
-            22.0,
+            22.0 * k,
             0.0,
             Color::new(0.1, 0.05, 0.25, 0.35),
         );
@@ -174,26 +190,31 @@ pub fn hud(view: &View, ladder: &Ladder, label: &str, accent: Color, bump: &Bump
         } else {
             with_alpha(WHITE, 0.55)
         };
-        star(c, 20.0, 0.0, fill);
+        star(c, 20.0 * k, 0.0, fill);
     }
-    let bar_w = (view.w - 180.0).min(520.0);
-    let gap = 8.0;
+    let bar_w = (view.w - 180.0).min(520.0 * k);
+    let gap = 8.0 * k;
     let seg = (bar_w - gap * (UP_STREAK as f32 - 1.0)) / UP_STREAK as f32;
     let x0 = view.w / 2.0 - bar_w / 2.0;
-    for k in 0..UP_STREAK {
-        let r = Rect::new(x0 + k as f32 * (seg + gap), 76.0, seg, 18.0);
-        let filled = k < ladder.streak;
-        let last = filled && k + 1 == ladder.streak;
-        let s = if last { bump.scale(0.35) } else { 1.0 };
+    for j in 0..UP_STREAK {
+        let r = Rect::new(
+            x0 + j as f32 * (seg + gap),
+            chip.y + chip.h + 12.0,
+            seg,
+            18.0 * k,
+        );
+        let filled = j < ladder.streak;
+        let last = filled && j + 1 == ladder.streak;
+        let sc = if last { bump.scale(0.35) } else { 1.0 };
         let rr = Rect::new(
-            r.x + r.w * (1.0 - s) / 2.0,
-            r.y + r.h * (1.0 - s) / 2.0,
-            r.w * s,
-            r.h * s,
+            r.x + r.w * (1.0 - sc) / 2.0,
+            r.y + r.h * (1.0 - sc) / 2.0,
+            r.w * sc,
+            r.h * sc,
         );
         round_rect(
             Rect::new(rr.x, rr.y + 3.0, rr.w, rr.h),
-            9.0,
+            rr.h / 2.0,
             Color::new(0.0, 0.0, 0.0, 0.15),
         );
         let col = if filled {
@@ -201,19 +222,25 @@ pub fn hud(view: &View, ladder: &Ladder, label: &str, accent: Color, bump: &Bump
         } else {
             with_alpha(WHITE, 0.5)
         };
-        round_rect(rr, 9.0, col);
+        round_rect(rr, rr.h / 2.0, col);
         if filled {
-            gloss(rr, 9.0);
+            gloss(rr, rr.h / 2.0);
         }
     }
 }
 
 pub fn drifting_clouds(view: &View, t: f32) {
-    for k in 0..7 {
-        let f = k as f32;
+    let k = ui_scale(view);
+    for j in 0..7 {
+        let f = j as f32;
         let x = (f * 211.0 + t * (5.0 + f)) % (view.w + 160.0) - 80.0;
-        let y = 90.0 + (f * 97.0) % (view.h * 0.5);
-        cloud(x, y, 0.8 + (k % 3) as f32 * 0.25, with_alpha(WHITE, 0.55));
+        let y = hud_bottom(view) + (f * 97.0 * k) % (view.h * 0.6);
+        cloud(
+            x,
+            y,
+            (0.8 + (j % 3) as f32 * 0.25) * k,
+            with_alpha(WHITE, 0.55),
+        );
     }
 }
 

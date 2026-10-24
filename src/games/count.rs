@@ -104,7 +104,7 @@ pub fn scatter(count: usize, seed: u32, area: Rect) -> (Vec<Vec2>, f32) {
     let rows = count.div_ceil(cols).max(1);
     let cols = count.div_ceil(rows).max(1);
     let (cw, ch) = (area.w / cols as f32, area.h / rows as f32);
-    let radius = (cw.min(ch) * 0.5 * 0.8).min(70.0);
+    let radius = (cw.min(ch) * 0.5 * 0.8).min(70.0 * (area.h / area.w).clamp(1.0, 1.6));
     let mut cells: Vec<usize> = (0..cols * rows).collect();
     cells.sort_by_key(|c| mix(seed, *c as u32));
     cells.truncate(count);
@@ -126,14 +126,28 @@ pub fn scatter(count: usize, seed: u32, area: Rect) -> (Vec<Vec2>, f32) {
     (points, radius)
 }
 
+pub fn prompt_size(view: &View) -> f32 {
+    62.0 * ui_scale(view)
+}
+
+pub fn prompt_y(view: &View) -> f32 {
+    hud_bottom(view) + prompt_size(view) * 0.7
+}
+
+pub fn button_height(view: &View) -> f32 {
+    124.0 * ui_scale(view)
+}
+
 pub fn play_area(view: &View) -> Rect {
-    Rect::new(50.0, 192.0, view.w - 100.0, view.h - 192.0 - 210.0)
+    let top = prompt_y(view) + prompt_size(view) * 0.7;
+    let bottom = view.h - button_height(view) - 80.0;
+    Rect::new(50.0, top, view.w - 100.0, bottom - top)
 }
 
 pub fn button_rects(view: &View, n: usize) -> Vec<Rect> {
     let gap = 24.0;
-    let w = ((view.w - 80.0 - gap * (n as f32 - 1.0)) / n as f32).min(240.0);
-    let h = 124.0;
+    let h = button_height(view);
+    let w = ((view.w - 80.0 - gap * (n as f32 - 1.0)) / n as f32).min(240.0 * ui_scale(view));
     let left = (view.w - w * n as f32 - gap * (n as f32 - 1.0)) / 2.0;
     (0..n)
         .map(|i| Rect::new(left + i as f32 * (w + gap), view.h - h - 40.0, w, h))
@@ -387,8 +401,8 @@ impl Count {
         text_outline(
             &s,
             view.w / 2.0,
-            132.0,
-            62.0 * pop,
+            prompt_y(view),
+            prompt_size(view) * pop,
             WHITE,
             Color::from_rgba(40, 30, 60, 255),
         );
@@ -710,6 +724,24 @@ mod tests {
         let area = play_area(&View::ipad_landscape());
         assert_eq!(scatter(9, 3, area).0, scatter(9, 3, area).0);
         assert_ne!(scatter(9, 3, area).0, scatter(9, 4, area).0);
+    }
+
+    #[test]
+    fn on_a_tall_phone_everything_scales_up() {
+        let v = View::fit(1080.0, 2400.0);
+        for n in [3, 4] {
+            for r in button_rects(&v, n) {
+                assert!(r.w >= 140.0 && r.h >= 140.0, "{r:?}");
+            }
+        }
+        assert!(prompt_size(&v) >= 90.0);
+        assert!(hud_bottom(&v) >= 100.0);
+        let area = play_area(&v);
+        assert!(area.h >= v.h * 0.45, "{area:?}");
+        let (_, r) = scatter(5, 1, area);
+        assert!(r >= 90.0, "{r}");
+        let (_, r) = scatter(20, 1, area);
+        assert!(r >= 60.0, "{r}");
     }
 
     #[test]

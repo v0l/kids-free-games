@@ -120,18 +120,47 @@ impl Question {
     }
 }
 
+const WIDEST_QUESTION_EM: f32 = 6.6;
+const QUESTION_PAD_EM: f32 = 0.6;
+
+pub fn question_text_size(view: &View) -> f32 {
+    (88.0 * ui_scale(view)).min((view.w - 40.0) / (WIDEST_QUESTION_EM + QUESTION_PAD_EM))
+}
+
+pub fn question_rect(view: &View) -> Rect {
+    let size = question_text_size(view);
+    let w = (size * (WIDEST_QUESTION_EM + QUESTION_PAD_EM))
+        .max(360.0)
+        .min(view.w - 20.0);
+    Rect::new((view.w - w) / 2.0, hud_bottom(view) + 24.0, w, size * 1.25)
+}
+
+fn grid(view: &View) -> (usize, Rect) {
+    let top = question_rect(view).bottom() + 30.0;
+    let cols = if tall(view) { 2 } else { BALLOONS };
+    (cols, Rect::new(0.0, top, view.w, view.h - 40.0 - top))
+}
+
 pub fn balloon_radius(view: &View) -> f32 {
-    (view.w / BALLOONS as f32 * 0.36).min(86.0)
+    let (cols, area) = grid(view);
+    let rows = BALLOONS.div_ceil(cols) as f32;
+    let cap = if tall(view) { f32::MAX } else { 86.0 };
+    (area.w / cols as f32 * 0.36)
+        .min(area.h / rows / 4.0)
+        .min(cap)
 }
 
 pub fn balloon_rest(view: &View, slot: usize) -> Vec2 {
-    let top = 250.0;
-    let bottom = view.h - 100.0;
-    let amp = ((bottom - top) * 0.14).clamp(20.0, 90.0);
+    let (cols, area) = grid(view);
+    let rows = BALLOONS.div_ceil(cols);
+    let r = balloon_radius(view);
+    let (col, row) = (slot % cols, slot / cols);
+    let cell = vec2(area.w / cols as f32, area.h / rows as f32);
+    let amp = ((cell.y - 3.2 * r) / 2.0 * 0.9).clamp(0.0, 70.0);
     let stagger = [-1.0, 0.6, -0.5, 1.0][slot % 4];
     vec2(
-        view.w * (slot as f32 + 0.5) / BALLOONS as f32,
-        (top + bottom) / 2.0 + stagger * amp,
+        cell.x * (col as f32 + 0.5),
+        area.y + cell.y * (row as f32 + 0.5) - r * 0.6 + stagger * amp,
     )
 }
 
@@ -388,17 +417,22 @@ impl MathPop {
     fn draw_question(&self, view: &View) {
         let solved = self.attempt.solved;
         let text = self.question.text(solved);
-        let size = 88.0;
+        let size = question_text_size(view);
         let pop = ease_out_back(self.question_bump.t).max(0.2);
-        let w = (text_size(&text, size).width + 100.0).max(360.0) * pop;
-        let c = vec2(view.w / 2.0, 168.0);
-        let r = Rect::new(c.x - w / 2.0, c.y - 55.0 * pop, w, 110.0 * pop);
+        let base = question_rect(view);
+        let c = base.center();
+        let r = Rect::new(
+            c.x - base.w * pop / 2.0,
+            c.y - base.h * pop / 2.0,
+            base.w * pop,
+            base.h * pop,
+        );
         round_rect(
             Rect::new(r.x, r.y + 8.0, r.w, r.h),
-            34.0,
+            r.h * 0.31,
             Color::new(0.0, 0.0, 0.0, 0.2),
         );
-        round_rect(r, 34.0, WHITE);
+        round_rect(r, r.h * 0.31, WHITE);
         let ink = if solved {
             Color::from_rgba(60, 170, 90, 255)
         } else {
@@ -684,6 +718,10 @@ mod tests {
         assert!(g.attempt.solved);
     }
 
+    fn phone() -> View {
+        View::fit(1080.0, 2400.0)
+    }
+
     #[test]
     fn balloons_are_big_touch_targets_and_fit_on_screen() {
         for v in [
@@ -691,18 +729,37 @@ mod tests {
             View::ipad_portrait(),
             View::fit(390.0, 844.0),
             View::fit(1920.0, 1080.0),
+            phone(),
         ] {
             let r = balloon_radius(&v);
             assert!(r * 2.0 >= 90.0 * 1.5);
+            let top = question_rect(&v).bottom();
             for slot in 0..BALLOONS {
                 let c = balloon_rest(&v, slot);
                 assert!(c.x - r >= 0.0 && c.x + r <= v.w, "{v:?}");
-                assert!(c.y - r >= 230.0 && c.y + r * 2.3 <= v.h, "{v:?}");
+                assert!(c.y - r >= top && c.y + r * 2.3 <= v.h, "{v:?}");
             }
+            let (cols, _) = grid(&v);
             for slot in 1..BALLOONS {
-                let gap = balloon_rest(&v, slot).x - balloon_rest(&v, slot - 1).x;
-                assert!(gap > r * 1.8);
+                if slot % cols != 0 {
+                    let gap = balloon_rest(&v, slot).x - balloon_rest(&v, slot - 1).x;
+                    assert!(gap > r * 1.8);
+                }
             }
         }
+    }
+
+    #[test]
+    fn on_a_tall_phone_the_balloons_use_most_of_the_height() {
+        let v = phone();
+        assert!(v.h > 2000.0);
+        let r = balloon_radius(&v);
+        assert!(r >= 140.0, "{r}");
+        let ys: Vec<f32> = (0..BALLOONS).map(|i| balloon_rest(&v, i).y).collect();
+        let top = ys.iter().cloned().fold(f32::MAX, f32::min) - r;
+        let bottom = ys.iter().cloned().fold(f32::MIN, f32::max) + r * 2.3;
+        assert!(bottom - top >= v.h * 0.5, "{top} {bottom} of {}", v.h);
+        assert!(question_rect(&v).h >= 150.0);
+        assert!(question_text_size(&v) >= 120.0);
     }
 }
