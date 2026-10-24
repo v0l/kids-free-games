@@ -39,6 +39,11 @@ def pack_dir(pack):
 
 
 def source(path):
+    if path.startswith("repo:"):
+        p = ROOT / path[5:]
+        if not p.exists():
+            sys.exit(f"missing {p}")
+        return p
     pack, rest = path.split("/", 1)
     p = pack_dir(pack) / rest
     if not p.exists():
