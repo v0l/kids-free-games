@@ -1,11 +1,14 @@
 use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::learn::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
+
+mod art {
+    crate::sprites!("mathpop");
+}
 
 pub const LEVEL_NAMES: [&str; 5] = [
     "Adding to 10",
@@ -303,6 +306,12 @@ impl MathPop {
                 );
                 self.particles.sparkle(c, gold);
                 self.streak_bump.kick();
+                sfx::say(match step {
+                    Step::Up => sfx::Say::LevelUp,
+                    Step::Cleared => sfx::Say::Congrats,
+                    _ if self.attempt.wrong == 0 => sfx::Say::Great,
+                    _ => sfx::Say::Correct,
+                });
                 let first_try = self.attempt.wrong == 0;
                 let word = if first_try {
                     PRAISE[rand::gen_range(0, PRAISE.len())]
@@ -389,16 +398,7 @@ impl Game for MathPop {
     }
 
     fn draw(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(110, 190, 250, 255),
-            Color::from_rgba(215, 240, 255, 255),
-        );
-        drifting_clouds(view, self.t);
-        let hill = Color::from_rgba(120, 205, 130, 255);
-        draw_circle(view.w * 0.2, view.h + 120.0, 330.0, hill);
-        draw_circle(view.w * 0.78, view.h + 160.0, 400.0, darker(hill, 0.9));
-
+        self.draw_backdrop(view);
         hud(
             view,
             &self.ladder,
@@ -431,6 +431,64 @@ impl Game for MathPop {
 }
 
 impl MathPop {
+    fn draw_backdrop(&self, view: &View) {
+        let f = view.full();
+        let side = f.w.max(f.h);
+        art::sprite(
+            "bg",
+            Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
+        );
+        for i in 0..5usize {
+            let span = view.w + 500.0;
+            let x = (i as f32 * 0.23 * span + self.t * (7.0 + i as f32 * 3.0)) % span - 250.0;
+            let y = hud_bottom(view) + 20.0 + (i as f32 * 0.37 % 1.0) * view.h * 0.35;
+            crate::ui::cloud(
+                i * 2,
+                vec2(x, y),
+                150.0 + (i % 3) as f32 * 50.0,
+                with_alpha(WHITE, 0.9),
+            );
+        }
+        self.draw_bunnies(view);
+    }
+
+    fn mood(&self) -> &'static str {
+        if self.leave.is_some() {
+            "up"
+        } else if self.balloons.iter().any(|b| b.wobble > 0.3) {
+            "sad"
+        } else {
+            "stand"
+        }
+    }
+
+    fn draw_bunnies(&self, view: &View) {
+        let h = 150.0 * ui_scale(view);
+        let hop = match self.leave {
+            Some(l) => (l * 14.0).sin().abs() * h * 0.2,
+            None => 0.0,
+        };
+        let names = match self.mood() {
+            "up" => ["bunny_up", "pink_up"],
+            "sad" => ["bunny_sad", "pink_sad"],
+            _ => ["bunny", "pink"],
+        };
+        let y = view.h - h * 0.5 - 10.0 - hop;
+        for (i, name) in names.iter().enumerate() {
+            let side = if i == 0 { 1.0 } else { -1.0 };
+            let x = if i == 0 { 70.0 } else { view.w - 70.0 };
+            art::sprite_at(
+                name,
+                vec2(x, y),
+                h,
+                crate::art::Draw {
+                    flip_x: side < 0.0,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
     fn draw_question(&self, view: &View) {
         let solved = self.attempt.solved;
         let text = self.question.text(solved);
@@ -444,12 +502,7 @@ impl MathPop {
             base.w * pop,
             base.h * pop,
         );
-        round_rect(
-            Rect::new(r.x, r.y + 8.0, r.w, r.h),
-            r.h * 0.31,
-            Color::new(0.0, 0.0, 0.0, 0.2),
-        );
-        round_rect(r, r.h * 0.31, WHITE);
+        crate::ui::chip_box(r);
         let ink = if solved {
             Color::from_rgba(60, 170, 90, 255)
         } else {
@@ -483,30 +536,22 @@ fn draw_balloon(c: Vec2, r: f32, b: &Balloon, t: f32) {
         vec2(c.x + 11.0, c.y + ry + 14.0),
         with_alpha(darker(color, 0.8), fade),
     );
-    draw_ellipse(
-        c.x,
-        c.y + 6.0,
-        rx,
-        ry,
-        0.0,
-        Color::new(0.0, 0.0, 0.0, 0.12 * fade),
+    let rect = Rect::new(c.x - rx * 1.04, c.y - ry * 1.04, rx * 2.08, ry * 2.08);
+    art::sprite_ex(
+        "ball",
+        Rect::new(rect.x, rect.y + 6.0, rect.w, rect.h),
+        crate::art::Draw {
+            tint: Color::new(0.0, 0.0, 0.0, 0.15 * fade),
+            ..Default::default()
+        },
     );
-    draw_ellipse(c.x, c.y, rx, ry, 0.0, with_alpha(darker(color, 0.8), fade));
-    draw_ellipse(
-        c.x,
-        c.y - 4.0,
-        rx * 0.95,
-        ry * 0.95,
-        0.0,
-        with_alpha(color, fade),
-    );
-    draw_ellipse(
-        c.x - rx * 0.38,
-        c.y - ry * 0.42,
-        rx * 0.2,
-        ry * 0.3,
-        0.0,
-        Color::new(1.0, 1.0, 1.0, 0.45 * fade),
+    art::sprite_ex(
+        "ball",
+        rect,
+        crate::art::Draw {
+            tint: with_alpha(color, fade),
+            ..Default::default()
+        },
     );
     text_outline(
         &b.value.to_string(),
@@ -519,12 +564,35 @@ fn draw_balloon(c: Vec2, r: f32, b: &Balloon, t: f32) {
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(130, 200, 250, 255));
-    let big = vec2(r.x + r.w * 0.36, r.y + r.h * 0.42);
-    let small = vec2(r.x + r.w * 0.72, r.y + r.h * 0.5);
-    for (c, rad, col) in [
-        (big, r.w * 0.27, Color::from_rgba(240, 90, 110, 255)),
-        (small, r.w * 0.2, Color::from_rgba(255, 210, 70, 255)),
+    art::sprite("bg", r);
+    crate::ui::cloud(
+        2,
+        vec2(r.x + r.w * 0.78, r.y + r.h * 0.16),
+        r.w * 0.34,
+        with_alpha(WHITE, 0.9),
+    );
+    art::sprite_at(
+        "bunny_up",
+        vec2(r.x + r.w * 0.8, r.y + r.h * 0.84),
+        r.h * 0.34,
+        crate::art::Draw {
+            flip_x: true,
+            ..Default::default()
+        },
+    );
+    for (c, rad, hue, label) in [
+        (
+            vec2(r.x + r.w * 0.34, r.y + r.h * 0.42),
+            r.w * 0.27,
+            0.97,
+            "5",
+        ),
+        (
+            vec2(r.x + r.w * 0.72, r.y + r.h * 0.5),
+            r.w * 0.2,
+            0.13,
+            "+",
+        ),
     ] {
         draw_line(
             c.x,
@@ -534,23 +602,87 @@ pub fn icon(r: Rect) {
             2.0,
             WHITE,
         );
-        draw_ellipse(c.x, c.y, rad * 0.88, rad, 0.0, col);
-        draw_ellipse(
-            c.x - rad * 0.3,
-            c.y - rad * 0.35,
-            rad * 0.18,
-            rad * 0.27,
-            0.0,
-            Color::new(1.0, 1.0, 1.0, 0.5),
+        art::sprite_ex(
+            "ball",
+            Rect::new(c.x - rad * 0.9, c.y - rad, rad * 1.8, rad * 2.0),
+            crate::art::Draw {
+                tint: hsv(hue, 0.65, 1.0),
+                ..Default::default()
+            },
+        );
+        text_outline(
+            label,
+            c.x,
+            c.y,
+            rad * 1.0,
+            WHITE,
+            darker(hsv(hue, 0.65, 1.0), 0.5),
         );
     }
-    text_center("5", big.x, big.y, r.h * 0.34, WHITE);
-    text_center("+", small.x, small.y, r.h * 0.3, WHITE);
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mathpop_sprites_all_exist() {
+        let have = art::names();
+        for n in [
+            "bg",
+            "ball",
+            "bunny",
+            "bunny_up",
+            "bunny_sad",
+            "pink",
+            "pink_up",
+            "pink_sad",
+        ] {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn right_answers_are_praised_aloud_and_wrong_ones_are_not() {
+        let v = View::ipad_landscape();
+        let mut g = game_with_first_try_answers();
+        let wrong = wrong_slot(&g);
+        let tap = g.pick(wrong);
+        g.react(&v, wrong, tap);
+        assert_eq!(crate::sfx::take_voice(), None);
+        let slot = g.question.slot_of_answer();
+        let tap = g.pick(slot);
+        g.react(&v, slot, tap);
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Correct));
+    }
+
+    #[test]
+    fn first_try_answer_says_great_and_level_up_says_so() {
+        let v = View::ipad_landscape();
+        let mut g = game_with_first_try_answers();
+        let slot = g.question.slot_of_answer();
+        let tap = g.pick(slot);
+        g.react(&v, slot, tap);
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Great));
+        let mut g = game_with_first_try_answers();
+        g.ladder.streak = UP_STREAK - 1;
+        let slot = g.question.slot_of_answer();
+        let tap = g.pick(slot);
+        g.react(&v, slot, tap);
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::LevelUp));
+    }
+
+    #[test]
+    fn bunnies_cheer_after_a_pop_and_wince_after_a_miss() {
+        let mut g = game_with_first_try_answers();
+        assert_eq!(g.mood(), "stand");
+        let wrong = wrong_slot(&g);
+        g.pick(wrong);
+        assert_eq!(g.mood(), "sad");
+        let slot = g.question.slot_of_answer();
+        g.pick(slot);
+        assert_eq!(g.mood(), "up");
+    }
 
     fn assert_sound(q: &Question) {
         assert_eq!(q.answer, solve(q.a, q.b, q.op));

@@ -1,0 +1,8 @@
+bg        | physics-assets/PNG/Backgrounds/colored_land.png | solo max=1024 keep
+ball      | puzzle-pack-2/PNG/Balls/Grey/ballGrey_02.png | max=128
+bunny     | jumper-pack/PNG/Players/bunny1_stand.png | max=200
+bunny_up  | jumper-pack/PNG/Players/bunny1_jump.png | max=200
+bunny_sad | jumper-pack/PNG/Players/bunny1_hurt.png | max=200
+pink      | jumper-pack/PNG/Players/bunny2_stand.png | max=200
+pink_up   | jumper-pack/PNG/Players/bunny2_jump.png | max=200
+pink_sad  | jumper-pack/PNG/Players/bunny2_hurt.png | max=200
