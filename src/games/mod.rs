@@ -1,4 +1,5 @@
 pub mod breakout;
+pub mod crossy;
 pub mod flappy;
 pub mod fruit;
 pub mod hotel;
@@ -91,6 +92,13 @@ pub fn all() -> Vec<Entry> {
             color: Color::from_rgba(60, 170, 200, 255),
             make: || Box::new(memory::Memory::new()),
             icon: memory::icon,
+        },
+        Entry {
+            name: "Road Hopper",
+            like: "Crossy Road",
+            color: Color::from_rgba(100, 190, 80, 255),
+            make: || Box::new(crossy::Crossy::new()),
+            icon: crossy::icon,
         },
     ]
 }

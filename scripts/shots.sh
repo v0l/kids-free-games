@@ -21,7 +21,8 @@ python3 -m http.server "$PORT" -d "$OUT" >/dev/null 2>&1 &
 srv=$!
 trap 'kill $srv' EXIT
 sleep 1
-for i in $(seq 0 10); do
+COUNT=$(grep -c "^        Entry {" src/games/mod.rs)
+for i in $(seq 0 "$COUNT"); do
   google-chrome --headless=new --no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader --hide-scrollbars \
     --window-size="$W,$H" --virtual-time-budget=4000 --screenshot="$OUT/$i.png" "http://localhost:$PORT/index.html#$i" 2>/dev/null
 done
@@ -29,7 +30,8 @@ python3 - "$OUT" <<'EOF'
 import sys
 from PIL import Image
 out = sys.argv[1]
-ims = [Image.open(f"{out}/{i}.png") for i in range(11)]
+import glob
+ims = [Image.open(f"{out}/{i}.png") for i in range(len(glob.glob(f"{out}/[0-9]*.png")))]
 w, h = ims[0].size
 cols = 3
 rows = (len(ims) + cols - 1) // cols
