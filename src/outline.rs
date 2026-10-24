@@ -231,6 +231,29 @@ thread_local! {
     static CACHE: RefCell<Option<Cache>> = const { RefCell::new(None) };
 }
 
+pub fn measure(bytes: &[u8], s: &str, px: f32) -> f32 {
+    thread_local! {
+        static FONT: RefCell<Option<fontdue::Font>> = const { RefCell::new(None) };
+    }
+    FONT.with(|f| {
+        let mut f = f.borrow_mut();
+        if f.is_none() {
+            *f = fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).ok();
+        }
+        let Some(font) = f.as_ref() else { return 0.0 };
+        let mut w = 0.0;
+        let mut prev = None;
+        for ch in s.chars() {
+            if let Some(p) = prev {
+                w += font.horizontal_kern(p, ch, px).unwrap_or(0.0);
+            }
+            w += font.metrics(ch, px).advance_width;
+            prev = Some(ch);
+        }
+        w
+    })
+}
+
 pub fn with_cache<R>(bytes: &[u8], f: impl FnOnce(&mut Cache) -> R) -> Option<R> {
     CACHE.with(|c| {
         let mut c = c.borrow_mut();

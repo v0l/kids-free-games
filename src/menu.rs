@@ -89,9 +89,41 @@ fn draw_mute(view: &View, scroll: f32) {
     }
 }
 
+pub struct Header {
+    pub title_size: f32,
+    pub title_y: f32,
+    pub title_band: (f32, f32),
+    pub tag: Rect,
+    pub bottom: f32,
+}
+
+const WAVE: f32 = 6.0;
+const TAG_SIZE: f32 = 26.0;
+
+pub fn measure_width(s: &str, size: f32) -> f32 {
+    crate::outline::measure(FONT_BYTES, s, size)
+}
+
+pub fn header(view: &View) -> Header {
+    let title_size = (view.w / 13.0).min(64.0);
+    let reach = title_size * (0.5 + crate::outline::OUTLINE_FRAC + 0.08) + WAVE;
+    let title_y = 14.0 + reach;
+    let title_band = (title_y - reach, title_y + reach);
+    let tag_h = TAG_SIZE + 14.0;
+    let tag_w = measure_width("No ads. No tracking. Just play.", TAG_SIZE) + 40.0;
+    let tag = Rect::new(view.w / 2.0 - tag_w / 2.0, title_band.1 + 8.0, tag_w, tag_h);
+    Header {
+        title_size,
+        title_y,
+        title_band,
+        tag,
+        bottom: tag.y + tag.h,
+    }
+}
+
 pub fn tile_rects(view: &View, count: usize) -> Vec<Rect> {
     let pad = 22.0;
-    let top = 130.0;
+    let top = header(view).bottom + pad;
     let fit = |cols: usize| {
         let rows = count.div_ceil(cols);
         let by_w = (view.w - pad * (cols as f32 + 1.0)) / cols as f32;
@@ -310,15 +342,16 @@ impl App {
 
     fn draw_title(&self, view: &View) {
         let title = "Kids Free Games";
-        let size = (view.w / 11.0).min(72.0);
-        let total = text_size(title, size).width;
+        let h = header(view);
+        let size = h.title_size;
+        let total = measure_width(title, size);
         let mut x = view.w / 2.0 - total / 2.0;
-        let y = 66.0 - self.scroll;
+        let y = h.title_y - self.scroll;
         for (i, ch) in title.chars().enumerate() {
             let s = ch.to_string();
-            let w = text_size(&s, size).width;
+            let w = measure_width(&s, size);
             let intro = ease_out_back(((self.since_menu - i as f32 * 0.015) / 0.3).clamp(0.0, 1.0));
-            let wave = (self.t * 3.0 - i as f32 * 0.45).sin() * 6.0;
+            let wave = (self.t * 3.0 - i as f32 * 0.45).sin() * WAVE;
             let col = hsv(i as f32 * 0.07 + self.t * 0.05, 0.55, 1.0);
             if ch != ' ' {
                 text_outline(
@@ -334,14 +367,13 @@ impl App {
         }
         let tag = "No ads. No tracking. Just play.";
         let a = ((self.since_menu - 0.15) / 0.25).clamp(0.0, 1.0);
-        let tw = text_size(tag, 26.0).width + 40.0;
-        let r = Rect::new(view.w / 2.0 - tw / 2.0, y + 32.0, tw, 38.0);
-        round_rect(r, 19.0, Color::new(1.0, 1.0, 1.0, 0.35 * a));
+        let r = Rect::new(h.tag.x, h.tag.y - self.scroll, h.tag.w, h.tag.h);
+        round_rect(r, r.h / 2.0, Color::new(1.0, 1.0, 1.0, 0.35 * a));
         text_center(
             tag,
             view.w / 2.0,
-            r.y + 19.0,
-            26.0,
+            r.y + r.h / 2.0,
+            TAG_SIZE,
             with_alpha(Color::from_rgba(130, 40, 70, 255), a),
         );
     }
@@ -456,6 +488,39 @@ impl Default for App {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn title_tagline_and_tiles_do_not_overlap() {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(1300.0, 950.0),
+            View::fit(1920.0, 1080.0),
+            View::fit(1080.0, 2400.0),
+        ] {
+            let h = header(&v);
+            assert!(h.title_band.0 >= 0.0, "title clipped at top in {v:?}");
+            assert!(
+                h.title_band.1 <= h.tag.y,
+                "title {:?} runs into tagline {:?} in {v:?}",
+                h.title_band,
+                h.tag
+            );
+            let tiles = tile_rects(&v, 17);
+            assert!(
+                h.bottom <= tiles[0].y - 8.0,
+                "tagline bottom {} touches tiles at {} in {v:?}",
+                h.bottom,
+                tiles[0].y
+            );
+            assert!(
+                h.title_band.1 < HOME.y + HOME.h
+                    || mute_rect(&v).x
+                        > v.w / 2.0 + measure_width("Kids Free Games", h.title_size) / 2.0,
+                "title runs under the mute button in {v:?}"
+            );
+        }
+    }
 
     #[test]
     fn every_tile_is_reachable_by_scrolling() {
