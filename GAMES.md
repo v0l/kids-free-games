@@ -21,7 +21,15 @@ The games kids actually play on iPads and phones, what they are like in the stor
 | Color Bump / Ball sort puzzles | Physics and sorting puzzles | | Not yet |
 | Cut the Rope | Physics puzzle | | Not yet |
 | Tetris clones | Falling blocks | Block Drop | Done |
-| Math and counting apps for ages 4 to 9 | Pop the balloon with the right answer; count the things and tap the number | Math Pop, Count It | Done |
+| Math, counting and spelling apps for ages 4 to 9 | Pop the right answer, count the things, spell the picture | Math Pop, Count It, Spell It | Done |
 | Minecraft-like sandbox | Block building | | Out of scope |
+
+## Learning games
+
+| Game | What it teaches |
+|---|---|
+| Math Pop | Adding, taking away and times tables: pop the balloon with the answer |
+| Count It | Counting 1 to 20 |
+| Spell It | Spelling 30 picture words, 3 to 7 letters |
 
 None of the games here have ads, purchases, accounts, network access or tracking. Nothing leaves the device.

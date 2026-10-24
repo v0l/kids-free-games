@@ -67,6 +67,14 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                     Some([Dir::Left, Dir::Down, Dir::Right, Dir::Up, Dir::Down][(f / 20) % 5]);
             }
         }
+        "Spell It" => {
+            if f == 120 || f == 160 {
+                let n = 3usize;
+                let k = learn_tiles_x(view, n);
+                tap(&mut i, k);
+                i.released = true;
+            }
+        }
         "Road Hopper" if f.is_multiple_of(30) && f < 200 => i.swipe = Some(Dir::Up),
         "Brick Breaker" => {
             if f == 2 {
@@ -132,6 +140,41 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
         _ => {}
     }
     i
+}
+
+fn learn_tiles_x(view: &View, n: usize) -> Vec2 {
+    let l = kids_games::games::spell::layout(view, n, n);
+    l.tiles[0].center()
+}
+
+fn word_grid(view: &View) {
+    sky(
+        view,
+        Color::from_rgba(255, 236, 170, 255),
+        Color::from_rgba(255, 190, 200, 255),
+    );
+    let words = kids_games::games::spell::WORDS;
+    let cols = 6;
+    let rows = words.len().div_ceil(cols);
+    let cw = view.w / cols as f32;
+    let ch = view.h / rows as f32;
+    for (i, (w, draw)) in words.iter().enumerate() {
+        let c = vec2(
+            (i % cols) as f32 * cw + cw / 2.0,
+            (i / cols) as f32 * ch + ch / 2.0 - 10.0,
+        );
+        round_rect(
+            Rect::new(c.x - cw * 0.45, c.y - ch * 0.42, cw * 0.9, ch * 0.92),
+            16.0,
+            WHITE,
+        );
+        draw(&kids_games::games::spell::Pen {
+            c,
+            s: ch * 0.3,
+            t: 0.0,
+        });
+        text_center(w, c.x, c.y + ch * 0.4, 22.0, BLACK);
+    }
 }
 
 fn app_icon(view: &View) {
@@ -243,6 +286,7 @@ async fn main() {
         let view = begin_frame_safe(fake_inset());
         match &mut game {
             Some(g) => g.draw(&view),
+            None if which == -2 => word_grid(&view),
             None if which < 0 => app_icon(&view),
             None => app.draw(&view),
         }

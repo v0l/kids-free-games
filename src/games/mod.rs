@@ -12,6 +12,7 @@ pub mod memory;
 pub mod merge;
 pub mod paper;
 pub mod snake;
+pub mod spell;
 pub mod stack;
 
 use crate::engine::Game;
@@ -131,6 +132,13 @@ pub fn all() -> Vec<Entry> {
             color: Color::from_rgba(250, 170, 60, 255),
             make: || Box::new(count::Count::new()),
             icon: count::icon,
+        },
+        Entry {
+            name: "Spell It",
+            like: "Spelling games",
+            color: Color::from_rgba(250, 150, 80, 255),
+            make: || Box::new(spell::Spell::new()),
+            icon: spell::icon,
         },
     ]
 }
