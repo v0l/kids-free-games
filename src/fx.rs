@@ -356,12 +356,12 @@ impl Bump {
 }
 
 pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) {
-    let fade = ease_out_cubic(age / 0.3);
+    let fade = ease_out_cubic(age / 0.2);
     fill_screen(view, Color::new(0.08, 0.05, 0.15, 0.5 * fade));
     let pw = 600.0f32.min(view.w - 40.0);
     let ph = 190.0 + lines.len() as f32 * 50.0;
-    let s = ease_out_back(age / 0.45).max(0.01);
-    let c = view.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.45)) * 80.0);
+    let s = ease_out_back(age / 0.28).max(0.01);
+    let c = view.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.28)) * 80.0);
     let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
     round_rect(
         Rect::new(r.x, r.y + 10.0 * s, r.w, r.h),
@@ -387,7 +387,7 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
         darker(accent, 0.55),
     );
     for (i, l) in lines.iter().enumerate() {
-        let la = ((age - 0.2 - i as f32 * 0.08) / 0.25).clamp(0.0, 1.0);
+        let la = ((age - 0.1 - i as f32 * 0.05) / 0.18).clamp(0.0, 1.0);
         let last = i + 1 == lines.len();
         let y = band.y + band.h + 50.0 * s + i as f32 * 50.0 * s + (1.0 - la) * 16.0;
         if last && lines.len() > 1 {

@@ -28,7 +28,7 @@ pub struct App {
     fx: Particles,
 }
 
-const LAUNCH_TIME: f32 = 0.35;
+const LAUNCH_TIME: f32 = 0.22;
 
 pub fn mute_rect(view: &View) -> Rect {
     Rect::new(view.w - 74.0, 12.0, 60.0, 48.0)
@@ -159,7 +159,7 @@ impl App {
     pub fn update(&mut self, input: &Input, view: &View, dt: f32) {
         self.t += dt;
         self.since_menu += dt;
-        self.curtain = (self.curtain - dt * 3.5).max(0.0);
+        self.curtain = (self.curtain - dt * 5.0).max(0.0);
         self.fx.update(dt);
         tick_overlay(dt);
         if let Some((_, game)) = &mut self.current {
@@ -317,7 +317,7 @@ impl App {
         for (i, ch) in title.chars().enumerate() {
             let s = ch.to_string();
             let w = text_size(&s, size).width;
-            let intro = ease_out_back(((self.since_menu - i as f32 * 0.035) / 0.5).clamp(0.0, 1.0));
+            let intro = ease_out_back(((self.since_menu - i as f32 * 0.015) / 0.3).clamp(0.0, 1.0));
             let wave = (self.t * 3.0 - i as f32 * 0.45).sin() * 6.0;
             let col = hsv(i as f32 * 0.07 + self.t * 0.05, 0.55, 1.0);
             if ch != ' ' {
@@ -333,7 +333,7 @@ impl App {
             x += w;
         }
         let tag = "No ads. No tracking. Just play.";
-        let a = ((self.since_menu - 0.4) / 0.4).clamp(0.0, 1.0);
+        let a = ((self.since_menu - 0.15) / 0.25).clamp(0.0, 1.0);
         let tw = text_size(tag, 26.0).width + 40.0;
         let r = Rect::new(view.w / 2.0 - tw / 2.0, y + 32.0, tw, 38.0);
         round_rect(r, 19.0, Color::new(1.0, 1.0, 1.0, 0.35 * a));
@@ -366,7 +366,7 @@ impl App {
                 continue;
             }
             let intro =
-                ease_out_back(((self.since_menu - 0.15 - i as f32 * 0.05) / 0.45).clamp(0.0, 1.0));
+                ease_out_back(((self.since_menu - 0.05 - i as f32 * 0.02) / 0.3).clamp(0.0, 1.0));
             if intro <= 0.0 {
                 continue;
             }

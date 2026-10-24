@@ -637,7 +637,7 @@ mod tests {
             set_text_scale(scale);
             let mut sizes: Vec<u16> = vec![];
             for frame in 0..60 {
-                let s = crate::fx::ease_out_back(frame as f32 / 120.0 / 0.45).max(0.01);
+                let s = crate::fx::ease_out_back(frame as f32 / 120.0 / 0.28).max(0.01);
                 for base in [58.0, 36.0, 30.0, 32.0] {
                     sizes.push(font_params(base * s).0);
                 }
@@ -669,7 +669,7 @@ mod tests {
             let (px, k) = font_params(size);
             assert!((px as f32 * k - size).abs() < 1e-3);
             let want = size * 2.625;
-            if want >= 24.0 && want <= 200.0 {
+            if (24.0..=200.0).contains(&want) {
                 assert!(
                     px as f32 >= want * 0.9,
                     "{want}px drawn from a {px}px glyph would blur"
