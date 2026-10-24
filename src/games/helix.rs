@@ -1,5 +1,3 @@
-use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -13,6 +11,7 @@ pub const GRAVITY: f32 = 1700.0;
 pub const BOUNCE: f32 = -640.0;
 pub const BALL_R: f32 = 18.0;
 pub const SMASH_FLOORS: u32 = 3;
+const BALL_TINT: Color = Color::new(1.0, 0.55, 0.22, 1.0);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
@@ -238,6 +237,7 @@ impl Game for Helix {
                 self.y = -60.0 + (self.t * 4.0).sin().abs() * -40.0;
                 if input.pressed || input.action {
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                     self.vy = 0.0;
                 }
             }
@@ -267,6 +267,10 @@ impl Game for Helix {
                     }
                     Some(Seg::Danger) => {
                         sfx::play(Sfx::Hit);
+                        sfx::play(Sfx::Lose);
+                        if self.score > self.best.0 && self.best.0 > 0 {
+                            sfx::say(sfx::Say::Best);
+                        }
                         feel::impact(Impact::Large);
                         self.state = State::Dead;
                         self.end_t = 0.0;
@@ -308,6 +312,7 @@ impl Game for Helix {
                 }
                 if self.passed >= self.floors.len() {
                     sfx::play(Sfx::Win);
+                    sfx::say(sfx::Say::Win);
                     self.state = State::Won;
                     self.end_t = 0.0;
                     self.best.offer(self.score);
@@ -340,39 +345,19 @@ impl Game for Helix {
 
     fn draw(&self, view: &View) {
         let hue = 0.55 + self.level as f32 * 0.09;
-        sky(view, hsv(hue, 0.35, 1.0), hsv(hue + 0.08, 0.55, 0.85));
+        sky(view, hsv(hue, 0.3, 1.0), hsv(hue + 0.06, 0.4, 0.92));
         let sh = self.shake.offset();
         let cx = view.w / 2.0 + sh.x;
         let to_screen = |y: f32| y - self.cam + view.h * 0.15 + sh.y;
+        draw_clouds(view, self.cam, self.t);
         let (outer, inner) = self.ring();
         let pole_w = inner * 1.1;
-        draw_rectangle(
-            cx - pole_w / 2.0,
-            0.0,
-            pole_w,
-            view.h,
-            Color::from_rgba(250, 245, 240, 255),
-        );
-        draw_rectangle(
-            cx - pole_w / 2.0,
-            0.0,
-            pole_w * 0.3,
-            view.h,
-            Color::new(1.0, 1.0, 1.0, 0.6),
-        );
-        draw_rectangle(
-            cx + pole_w * 0.25,
-            0.0,
-            pole_w * 0.25,
-            view.h,
-            Color::new(0.0, 0.0, 0.0, 0.06),
-        );
+        draw_pole(cx, view, pole_w);
         for (i, f) in self.floors.iter().enumerate() {
             let y = to_screen(Self::floor_y(i));
             if y < -100.0 || y > view.h + 100.0 {
                 continue;
             }
-            let base = hsv(f.hue, 0.55, 0.98);
             let fall = f.broken * f.broken * 900.0;
             let fade = (1.0 - f.broken * 1.5).max(0.0);
             if f.broken > 0.0 && fade <= 0.0 {
@@ -386,65 +371,41 @@ impl Game for Helix {
                 let a0 = self.angle + k as f32 / SEGMENTS as f32 * TAU;
                 let a1 = a0 + TAU / SEGMENTS as f32;
                 let mid = (a0 + a1) / 2.0;
-                let depth = mid.sin();
-                let col = match seg {
-                    Seg::Danger => Color::from_rgba(240, 60, 70, 255),
-                    _ => base,
-                };
-                let lit = darker(col, 0.75 + 0.25 * depth.max(-0.2));
                 let push = if f.broken > 0.0 {
-                    vec2(mid.cos(), 0.0) * fall * 0.6
+                    vec2(mid.cos() * fall * 0.6, fall)
                 } else {
                     Vec2::ZERO
                 };
-                let yy = y + fall;
-                let steps = 4;
-                for s in 0..steps {
-                    let b0 = a0 + (a1 - a0) * s as f32 / steps as f32;
-                    let b1 = a0 + (a1 - a0) * (s + 1) as f32 / steps as f32;
-                    let p = |a: f32, r: f32, dy: f32| {
-                        vec2(cx + a.cos() * r, yy + a.sin() * r * 0.32 + dy) + push
-                    };
-                    let thick = 18.0;
-                    if b0.sin() + b1.sin() > -0.5 {
-                        draw_triangle(
-                            p(b0, outer, 0.0),
-                            p(b1, outer, 0.0),
-                            p(b0, outer, thick),
-                            with_alpha(darker(col, 0.6), fade),
-                        );
-                        draw_triangle(
-                            p(b1, outer, 0.0),
-                            p(b1, outer, thick),
-                            p(b0, outer, thick),
-                            with_alpha(darker(col, 0.6), fade),
-                        );
-                    }
-                    draw_triangle(
-                        p(b0, inner, 0.0),
-                        p(b0, outer, 0.0),
-                        p(b1, outer, 0.0),
-                        with_alpha(lit, fade),
-                    );
-                    draw_triangle(
-                        p(b0, inner, 0.0),
-                        p(b1, outer, 0.0),
-                        p(b1, inner, 0.0),
-                        with_alpha(lit, fade),
-                    );
-                }
+                let name = if seg == Seg::Danger {
+                    "tile_red"
+                } else {
+                    floor_tile(f.hue)
+                };
+                draw_ring_segment(&Ring {
+                    centre: vec2(cx, y) + push,
+                    a0,
+                    a1,
+                    outer,
+                    inner,
+                    thick: 18.0,
+                    flat: 0.32,
+                    tile: name,
+                    light: 0.75 + 0.25 * mid.sin().max(-0.2),
+                    alpha: fade,
+                });
             }
             for (fi, seg, at) in &self.splats {
                 if *fi == i && f.broken == 0.0 {
                     let a = self.angle - at + (*seg + 0.5) / SEGMENTS as f32 * TAU;
                     let r = (outer + inner) / 2.0;
-                    draw_ellipse(
-                        cx + a.cos() * r,
-                        y + a.sin() * r * 0.32,
-                        16.0,
-                        6.0,
-                        0.0,
-                        Color::from_rgba(255, 120, 60, 200),
+                    art::sprite_at(
+                        "splat",
+                        vec2(cx + a.cos() * r, y + a.sin() * r * 0.32),
+                        24.0,
+                        crate::art::Draw {
+                            tint: Color::from_rgba(255, 196, 40, 230),
+                            ..Default::default()
+                        },
                     );
                 }
             }
@@ -457,74 +418,74 @@ impl Game for Helix {
             let stretch = (self.vy.abs() / 1200.0).min(0.25) * (1.0 - self.squash);
             if self.streak >= SMASH_FLOORS && self.state == State::Playing {
                 for k in 0..6 {
-                    draw_circle(
-                        bx,
-                        bz - k as f32 * 10.0,
-                        BALL_R * (1.0 - k as f32 * 0.12),
-                        Color::new(1.0, 0.5, 0.2, 0.25),
+                    art::sprite_at(
+                        "ball",
+                        vec2(bx, bz - k as f32 * 10.0),
+                        BALL_R * 2.0 * (1.0 - k as f32 * 0.12),
+                        crate::art::Draw {
+                            tint: Color::new(1.0, 0.6, 0.2, 0.3),
+                            ..Default::default()
+                        },
                     );
                 }
             }
-            draw_ellipse(
-                bx,
-                bz,
-                BALL_R * (1.0 + sq - stretch * 0.5),
-                BALL_R * (1.0 - sq + stretch),
-                0.0,
-                Color::from_rgba(255, 120, 60, 255),
-            );
-            draw_circle(
-                bx - 6.0,
-                bz - 6.0,
-                BALL_R * 0.3,
-                Color::new(1.0, 1.0, 1.0, 0.6),
+            let w = BALL_R * 2.0 * (1.0 + sq - stretch * 0.5);
+            let h = BALL_R * 2.0 * (1.0 - sq + stretch);
+            art::sprite_ex(
+                "ball",
+                Rect::new(bx - w / 2.0, bz - h / 2.0, w, h),
+                crate::art::Draw {
+                    tint: BALL_TINT,
+                    ..Default::default()
+                },
             );
         } else {
             let by = to_screen(self.y);
             let bx = cx + ball_angle().cos() * (outer + inner) / 2.0;
             let bz = by + (outer + inner) / 2.0 * 0.32;
-            draw_ellipse(
-                bx,
-                bz + 4.0,
-                BALL_R * 1.8,
-                BALL_R * 0.5,
-                0.0,
-                Color::from_rgba(255, 120, 60, 255),
+            art::sprite(
+                "splat",
+                Rect::new(
+                    bx - BALL_R * 1.8,
+                    bz + 4.0 - BALL_R * 0.6,
+                    BALL_R * 3.6,
+                    BALL_R * 1.2,
+                ),
             );
         }
         self.fx.draw();
         self.pops.draw();
         let progress = self.passed as f32 / self.floors.len() as f32;
         let bar = Rect::new(view.w / 2.0 - 180.0, 24.0, 360.0, 26.0);
-        round_rect(bar, 13.0, Color::new(1.0, 1.0, 1.0, 0.5));
-        round_rect(
-            Rect::new(bar.x, bar.y, (bar.w * progress).max(26.0), bar.h),
-            13.0,
-            Color::from_rgba(255, 120, 60, 255),
+        crate::ui::nine("panel", bar, 14.0, bar.h / 64.0, WHITE);
+        crate::ui::nine(
+            "btn_yellow",
+            Rect::new(bar.x, bar.y, (bar.w * progress).max(bar.h), bar.h),
+            18.0,
+            bar.h / 64.0,
+            WHITE,
         );
         for (k, x) in [
             (self.level, bar.x - 26.0),
             (self.level + 1, bar.x + bar.w + 26.0),
         ] {
-            draw_circle(
-                x,
-                bar.y + 13.0,
-                22.0,
-                if x < view.w / 2.0 || progress >= 1.0 {
-                    Color::from_rgba(255, 120, 60, 255)
-                } else {
-                    WHITE
-                },
+            let done = x < view.w / 2.0 || progress >= 1.0;
+            crate::ui::sprite_at(
+                if done { "round_yellow" } else { "round_white" },
+                vec2(x, bar.y + 13.0),
+                46.0,
+                Default::default(),
             );
-            text_center(
+            text_outline(
                 &k.to_string(),
                 x,
-                bar.y + 13.0,
+                bar.y + 11.0,
                 26.0,
-                if x < view.w / 2.0 || progress >= 1.0 {
-                    WHITE
+                WHITE,
+                if done {
+                    Color::from_rgba(150, 90, 0, 255)
                 } else {
-                    Color::from_rgba(255, 120, 60, 255)
+                    crate::ui::INK
                 },
             );
         }
@@ -555,42 +516,179 @@ impl Game for Helix {
     }
 }
 
-pub fn icon(r: Rect) {
-    let c = vec2(r.x + r.w / 2.0, r.y);
-    draw_rectangle(
-        c.x - r.w * 0.08,
-        r.y,
-        r.w * 0.16,
-        r.h,
-        Color::from_rgba(250, 245, 240, 255),
-    );
-    for (k, col) in [
-        (0.25, hsv(0.55, 0.55, 0.98)),
-        (0.55, hsv(0.85, 0.55, 0.98)),
-        (0.85, hsv(0.15, 0.55, 0.98)),
-    ] {
-        let y = c.y + r.h * k;
-        draw_ellipse(c.x, y, r.w * 0.45, r.h * 0.1, 0.0, col);
-        draw_ellipse(
-            c.x,
-            y,
-            r.w * 0.12,
-            r.h * 0.03,
-            0.0,
-            Color::from_rgba(250, 245, 240, 255),
+mod art {
+    crate::sprites!("helix");
+
+    pub fn bytes() -> &'static [u8] {
+        SHEET_BYTES
+    }
+}
+
+thread_local! {
+    static TILES: std::cell::RefCell<Option<(Texture2D, crate::art::Index)>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+pub fn floor_tile(hue: f32) -> &'static str {
+    ["tile_green", "tile_blue", "tile_pink", "tile_grey"][(hue.rem_euclid(1.0) * 4.0) as usize % 4]
+}
+
+pub struct Ring {
+    pub centre: Vec2,
+    pub a0: f32,
+    pub a1: f32,
+    pub outer: f32,
+    pub inner: f32,
+    pub thick: f32,
+    pub flat: f32,
+    pub tile: &'static str,
+    pub light: f32,
+    pub alpha: f32,
+}
+
+fn with_tiles(f: impl FnOnce(&Texture2D, &crate::art::Index)) {
+    TILES.with(|t| {
+        let mut t = t.borrow_mut();
+        let (tex, index) = t.get_or_insert_with(|| {
+            let index = crate::art::parse(art::bytes()).expect("bad helix sheet");
+            let (at, len) = index.pages[0];
+            let tex = Texture2D::from_file_with_format(
+                &art::bytes()[at..at + len],
+                Some(ImageFormat::Png),
+            );
+            tex.set_filter(FilterMode::Linear);
+            (tex, index)
+        });
+        f(tex, index);
+    });
+}
+
+fn textured_quad(tex: &Texture2D, pts: [Vec2; 4], uvs: [Vec2; 4], color: Color) {
+    use macroquad::models::{draw_mesh, Mesh, Vertex};
+    let vertices = (0..4)
+        .map(|i| Vertex::new2(vec3(pts[i].x, pts[i].y, 0.0), uvs[i], color))
+        .collect();
+    draw_mesh(&Mesh {
+        vertices,
+        indices: vec![0, 1, 2, 0, 2, 3],
+        texture: Some(tex.clone()),
+    });
+}
+
+pub fn draw_ring_segment(r: &Ring) {
+    with_tiles(|tex, index| {
+        let Some(f) = index.frames.get(r.tile) else {
+            return;
+        };
+        let (tw, th) = (tex.width(), tex.height());
+        let uv = |u: f32, v: f32| {
+            vec2(
+                (f.src.x + 0.5 + (f.src.w - 1.0) * u) / tw,
+                (f.src.y + 0.5 + (f.src.h - 1.0) * v) / th,
+            )
+        };
+        let steps = 4;
+        let top = Color::new(r.light, r.light, r.light, r.alpha);
+        let side = Color::new(r.light * 0.7, r.light * 0.7, r.light * 0.7, r.alpha);
+        let p =
+            |a: f32, rad: f32, dy: f32| r.centre + vec2(a.cos() * rad, a.sin() * rad * r.flat + dy);
+        for s in 0..steps {
+            let k0 = s as f32 / steps as f32;
+            let k1 = (s + 1) as f32 / steps as f32;
+            let b0 = r.a0 + (r.a1 - r.a0) * k0;
+            let b1 = r.a0 + (r.a1 - r.a0) * k1;
+            if b0.sin() + b1.sin() > -0.5 {
+                textured_quad(
+                    tex,
+                    [
+                        p(b0, r.outer, 0.0),
+                        p(b1, r.outer, 0.0),
+                        p(b1, r.outer, r.thick),
+                        p(b0, r.outer, r.thick),
+                    ],
+                    [uv(k0, 0.8), uv(k1, 0.8), uv(k1, 1.0), uv(k0, 1.0)],
+                    side,
+                );
+            }
+            textured_quad(
+                tex,
+                [
+                    p(b0, r.inner, 0.0),
+                    p(b1, r.inner, 0.0),
+                    p(b1, r.outer, 0.0),
+                    p(b0, r.outer, 0.0),
+                ],
+                [uv(k0, 0.0), uv(k1, 0.0), uv(k1, 0.8), uv(k0, 0.8)],
+                top,
+            );
+        }
+    });
+}
+
+fn draw_pole(cx: f32, view: &View, width: f32) {
+    let f = view.full();
+    art::sprite("pole", Rect::new(cx - width / 2.0, f.y, width, f.h));
+}
+
+fn draw_clouds(view: &View, cam: f32, t: f32) {
+    for i in 0..6 {
+        let depth = 0.08 + (i % 3) as f32 * 0.05;
+        let span = view.w + 400.0;
+        let x = (i as f32 * 233.0 + t * (5.0 + depth * 40.0)).rem_euclid(span) - 200.0;
+        let y = ((i * 131 % 700) as f32 - cam * depth).rem_euclid(view.h + 200.0) - 100.0;
+        crate::ui::cloud(
+            i,
+            vec2(x, y),
+            120.0 + depth * 700.0,
+            Color::new(1.0, 1.0, 1.0, 0.8),
         );
     }
-    draw_triangle(
-        vec2(c.x + r.w * 0.05, r.y + r.h * 0.55),
-        vec2(c.x + r.w * 0.45, r.y + r.h * 0.45),
-        vec2(c.x + r.w * 0.45, r.y + r.h * 0.65),
-        Color::from_rgba(150, 200, 255, 255),
-    );
-    draw_circle(
-        c.x + r.w * 0.25,
-        r.y + r.h * 0.38,
-        r.w * 0.08,
-        Color::from_rgba(255, 120, 60, 255),
+}
+
+pub fn icon(r: Rect) {
+    gradient_rect(r, hsv(0.56, 0.3, 1.0), hsv(0.62, 0.4, 0.92));
+    let cx = r.x + r.w / 2.0;
+    let pw = r.w * 0.17;
+    art::sprite("pole", Rect::new(cx - pw / 2.0, r.y, pw, r.h));
+    let floors = [
+        (0.25, 0.0f32, "tile_green"),
+        (0.55, 2.2, "tile_pink"),
+        (0.84, 4.4, "tile_blue"),
+    ];
+    for (k, rot, name) in floors {
+        for seg in 0..SEGMENTS {
+            if (seg + (rot * 2.0) as usize) % SEGMENTS / 3 == 0 {
+                continue;
+            }
+            let a0 = rot + seg as f32 / SEGMENTS as f32 * TAU;
+            let a1 = a0 + TAU / SEGMENTS as f32;
+            let tile = if seg == 7 && k > 0.5 {
+                "tile_red"
+            } else {
+                name
+            };
+            draw_ring_segment(&Ring {
+                centre: vec2(cx, r.y + r.h * k),
+                a0,
+                a1,
+                outer: r.w * 0.45,
+                inner: r.w * 0.12,
+                thick: r.h * 0.07,
+                flat: 0.32,
+                tile,
+                light: 0.8 + 0.2 * (a0 + a1).sin() / 2.0,
+                alpha: 1.0,
+            });
+        }
+    }
+    art::sprite_at(
+        "ball",
+        vec2(cx + r.w * 0.18, r.y + r.h * 0.4),
+        r.h * 0.17,
+        crate::art::Draw {
+            tint: BALL_TINT,
+            ..Default::default()
+        },
     );
 }
 
@@ -605,6 +703,36 @@ mod tests {
         g.y = Helix::floor_y(floor) - BALL_R - 5.0;
         g.vy = 400.0;
         g.state = State::Playing;
+    }
+
+    #[test]
+    fn helix_sprites_all_exist() {
+        let have = art::names();
+        for n in [
+            "tile_green",
+            "tile_pink",
+            "tile_blue",
+            "tile_grey",
+            "tile_red",
+            "ball",
+            "pole",
+            "splat",
+            "cloud",
+        ] {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+        for k in 0..8 {
+            let name = floor_tile(k as f32 / 8.0);
+            assert!(have.iter().any(|h| h == name), "missing {name}");
+        }
+    }
+
+    #[test]
+    fn hue_picks_a_safe_tile_that_is_never_red() {
+        for k in 0..100 {
+            assert_ne!(floor_tile(k as f32 / 100.0), "tile_red");
+        }
+        assert_eq!(floor_tile(1.0), floor_tile(0.0));
     }
 
     #[test]
@@ -631,6 +759,16 @@ mod tests {
         g.physics(0.05);
         assert_eq!(g.passed, 3);
         assert!(g.score > 0);
+    }
+
+    #[test]
+    fn dying_plays_the_sad_jingle() {
+        let mut g = Helix::new();
+        above(&mut g, 2, Seg::Danger);
+        crate::sfx::take_pending();
+        g.update(&Input::default(), &View::ipad_landscape(), 0.05);
+        assert_eq!(g.state, State::Dead);
+        assert!(crate::sfx::take_pending().contains(&Sfx::Lose));
     }
 
     #[test]

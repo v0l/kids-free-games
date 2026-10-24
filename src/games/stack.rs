@@ -43,8 +43,9 @@ pub fn altitude(score: u32) -> f32 {
 
 pub fn sky_palette(hue: f32, score: u32) -> (Color, Color) {
     let k = ease_out_cubic(altitude(score));
-    let day_top = hsv(hue + 0.5, 0.35, 0.95);
-    let day_bottom = hsv(hue + 0.45, 0.5, 0.7);
+    let drift = (hue * 6.0).sin() * 0.03;
+    let day_top = hsv(0.56 + drift, 0.45, 0.98);
+    let day_bottom = hsv(0.54 + drift, 0.2, 0.97);
     let night_top = Color::from_rgba(12, 14, 46, 255);
     let night_bottom = Color::from_rgba(52, 38, 96, 255);
     let mix = |a: Color, b: Color| {
@@ -57,6 +58,46 @@ pub fn sky_palette(hue: f32, score: u32) -> (Color, Color) {
     };
     (mix(day_top, night_top), mix(day_bottom, night_bottom))
 }
+
+pub fn block_tint(hue: f32) -> Color {
+    hsv(hue, 0.6, 1.0)
+}
+
+pub fn dusk_tint(score: u32) -> Color {
+    let k = ease_out_cubic(altitude(score)) * 0.65;
+    let night = Color::new(0.4, 0.42, 0.7, 1.0);
+    Color::new(
+        1.0 + (night.r - 1.0) * k,
+        1.0 + (night.g - 1.0) * k,
+        1.0 + (night.b - 1.0) * k,
+        1.0,
+    )
+}
+
+pub fn tile_spans(from: f32, to: f32, width: f32) -> Vec<(f32, bool)> {
+    let first = (from / width).floor() as i32;
+    let last = (to / width).ceil() as i32;
+    (first..last)
+        .map(|i| (i as f32 * width, i.rem_euclid(2) == 1))
+        .collect()
+}
+
+const SCENERY: [(f32, &str, f32); 14] = [
+    (-980.0, "tree_pine", 190.0),
+    (-820.0, "tree_small", 120.0),
+    (-700.0, "castle", 150.0),
+    (-560.0, "tree_round", 150.0),
+    (-440.0, "tree_cone", 170.0),
+    (-300.0, "tree_small", 100.0),
+    (-190.0, "tree_tall", 190.0),
+    (230.0, "tree_pine", 170.0),
+    (360.0, "tree_small", 110.0),
+    (480.0, "house", 110.0),
+    (600.0, "tree_round", 170.0),
+    (730.0, "tree_cone", 150.0),
+    (850.0, "tree_tall", 200.0),
+    (990.0, "tree_pine", 190.0),
+];
 
 pub fn star_field(n: usize) -> Vec<(f32, f32, f32)> {
     (0..n)
@@ -180,7 +221,7 @@ impl Stack {
     }
 
     fn crumble(&mut self, x: f32, w: f32, y: f32, hue: f32) {
-        let c = hsv(hue, 0.5, 0.95);
+        let c = block_tint(hue);
         self.fx.emit(
             vec2(x + w / 2.0, y + BLOCK_H / 2.0),
             &[c, darker(c, 0.8), WHITE],
@@ -207,10 +248,14 @@ impl Stack {
                 self.chips.push(Chip {
                     rect: Rect::new(self.moving.x, 0.0, self.moving.w, BLOCK_H),
                     vy: 0.0,
-                    color: hsv(self.moving.hue, 0.5, 0.95),
+                    color: block_tint(self.moving.hue),
                 });
                 self.crumble(self.moving.x, self.moving.w, y, self.moving.hue);
                 sfx::play(Sfx::Crunch);
+                sfx::play(Sfx::Lose);
+                if self.score > self.best.0 && self.best.0 > 0 {
+                    sfx::say(sfx::Say::Best);
+                }
                 feel::impact(Impact::Medium);
                 self.shake.add(0.6);
                 self.state = State::Over;
@@ -255,7 +300,7 @@ impl Stack {
                 self.chips.push(Chip {
                     rect: Rect::new(cx, 0.0, cut, BLOCK_H),
                     vy: 0.0,
-                    color: hsv(self.moving.hue, 0.5, 0.95),
+                    color: block_tint(self.moving.hue),
                 });
                 self.crumble(cx, cut, y, self.moving.hue);
                 self.shake.add((0.25 + cut / START_W).min(0.7));
@@ -320,6 +365,7 @@ impl Game for Stack {
                     let best = self.best;
                     *self = Self::new();
                     self.best = best;
+                    sfx::say(sfx::Say::Go);
                 }
             }
         }
@@ -372,6 +418,7 @@ impl Game for Stack {
 impl Stack {
     fn draw_backdrop(&self, view: &View) {
         let k = altitude(self.score);
+        let dusk = dusk_tint(self.score);
         for (fx, fy, size) in star_field(48) {
             let twinkle = 0.6 + 0.4 * (self.time * 2.5 + fx * 40.0).sin();
             let y = (fy * view.h + self.cam * 0.05).rem_euclid(view.h);
@@ -389,98 +436,251 @@ impl Stack {
                 }
             }
         }
-        let cloud_alpha = 0.75 * (1.0 - k * 0.8);
+        let moon_a = (k * 2.0 - 0.6).clamp(0.0, 1.0);
+        if moon_a > 0.0 {
+            art::sprite_at(
+                "moon",
+                vec2(view.w * 0.82, 150.0 + (1.0 - moon_a) * 60.0),
+                90.0,
+                crate::art::Draw {
+                    tint: with_alpha(WHITE, moon_a),
+                    ..Default::default()
+                },
+            );
+        }
+        let cloud_alpha = 0.85 * (1.0 - k * 0.8);
         for i in 0..7 {
             let depth = 0.12 + (i % 3) as f32 * 0.08;
             let span = view.w + 500.0;
             let x = (i as f32 * 270.0 + self.time * (6.0 + depth * 40.0)).rem_euclid(span) - 250.0;
             let y =
                 (60.0 + (i * 97 % 520) as f32 + self.cam * depth).rem_euclid(view.h + 160.0) - 80.0;
-            cloud(x, y, 0.8 + depth * 2.5, with_alpha(WHITE, cloud_alpha));
+            crate::ui::cloud(
+                i,
+                vec2(x, y),
+                (0.8 + depth * 2.5) * 130.0,
+                with_alpha(WHITE, cloud_alpha),
+            );
         }
+        let ground = view.h - 80.0;
+        let f = view.full();
+        let peak_h = 190.0;
+        let peak_w = 1001.0 * peak_h / 168.0;
+        let peak_bottom = ground + 24.0 + self.cam * 0.55;
+        let haze = Color::new(0.808 * dusk.r, 0.914 * dusk.g, 0.957 * dusk.b, 1.0);
+        draw_rectangle(f.x, peak_bottom - 2.0, f.w, f.h + 400.0, haze);
+        let shift = -self.center * 0.12;
+        for (x, flip) in tile_spans(f.x - shift, f.x + f.w - shift, peak_w) {
+            art::sprite_ex(
+                "peaks",
+                Rect::new(x + shift, peak_bottom - peak_h, peak_w + 1.0, peak_h),
+                crate::art::Draw {
+                    tint: Color::new(0.82 * dusk.r, 0.9 * dusk.g, 1.0 * dusk.b, 1.0),
+                    flip_x: flip,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    fn draw_scenery(&self, view: &View) {
+        let dusk = dusk_tint(self.score);
+        let hill_h = 120.0;
+        let hill_w = 1001.0 * hill_h / 128.0;
+        let sage = Color::new(0.72 * dusk.r, 0.9 * dusk.g, 0.7 * dusk.b, 1.0);
+        let reach = 1500.0;
+        for (x, flip) in tile_spans(-reach, reach, hill_w) {
+            art::sprite_ex(
+                "hills_far",
+                Rect::new(x - 120.0, -hill_h + 6.0, hill_w + 1.0, hill_h),
+                crate::art::Draw {
+                    tint: sage,
+                    flip_x: flip,
+                    ..Default::default()
+                },
+            );
+        }
+        let green = Color::new(0.5 * dusk.r, 0.82 * dusk.g, 0.45 * dusk.b, 1.0);
+        let near_h = 70.0;
+        let near_w = 1001.0 * near_h / 128.0;
+        for (x, flip) in tile_spans(-reach, reach, near_w) {
+            art::sprite_ex(
+                "hills_near",
+                Rect::new(x + 60.0, -near_h + 8.0, near_w + 1.0, near_h),
+                crate::art::Draw {
+                    tint: green,
+                    flip_x: flip,
+                    ..Default::default()
+                },
+            );
+        }
+        for (x, name, h) in SCENERY {
+            if x < -view.w || x > view.w {
+                continue;
+            }
+            let tint = if name == "castle" || name == "house" {
+                Color::new(dusk.r * 0.95, dusk.g * 0.95, dusk.b * 0.95, 1.0)
+            } else {
+                Color::new(dusk.r, dusk.g, dusk.b, 1.0)
+            };
+            art::sprite_at(
+                name,
+                vec2(x, 6.0 - h / 2.0),
+                h,
+                crate::art::Draw {
+                    tint,
+                    ..Default::default()
+                },
+            );
+        }
+    }
+
+    fn draw_block_sprite(r: Rect, tint: Color) {
+        art::nine("blk", r, 16.0, BLOCK_H / 88.0, tint);
     }
 
     fn draw_tower(&self, view: &View, ground: f32) {
         let screen_y = |wy: f32| ground + self.cam + wy;
+        let dusk = dusk_tint(self.score);
+        self.draw_scenery(view);
         draw_rectangle(
             -3000.0,
             0.0,
             6000.0,
             600.0,
-            Color::from_rgba(96, 170, 90, 255),
+            Color::new(0.38 * dusk.r, 0.67 * dusk.g, 0.35 * dusk.b, 1.0),
         );
         draw_rectangle(
             -3000.0,
             0.0,
             6000.0,
             10.0,
-            Color::from_rgba(140, 215, 110, 255),
+            Color::new(0.55 * dusk.r, 0.85 * dusk.g, 0.43 * dusk.b, 1.0),
         );
         let base = self.tower[0];
         soft_shadow(vec2(base.x + base.w / 2.0, 10.0), base.w * 0.6, 10.0, 0.8);
-        let draw_block = |b: Block, y: f32| {
-            let c = hsv(b.hue, 0.5, 0.95);
-            let r = Rect::new(b.x, y, b.w, BLOCK_H);
-            draw_rectangle(r.x, r.y, r.w, r.h, c);
-            draw_rectangle(r.x, r.y + BLOCK_H - 6.0, r.w, 6.0, darker(c, 0.8));
-            draw_rectangle(r.x + r.w - 5.0, r.y, 5.0, r.h, darker(c, 0.88));
-            draw_rectangle(r.x, r.y, r.w, 6.0, with_alpha(WHITE, 0.35));
-            gloss(r, 8.0);
-            draw_rectangle_lines(r.x, r.y, r.w, r.h, 2.0, darker(c, 0.65));
-        };
         for (i, b) in self.tower.iter().enumerate() {
             let y = block_top(i);
             let sy = screen_y(y);
             if sy > view.h + BLOCK_H || sy < -BLOCK_H {
                 continue;
             }
-            draw_block(*b, y);
+            Self::draw_block_sprite(Rect::new(b.x, y, b.w, BLOCK_H), block_tint(b.hue));
         }
         let my = block_top(self.tower.len());
         if self.state == State::Playing {
             let b = self.moving;
-            let c = hsv(b.hue, 0.5, 0.95);
-            draw_rectangle(
-                b.x - 4.0,
-                my - 4.0,
-                b.w + 8.0,
-                BLOCK_H + 8.0,
+            let c = block_tint(b.hue);
+            Self::draw_block_sprite(
+                Rect::new(b.x - 5.0, my - 5.0, b.w + 10.0, BLOCK_H + 10.0),
                 with_alpha(c, 0.25),
             );
-            draw_block(b, my);
+            Self::draw_block_sprite(Rect::new(b.x, my, b.w, BLOCK_H), c);
             shine_sweep(Rect::new(b.x, my, b.w, BLOCK_H), self.time);
         }
         for c in &self.chips {
-            draw_rectangle(c.rect.x, my + c.rect.y, c.rect.w, c.rect.h, c.color);
-            draw_rectangle(
-                c.rect.x,
-                my + c.rect.y,
-                c.rect.w,
-                6.0,
-                with_alpha(WHITE, 0.3),
+            Self::draw_block_sprite(
+                Rect::new(c.rect.x, my + c.rect.y, c.rect.w, c.rect.h),
+                c.color,
             );
         }
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, hsv(0.05, 0.3, 0.95));
+    gradient_rect(r, hsv(0.55, 0.3, 1.0), hsv(0.5, 0.2, 0.95));
+    art::sprite(
+        "peaks",
+        Rect::new(r.x, r.y + r.h * 0.42, r.w, r.w * 168.0 / 1001.0),
+    );
+    draw_rectangle(
+        r.x,
+        r.y + r.h * 0.42 + r.w * 168.0 / 1001.0 - 1.0,
+        r.w,
+        r.h * 0.58 - r.w * 168.0 / 1001.0 + 1.0,
+        Color::from_rgba(206, 233, 244, 255),
+    );
+    let ground = r.y + r.h * 0.84;
+    draw_rectangle(
+        r.x,
+        ground,
+        r.w,
+        r.y + r.h - ground,
+        Color::from_rgba(96, 170, 90, 255),
+    );
+    art::sprite_at(
+        "tree_pine",
+        vec2(r.x + r.w * 0.14, ground),
+        r.h * 0.34,
+        Default::default(),
+    );
+    art::sprite_at(
+        "tree_round",
+        vec2(r.x + r.w * 0.88, ground),
+        r.h * 0.26,
+        Default::default(),
+    );
+    let bh = r.h * 0.1;
     for i in 0..6 {
-        let w = r.w * (0.7 - i as f32 * 0.05);
-        let x = r.x + (r.w - w) / 2.0 + (i % 2) as f32 * 3.0;
-        draw_rectangle(
-            x,
-            r.y + r.h - (i + 1) as f32 * r.h * 0.13,
-            w,
-            r.h * 0.13,
-            hsv(0.55 + i as f32 * 0.035, 0.5, 0.95),
+        let w = r.w * (0.52 - i as f32 * 0.035);
+        let x = r.x + (r.w - w) / 2.0 + [0.0, 5.0, -4.0, 3.0, -2.0, 4.0][i] * r.w / 150.0;
+        art::nine(
+            "blk",
+            Rect::new(x, ground + 2.0 - (i + 1) as f32 * bh, w, bh),
+            16.0,
+            bh / 88.0,
+            block_tint(0.55 + i as f32 * 0.07),
         );
     }
+}
+
+mod art {
+    crate::sprites!("stack");
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn stack_sprites_all_exist() {
+        let have = art::names();
+        for n in [
+            "blk",
+            "hills_near",
+            "hills_far",
+            "peaks",
+            "tree_pine",
+            "tree_round",
+            "tree_small",
+            "tree_tall",
+            "tree_cone",
+            "castle",
+            "house",
+            "moon",
+        ] {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+        for (_, name, _) in SCENERY {
+            assert!(have.iter().any(|h| h == name), "missing {name}");
+        }
+    }
+
+    #[test]
+    fn dusk_darkens_with_altitude() {
+        let day = dusk_tint(0);
+        let night = dusk_tint(80);
+        assert_eq!(day, WHITE);
+        assert!(night.r < 0.7 && night.g < 0.7);
+    }
+
+    #[test]
+    fn tile_spans_cover_the_range_and_alternate() {
+        let t = tile_spans(-250.0, 1700.0, 1000.0);
+        assert_eq!(t.first().unwrap().0, -1000.0);
+        assert!(t.last().unwrap().0 + 1000.0 >= 1700.0);
+        assert!(t.windows(2).all(|w| w[0].1 != w[1].1));
+    }
 
     #[test]
     fn overhang_is_cut_off() {
@@ -587,6 +787,19 @@ mod tests {
             s.update(&Input::default(), &v, 1.0 / 60.0);
         }
         assert!(s.rings.is_empty());
+    }
+
+    #[test]
+    fn losing_plays_the_sad_jingle_and_a_new_best_is_announced() {
+        let mut s = Stack::new();
+        s.best = Best(2);
+        s.score = 5;
+        crate::sfx::take_pending();
+        crate::sfx::take_voice();
+        s.moving.x = 400.0;
+        s.drop_block();
+        assert!(crate::sfx::take_pending().contains(&Sfx::Lose));
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Best));
     }
 
     #[test]

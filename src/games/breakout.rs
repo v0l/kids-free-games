@@ -1,4 +1,3 @@
-use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -9,7 +8,7 @@ pub const ROWS: usize = 6;
 pub const COLS: usize = 10;
 pub const BALL_R: f32 = 11.0;
 pub const PADDLE_W: f32 = 170.0;
-pub const PADDLE_H: f32 = 22.0;
+pub const PADDLE_H: f32 = 32.0;
 pub const LIVES: u32 = 3;
 const TRAIL_LEN: usize = 14;
 const COMBO_WINDOW: f32 = 1.2;
@@ -38,7 +37,14 @@ pub fn squash_scale(t: f32) -> Vec2 {
 }
 
 pub fn brick_color(row: usize) -> Color {
-    hsv(row as f32 / ROWS as f32 * 0.8, 0.65, 0.95)
+    [
+        Color::from_rgba(238, 107, 107, 255),
+        Color::from_rgba(255, 144, 72, 255),
+        Color::from_rgba(255, 220, 60, 255),
+        Color::from_rgba(150, 215, 60, 255),
+        Color::from_rgba(80, 190, 250, 255),
+        Color::from_rgba(255, 170, 215, 255),
+    ][row % ROWS]
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -278,6 +284,9 @@ impl Breakout {
                 }
                 Event::Lost(at) => {
                     sfx::play(Sfx::Wrong);
+                    if self.lives == 0 {
+                        sfx::play(Sfx::Lose);
+                    }
                     feel::impact(Impact::Medium);
                     self.shake.add(0.7);
                     self.particles.emit(
@@ -293,6 +302,7 @@ impl Breakout {
                 }
                 Event::LevelCleared => {
                     sfx::play(Sfx::Win);
+                    sfx::say(sfx::Say::Win);
                     self.shake.add(0.4);
                     self.particles.confetti(view);
                 }
@@ -343,6 +353,9 @@ impl Game for Breakout {
             State::Serve => {
                 self.ball = vec2(self.paddle_x, self.paddle_y() - BALL_R - 1.0);
                 if input.released || input.action {
+                    if self.score == 0 && self.lives == LIVES {
+                        sfx::say(sfx::Say::Go);
+                    }
                     self.state = State::Playing;
                     self.vel = vec2(0.35, -1.0).normalize() * self.speed();
                 }
@@ -371,22 +384,7 @@ impl Game for Breakout {
     }
 
     fn draw(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(30, 30, 70, 255),
-            Color::from_rgba(70, 40, 110, 255),
-        );
-        for k in 0..14 {
-            let x = (k as f32 * 197.0 + 40.0) % view.w;
-            let y = (k as f32 * 131.0 + 20.0) % view.h;
-            let tw = 0.5 + 0.5 * (self.clock * 1.5 + k as f32).sin();
-            star(
-                vec2(x, y),
-                3.0 + tw * 2.0,
-                self.clock * 0.2,
-                with_alpha(WHITE, 0.15 + 0.2 * tw),
-            );
-        }
+        draw_arena(view, self.clock);
         let off = self.shake.offset();
         set_view_camera(view, vec2(off.x, off.y));
         for (i, b) in self.bricks.iter().enumerate() {
@@ -396,7 +394,6 @@ impl Game for Breakout {
                     continue;
                 }
                 let k = ease_out_back(age / 0.35).max(0.01);
-                let c = brick_color(i / COLS);
                 let center = r.center();
                 let r = Rect::new(
                     center.x - r.w * k / 2.0,
@@ -404,14 +401,7 @@ impl Game for Breakout {
                     r.w * k,
                     r.h * k,
                 );
-                round_rect(Rect::new(r.x, r.y + 4.0, r.w, r.h), 7.0, darker(c, 0.55));
-                round_rect(r, 7.0, c);
-                round_rect(
-                    Rect::new(r.x + 2.0, r.y + r.h * 0.55, r.w - 4.0, r.h * 0.45 - 2.0),
-                    6.0,
-                    darker(c, 0.88),
-                );
-                gloss(r, 7.0);
+                draw_brick(i / COLS, r);
                 shine_sweep(
                     r,
                     self.clock * 0.7 - (i % COLS) as f32 * 0.15 - (i / COLS) as f32 * 0.1,
@@ -420,11 +410,14 @@ impl Game for Breakout {
         }
         for (i, p) in self.trail.iter().enumerate() {
             let k = (i + 1) as f32 / self.trail.len() as f32;
-            draw_circle(
-                p.x,
-                p.y,
-                BALL_R * (0.3 + 0.6 * k),
-                Color::new(0.7, 0.85, 1.0, 0.25 * k),
+            art::sprite_at(
+                "ball_glow",
+                *p,
+                BALL_R * 2.0 * (0.3 + 0.6 * k),
+                crate::art::Draw {
+                    tint: Color::new(1.0, 1.0, 1.0, 0.28 * k),
+                    ..Default::default()
+                },
             );
         }
         let p = self.paddle_rect();
@@ -437,32 +430,18 @@ impl Game for Breakout {
             p.h * sq.y,
         );
         soft_shadow(vec2(pc.x, p.y + p.h + 10.0), p.w * 0.45, 7.0, 0.6);
-        round_rect(
-            Rect::new(p.x, p.y + 4.0, p.w, p.h),
-            PADDLE_H / 2.0,
-            Color::from_rgba(120, 130, 190, 255),
+        art::sprite("paddle", p);
+        let glow = 0.22 + 0.08 * (self.clock * 6.0).sin();
+        art::sprite_at(
+            "ball_glow",
+            self.ball,
+            BALL_R * 4.0,
+            crate::art::Draw {
+                tint: Color::new(1.0, 1.0, 1.0, glow),
+                ..Default::default()
+            },
         );
-        round_rect(p, PADDLE_H / 2.0, Color::from_rgba(240, 240, 255, 255));
-        round_rect(
-            Rect::new(p.x + 6.0, p.y + 4.0, p.w - 12.0, p.h * 0.3),
-            3.0,
-            Color::from_rgba(150, 200, 255, 255),
-        );
-        shine_sweep(p, self.clock);
-        let glow = 0.12 + 0.05 * (self.clock * 6.0).sin();
-        draw_circle(
-            self.ball.x,
-            self.ball.y,
-            BALL_R * 2.0,
-            Color::new(0.7, 0.85, 1.0, glow),
-        );
-        draw_circle(self.ball.x, self.ball.y, BALL_R, WHITE);
-        draw_circle(
-            self.ball.x - 3.0,
-            self.ball.y - 3.0,
-            BALL_R * 0.35,
-            Color::from_rgba(200, 230, 255, 255),
-        );
+        art::sprite_at("ball", self.ball, BALL_R * 2.3, Default::default());
         self.particles.draw();
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
@@ -494,15 +473,20 @@ impl Game for Breakout {
             );
         }
         for i in 0..self.lives {
-            let c = vec2(view.w - 30.0 - i as f32 * 34.0, 35.0);
-            draw_circle(c.x, c.y + 2.0, 11.0, Color::from_rgba(40, 30, 60, 255));
-            draw_circle(c.x, c.y, 11.0, WHITE);
-            draw_circle(
-                c.x - 3.0,
-                c.y - 3.0,
-                4.0,
-                Color::from_rgba(200, 230, 255, 255),
+            let c = vec2(
+                view.w - 30.0 - i as f32 * 36.0,
+                35.0 + view.inset.top.min(0.0),
             );
+            art::sprite_at(
+                "ball",
+                c + vec2(0.0, 2.0),
+                28.0,
+                crate::art::Draw {
+                    tint: Color::new(0.0, 0.0, 0.0, 0.3),
+                    ..Default::default()
+                },
+            );
+            art::sprite_at("ball", c, 28.0, Default::default());
         }
         match self.state {
             State::Serve => text_shadow(
@@ -523,26 +507,87 @@ impl Game for Breakout {
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(40, 35, 85, 255));
+    gradient_rect(
+        r,
+        Color::from_rgba(52, 42, 110, 255),
+        Color::from_rgba(92, 52, 130, 255),
+    );
+    let bw = r.w / 4.4;
+    let bh = bw * 0.46;
     for row in 0..3 {
         for col in 0..4 {
-            draw_rectangle(
-                r.x + 4.0 + col as f32 * r.w * 0.24,
-                r.y + 8.0 + row as f32 * r.h * 0.12,
-                r.w * 0.22,
-                r.h * 0.1,
-                hsv(row as f32 * 0.2, 0.65, 0.95),
+            art::nine(
+                &format!("brick{}", (row * 2 + col / 2) % ROWS),
+                Rect::new(
+                    r.x + bw * 0.2 + col as f32 * bw,
+                    r.y + r.h * 0.1 + row as f32 * bh,
+                    bw - 2.0,
+                    bh - 2.0,
+                ),
+                16.0,
+                bh / 88.0,
+                WHITE,
             );
         }
     }
-    draw_circle(r.x + r.w * 0.55, r.y + r.h * 0.65, r.w * 0.06, WHITE);
-    draw_rectangle(
-        r.x + r.w * 0.3,
-        r.y + r.h * 0.85,
-        r.w * 0.4,
-        r.h * 0.06,
-        WHITE,
+    art::sprite_at(
+        "ball",
+        vec2(r.x + r.w * 0.6, r.y + r.h * 0.62),
+        r.h * 0.13,
+        Default::default(),
     );
+    art::sprite_w(
+        "paddle",
+        vec2(r.x + r.w * 0.5, r.y + r.h * 0.86),
+        r.w * 0.5,
+        Default::default(),
+    );
+}
+
+mod art {
+    crate::sprites!("breakout");
+}
+
+fn draw_brick(row: usize, r: Rect) {
+    art::nine(&format!("brick{}", row % ROWS), r, 16.0, r.h / 88.0, WHITE);
+}
+
+fn draw_arena(view: &View, clock: f32) {
+    sky(
+        view,
+        Color::from_rgba(44, 36, 100, 255),
+        Color::from_rgba(96, 50, 128, 255),
+    );
+    let f = view.full();
+    let tile = 128.0;
+    let tint = Color::new(0.32, 0.26, 0.55, 0.35);
+    let mut y = f.y;
+    while y < f.y + f.h {
+        let mut x = f.x;
+        while x < f.x + f.w {
+            art::sprite_ex(
+                "backtile",
+                Rect::new(x, y, tile + 1.0, tile + 1.0),
+                crate::art::Draw {
+                    tint,
+                    ..Default::default()
+                },
+            );
+            x += tile;
+        }
+        y += tile;
+    }
+    for k in 0..14 {
+        let x = (k as f32 * 197.0 + 40.0) % view.w;
+        let y = (k as f32 * 131.0 + 20.0) % view.h;
+        let tw = 0.5 + 0.5 * (clock * 1.5 + k as f32).sin();
+        crate::ui::spark(
+            vec2(x, y),
+            6.0 + tw * 4.0,
+            clock * 0.2,
+            with_alpha(WHITE, 0.2 + 0.25 * tw),
+        );
+    }
 }
 
 #[cfg(test)]
@@ -553,6 +598,36 @@ mod tests {
         let mut b = Breakout::new();
         b.state = State::Playing;
         b
+    }
+
+    #[test]
+    fn breakout_sprites_all_exist() {
+        let have = art::names();
+        let mut wanted: Vec<String> = (0..ROWS).map(|r| format!("brick{r}")).collect();
+        wanted.extend(["paddle", "ball", "ball_glow", "backtile"].map(String::from));
+        for n in wanted {
+            assert!(have.contains(&n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn paddle_sprite_is_as_wide_as_its_hitbox() {
+        let s = art::size("paddle");
+        let drawn_h = PADDLE_W * s.y / s.x;
+        assert!((drawn_h - PADDLE_H).abs() < 2.0, "{drawn_h}");
+    }
+
+    #[test]
+    fn losing_all_balls_plays_the_sad_jingle() {
+        let mut b = playing();
+        b.lives = 1;
+        b.ball = vec2(10.0 + BALL_R, b.size.y - 5.0);
+        b.paddle_x = b.size.x - PADDLE_W;
+        b.vel = vec2(0.0, 600.0);
+        b.step(0.1);
+        crate::sfx::take_pending();
+        b.react(&View::fit(MIN_W, MIN_H));
+        assert!(crate::sfx::take_pending().contains(&Sfx::Lose));
     }
 
     #[test]

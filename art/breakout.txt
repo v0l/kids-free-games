@@ -1,0 +1,10 @@
+brick0   | puzzle-pack-2/PNG/Tiles red/tileRed_02.png | max=188
+brick1   | puzzle-pack-2/PNG/Tiles orange/tileOrange_01.png | max=188
+brick2   | puzzle-pack-2/PNG/Tiles yellow/tileYellow_02.png | max=188
+brick3   | puzzle-pack-2/PNG/Tiles green/tileGreen_02.png | max=188
+brick4   | puzzle-pack-2/PNG/Tiles blue/tileBlue_02.png | max=188
+brick5   | puzzle-pack-2/PNG/Tiles pink/tilePink_02.png | max=188
+paddle   | puzzle-pack-2/PNG/Paddles/paddle_08.png | max=620
+ball     | puzzle-pack-2/PNG/Balls/Grey/ballGrey_10.png | max=96
+ball_glow | puzzle-pack-2/PNG/Balls/Blue/ballBlue_01.png | max=96
+backtile | puzzle-pack-2/PNG/Back tiles/BackTile_05.png | max=128

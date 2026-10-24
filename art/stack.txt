@@ -1,0 +1,13 @@
+blk         | puzzle-pack-2/PNG/Tiles grey/tileGrey_02.png | max=188
+hills_near  | background-elements/PNG/Flat/hills1.png | max=1001 keep
+hills_far   | background-elements/PNG/Flat/hills2.png | max=1001 keep
+peaks       | background-elements/PNG/Flat/pointy_mountains.png | max=1001 keep
+tree_pine   | background-elements/PNG/tree03.png | max=200
+tree_round  | background-elements/PNG/tree05.png | max=200
+tree_small  | background-elements/PNG/tree09.png | max=140
+tree_tall   | background-elements/PNG/tree23.png | max=220
+tree_cone   | background-elements/PNG/tree32.png | max=200
+castle      | background-elements/PNG/castle_grey.png | max=240
+house       | background-elements/PNG/house_beige_front.png | max=130
+moon        | background-elements/PNG/moon_full.png | max=96
+tap         | tappy-plane/PNG/UI/tap.png | max=128
