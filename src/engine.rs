@@ -237,8 +237,15 @@ static FONT_BYTES: &[u8] = include_bytes!("../assets/Fredoka-SemiBold.ttf");
 
 fn font() -> Option<Font> {
     FONT.with(|f| {
-        f.get_or_init(|| load_ttf_font_from_bytes(FONT_BYTES).ok())
-            .clone()
+        f.get_or_init(|| {
+            let font = load_ttf_font_from_bytes(FONT_BYTES).ok()?;
+            let chars: Vec<char> = (32u8..127).map(char::from).collect();
+            for size in [24.0, 32.0, 40.0, 56.0, 72.0] {
+                font.populate_font_cache(&chars, font_params(size).0);
+            }
+            Some(font)
+        })
+        .clone()
     })
 }
 
