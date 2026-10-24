@@ -275,12 +275,21 @@ async fn main() {
     next_frame().await;
     let view = begin_frame_safe(fake_inset());
     let all = games::all();
+    let idle = which > 100;
+    let which = if idle { which - 100 } else { which };
     let mut game = (which > 0).then(|| {
         let e = &all[which as usize - 1];
         set_accent(e.color);
         let mut g = (e.make)();
         for f in 0..frames {
-            g.update(&scripted(e.name, f, &view), &view, 1.0 / 60.0);
+            let input = if idle && f > 1 {
+                Input::default()
+            } else if idle {
+                Input::press_at(view.center())
+            } else {
+                scripted(e.name, f, &view)
+            };
+            g.update(&input, &view, 1.0 / 60.0);
             tick_overlay(1.0 / 60.0);
         }
         g
@@ -292,7 +301,10 @@ async fn main() {
     loop {
         let view = begin_frame_safe(fake_inset());
         match &mut game {
-            Some(g) => g.draw(&view),
+            Some(g) => {
+                g.draw(&view);
+                tick_overlay(1.0 / 60.0);
+            }
             None if which == -2 => word_grid(&view),
             None if which < 0 => app_icon(&view),
             None => app.draw(&view),

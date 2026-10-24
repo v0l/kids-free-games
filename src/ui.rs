@@ -120,7 +120,7 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
     let fade = ease_out_cubic(age / 0.2);
     fill_screen(view, Color::new(0.08, 0.05, 0.15, 0.45 * fade));
     let pw = 560.0f32.min(view.w - 40.0);
-    let ph = 170.0 + lines.len() as f32 * 54.0;
+    let ph = 96.0 + lines.len() as f32 * 60.0;
     let s = ease_out_back(age / 0.3).max(0.01);
     let c = view.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.3)) * 80.0);
     let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
@@ -147,7 +147,7 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
     for (i, l) in lines.iter().enumerate() {
         let la = ((age - 0.1 - i as f32 * 0.05) / 0.18).clamp(0.0, 1.0);
         let last = i + 1 == lines.len();
-        let y = band.y + band.h + 44.0 * s + i as f32 * 54.0 * s + (1.0 - la) * 16.0;
+        let y = band.y + band.h + 40.0 * s + i as f32 * 60.0 * s + (1.0 - la) * 16.0;
         if last && lines.len() > 1 {
             let pulse = 1.0 + (age * 5.0).sin() * 0.03;
             let bw = (crate::outline::measure(FONT_BYTES, l, 30.0) + 80.0) * s * pulse;

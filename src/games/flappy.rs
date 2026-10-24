@@ -308,7 +308,7 @@ impl Game for Flappy {
         if self.flash > 0.0 {
             fill_screen(view, with_alpha(WHITE, self.flash * 0.7));
         }
-        if self.state != State::Ready {
+        if self.state == State::Playing {
             big_score(view, &self.score.to_string(), 80.0, self.bump.t);
         }
         chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);

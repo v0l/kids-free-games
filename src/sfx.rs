@@ -765,6 +765,7 @@ mod tests {
         for (_, d) in pack() {
             decode(d).unwrap();
         }
+        eprintln!("decoded pack in {:?}", t.elapsed());
         let limit = if cfg!(debug_assertions) { 20.0 } else { 1.5 };
         assert!(t.elapsed().as_secs_f32() < limit, "took {:?}", t.elapsed());
     }
