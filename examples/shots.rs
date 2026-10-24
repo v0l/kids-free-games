@@ -41,11 +41,18 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             if f == 1 {
                 i.pressed = true;
             }
-            if f > 200 && f % 40 < 10 {
-                let k = (f % 40) as f32 / 10.0;
+            if f > 60 && f % 12 < 6 {
+                let k = (f % 12) as f32 / 6.0;
+                let y = view.h * (0.25 + 0.5 * ((f / 12) as f32 * 0.37).fract());
+                let dir = if (f / 12).is_multiple_of(2) {
+                    1.0
+                } else {
+                    -1.0
+                };
+                let x = |k: f32| view.w * (0.5 + dir * (k - 0.5) * 0.9);
                 i.down = true;
-                i.prev_pos = vec2(view.w * (0.1 + 0.8 * (k - 0.1)), view.h * 0.45);
-                i.pos = vec2(view.w * (0.1 + 0.8 * k), view.h * 0.4);
+                i.prev_pos = vec2(x(k - 0.17), y);
+                i.pos = vec2(x(k), y);
             }
         }
         "Stack Tower" if f % 50 == 49 => tap(&mut i, c),

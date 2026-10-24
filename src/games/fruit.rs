@@ -1,5 +1,4 @@
 use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -42,25 +41,73 @@ struct Stain {
     color: Color,
     age: f32,
     drops: [Vec2; 3],
+    splat: usize,
+    turn: f32,
 }
 
 type Rgb = (u8, u8, u8);
 
-const FRUITS: [(Rgb, Rgb); 5] = [
-    ((220, 40, 50), (255, 230, 220)),
-    ((250, 150, 30), (255, 210, 120)),
-    ((60, 170, 60), (240, 70, 70)),
-    ((250, 220, 50), (255, 250, 200)),
-    ((130, 60, 170), (220, 190, 240)),
+struct Species {
+    name: &'static str,
+    skin: Rgb,
+    flesh: Rgb,
+    seed: Option<Rgb>,
+}
+
+const FRUITS: [Species; 8] = [
+    Species {
+        name: "apple",
+        skin: (220, 50, 50),
+        flesh: (255, 232, 205),
+        seed: Some((90, 50, 30)),
+    },
+    Species {
+        name: "orange",
+        skin: (250, 150, 30),
+        flesh: (255, 190, 70),
+        seed: None,
+    },
+    Species {
+        name: "watermelon",
+        skin: (60, 150, 80),
+        flesh: (236, 70, 84),
+        seed: Some((30, 25, 25)),
+    },
+    Species {
+        name: "pineapple",
+        skin: (240, 190, 60),
+        flesh: (252, 220, 90),
+        seed: None,
+    },
+    Species {
+        name: "lemon",
+        skin: (250, 220, 60),
+        flesh: (255, 240, 150),
+        seed: Some((235, 215, 140)),
+    },
+    Species {
+        name: "strawberry",
+        skin: (220, 60, 70),
+        flesh: (240, 92, 104),
+        seed: Some((250, 230, 120)),
+    },
+    Species {
+        name: "coconut",
+        skin: (120, 70, 50),
+        flesh: (246, 246, 240),
+        seed: None,
+    },
+    Species {
+        name: "pear",
+        skin: (80, 170, 110),
+        flesh: (238, 238, 176),
+        seed: Some((60, 40, 30)),
+    },
 ];
 
-const SEEDS: [Option<Rgb>; 5] = [
-    Some((90, 50, 30)),
-    None,
-    Some((30, 25, 25)),
-    Some((235, 215, 140)),
-    Some((70, 40, 90)),
-];
+const FRUIT_SPAN: f32 = 2.3;
+const BOMB_SPAN: f32 = 2.5;
+const SPLATS: usize = 4;
 
 pub fn combo_bonus(n: u32) -> u32 {
     if n >= 3 {
@@ -103,6 +150,10 @@ pub struct Fruit {
     popups: Popups,
     score_bump: Bump,
     heart_bump: Bump,
+}
+
+fn mix(a: Color, b: Color, k: f32) -> Color {
+    Color::from_vec(a.to_vec() * (1.0 - k) + b.to_vec() * k)
 }
 
 fn rgb(c: Rgb) -> Color {
@@ -159,8 +210,8 @@ impl Fruit {
     }
 
     fn splash(&mut self, at: Vec2, fruit: usize, dir: Vec2) {
-        let flesh = rgb(FRUITS[fruit].1);
-        let skin = rgb(FRUITS[fruit].0);
+        let flesh = rgb(FRUITS[fruit].flesh);
+        let skin = rgb(FRUITS[fruit].skin);
         let angle = dir.y.atan2(dir.x);
         for side in [0.0, std::f32::consts::PI] {
             self.fx.emit(
@@ -179,7 +230,7 @@ impl Fruit {
                 },
             );
         }
-        if let Some(seed) = SEEDS[fruit] {
+        if let Some(seed) = FRUITS[fruit].seed {
             self.fx.emit(
                 at,
                 &[rgb(seed)],
@@ -199,9 +250,11 @@ impl Fruit {
         }
         self.stains.push(Stain {
             pos: at,
-            r: rand::gen_range(26.0, 40.0),
-            color: flesh,
+            r: rand::gen_range(34.0, 52.0),
+            color: mix(flesh, skin, 0.45),
             age: 0.0,
+            splat: rand::gen_range(0, SPLATS),
+            turn: rand::gen_range(0.0, std::f32::consts::TAU),
             drops: [0, 1, 2].map(|_| {
                 vec2(rand::gen_range(-1.0, 1.0), rand::gen_range(-1.0, 1.0))
                     * rand::gen_range(38.0, 80.0)
@@ -263,7 +316,7 @@ impl Fruit {
                     self.score += 1;
                     self.score_bump.kick();
                     let side = vec2(-dir.y, dir.x) * 120.0;
-                    let angle = dir.y.atan2(dir.x);
+                    let angle = dir.y.atan2(dir.x) - std::f32::consts::FRAC_PI_2;
                     for s in [-1.0, 1.0] {
                         self.halves.push(Half {
                             pos: t.pos,
@@ -271,7 +324,7 @@ impl Fruit {
                             r: t.r,
                             fruit: f,
                             angle,
-                            spin: s * 4.0,
+                            spin: s * 2.5,
                         });
                     }
                     self.splash(t.pos, f, dir);
@@ -336,7 +389,7 @@ impl Game for Fruit {
         }
         for h in &self.halves {
             if rand::gen_range(0.0, 1.0) < dt * 14.0 {
-                let c = rgb(FRUITS[h.fruit].1);
+                let c = rgb(FRUITS[h.fruit].flesh);
                 self.fx.emit(
                     h.pos,
                     &[c],
@@ -356,6 +409,7 @@ impl Game for Fruit {
             State::Ready => {
                 if input.tap() {
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                 }
             }
             State::Playing => {
@@ -388,6 +442,10 @@ impl Game for Fruit {
                 }
                 if self.lives == 0 {
                     self.state = State::Over;
+                    sfx::play(Sfx::Lose);
+                    if self.score > self.best.0 && self.best.0 > 0 {
+                        sfx::say(sfx::Say::Best);
+                    }
                     self.best.offer(self.score);
                 }
             }
@@ -397,6 +455,7 @@ impl Game for Fruit {
                     *self = Self::new();
                     self.best = best;
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                 }
             }
         }
@@ -418,7 +477,7 @@ impl Game for Fruit {
         self.draw_blade();
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
-        vignette(view, 0.8);
+        vignette(view, 0.6);
         self.draw_hud(view);
         if self.flash > 0.0 {
             fill_screen(view, with_alpha(WHITE, self.flash));
@@ -446,161 +505,71 @@ fn draw_stain(st: &Stain) {
     let a = stain_alpha(st.age);
     let c = with_alpha(st.color, a);
     let grow = ease_out_back(st.age / 0.25);
-    let r = st.r * grow;
-    draw_circle(st.pos.x, st.pos.y, r, c);
+    let tint = crate::art::Draw {
+        tint: c,
+        rotation: st.turn,
+        ..Default::default()
+    };
+    art::sprite_at(&splat_name(st.splat), st.pos, st.r * 2.2 * grow, tint);
     for (i, d) in st.drops.iter().enumerate() {
-        let dr = r * (0.28 + 0.1 * i as f32);
-        draw_circle(st.pos.x + d.x * grow, st.pos.y + d.y * grow, dr, c);
+        let size = st.r * (0.4 + 0.12 * i as f32) * grow;
+        art::sprite_at(
+            &splat_name((st.splat + i + 1) % SPLATS),
+            st.pos + *d * grow,
+            size,
+            crate::art::Draw {
+                tint: c,
+                rotation: st.turn + i as f32,
+                ..Default::default()
+            },
+        );
     }
-    let drip = st.r * 2.2 * ease_out_cubic(st.age / 2.5);
-    draw_rectangle(st.pos.x - 4.0, st.pos.y, 8.0, drip, c);
-    draw_circle(st.pos.x, st.pos.y + drip, 5.5, c);
-    draw_circle(
-        st.pos.x - r * 0.3,
-        st.pos.y - r * 0.3,
-        r * 0.2,
-        with_alpha(WHITE, a * 0.35),
+}
+
+fn splat_name(i: usize) -> String {
+    format!("splat{}", i % SPLATS)
+}
+
+fn fruit_sprite(f: usize, suffix: &str, c: Vec2, r: f32, rotation: f32) {
+    let side = r * FRUIT_SPAN;
+    art::sprite_ex(
+        &format!("{}{}", FRUITS[f].name, suffix),
+        Rect::new(c.x - side / 2.0, c.y - side / 2.0, side, side),
+        crate::art::Draw {
+            rotation,
+            ..Default::default()
+        },
     );
 }
 
 fn draw_half(h: &Half) {
-    let (skin, flesh) = FRUITS[h.fruit];
-    let n = vec2(h.angle.cos(), h.angle.sin());
-    let off = vec2(-n.y, n.x) * if h.spin > 0.0 { 1.0 } else { -1.0 };
-    let base = h.pos;
-    let steps = 12;
-    let start = off.y.atan2(off.x) - std::f32::consts::FRAC_PI_2;
-    let core = Color::from_rgba(flesh.0, flesh.1, flesh.2, 255);
-    for i in 0..steps {
-        let a0 = start + std::f32::consts::PI * i as f32 / steps as f32;
-        let a1 = start + std::f32::consts::PI * (i + 1) as f32 / steps as f32;
-        let p0 = vec2(a0.cos(), a0.sin());
-        let p1 = vec2(a1.cos(), a1.sin());
-        draw_triangle(
-            base,
-            base + p0 * h.r,
-            base + p1 * h.r,
-            darker(rgb(skin), 0.8),
-        );
-        draw_triangle(
-            base,
-            base + p0 * (h.r - 3.0),
-            base + p1 * (h.r - 3.0),
-            rgb(skin),
-        );
-        draw_triangle(
-            base,
-            base + p0 * (h.r - 7.0),
-            base + p1 * (h.r - 7.0),
-            rgb(flesh),
-        );
-        draw_triangle(
-            base,
-            base + p0 * h.r * 0.3,
-            base + p1 * h.r * 0.3,
-            with_alpha(darker(core, 0.9), 0.7),
-        );
-    }
-    if let Some(seed) = SEEDS[h.fruit] {
-        for k in -2..=2 {
-            let kf = k as f32;
-            let at = base + off * h.r * (0.45 - kf.abs() * 0.06) + n * kf * h.r * 0.2;
-            draw_ellipse(
-                at.x,
-                at.y,
-                h.r * 0.07,
-                h.r * 0.12,
-                off.y.atan2(off.x).to_degrees(),
-                rgb(seed),
-            );
-        }
-    } else {
-        for k in 0..6 {
-            let a = start + std::f32::consts::PI * (k as f32 + 0.5) / 6.0;
-            let d = vec2(a.cos(), a.sin());
-            draw_line(
-                base.x + d.x * h.r * 0.2,
-                base.y + d.y * h.r * 0.2,
-                base.x + d.x * (h.r - 9.0),
-                base.y + d.y * (h.r - 9.0),
-                2.0,
-                Color::new(1.0, 1.0, 1.0, 0.5),
-            );
-        }
-    }
-    draw_line(
-        base.x - n.x * h.r,
-        base.y - n.y * h.r,
-        base.x + n.x * h.r,
-        base.y + n.y * h.r,
-        2.0,
-        with_alpha(WHITE, 0.6),
-    );
+    let suffix = if h.spin > 0.0 { "_l" } else { "_r" };
+    fruit_sprite(h.fruit, suffix, h.pos, h.r, h.angle);
+}
+
+mod art {
+    crate::sprites!("fruit");
 }
 
 impl Fruit {
     fn draw_wall(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(110, 70, 40, 255),
-            Color::from_rgba(70, 40, 25, 255),
-        );
-        let plank = 120.0;
-        for i in 0..((view.w / plank) as i32 + 1) {
-            let x = i as f32 * plank;
-            let tone = 0.04 * ((i * 7 % 5) as f32 - 2.0);
-            draw_rectangle(
-                x,
-                0.0,
-                plank,
-                view.h,
-                Color::new(1.0, 0.8, 0.5, 0.05 + tone.abs()),
-            );
-            for g in 0..5 {
-                let gx = x + 14.0 + g as f32 * 21.0 + ((i * 13 + g * 5) % 9) as f32;
-                let mut prev = vec2(gx, 0.0);
-                let mut y = 0.0;
-                while y < view.h {
-                    y += 40.0;
-                    let wob = ((y * 0.02 + (i * 3 + g) as f32).sin()) * 3.0;
-                    let next = vec2(gx + wob, y);
-                    draw_line(
-                        prev.x,
-                        prev.y,
-                        next.x,
-                        next.y,
-                        1.5,
-                        Color::new(0.2, 0.1, 0.03, 0.25),
-                    );
-                    prev = next;
-                }
+        let f = view.full();
+        fill_screen(view, Color::from_rgba(84, 52, 30, 255));
+        let plank = 104.0;
+        let tall = plank * 220.0 / 70.0;
+        let n = (f.w / plank).ceil() as i32 + 1;
+        let left = f.x + (f.w - n as f32 * plank) / 2.0;
+        for i in 0..n {
+            let name = if i % 2 == 0 { "plank_a" } else { "plank_b" };
+            let shift = (i * 131 % 300) as f32;
+            let mut y = f.y - shift;
+            while y < f.y + f.h {
+                art::sprite(
+                    name,
+                    Rect::new(left + i as f32 * plank, y, plank + 1.0, tall + 1.0),
+                );
+                y += tall - 2.0;
             }
-            let ky = 80.0 + ((i * 197) % 420) as f32;
-            draw_ellipse(
-                x + 60.0,
-                ky,
-                13.0,
-                9.0,
-                0.0,
-                Color::new(0.2, 0.1, 0.03, 0.4),
-            );
-            draw_ellipse(
-                x + 60.0,
-                ky,
-                7.0,
-                4.5,
-                0.0,
-                Color::new(0.1, 0.05, 0.02, 0.4),
-            );
-            draw_line(x, 0.0, x, view.h, 4.0, Color::from_rgba(60, 35, 20, 255));
-            draw_line(
-                x + 3.0,
-                0.0,
-                x + 3.0,
-                view.h,
-                2.0,
-                Color::new(1.0, 0.8, 0.5, 0.12),
-            );
         }
     }
 
@@ -611,86 +580,33 @@ impl Fruit {
                 draw_circle(
                     t.pos.x,
                     t.pos.y,
-                    t.r * 1.25,
-                    Color::new(1.0, 0.3, 0.2, 0.08 + 0.08 * pulse),
+                    t.r * 1.3,
+                    Color::new(1.0, 0.3, 0.2, 0.08 + 0.1 * pulse),
                 );
-                draw_circle(t.pos.x, t.pos.y, t.r, Color::from_rgba(25, 25, 32, 255));
-                draw_circle(
-                    t.pos.x,
-                    t.pos.y,
-                    t.r - 3.0,
-                    Color::from_rgba(45, 45, 56, 255),
+                let size = t.r * BOMB_SPAN;
+                let at = Rect::new(t.pos.x - size / 2.0, t.pos.y - size / 2.0, size, size);
+                let turn = crate::art::Draw {
+                    rotation: (t.spin * self.time).sin() * 0.4,
+                    ..Default::default()
+                };
+                art::sprite_ex("bomb", at, turn);
+                art::sprite_ex(
+                    "bomb_lit",
+                    at,
+                    crate::art::Draw {
+                        tint: Color::new(1.0, 0.5, 0.4, 0.55 * pulse),
+                        ..turn
+                    },
                 );
-                draw_circle(
-                    t.pos.x + t.r * 0.15,
-                    t.pos.y + t.r * 0.2,
-                    t.r * 0.75,
-                    Color::new(0.0, 0.0, 0.0, 0.25),
-                );
-                draw_circle(
-                    t.pos.x - t.r * 0.3,
-                    t.pos.y - t.r * 0.3,
-                    t.r * 0.25,
-                    Color::from_rgba(110, 110, 125, 255),
-                );
-                draw_line(
-                    t.pos.x,
-                    t.pos.y - t.r,
-                    t.pos.x + 10.0,
-                    t.pos.y - t.r - 16.0,
-                    4.0,
-                    Color::from_rgba(160, 120, 80, 255),
-                );
-                let tip = vec2(t.pos.x + 10.0, t.pos.y - t.r - 16.0);
-                let spark = (self.time * 30.0).sin() * 3.0 + 7.0;
-                draw_circle(tip.x, tip.y, spark + 4.0, Color::new(1.0, 0.7, 0.2, 0.3));
-                star(
-                    tip,
-                    spark + 3.0,
-                    self.time * 6.0,
-                    Color::from_rgba(255, 220, 80, 255),
-                );
-                text_center("X", t.pos.x, t.pos.y + 2.0, t.r, RED);
             }
             Kind::Fruit(f) => {
-                let (skin, _) = FRUITS[f];
-                let skin = rgb(skin);
-                let spin = t.spin * self.time;
                 soft_shadow(
-                    t.pos + vec2(t.r * 0.12, t.r * 0.16),
-                    t.r * 0.9,
-                    t.r * 0.9,
+                    t.pos + vec2(t.r * 0.12, t.r * 0.9),
+                    t.r * 0.8,
+                    t.r * 0.18,
                     0.4,
                 );
-                draw_circle(t.pos.x, t.pos.y, t.r, darker(skin, 0.7));
-                draw_circle(t.pos.x, t.pos.y, t.r - 3.0, skin);
-                draw_circle(
-                    t.pos.x + t.r * 0.18,
-                    t.pos.y + t.r * 0.2,
-                    t.r * 0.72,
-                    Color::new(0.0, 0.0, 0.0, 0.12),
-                );
-                draw_circle(
-                    t.pos.x - t.r * 0.08,
-                    t.pos.y - t.r * 0.08,
-                    t.r * 0.72,
-                    with_alpha(skin, 1.0),
-                );
-                draw_fruit_detail(t, f, spin);
-                draw_ellipse(
-                    t.pos.x - t.r * 0.35,
-                    t.pos.y - t.r * 0.4,
-                    t.r * 0.2,
-                    t.r * 0.12,
-                    -40.0,
-                    with_alpha(WHITE, 0.55),
-                );
-                draw_circle(
-                    t.pos.x - t.r * 0.12,
-                    t.pos.y - t.r * 0.6,
-                    t.r * 0.05,
-                    with_alpha(WHITE, 0.5),
-                );
+                fruit_sprite(f, "", t.pos, t.r, t.spin * self.time);
             }
         }
     }
@@ -731,147 +647,52 @@ impl Fruit {
         );
         let pulse = self.heart_bump.scale(0.5);
         for i in 0..LIVES {
-            let x = view.w - 50.0 - i as f32 * 50.0;
+            let x = view.w - 50.0 - i as f32 * 54.0;
             let alive = i < self.lives;
-            let c = if alive {
-                Color::from_rgba(240, 60, 70, 255)
-            } else {
-                Color::from_rgba(90, 60, 50, 255)
-            };
             let k = if i == self.lives { pulse } else { 1.0 };
-            let (cx, cy) = (x, 48.0);
-            draw_circle(cx - 8.0 * k, cy - 8.0 * k, 11.0 * k, c);
-            draw_circle(cx + 8.0 * k, cy - 8.0 * k, 11.0 * k, c);
-            draw_triangle(
-                vec2(cx - 19.0 * k, cy - 4.0 * k),
-                vec2(cx + 19.0 * k, cy - 4.0 * k),
-                vec2(cx, cy + 16.0 * k),
-                c,
-            );
-            if alive {
-                draw_circle(cx - 11.0, cy - 12.0, 3.5, with_alpha(WHITE, 0.55));
-            }
-        }
-    }
-}
-
-fn draw_fruit_detail(t: &Thing, f: usize, spin: f32) {
-    let c = t.pos;
-    let r = t.r;
-    let dark = darker(rgb(FRUITS[f].0), 0.6);
-    match f {
-        0 => {
-            draw_circle(c.x, c.y - r * 0.82, r * 0.14, darker(rgb(FRUITS[0].0), 0.5));
-            draw_line(
-                c.x,
-                c.y - r * 0.85,
-                c.x + 3.0,
-                c.y - r - 8.0,
-                3.0,
-                Color::from_rgba(90, 60, 30, 255),
-            );
-            draw_ellipse(
-                c.x + r * 0.25,
-                c.y - r * 0.95,
-                r * 0.3,
-                r * 0.14,
-                spin.to_degrees() * 0.2 - 25.0,
-                Color::from_rgba(60, 170, 50, 255),
-            );
-        }
-        1 => {
-            for k in 0..9 {
-                let a = spin + k as f32 * 0.7;
-                let d = r * (0.2 + 0.07 * (k % 4) as f32 * 2.0);
-                draw_circle(
-                    c.x + a.cos() * d,
-                    c.y + a.sin() * d,
-                    1.6,
-                    Color::new(0.7, 0.3, 0.0, 0.5),
-                );
-            }
-            draw_circle(
-                c.x,
-                c.y - r * 0.82,
-                r * 0.09,
-                Color::from_rgba(70, 140, 40, 255),
-            );
-        }
-        2 => {
-            for k in -2..=2 {
-                let a = spin + k as f32 * 0.35;
-                let d = vec2(a.cos(), a.sin());
-                let n = vec2(-d.y, d.x);
-                let half = (r - 5.0) * (1.0 - (k as f32 * 0.3).powi(2)).sqrt();
-                draw_line(
-                    c.x - n.x * k as f32 * 6.0 - d.x * half,
-                    c.y - n.y * k as f32 * 6.0 - d.y * half,
-                    c.x - n.x * k as f32 * 6.0 + d.x * half,
-                    c.y - n.y * k as f32 * 6.0 + d.y * half,
-                    5.0,
-                    with_alpha(dark, 0.55),
-                );
-            }
-        }
-        3 => {
-            draw_circle(c.x + r * 0.95, c.y, r * 0.12, rgb(FRUITS[3].0));
-            draw_circle(c.x - r * 0.95, c.y, r * 0.12, rgb(FRUITS[3].0));
-            for k in 0..8 {
-                let a = spin + k as f32 * 0.8;
-                draw_circle(
-                    c.x + a.cos() * r * 0.5,
-                    c.y + a.sin() * r * 0.5,
-                    1.4,
-                    Color::new(0.6, 0.5, 0.0, 0.35),
-                );
-            }
-        }
-        _ => {
-            for row in 0..3 {
-                for col in 0..3 {
-                    let at = c + vec2((col as f32 - 1.0) * r * 0.42, (row as f32 - 1.0) * r * 0.42);
-                    if at.distance(c) < r * 0.8 {
-                        draw_circle(at.x, at.y, r * 0.22, with_alpha(dark, 0.25));
-                        draw_circle(
-                            at.x - r * 0.06,
-                            at.y - r * 0.06,
-                            r * 0.06,
-                            with_alpha(WHITE, 0.3),
-                        );
-                    }
-                }
-            }
-            draw_line(
-                c.x,
-                c.y - r * 0.85,
-                c.x + 5.0,
-                c.y - r - 10.0,
-                3.0,
-                Color::from_rgba(70, 120, 40, 255),
+            art::sprite_at(
+                if alive { "heart" } else { "heart_empty" },
+                vec2(x, 48.0),
+                48.0 * k,
+                Default::default(),
             );
         }
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(110, 70, 40, 255));
-    let c = vec2(r.x + r.w * 0.5, r.y + r.h * 0.55);
-    draw_circle(c.x, c.y, r.w * 0.3, Color::from_rgba(60, 170, 60, 255));
-    draw_circle(c.x, c.y, r.w * 0.25, Color::from_rgba(240, 70, 70, 255));
-    for i in 0..5 {
-        let a = i as f32 * 1.25;
-        draw_circle(
-            c.x + a.cos() * r.w * 0.13,
-            c.y + a.sin() * r.w * 0.13,
-            3.0,
-            BLACK,
-        );
+    let plank = r.w / 3.0;
+    for i in 0..3 {
+        let name = if i % 2 == 0 { "plank_a" } else { "plank_b" };
+        art::sprite(name, Rect::new(r.x + i as f32 * plank, r.y, plank, r.h));
     }
+    let c = vec2(r.x + r.w * 0.5, r.y + r.h * 0.55);
+    let side = r.h * 0.5;
+    art::sprite(
+        "watermelon_l",
+        Rect::new(c.x - side * 0.62, c.y - side * 0.45, side, side),
+    );
+    art::sprite(
+        "watermelon_r",
+        Rect::new(c.x - side * 0.38, c.y - side * 0.55, side, side),
+    );
+    art::sprite_at(
+        "lemon",
+        vec2(r.x + r.w * 0.2, r.y + r.h * 0.3),
+        r.h * 0.26,
+        Default::default(),
+    );
+    art::sprite_at(
+        "apple",
+        vec2(r.x + r.w * 0.82, r.y + r.h * 0.74),
+        r.h * 0.26,
+        Default::default(),
+    );
     draw_line(
-        r.x + r.w * 0.1,
-        r.y + r.h * 0.85,
-        r.x + r.w * 0.9,
-        r.y + r.h * 0.15,
+        r.x + r.w * 0.08,
+        r.y + r.h * 0.9,
+        r.x + r.w * 0.92,
+        r.y + r.h * 0.12,
         5.0,
         WHITE,
     );
@@ -892,6 +713,53 @@ mod tests {
             spin: 0.0,
         });
         g
+    }
+
+    #[test]
+    fn fruit_sprites_all_exist() {
+        let have = art::names();
+        let mut want: Vec<String> = [
+            "plank_a",
+            "plank_b",
+            "bomb",
+            "bomb_lit",
+            "heart",
+            "heart_empty",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        for f in FRUITS.iter() {
+            for suffix in ["", "_l", "_r"] {
+                want.push(format!("{}{}", f.name, suffix));
+            }
+        }
+        for i in 0..SPLATS {
+            want.push(splat_name(i));
+        }
+        for n in want {
+            assert!(have.contains(&n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn slicing_splits_into_two_halves_that_part_ways() {
+        let mut g = with(Kind::Fruit(2), vec2(300.0, 300.0));
+        g.slice(vec2(200.0, 300.0), vec2(400.0, 300.0));
+        assert_eq!(g.halves.len(), 2);
+        assert!(g.halves[0].spin * g.halves[1].spin < 0.0);
+        assert!(g.halves[0].vel.y * g.halves[1].vel.y < 0.0);
+    }
+
+    #[test]
+    fn losing_plays_the_lose_jingle() {
+        let v = View::ipad_landscape();
+        let mut g = with(Kind::Fruit(1), vec2(300.0, v.h + 100.0));
+        g.lives = 1;
+        g.things[0].vel = vec2(0.0, 10.0);
+        crate::sfx::take_pending();
+        g.update(&Input::default(), &v, 0.01);
+        assert!(crate::sfx::take_pending().contains(&Sfx::Lose));
     }
 
     #[test]

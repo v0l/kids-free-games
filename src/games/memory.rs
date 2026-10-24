@@ -1,4 +1,3 @@
-use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -7,6 +6,10 @@ use macroquad::prelude::*;
 
 pub const PAIRS: usize = 8;
 pub const PEEK: f32 = 0.8;
+const CARD_TALL: f32 = 1.3;
+const ANIMALS: [&str; PAIRS] = [
+    "giraffe", "hippo", "monkey", "panda", "parrot", "penguin", "pig", "elephant",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Face {
@@ -91,6 +94,7 @@ impl Memory {
             return;
         }
         self.cards[i].1 = Face::Up;
+        sfx::play(Sfx::Card);
         let up = self.up();
         if up.len() == 2 {
             self.moves += 1;
@@ -124,21 +128,36 @@ impl Memory {
         }
     }
 
+    fn card_size(view: &View, cols: usize) -> (f32, f32) {
+        let rows = (PAIRS * 2).div_ceil(cols);
+        let avail_h = view.h - 100.0;
+        let wide = (view.w - 40.0) / cols as f32;
+        let tall = (avail_h / rows as f32).min(wide * CARD_TALL);
+        ((tall / CARD_TALL * 1.08).min(wide), tall)
+    }
+
     fn layout(view: &View) -> Vec<Rect> {
         let n = PAIRS * 2;
-        let cols = if view.w >= view.h { n / 2 } else { 4 };
+        let cols = [4usize, 8]
+            .into_iter()
+            .filter(|c| view.w >= view.h || *c == 4)
+            .max_by(|a, b| {
+                Self::card_size(view, *a)
+                    .1
+                    .total_cmp(&Self::card_size(view, *b).1)
+            })
+            .unwrap_or(4);
         let rows = n.div_ceil(cols);
-        let top = 80.0;
-        let size = ((view.w - 40.0) / cols as f32).min((view.h - top - 20.0) / rows as f32);
-        let ox = (view.w - size * cols as f32) / 2.0;
-        let oy = top + (view.h - top - 20.0 - size * rows as f32) / 2.0;
+        let (cw, ch) = Self::card_size(view, cols);
+        let ox = (view.w - cw * cols as f32) / 2.0;
+        let oy = 80.0 + (view.h - 100.0 - ch * rows as f32) / 2.0;
         (0..PAIRS * 2)
             .map(|i| {
                 Rect::new(
-                    ox + (i % cols) as f32 * size + 6.0,
-                    oy + (i / cols) as f32 * size + 6.0,
-                    size - 12.0,
-                    size - 12.0,
+                    ox + (i % cols) as f32 * cw + 6.0,
+                    oy + (i / cols) as f32 * ch + 6.0,
+                    cw - 12.0,
+                    ch - 12.0,
                 )
             })
             .collect()
@@ -151,61 +170,9 @@ impl Default for Memory {
     }
 }
 
-fn draw_symbol(id: u8, c: Vec2, s: f32) {
-    let col = hsv(id as f32 / PAIRS as f32, 0.7, 0.9);
-    match id % 8 {
-        0 => draw_circle(c.x, c.y, s, col),
-        1 => draw_rectangle(c.x - s * 0.85, c.y - s * 0.85, s * 1.7, s * 1.7, col),
-        2 => draw_triangle(
-            vec2(c.x, c.y - s),
-            vec2(c.x - s, c.y + s * 0.8),
-            vec2(c.x + s, c.y + s * 0.8),
-            col,
-        ),
-        3 => {
-            draw_poly(c.x, c.y, 5, s, -90.0, col);
-            draw_poly(c.x, c.y, 5, s * 0.5, -54.0, col);
-            for k in 0..5 {
-                let a = (-90.0 + k as f32 * 72.0f32).to_radians();
-                let b0 = (-90.0 + k as f32 * 72.0 - 36.0f32).to_radians();
-                let b1 = (-90.0 + k as f32 * 72.0 + 36.0f32).to_radians();
-                draw_triangle(
-                    c + vec2(a.cos(), a.sin()) * s * 1.1,
-                    c + vec2(b0.cos(), b0.sin()) * s * 0.45,
-                    c + vec2(b1.cos(), b1.sin()) * s * 0.45,
-                    col,
-                );
-            }
-        }
-        4 => {
-            draw_circle(c.x - s * 0.45, c.y - s * 0.2, s * 0.55, col);
-            draw_circle(c.x + s * 0.45, c.y - s * 0.2, s * 0.55, col);
-            draw_triangle(
-                vec2(c.x - s, c.y),
-                vec2(c.x + s, c.y),
-                vec2(c.x, c.y + s),
-                col,
-            );
-        }
-        5 => draw_poly(c.x, c.y, 6, s, 0.0, col),
-        6 => {
-            draw_rectangle(c.x - s * 0.3, c.y - s, s * 0.6, s * 2.0, col);
-            draw_rectangle(c.x - s, c.y - s * 0.3, s * 2.0, s * 0.6, col);
-        }
-        _ => {
-            draw_circle(c.x, c.y, s, col);
-            draw_circle(
-                c.x + s * 0.4,
-                c.y - s * 0.3,
-                s * 0.8,
-                Color::from_rgba(250, 250, 255, 255),
-            );
-        }
-    }
+mod art {
+    crate::sprites!("memory");
 }
-
-const BACK: Color = Color::new(0.35, 0.43, 0.86, 1.0);
-const FRAME: Color = Color::new(0.24, 0.30, 0.68, 1.0);
 
 impl Memory {
     fn react(&mut self, view: &View) {
@@ -233,6 +200,7 @@ impl Memory {
                 }
                 Event::Win => {
                     sfx::play(Sfx::Win);
+                    sfx::say(sfx::Say::Win);
                     feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
                     self.celebrated = 0.0
                 }
@@ -293,17 +261,22 @@ impl Game for Memory {
     }
 
     fn draw(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(120, 200, 230, 255),
-            Color::from_rgba(180, 230, 210, 255),
+        let f = view.full();
+        let side = f.w.max(f.h);
+        art::sprite(
+            "bg",
+            Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
         );
-        for k in 0..9 {
-            let f = k as f32;
-            let x = (f * 137.0 + self.t * (6.0 + f)) % (view.w + 80.0) - 40.0;
-            let y = view.h - ((f * 91.0 + self.t * (14.0 + f * 3.0)) % (view.h + 60.0)) + 30.0;
-            draw_circle(x, y, 10.0 + f * 3.0, Color::new(1.0, 1.0, 1.0, 0.12));
-            draw_circle_lines(x, y, 10.0 + f * 3.0, 2.0, Color::new(1.0, 1.0, 1.0, 0.2));
+        for k in 0..5 {
+            let kf = k as f32;
+            let x = (kf * 223.0 + self.t * (7.0 + kf * 2.0)) % (f.w + 300.0) - 150.0 + f.x;
+            let y = f.y + 70.0 + (kf * 97.0) % (f.h * 0.5);
+            crate::ui::cloud(
+                k,
+                vec2(x, y),
+                150.0 + kf * 20.0,
+                Color::new(1.0, 1.0, 1.0, 0.85),
+            );
         }
         chip(
             view,
@@ -344,105 +317,64 @@ impl Memory {
         );
         soft_shadow(
             vec2(r.center().x + shake.x, r.y + r.h - 2.0 + shake.y),
-            r.w * 0.42 * (0.4 + 0.6 * w),
-            r.h * 0.07,
+            r.w * 0.45 * (0.4 + 0.6 * w),
+            r.h * 0.04,
             0.6 - lift * 0.3,
         );
-        let face_up = self.flip[i] >= 0.5;
-        if !face_up {
-            round_rect(
-                Rect::new(rr.x, rr.y + 5.0, rr.w, rr.h),
-                14.0,
-                darker(FRAME, 0.7),
-            );
-            round_rect(rr, 14.0, FRAME);
-            let inner = Rect::new(
-                rr.x + 7.0 * w,
-                rr.y + 7.0,
-                (rr.w - 14.0 * w).max(0.0),
-                rr.h - 16.0,
-            );
-            round_rect(inner, 10.0, BACK);
-            if w > 0.25 {
-                let cols = 4;
-                for gy in 0..4 {
-                    for gx in 0..cols {
-                        let off = if gy % 2 == 0 { 0.0 } else { 0.5 };
-                        let px =
-                            inner.x + inner.w * (gx as f32 + 0.5 + off * 0.5 - 0.25) / cols as f32;
-                        let py = inner.y + inner.h * (gy as f32 + 0.5) / 4.0;
-                        if px > inner.x + 4.0 && px < inner.x + inner.w - 4.0 {
-                            draw_poly(px, py, 4, 5.0 * w, 0.0, with_alpha(WHITE, 0.16));
-                        }
-                    }
-                }
-                text_center(
-                    "?",
-                    rr.x + rr.w / 2.0,
-                    rr.y + rr.h / 2.0,
-                    r.h * 0.4 * w.max(0.5),
-                    with_alpha(WHITE, 0.85),
-                );
-                gloss(inner, 10.0);
-                if w > 0.9 {
-                    shine_sweep(inner, self.t + i as f32 * 0.37);
-                }
-            }
+        if self.flip[i] < 0.5 {
+            art::sprite("back", rr);
+            return;
+        }
+        let tint = if matched {
+            Color::from_rgba(214, 255, 214, 255)
         } else {
-            let tint = hsv(self.cards[i].0 as f32 / PAIRS as f32, 0.45, 1.0);
-            let base = if matched {
-                Color::from_rgba(224, 255, 226, 255)
+            WHITE
+        };
+        art::sprite_ex(
+            "face",
+            rr,
+            crate::art::Draw {
+                tint,
+                ..Default::default()
+            },
+        );
+        if w > 0.2 {
+            let bounce = if matched {
+                (self.t * 4.0 + i as f32).sin() * 3.0
             } else {
-                WHITE
+                0.0
             };
-            round_rect(
-                Rect::new(rr.x, rr.y + 5.0, rr.w, rr.h),
-                14.0,
-                darker(tint, 0.6),
+            let d = r.w * 0.78;
+            art::sprite_w(
+                ANIMALS[self.cards[i].0 as usize % PAIRS],
+                vec2(rr.x + rr.w / 2.0, rr.y + rr.h / 2.0 + bounce),
+                d * w,
+                Default::default(),
             );
-            round_rect(rr, 14.0, tint);
-            round_rect(
-                Rect::new(
-                    rr.x + 5.0 * w,
-                    rr.y + 5.0,
-                    (rr.w - 10.0 * w).max(0.0),
-                    rr.h - 10.0,
-                ),
-                11.0,
-                base,
-            );
-            if w > 0.2 {
-                let s = r.w * 0.28 * w;
-                let bounce = if matched {
-                    (self.t * 4.0 + i as f32).sin() * 3.0
-                } else {
-                    0.0
-                };
-                let sc = vec2(rr.x + rr.w / 2.0, rr.y + rr.h / 2.0 + bounce);
-                draw_circle(sc.x, sc.y + s * 0.15, s * 1.25, with_alpha(tint, 0.25));
-                draw_symbol(self.cards[i].0, sc, s);
-                if matched {
-                    shine_sweep(rr, self.t * 1.5 + i as f32 * 0.2);
-                }
+            if matched {
+                shine_sweep(rr, self.t * 1.5 + i as f32 * 0.2);
             }
-            gloss(rr, 14.0);
         }
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(150, 215, 220, 255));
-    let w = r.w * 0.4;
-    draw_rectangle(
-        r.x + r.w * 0.07,
-        r.y + r.h * 0.15,
-        w,
-        r.h * 0.7,
-        Color::from_rgba(90, 110, 220, 255),
+    let side = r.w.max(r.h);
+    art::sprite("bg", Rect::new(r.x, r.y + r.h - side, side, side));
+    let h = r.h * 0.66;
+    let w = h * art::size("back").x / art::size("back").y;
+    let tilt = |a: f32| crate::art::Draw {
+        rotation: a,
+        ..Default::default()
+    };
+    art::sprite_ex(
+        "back",
+        Rect::new(r.x + r.w * 0.1, r.y + r.h * 0.2, w, h),
+        tilt(-0.12),
     );
-    draw_rectangle(r.x + r.w * 0.53, r.y + r.h * 0.15, w, r.h * 0.7, WHITE);
-    draw_symbol(4, vec2(r.x + r.w * 0.73, r.y + r.h * 0.48), r.w * 0.12);
-    text_center("?", r.x + r.w * 0.27, r.y + r.h * 0.5, r.h * 0.35, WHITE);
+    let face = Rect::new(r.x + r.w * 0.9 - w, r.y + r.h * 0.14, w, h);
+    art::sprite_ex("face", face, tilt(0.1));
+    art::sprite_at("panda", face.center() + vec2(0.0, 0.0), w * 0.8, tilt(0.1));
 }
 
 #[cfg(test)]
@@ -452,6 +384,24 @@ mod tests {
     fn pair_positions(m: &Memory, id: u8) -> (usize, usize) {
         let v: Vec<usize> = (0..m.cards.len()).filter(|i| m.cards[*i].0 == id).collect();
         (v[0], v[1])
+    }
+
+    #[test]
+    fn memory_sprites_all_exist() {
+        let have = art::names();
+        let mut want = vec!["bg", "back", "face"];
+        want.extend(ANIMALS);
+        for n in want {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn flipping_a_card_plays_the_card_sound() {
+        let mut m = Memory::new();
+        crate::sfx::take_pending();
+        m.pick(0);
+        assert!(crate::sfx::take_pending().contains(&Sfx::Card));
     }
 
     #[test]

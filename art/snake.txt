@@ -1,0 +1,18 @@
+# run art/render_snake.py and art/render_food.py before assets.py
+bg       | physics-assets/PNG/Backgrounds/colored_grass.png | solo max=1024
+frame    | physics-assets/PNG/Wood elements/elementWood033.png | max=140
+head     | animal-pack/PNG/Derived/head.png | max=160
+body     | animal-pack/PNG/Derived/body.png | max=128
+apple      | food-kit/Render/apple.png | max=96
+orange     | food-kit/Render/orange.png | max=96
+pear       | food-kit/Render/pear.png | max=96
+strawberry | food-kit/Render/strawberry.png | max=96
+lemon      | food-kit/Render/lemon.png | max=96
+watermelon | food-kit/Render/watermelon.png | max=96
+tuft1    | foliage-pack/PNG/Default size/foliagePack_018.png | max=64
+tuft2    | foliage-pack/PNG/Default size/foliagePack_019.png | max=64
+tuft3    | foliage-pack/PNG/Default size/foliagePack_020.png | max=64
+flower1  | foliage-pack/PNG/Default size/foliagePack_001.png | max=64
+flower2  | foliage-pack/PNG/Default size/foliagePack_002.png | max=64
+flower3  | foliage-pack/PNG/Default size/foliagePack_003.png | max=64
+flower4  | foliage-pack/PNG/Default size/foliagePack_062.png | max=64
