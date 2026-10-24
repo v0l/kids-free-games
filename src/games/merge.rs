@@ -91,12 +91,17 @@ pub fn can_move(board: &Board) -> bool {
     Dir::ALL.iter().any(|d| shift(board, *d).0 != *board)
 }
 
+mod art {
+    crate::sprites!("merge");
+}
+
 pub struct Merge {
     pub board: Board,
     pub score: u32,
     pub best: Best,
     pub won_shown: bool,
     pub over: bool,
+    pub record_broken: bool,
     slides: Vec<TileMove>,
     slide_t: f32,
     born: [[f32; N]; N],
@@ -117,6 +122,7 @@ impl Merge {
             best: Best::default(),
             won_shown: false,
             over: false,
+            record_broken: false,
             slides: vec![],
             slide_t: SLIDE,
             born: [[1.0; N]; N],
@@ -173,6 +179,9 @@ impl Merge {
         if gained > 0 {
             self.score_bump.kick();
         }
+        if self.best.0 > 0 && self.score > self.best.0 {
+            self.record_broken = true;
+        }
         self.best.offer(self.score);
         if let Some((r, c)) = self.spawn() {
             self.born[r][c] = -SLIDE;
@@ -192,21 +201,12 @@ impl Default for Merge {
     }
 }
 
-fn tile_color(v: u32) -> (Color, Color) {
-    let k = (v.max(2) as f32).log2();
-    let bg = match v {
-        2 => Color::from_rgba(238, 228, 218, 255),
-        4 => Color::from_rgba(237, 224, 200, 255),
-        _ => hsv(0.1 - k * 0.07, 0.65, 0.97),
-    };
-    (
-        bg,
-        if v <= 4 {
-            Color::from_rgba(119, 110, 101, 255)
-        } else {
-            WHITE
-        },
-    )
+pub fn tile_tint(v: u32) -> Color {
+    let k = v.max(2).ilog2() as usize;
+    const HUES: [f32; 11] = [
+        0.58, 0.5, 0.38, 0.25, 0.15, 0.09, 0.0, 0.92, 0.83, 0.75, 0.68,
+    ];
+    hsv(HUES[(k - 1).min(HUES.len() - 1)], 0.55, 1.0)
 }
 
 struct Grid {
@@ -262,29 +262,44 @@ pub fn born_scale(age: f32) -> f32 {
 }
 
 fn draw_tile(center: Vec2, cs: f32, scale: f32, v: u32, t: f32) {
-    let (bg, fg) = tile_color(v);
+    let tint = tile_tint(v);
     let s = cs * scale;
     let r = Rect::new(center.x - s / 2.0, center.y - s / 2.0, s, s);
-    let radius = 10.0 * scale;
     if v >= 128 {
-        let glow = 0.18 + 0.08 * (t * 4.0).sin();
-        round_rect(
-            Rect::new(r.x - 5.0, r.y - 5.0, r.w + 10.0, r.h + 10.0),
-            radius + 4.0,
-            with_alpha(bg, glow),
+        let glow = 0.35 + 0.15 * (t * 4.0).sin();
+        art::sprite_ex(
+            "tile",
+            Rect::new(r.x - 6.0, r.y - 6.0, r.w + 12.0, r.h + 12.0),
+            crate::art::Draw {
+                tint: with_alpha(Color::new(1.0, 0.95, 0.5, 1.0), glow),
+                ..Default::default()
+            },
         );
     }
-    round_rect(
-        Rect::new(r.x, r.y + 4.0 * scale, r.w, r.h),
-        radius,
-        darker(bg, 0.78),
+    art::sprite_ex(
+        "tile",
+        Rect::new(r.x, r.y + 5.0 * scale, r.w, r.h),
+        crate::art::Draw {
+            tint: Color::new(0.0, 0.0, 0.0, 0.22),
+            ..Default::default()
+        },
     );
-    round_rect(r, radius, bg);
-    if v > 4 {
-        gloss(r, radius);
-    }
-    if v >= 128 {
-        shine_sweep(r, t + v as f32 * 0.01);
+    art::sprite_ex(
+        "tile",
+        r,
+        crate::art::Draw {
+            tint,
+            ..Default::default()
+        },
+    );
+    if v >= 2048 {
+        let bob = (t * 3.0).sin() * s * 0.02;
+        art::sprite_at(
+            "crown",
+            vec2(r.center().x, r.y + s * 0.1 + bob),
+            s * 0.32,
+            Default::default(),
+        );
     }
     let label = v.to_string();
     let fs = s * match label.len() {
@@ -292,10 +307,35 @@ fn draw_tile(center: Vec2, cs: f32, scale: f32, v: u32, t: f32) {
         3 => 0.4,
         _ => 0.32,
     };
-    if v <= 4 {
-        text_center(&label, center.x, center.y, fs, fg);
-    } else {
-        text_outline(&label, center.x, center.y, fs, fg, darker(bg, 0.55));
+    text_outline(
+        &label,
+        center.x,
+        center.y + s * 0.03,
+        fs,
+        WHITE,
+        darker(tint, 0.45),
+    );
+}
+
+fn draw_backdrop(view: &View, t: f32) {
+    let f = view.full();
+    let side = f.w.max(f.h);
+    art::sprite(
+        "bg",
+        Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
+    );
+    for (i, (x, y, w)) in [(0.15, 0.1, 190.0), (0.62, 0.2, 240.0), (0.9, 0.06, 160.0)]
+        .iter()
+        .enumerate()
+    {
+        let drift = (t * (6.0 + i as f32 * 3.0) + i as f32 * 300.0) % (view.w + 400.0) - 200.0;
+        let cx = (view.w * x + drift).rem_euclid(view.w + 400.0) - 200.0;
+        crate::ui::cloud(
+            i * 3 + 1,
+            vec2(cx, view.h * y + 90.0),
+            *w,
+            with_alpha(WHITE, 0.85),
+        );
     }
 }
 
@@ -324,6 +364,7 @@ impl Game for Merge {
                     let best = self.best;
                     *self = Self::new();
                     self.best = best;
+                    sfx::say(sfx::Say::Go);
                 } else {
                     self.won_shown = true;
                 }
@@ -340,27 +381,9 @@ impl Game for Merge {
     }
 
     fn draw(&self, view: &View) {
-        clear_background(Color::from_rgba(250, 248, 239, 255));
         let g = Grid::new(view);
         let (o, size) = (g.origin, g.size);
-        for k in 0..14 {
-            let f = k as f32;
-            let x = (f * 173.0 + self.t * (5.0 + f * 0.7)) % (view.w + 100.0) - 50.0;
-            let y = (f * 97.0 + self.t * (9.0 + f)) % (view.h + 100.0) - 50.0;
-            let s = 24.0 + (f * 13.0) % 40.0;
-            let a = (self.t * 0.2 + f).sin() * 0.5;
-            draw_rectangle_ex(
-                x,
-                y,
-                s,
-                s,
-                DrawRectangleParams {
-                    rotation: a,
-                    offset: vec2(0.5, 0.5),
-                    color: Color::from_rgba(225, 215, 200, 60),
-                },
-            );
-        }
+        draw_backdrop(view, self.t);
         let sh = self.shake.offset();
         text_outline(
             "2048",
@@ -384,19 +407,8 @@ impl Game for Merge {
                 160.0,
                 80.0,
             );
-            round_rect(
-                Rect::new(r.x, r.y + 4.0, r.w, r.h),
-                10.0,
-                Color::from_rgba(150, 135, 120, 255),
-            );
-            round_rect(r, 10.0, Color::from_rgba(187, 173, 160, 255));
-            text_center(
-                label,
-                r.x + r.w / 2.0,
-                r.y + 22.0,
-                22.0,
-                Color::from_rgba(238, 228, 218, 255),
-            );
+            crate::ui::chip_box(r);
+            text_center(label, r.x + r.w / 2.0, r.y + 22.0, 22.0, crate::ui::BODY);
             if i == 0 {
                 score_text(
                     &v.to_string(),
@@ -411,25 +423,37 @@ impl Game for Merge {
                     r.x + r.w / 2.0,
                     r.y + 54.0,
                     36.0,
-                    WHITE,
+                    Color::from_rgba(255, 200, 40, 255),
                     Color::from_rgba(40, 30, 60, 255),
                 );
             }
         }
         let frame = Rect::new(o.x + sh.x, o.y + sh.y, size, size);
-        round_rect(
-            Rect::new(frame.x, frame.y + 6.0, frame.w, frame.h),
-            16.0,
-            Color::from_rgba(0, 0, 0, 40),
+        art::sprite_ex(
+            "tile",
+            Rect::new(frame.x, frame.y + 8.0, frame.w, frame.h),
+            crate::art::Draw {
+                tint: Color::new(0.0, 0.0, 0.0, 0.25),
+                ..Default::default()
+            },
         );
-        round_rect(frame, 16.0, Color::from_rgba(187, 173, 160, 255));
+        art::nine(
+            "tile",
+            frame,
+            14.0,
+            (frame.w / 128.0).max(0.5),
+            Color::from_rgba(120, 92, 80, 255),
+        );
         for r in 0..N {
             for c in 0..N {
                 let p = g.pos(r as f32, c as f32) + sh;
-                round_rect(
+                art::sprite_ex(
+                    "tile",
                     Rect::new(p.x, p.y, g.cell, g.cell),
-                    10.0,
-                    Color::from_rgba(205, 193, 180, 255),
+                    crate::art::Draw {
+                        tint: Color::from_rgba(80, 60, 55, 120),
+                        ..Default::default()
+                    },
                 );
             }
         }
@@ -471,7 +495,7 @@ impl Merge {
         for (r, c, v) in std::mem::take(&mut self.reveal) {
             self.merged_at[r][c] = 0.0;
             let at = g.center(r, c);
-            let (bg, _) = tile_color(v);
+            let bg = tile_tint(v);
             self.particles.emit(
                 at,
                 &[bg, WHITE, darker(bg, 0.8)],
@@ -503,38 +527,87 @@ impl Merge {
             }
             if v >= 2048 {
                 sfx::play(Sfx::Win);
+                sfx::say(sfx::Say::Win);
                 self.particles.confetti(view);
             }
         }
         if self.over {
-            sfx::play(Sfx::Wrong);
+            sfx::play(Sfx::Lose);
+            sfx::say(if self.record_broken {
+                sfx::Say::Best
+            } else {
+                sfx::Say::GameOver
+            });
             self.shake.add(0.5);
         }
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(187, 173, 160, 255));
-    let g = r.w * 0.06;
-    let cs = (r.w - g * 3.0) / 2.0;
+    art::sprite("bg", r);
+    let g = r.w * 0.05;
+    let frame = Rect::new(r.x + g, r.y + g * 1.5, r.w - 2.0 * g, r.w - 2.0 * g);
+    art::nine(
+        "tile",
+        frame,
+        14.0,
+        frame.w / 300.0,
+        Color::from_rgba(120, 92, 80, 255),
+    );
+    let pad = g * 0.7;
+    let cs = (frame.w - pad * 3.0) / 2.0;
     for (i, v) in [2u32, 4, 8, 2048].iter().enumerate() {
-        let x = r.x + g + (i % 2) as f32 * (cs + g);
-        let y = r.y + g + (i / 2) as f32 * (cs + g);
-        let (bg, fg) = tile_color(*v);
-        draw_rectangle(x, y, cs, cs, bg);
-        text_center(
-            &v.to_string(),
-            x + cs / 2.0,
-            y + cs / 2.0,
-            cs * if *v > 999 { 0.32 } else { 0.55 },
-            fg,
-        );
+        let x = frame.x + pad + (i % 2) as f32 * (cs + pad);
+        let y = frame.y + pad + (i / 2) as f32 * (cs + pad);
+        draw_tile(vec2(x + cs / 2.0, y + cs / 2.0), cs, 1.0, *v, 0.0);
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn merge_sprites_all_exist() {
+        let have = art::names();
+        for n in ["bg", "tile", "crown"] {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn every_tile_value_has_its_own_colour() {
+        let mut seen: Vec<[u8; 4]> = vec![];
+        for k in 1..=11 {
+            let c: [u8; 4] = tile_tint(1 << k).into();
+            assert!(!seen.contains(&c), "2^{k} repeats a colour");
+            seen.push(c);
+        }
+    }
+
+    #[test]
+    fn game_over_loses_and_calls_it() {
+        let v = View::ipad_landscape();
+        let mut g = Merge::new();
+        g.board = [[2, 4, 2, 4], [4, 2, 4, 2], [2, 4, 2, 4], [4, 2, 0, 2]];
+        g.best = Best(4);
+        g.score = 100;
+        g.board[3][2] = 8;
+        crate::sfx::take_pending();
+        g.over = true;
+        g.land(&v);
+        assert!(crate::sfx::take_pending().contains(&Sfx::Lose));
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::GameOver));
+    }
+
+    #[test]
+    fn beating_a_standing_best_is_remembered() {
+        let mut g = Merge::new();
+        g.best = Best(4);
+        g.board = [[4, 4, 0, 0], [0; 4], [0; 4], [0; 4]];
+        assert!(g.play(Dir::Left));
+        assert!(g.record_broken);
+    }
 
     #[test]
     fn row_merges_each_tile_once() {

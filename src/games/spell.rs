@@ -1,5 +1,4 @@
 use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -7,12 +6,23 @@ use crate::learn::{tall, ui_scale, PRAISE};
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
+mod art {
+    crate::sprites!("spell");
+}
+
 pub const ROUND: usize = 8;
 const WIN_TIME: f32 = 1.6;
 const SLIDE_TIME: f32 = 0.22;
 const MIN_TILE: f32 = 96.0;
 
 type Draw = Picture;
+
+#[cfg(test)]
+const SPRITES: [&str; 26] = [
+    "cat", "dog", "bus", "car", "hat", "cup", "egg", "pig", "tree", "cake", "ball", "duck", "frog",
+    "moon", "boat", "house", "apple", "heart", "train", "cloud", "snail", "rocket", "banana",
+    "sun", "bee", "fish",
+];
 
 pub const WORDS: [(&str, Draw); 30] = [
     ("cat", cat),
@@ -306,6 +316,11 @@ impl Spell {
             self.results.push(perfect);
             self.phase = Phase::Won(0.0);
             sfx::play(Sfx::Right);
+            sfx::say(if perfect {
+                sfx::Say::Great
+            } else {
+                sfx::Say::Correct
+            });
             let msg = if perfect {
                 "Perfect!"
             } else {
@@ -399,14 +414,22 @@ fn letter_color(i: usize) -> Color {
 }
 
 fn tile(r: Rect, ch: char, color: Color, alpha: f32) {
-    let rad = r.w * 0.22;
-    round_rect(
-        Rect::new(r.x, r.y + r.h * 0.08, r.w, r.h),
-        rad,
-        with_alpha(darker(color, 0.65), alpha),
+    art::sprite_ex(
+        "tile",
+        Rect::new(r.x, r.y + r.h * 0.06, r.w, r.h),
+        crate::art::Draw {
+            tint: Color::new(0.0, 0.0, 0.0, 0.2 * alpha),
+            ..Default::default()
+        },
     );
-    round_rect(r, rad, with_alpha(color, alpha));
-    gloss(r, rad);
+    art::sprite_ex(
+        "tile",
+        r,
+        crate::art::Draw {
+            tint: with_alpha(color, alpha),
+            ..Default::default()
+        },
+    );
     text_outline(
         &ch.to_string(),
         r.x + r.w / 2.0,
@@ -415,6 +438,25 @@ fn tile(r: Rect, ch: char, color: Color, alpha: f32) {
         with_alpha(WHITE, alpha),
         with_alpha(darker(color, 0.45), alpha),
     );
+}
+
+fn draw_backdrop(view: &View, t: f32) {
+    let f = view.full();
+    let side = f.w.max(f.h);
+    art::sprite(
+        "bg",
+        Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
+    );
+    for i in 0..4usize {
+        let span = view.w + 500.0;
+        let x = (i as f32 * 0.27 * span + t * (6.0 + i as f32 * 3.0)) % span - 250.0;
+        crate::ui::cloud(
+            i * 2,
+            vec2(x, view.h * (0.12 + 0.17 * (i as f32 * 0.61 % 1.0))),
+            160.0 + (i % 3) as f32 * 50.0,
+            with_alpha(WHITE, 0.85),
+        );
+    }
 }
 
 impl Game for Spell {
@@ -442,6 +484,7 @@ impl Game for Spell {
                     self.advance();
                     if let Phase::Finished(_) = self.phase {
                         sfx::play(Sfx::Win);
+                        sfx::say(sfx::Say::Congrats);
                         feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
                         self.fx.confetti(view);
                     }
@@ -453,6 +496,7 @@ impl Game for Spell {
                 self.phase = Phase::Finished(t);
                 if t > 1.0 && input.pressed {
                     *self = Self::new();
+                    sfx::say(sfx::Say::Go);
                 }
                 return;
             }
@@ -489,11 +533,7 @@ impl Game for Spell {
     }
 
     fn draw(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(255, 236, 170, 255),
-            Color::from_rgba(255, 190, 200, 255),
-        );
+        draw_backdrop(view, self.t);
         let l = layout(view, self.board.word.len(), self.board.tiles.len());
         let k = ui_scale(view);
         set_view_camera(view, self.shake.offset());
@@ -502,32 +542,32 @@ impl Game for Spell {
                 view.w / 2.0 + (i as f32 - (ROUND as f32 - 1.0) / 2.0) * 44.0 * k,
                 l.stars_y,
             );
-            let col = match self.results.get(i) {
-                Some(true) => Color::from_rgba(255, 200, 40, 255),
-                Some(false) => Color::from_rgba(200, 210, 230, 255),
-                None if i == self.index => with_alpha(WHITE, 0.9),
-                None => with_alpha(WHITE, 0.4),
-            };
             let s = if i == self.index && self.results.len() == i {
                 1.0 + (self.t * 4.0).sin() * 0.08
             } else {
                 1.0
             };
-            star(
-                c + vec2(0.0, 2.0),
-                19.0 * k * s,
-                0.0,
-                Color::new(0.4, 0.2, 0.3, 0.25),
+            let name = match self.results.get(i) {
+                Some(true) => "star",
+                _ => "star_empty",
+            };
+            let tint = match self.results.get(i) {
+                Some(_) => WHITE,
+                None if i == self.index => with_alpha(WHITE, 0.95),
+                None => with_alpha(WHITE, 0.45),
+            };
+            crate::ui::sprite_at(
+                name,
+                c,
+                38.0 * k * s,
+                crate::art::Draw {
+                    tint,
+                    ..Default::default()
+                },
             );
-            star(c, 17.0 * k * s, 0.0, col);
         }
         let p = l.picture;
-        round_rect(
-            Rect::new(p.x, p.y + 10.0, p.w, p.h),
-            36.0,
-            Color::new(0.5, 0.2, 0.3, 0.18),
-        );
-        round_rect(p, 36.0, WHITE);
+        crate::ui::card(p, WHITE);
         let bob = (self.t * 2.0).sin() * p.h * 0.015;
         let sc = self.picture_bump.scale(0.12);
         if let Some(draw) = picture(self.word()) {
@@ -545,10 +585,13 @@ impl Game for Spell {
             let filled = i < self.board.filled;
             if !filled {
                 let next = i == self.board.filled;
-                round_rect(
+                art::sprite_ex(
+                    "tile",
                     *r,
-                    r.w * 0.22,
-                    Color::new(1.0, 1.0, 1.0, if next { 0.75 } else { 0.45 }),
+                    crate::art::Draw {
+                        tint: Color::new(1.0, 1.0, 1.0, if next { 0.7 } else { 0.35 }),
+                        ..Default::default()
+                    },
                 );
                 let line = if next {
                     Color::from_rgba(255, 140, 120, 255)
@@ -644,28 +687,7 @@ impl Game for Spell {
             h.w * hp,
             h.h * hp,
         );
-        round_rect(
-            Rect::new(hr.x, hr.y + 6.0, hr.w, hr.h),
-            hr.w / 2.0,
-            Color::from_rgba(200, 140, 20, 255),
-        );
-        round_rect(hr, hr.w / 2.0, Color::from_rgba(255, 200, 50, 255));
-        let bulb = hr.center() - vec2(0.0, hr.h * 0.08);
-        draw_circle(bulb.x, bulb.y, hr.w * 0.22, WHITE);
-        draw_rectangle(
-            bulb.x - hr.w * 0.1,
-            bulb.y + hr.h * 0.16,
-            hr.w * 0.2,
-            hr.h * 0.14,
-            WHITE,
-        );
-        draw_rectangle(
-            bulb.x - hr.w * 0.08,
-            bulb.y + hr.h * 0.32,
-            hr.w * 0.16,
-            hr.h * 0.05,
-            Color::from_rgba(255, 245, 220, 255),
-        );
+        crate::ui::round_button(hr, "icon_question", crate::ui::Tone::Yellow, 0.0);
         self.fx.draw();
         self.pops.draw();
         set_view_camera(view, Vec2::ZERO);
@@ -692,22 +714,6 @@ impl Pen {
         let p = self.p(x, y);
         draw_circle(p.x, p.y, r * self.s, col);
     }
-    fn ring(&self, x: f32, y: f32, r: f32, w: f32, col: Color) {
-        let p = self.p(x, y);
-        draw_circle_lines(p.x, p.y, r * self.s, w * self.s, col);
-    }
-    fn ellipse(&self, x: f32, y: f32, w: f32, h: f32, rot: f32, col: Color) {
-        let p = self.p(x, y);
-        draw_ellipse(p.x, p.y, w * self.s, h * self.s, rot, col);
-    }
-    fn rect(&self, x: f32, y: f32, w: f32, h: f32, col: Color) {
-        let p = self.p(x, y);
-        draw_rectangle(p.x, p.y, w * self.s, h * self.s, col);
-    }
-    fn rrect(&self, x: f32, y: f32, w: f32, h: f32, r: f32, col: Color) {
-        let p = self.p(x, y);
-        round_rect(Rect::new(p.x, p.y, w * self.s, h * self.s), r * self.s, col);
-    }
     fn tri(&self, a: (f32, f32), b: (f32, f32), c: (f32, f32), col: Color) {
         draw_triangle(self.p(a.0, a.1), self.p(b.0, b.1), self.p(c.0, c.1), col);
     }
@@ -715,371 +721,90 @@ impl Pen {
         let (p, q) = (self.p(a.0, a.1), self.p(b.0, b.1));
         draw_line(p.x, p.y, q.x, q.y, w * self.s, col);
     }
-    fn eyes(&self, x: f32, y: f32, gap: f32, r: f32) {
-        for s in [-1.0, 1.0] {
-            self.circle(x + s * gap, y, r, WHITE);
-            self.circle(
-                x + s * gap + r * 0.15,
-                y + r * 0.1,
-                r * 0.55,
-                Color::from_rgba(40, 30, 50, 255),
-            );
-            self.circle(x + s * gap + r * 0.3, y - r * 0.2, r * 0.2, WHITE);
-        }
-    }
-    fn smile(&self, x: f32, y: f32, w: f32) {
-        let col = Color::from_rgba(60, 40, 50, 255);
-        let n = 8;
-        for k in 0..n {
-            let a0 = std::f32::consts::PI * (0.15 + 0.7 * k as f32 / n as f32);
-            let a1 = std::f32::consts::PI * (0.15 + 0.7 * (k + 1) as f32 / n as f32);
-            self.line(
-                (x + a0.cos() * w, y + a0.sin() * w * 0.6),
-                (x + a1.cos() * w, y + a1.sin() * w * 0.6),
-                0.04,
-                col,
-            );
-        }
-    }
-    fn cheeks(&self, x: f32, y: f32, gap: f32) {
-        for s in [-1.0, 1.0] {
-            self.ellipse(
-                x + s * gap,
-                y,
-                0.09,
-                0.055,
-                0.0,
-                Color::new(1.0, 0.45, 0.5, 0.45),
-            );
-        }
-    }
 }
 
 fn rgb(r: u8, g: u8, b: u8) -> Color {
     Color::from_rgba(r, g, b, 255)
 }
 
-fn cat(p: &Pen) {
-    let fur = rgb(250, 170, 80);
-    p.tri(
-        (-0.62, -0.25),
-        (-0.2, -0.55),
-        (-0.68, -0.85),
-        darker(fur, 0.85),
-    );
-    p.tri(
-        (0.62, -0.25),
-        (0.2, -0.55),
-        (0.68, -0.85),
-        darker(fur, 0.85),
-    );
-    p.tri(
-        (-0.55, -0.35),
-        (-0.3, -0.5),
-        (-0.6, -0.72),
-        rgb(255, 180, 190),
-    );
-    p.tri((0.55, -0.35), (0.3, -0.5), (0.6, -0.72), rgb(255, 180, 190));
-    p.circle(0.0, 0.05, 0.7, fur);
-    p.ellipse(0.0, 0.32, 0.38, 0.26, 0.0, rgb(255, 235, 210));
-    p.eyes(0.0, -0.08, 0.27, 0.13);
-    p.tri((-0.07, 0.17), (0.07, 0.17), (0.0, 0.25), rgb(240, 110, 130));
-    p.smile(0.0, 0.25, 0.12);
-    for s in [-1.0, 1.0] {
-        for dy in [-0.03, 0.06] {
-            p.line(
-                (s * 0.3, 0.25 + dy),
-                (s * 0.85, 0.18 + dy * 2.0),
-                0.02,
-                rgb(120, 70, 40),
-            );
-        }
-    }
-    p.cheeks(0.0, 0.18, 0.38);
+fn draw_sprite(p: &Pen, name: &str, rotation: f32) {
+    draw_tinted(p, name, rotation, WHITE);
 }
 
-fn dog(p: &Pen) {
-    let fur = rgb(200, 150, 100);
-    p.ellipse(-0.6, 0.0, 0.2, 0.42, 15.0, darker(fur, 0.65));
-    p.ellipse(0.6, 0.0, 0.2, 0.42, -15.0, darker(fur, 0.65));
-    p.circle(0.0, 0.0, 0.62, fur);
-    p.ellipse(0.22, -0.2, 0.2, 0.22, 0.0, darker(fur, 0.8));
-    p.ellipse(0.0, 0.3, 0.32, 0.24, 0.0, rgb(250, 230, 200));
-    p.eyes(0.0, -0.15, 0.24, 0.12);
-    p.ellipse(0.0, 0.18, 0.12, 0.08, 0.0, rgb(50, 35, 40));
-    p.smile(0.0, 0.3, 0.12);
-    p.ellipse(0.0, 0.45, 0.07, 0.09, 0.0, rgb(240, 100, 120));
+fn draw_tinted(p: &Pen, name: &str, rotation: f32, tint: Color) {
+    let size = art::size(name);
+    let k = 1.55 * p.s / size.x.max(size.y);
+    let (w, h) = (size.x * k, size.y * k);
+    soft_shadow(p.c + vec2(0.0, p.s * 0.92), w * 0.4, p.s * 0.07, 0.5);
+    art::sprite_ex(
+        name,
+        Rect::new(p.c.x - w / 2.0, p.c.y - h / 2.0, w, h),
+        crate::art::Draw {
+            rotation,
+            tint,
+            ..Default::default()
+        },
+    );
+}
+
+macro_rules! sprite_pic {
+    ($($pic:ident => $name:literal),* $(,)?) => {
+        $(fn $pic(p: &Pen) {
+            draw_sprite(p, $name, 0.0);
+        })*
+    };
+}
+
+sprite_pic! {
+    cat => "cat",
+    dog => "dog",
+    bus => "bus",
+    car => "car",
+    hat => "hat",
+    cup => "cup",
+    egg => "egg",
+    pig => "pig",
+    tree => "tree",
+    cake => "cake",
+    ball => "ball",
+    duck => "duck",
+    frog => "frog",
+    boat => "boat",
+    house => "house",
+    apple => "apple",
+    heart => "heart",
+    train => "train",
+    snail => "snail",
+    rocket => "rocket",
+    banana => "banana",
 }
 
 fn sun(p: &Pen) {
-    let y = rgb(255, 200, 40);
-    for k in 0..12 {
-        let a = k as f32 / 12.0 * std::f32::consts::TAU + p.t * 0.3;
-        let (c, s) = (a.cos(), a.sin());
-        p.tri(
-            (c * 0.55 - s * 0.1, s * 0.55 + c * 0.1),
-            (c * 0.55 + s * 0.1, s * 0.55 - c * 0.1),
-            (c * 0.92, s * 0.92),
-            rgb(255, 160, 40),
-        );
-    }
-    p.circle(0.0, 0.0, 0.58, y);
-    p.eyes(0.0, -0.08, 0.2, 0.1);
-    p.smile(0.0, 0.12, 0.2);
-    p.cheeks(0.0, 0.12, 0.33);
-}
-
-fn wheel(p: &Pen, x: f32, y: f32, r: f32) {
-    p.circle(x, y, r, rgb(50, 50, 60));
-    p.circle(x, y, r * 0.45, rgb(200, 200, 210));
-}
-
-fn bus(p: &Pen) {
-    p.rrect(-0.85, -0.5, 1.7, 0.85, 0.15, rgb(255, 190, 30));
-    p.rect(-0.85, 0.12, 1.7, 0.08, rgb(220, 120, 30));
-    for k in 0..4 {
-        p.rrect(
-            -0.72 + k as f32 * 0.36,
-            -0.38,
-            0.28,
-            0.3,
-            0.05,
-            rgb(170, 220, 255),
-        );
-    }
-    p.rrect(0.55, -0.38, 0.22, 0.6, 0.04, rgb(150, 200, 240));
-    wheel(p, -0.5, 0.38, 0.17);
-    wheel(p, 0.5, 0.38, 0.17);
-    p.circle(0.82, 0.22, 0.05, rgb(255, 250, 200));
-}
-
-fn car(p: &Pen) {
-    p.rrect(-0.45, -0.45, 0.85, 0.4, 0.15, rgb(230, 60, 70));
-    p.rrect(-0.35, -0.38, 0.3, 0.28, 0.06, rgb(180, 225, 255));
-    p.rrect(0.02, -0.38, 0.3, 0.28, 0.06, rgb(180, 225, 255));
-    p.rrect(-0.85, -0.12, 1.7, 0.42, 0.16, rgb(240, 70, 80));
-    p.rect(-0.85, 0.05, 1.7, 0.05, rgb(200, 40, 60));
-    wheel(p, -0.48, 0.32, 0.19);
-    wheel(p, 0.48, 0.32, 0.19);
-    p.circle(0.78, 0.0, 0.06, rgb(255, 245, 180));
-}
-
-fn hat(p: &Pen) {
-    p.ellipse(0.0, 0.35, 0.9, 0.18, 0.0, rgb(60, 60, 90));
-    p.rrect(-0.5, -0.55, 1.0, 0.9, 0.12, rgb(70, 70, 105));
-    p.rect(-0.5, 0.08, 1.0, 0.16, rgb(230, 70, 90));
-    p.circle(0.3, 0.16, 0.1, rgb(255, 210, 60));
-}
-
-fn cup(p: &Pen) {
-    p.ring(0.6, 0.0, 0.22, 0.09, rgb(80, 160, 230));
-    p.rrect(-0.55, -0.45, 1.1, 0.95, 0.2, rgb(90, 170, 240));
-    p.ellipse(0.0, -0.45, 0.55, 0.1, 0.0, rgb(130, 80, 50));
-    p.circle(-0.15, 0.05, 0.12, rgb(255, 255, 255));
-    p.circle(0.15, 0.05, 0.12, rgb(255, 255, 255));
-    p.tri((-0.27, 0.08), (0.27, 0.08), (0.0, 0.3), rgb(255, 255, 255));
-    for k in 0..3 {
-        let x = -0.25 + k as f32 * 0.25;
-        let w = (p.t * 2.0 + k as f32).sin() * 0.05;
-        p.line(
-            (x, -0.6),
-            (x + w, -0.85),
-            0.04,
-            Color::new(0.7, 0.7, 0.8, 0.6),
-        );
-    }
-}
-
-fn egg(p: &Pen) {
-    p.ellipse(0.0, 0.05, 0.52, 0.7, 0.0, rgb(250, 245, 230));
-    p.ellipse(
-        -0.15,
-        -0.25,
-        0.12,
-        0.2,
-        -20.0,
-        Color::new(1.0, 1.0, 1.0, 0.8),
-    );
-    p.eyes(0.0, 0.05, 0.18, 0.09);
-    p.smile(0.0, 0.22, 0.12);
-    p.cheeks(0.0, 0.22, 0.28);
-}
-
-fn bee(p: &Pen) {
-    let flap = (p.t * 18.0).sin() * 0.05;
-    p.ellipse(
-        -0.2,
-        -0.45 + flap,
-        0.25,
-        0.35,
-        -25.0,
-        Color::new(0.85, 0.95, 1.0, 0.85),
-    );
-    p.ellipse(
-        0.2,
-        -0.45 - flap,
-        0.25,
-        0.35,
-        25.0,
-        Color::new(0.85, 0.95, 1.0, 0.85),
-    );
-    p.ellipse(0.0, 0.1, 0.72, 0.5, 0.0, rgb(255, 205, 40));
-    for x in [-0.25, 0.15] {
-        p.rect(x, -0.35, 0.16, 0.9, rgb(50, 40, 40));
-    }
-    p.circle(0.58, 0.05, 0.25, rgb(255, 205, 40));
-    p.eyes(0.62, 0.0, 0.1, 0.06);
-    p.tri((-0.72, 0.05), (-0.95, 0.12), (-0.72, 0.2), rgb(50, 40, 40));
-}
-
-fn pig(p: &Pen) {
-    let pink = rgb(255, 170, 185);
-    p.tri(
-        (-0.55, -0.3),
-        (-0.2, -0.55),
-        (-0.6, -0.75),
-        darker(pink, 0.85),
-    );
-    p.tri((0.55, -0.3), (0.2, -0.55), (0.6, -0.75), darker(pink, 0.85));
-    p.circle(0.0, 0.0, 0.65, pink);
-    p.ellipse(0.0, 0.18, 0.26, 0.18, 0.0, rgb(255, 130, 155));
-    p.circle(-0.09, 0.18, 0.05, rgb(180, 70, 100));
-    p.circle(0.09, 0.18, 0.05, rgb(180, 70, 100));
-    p.eyes(0.0, -0.18, 0.24, 0.1);
-    p.cheeks(0.0, 0.1, 0.4);
-}
-
-fn fish(p: &Pen) {
-    let wag = (p.t * 4.0).sin() * 0.06;
-    p.tri(
-        (0.45, 0.0),
-        (0.95, -0.4 + wag),
-        (0.95, 0.4 + wag),
-        rgb(255, 120, 60),
-    );
-    p.ellipse(-0.05, 0.0, 0.62, 0.42, 0.0, rgb(255, 150, 60));
-    p.tri(
-        (-0.1, -0.38),
-        (0.25, -0.38),
-        (0.1, -0.65),
-        rgb(255, 120, 60),
-    );
-    for k in 0..3 {
-        p.ring(
-            0.05 + k as f32 * 0.17,
-            0.0,
-            0.14,
-            0.03,
-            Color::new(1.0, 0.85, 0.6, 0.7),
-        );
-    }
-    p.circle(-0.38, -0.08, 0.1, WHITE);
-    p.circle(-0.4, -0.06, 0.05, rgb(40, 30, 50));
-    p.smile(-0.45, 0.1, 0.08);
-    for k in 0..3 {
-        let y = -0.55 - ((p.t * 0.8 + k as f32 * 0.33).fract()) * 0.4;
-        p.ring(
-            -0.75 + k as f32 * 0.05,
-            y,
-            0.05,
-            0.02,
-            Color::new(0.4, 0.7, 1.0, 0.7),
-        );
-    }
-}
-
-fn tree(p: &Pen) {
-    p.rrect(-0.12, 0.1, 0.24, 0.75, 0.04, rgb(140, 90, 50));
-    p.circle(0.0, -0.3, 0.45, rgb(80, 180, 80));
-    p.circle(-0.35, -0.05, 0.33, rgb(70, 165, 75));
-    p.circle(0.35, -0.05, 0.33, rgb(70, 165, 75));
-    p.circle(0.0, -0.55, 0.3, rgb(100, 200, 90));
-    for (x, y) in [(-0.2, -0.35), (0.25, -0.15), (0.05, -0.65), (-0.35, 0.05)] {
-        p.circle(x, y, 0.07, rgb(230, 60, 60));
-    }
-}
-
-fn cake(p: &Pen) {
-    p.ellipse(0.0, 0.62, 0.85, 0.12, 0.0, rgb(220, 220, 235));
-    p.rrect(-0.7, 0.0, 1.4, 0.6, 0.08, rgb(250, 200, 150));
-    p.rrect(-0.7, -0.08, 1.4, 0.2, 0.08, rgb(255, 150, 190));
-    for k in 0..6 {
-        p.circle(-0.6 + k as f32 * 0.24, 0.12, 0.08, rgb(255, 150, 190));
-    }
-    p.rect(-0.7, 0.32, 1.4, 0.08, rgb(255, 230, 240));
-    p.rect(-0.04, -0.5, 0.08, 0.42, rgb(120, 190, 250));
-    let flick = (p.t * 12.0).sin() * 0.02;
-    p.ellipse(flick, -0.6, 0.07, 0.12, 0.0, rgb(255, 180, 40));
-    p.ellipse(flick, -0.58, 0.035, 0.06, 0.0, rgb(255, 245, 160));
-}
-
-fn star_pic(p: &Pen) {
-    let c = p.p(0.0, 0.0);
-    star(c + vec2(0.0, 0.04 * p.s), 0.9 * p.s, 0.0, rgb(230, 160, 30));
-    star(c, 0.88 * p.s, 0.0, rgb(255, 210, 50));
-    p.eyes(0.0, -0.02, 0.16, 0.08);
-    p.smile(0.0, 0.14, 0.12);
-    p.cheeks(0.0, 0.14, 0.26);
-}
-
-fn ball(p: &Pen) {
-    p.circle(0.0, 0.0, 0.7, rgb(240, 70, 80));
-    p.ellipse(0.0, 0.0, 0.7, 0.22, 0.0, WHITE);
-    p.ellipse(0.0, 0.0, 0.7, 0.12, 0.0, rgb(60, 140, 240));
-    p.circle(-0.25, -0.35, 0.13, Color::new(1.0, 1.0, 1.0, 0.5));
-}
-
-fn duck(p: &Pen) {
-    let y = rgb(255, 215, 60);
-    p.ellipse(0.05, 0.25, 0.65, 0.42, 0.0, y);
-    p.ellipse(0.15, 0.2, 0.3, 0.18, -15.0, darker(y, 0.9));
-    p.circle(-0.35, -0.3, 0.33, y);
-    p.tri(
-        (-0.62, -0.32),
-        (-0.62, -0.18),
-        (-0.92, -0.24),
-        rgb(255, 140, 40),
-    );
-    p.circle(-0.42, -0.38, 0.07, rgb(40, 30, 50));
-    p.circle(-0.4, -0.4, 0.025, WHITE);
-    p.ellipse(0.0, 0.7, 0.9, 0.08, 0.0, Color::new(0.4, 0.7, 1.0, 0.6));
-}
-
-fn frog(p: &Pen) {
-    let g = rgb(110, 200, 90);
-    p.circle(-0.32, -0.42, 0.22, g);
-    p.circle(0.32, -0.42, 0.22, g);
-    p.ellipse(0.0, 0.05, 0.75, 0.55, 0.0, g);
-    p.ellipse(0.0, 0.25, 0.5, 0.3, 0.0, rgb(200, 240, 160));
-    p.eyes(0.0, -0.44, 0.32, 0.13);
-    p.smile(0.0, 0.0, 0.32);
-    p.cheeks(0.0, 0.05, 0.45);
+    draw_tinted(p, "sun", p.t * 0.4, rgb(255, 205, 40));
 }
 
 fn moon(p: &Pen) {
-    p.circle(0.0, 0.0, 0.7, rgb(255, 230, 120));
-    p.circle(0.35, -0.2, 0.62, rgb(255, 255, 255));
-    p.circle(-0.3, 0.2, 0.08, rgb(240, 205, 100));
-    p.circle(-0.45, -0.15, 0.06, rgb(240, 205, 100));
-    p.circle(-0.38, -0.02, 0.05, rgb(60, 50, 60));
-    for (x, y) in [(0.55, 0.45), (0.7, -0.6), (0.15, 0.6)] {
-        star(p.p(x, y), 0.09 * p.s, p.t, rgb(255, 210, 60));
-    }
+    draw_tinted(p, "moon", 0.0, rgb(255, 215, 90));
 }
 
-fn boat(p: &Pen) {
-    p.tri((0.0, -0.8), (0.0, 0.1), (0.6, 0.1), rgb(255, 255, 255));
-    p.tri(
-        (-0.05, -0.65),
-        (-0.05, 0.1),
-        (-0.5, 0.1),
-        rgb(255, 120, 110),
-    );
-    p.rect(-0.03, -0.85, 0.06, 0.95, rgb(120, 80, 50));
-    p.tri((-0.85, 0.15), (0.85, 0.15), (0.6, 0.5), rgb(220, 90, 60));
-    p.tri((-0.85, 0.15), (-0.6, 0.5), (0.6, 0.5), rgb(220, 90, 60));
-    let w = (p.t * 2.0).sin() * 0.03;
-    p.ellipse(0.0, 0.58 + w, 1.0, 0.1, 0.0, rgb(90, 170, 240));
+fn cloud_pic(p: &Pen) {
+    draw_tinted(p, "cloud", 0.0, rgb(175, 205, 245));
+}
+
+fn bee(p: &Pen) {
+    draw_sprite(p, "bee", (p.t * 6.0).sin() * 0.08);
+}
+
+fn fish(p: &Pen) {
+    draw_sprite(p, "fish", (p.t * 4.0).sin() * 0.08);
+}
+
+fn star_pic(p: &Pen) {
+    draw_sprite(p, "star", (p.t * 2.0).sin() * 0.15);
+}
+
+fn flower(p: &Pen) {
+    draw_sprite(p, "flower", (p.t * 1.5).sin() * 0.05);
 }
 
 fn kite(p: &Pen) {
@@ -1121,182 +846,6 @@ fn kite(p: &Pen) {
     }
 }
 
-fn house(p: &Pen) {
-    p.rect(-0.6, -0.15, 1.2, 0.85, rgb(255, 220, 160));
-    p.tri((-0.8, -0.1), (0.8, -0.1), (0.0, -0.8), rgb(220, 80, 70));
-    p.rect(0.35, -0.65, 0.15, 0.3, rgb(160, 90, 70));
-    p.rrect(-0.15, 0.25, 0.3, 0.45, 0.06, rgb(150, 95, 60));
-    p.circle(0.08, 0.48, 0.03, rgb(255, 210, 60));
-    for x in [-0.48, 0.25] {
-        p.rect(x, 0.0, 0.23, 0.2, rgb(150, 210, 255));
-        p.rect(x + 0.105, 0.0, 0.02, 0.2, WHITE);
-    }
-}
-
-fn apple(p: &Pen) {
-    p.circle(-0.22, 0.1, 0.5, rgb(235, 55, 60));
-    p.circle(0.22, 0.1, 0.5, rgb(235, 55, 60));
-    p.circle(0.0, 0.3, 0.48, rgb(235, 55, 60));
-    p.circle(-0.28, -0.08, 0.13, Color::new(1.0, 1.0, 1.0, 0.45));
-    p.rect(-0.03, -0.62, 0.07, 0.3, rgb(120, 80, 40));
-    p.ellipse(0.2, -0.52, 0.2, 0.09, -25.0, rgb(80, 180, 70));
-}
-
-fn heart(p: &Pen) {
-    let beat = 1.0 + (p.t * 4.0).sin().max(0.0) * 0.06;
-    let pp = Pen {
-        c: p.c,
-        s: p.s * beat,
-        t: p.t,
-    };
-    pp.circle(-0.3, -0.18, 0.38, rgb(240, 70, 110));
-    pp.circle(0.3, -0.18, 0.38, rgb(240, 70, 110));
-    pp.tri(
-        (-0.66, -0.05),
-        (0.66, -0.05),
-        (0.0, 0.72),
-        rgb(240, 70, 110),
-    );
-    pp.circle(-0.38, -0.3, 0.1, Color::new(1.0, 1.0, 1.0, 0.5));
-}
-
-fn train(p: &Pen) {
-    p.rrect(-0.85, -0.2, 1.1, 0.55, 0.08, rgb(60, 140, 230));
-    p.rrect(0.1, -0.6, 0.7, 0.95, 0.08, rgb(230, 70, 70));
-    p.rrect(0.2, -0.5, 0.5, 0.3, 0.05, rgb(180, 225, 255));
-    p.rect(-0.7, -0.5, 0.18, 0.32, rgb(70, 70, 80));
-    p.rect(-0.75, -0.55, 0.28, 0.08, rgb(70, 70, 80));
-    for (k, r) in [(-0.6, 0.15), (-0.2, 0.15), (0.3, 0.17), (0.65, 0.17)] {
-        wheel(p, k, 0.42, r);
-    }
-    for k in 0..3 {
-        let f = (p.t * 0.6 + k as f32 * 0.33).fract();
-        p.circle(
-            -0.61 - f * 0.3,
-            -0.62 - f * 0.4,
-            0.08 + f * 0.1,
-            Color::new(0.9, 0.9, 0.95, 0.8 - f * 0.6),
-        );
-    }
-}
-
-fn cloud_pic(p: &Pen) {
-    let puffs = [
-        (-0.45, 0.05, 0.3),
-        (-0.1, -0.2, 0.4),
-        (0.35, -0.1, 0.34),
-        (0.6, 0.1, 0.24),
-        (0.05, 0.12, 0.35),
-    ];
-    for (x, y, r) in puffs {
-        p.circle(x, y, r + 0.05, rgb(120, 170, 230));
-    }
-    for (x, y, r) in puffs {
-        p.circle(x, y, r, rgb(200, 225, 255));
-    }
-    for (x, y, r) in puffs {
-        p.circle(x - 0.03, y - 0.04, r * 0.88, rgb(235, 245, 255));
-    }
-    p.eyes(0.05, -0.05, 0.18, 0.08);
-    p.smile(0.05, 0.1, 0.1);
-    p.cheeks(0.05, 0.1, 0.3);
-    for k in 0..3 {
-        let f = (p.t * 0.9 + k as f32 * 0.33).fract();
-        p.ellipse(
-            -0.35 + k as f32 * 0.35,
-            0.55 + f * 0.3,
-            0.04,
-            0.07,
-            0.0,
-            Color::new(0.3, 0.55, 1.0, 1.0 - f),
-        );
-    }
-}
-
-fn snail(p: &Pen) {
-    p.ellipse(0.05, 0.42, 0.85, 0.18, 0.0, rgb(160, 210, 130));
-    p.circle(0.15, -0.05, 0.48, rgb(220, 140, 80));
-    p.ring(0.15, -0.05, 0.32, 0.07, rgb(180, 100, 60));
-    p.ring(0.15, -0.05, 0.15, 0.06, rgb(180, 100, 60));
-    p.circle(-0.55, 0.15, 0.2, rgb(160, 210, 130));
-    p.line((-0.6, 0.0), (-0.68, -0.35), 0.04, rgb(140, 190, 110));
-    p.line((-0.48, 0.0), (-0.45, -0.35), 0.04, rgb(140, 190, 110));
-    p.circle(-0.68, -0.38, 0.07, rgb(40, 30, 50));
-    p.circle(-0.45, -0.38, 0.07, rgb(40, 30, 50));
-    p.smile(-0.55, 0.18, 0.08);
-}
-
-fn flower(p: &Pen) {
-    p.rect(-0.04, 0.1, 0.08, 0.8, rgb(90, 170, 70));
-    p.ellipse(0.2, 0.55, 0.2, 0.08, -30.0, rgb(100, 190, 80));
-    for k in 0..6 {
-        let a = k as f32 / 6.0 * std::f32::consts::TAU + p.t * 0.2;
-        p.circle(
-            a.cos() * 0.32,
-            -0.25 + a.sin() * 0.32,
-            0.25,
-            rgb(255, 120, 170),
-        );
-    }
-    p.circle(0.0, -0.25, 0.22, rgb(255, 210, 60));
-    p.eyes(0.0, -0.28, 0.08, 0.05);
-    p.smile(0.0, -0.18, 0.06);
-}
-
-fn rocket(p: &Pen) {
-    let f = (p.t * 20.0).sin() * 0.05;
-    p.tri(
-        (-0.18, 0.5),
-        (0.18, 0.5),
-        (0.0, 0.95 + f),
-        rgb(255, 160, 40),
-    );
-    p.tri((-0.1, 0.5), (0.1, 0.5), (0.0, 0.78 + f), rgb(255, 240, 120));
-    p.tri((-0.3, 0.1), (-0.3, 0.55), (-0.6, 0.6), rgb(230, 70, 70));
-    p.tri((0.3, 0.1), (0.3, 0.55), (0.6, 0.6), rgb(230, 70, 70));
-    p.ellipse(0.0, 0.0, 0.32, 0.65, 0.0, rgb(235, 235, 245));
-    p.tri((-0.26, -0.38), (0.26, -0.38), (0.0, -0.9), rgb(230, 70, 70));
-    p.circle(0.0, -0.08, 0.15, rgb(90, 160, 240));
-    p.ring(0.0, -0.08, 0.15, 0.04, rgb(170, 170, 190));
-}
-
-fn banana(p: &Pen) {
-    let n = 28;
-    let arc = |f: f32, r: f32| {
-        let a = std::f32::consts::PI * (0.12 + 0.76 * f);
-        (a.cos() * r, -0.55 + a.sin() * r)
-    };
-    for k in 0..n {
-        let f0 = k as f32 / n as f32;
-        let f1 = (k + 1) as f32 / n as f32;
-        let thick = |f: f32| 0.05 + 0.3 * (1.0 - (f * 2.0 - 1.0).powi(2)).max(0.0);
-        let (o0, o1) = (arc(f0, 1.0), arc(f1, 1.0));
-        let (i0, i1) = (arc(f0, 1.0 - thick(f0)), arc(f1, 1.0 - thick(f1)));
-        let edge = rgb(230, 180, 40);
-        p.tri(o0, o1, i0, rgb(255, 220, 70));
-        p.tri(o1, i1, i0, rgb(255, 220, 70));
-        let (m0, m1) = (
-            arc(f0, 1.0 - thick(f0) * 0.35),
-            arc(f1, 1.0 - thick(f1) * 0.35),
-        );
-        p.tri(o0, o1, m0, edge);
-        p.tri(o1, m1, m0, edge);
-    }
-    let tip = arc(0.0, 0.97);
-    let end = arc(1.0, 0.97);
-    p.circle(tip.0, tip.1, 0.05, rgb(110, 80, 40));
-    p.rrect(
-        end.0 - 0.05,
-        end.1 - 0.12,
-        0.1,
-        0.16,
-        0.03,
-        rgb(110, 140, 50),
-    );
-    p.eyes(0.0, 0.2, 0.12, 0.06);
-    p.smile(0.0, 0.3, 0.07);
-}
-
 fn rainbow(p: &Pen) {
     let cols = [
         rgb(240, 70, 70),
@@ -1335,22 +884,28 @@ fn rainbow(p: &Pen) {
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, rgb(255, 225, 170));
+    art::sprite("bg", r);
+    crate::ui::cloud(
+        4,
+        vec2(r.x + r.w * 0.8, r.y + r.h * 0.14),
+        r.w * 0.3,
+        with_alpha(WHITE, 0.9),
+    );
+    cat(&Pen {
+        c: vec2(r.x + r.w / 2.0, r.y + r.h * 0.3),
+        s: r.w * 0.2,
+        t: 0.0,
+    });
     let s = r.w * 0.28;
     for (i, ch) in ['C', 'A', 'T'].iter().enumerate() {
         let x = r.x + r.w * 0.06 + i as f32 * (s + r.w * 0.04);
         tile(
-            Rect::new(x, r.y + r.h * 0.6, s, s),
+            Rect::new(x, r.y + r.h * 0.62, s, s),
             *ch,
             letter_color(i),
             1.0,
         );
     }
-    cat(&Pen {
-        c: vec2(r.x + r.w / 2.0, r.y + r.h * 0.32),
-        s: r.w * 0.24,
-        t: 0.0,
-    });
 }
 
 #[cfg(test)]
@@ -1370,6 +925,42 @@ mod tests {
         assert!(WORDS
             .iter()
             .all(|(w, _)| w.chars().all(|c| c.is_ascii_lowercase())));
+    }
+
+    #[test]
+    fn spell_sprites_all_exist() {
+        let have = art::names();
+        for n in SPRITES.iter().chain(["bg", "tile"].iter()) {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn only_kite_and_rainbow_are_still_hand_drawn() {
+        let drawn: Vec<&str> = WORDS
+            .iter()
+            .filter(|(w, _)| {
+                let pen = |draw: Picture| draw as usize;
+                let hand = [pen(kite), pen(rainbow)];
+                hand.contains(&pen(picture(w).unwrap()))
+            })
+            .map(|(w, _)| *w)
+            .collect();
+        assert_eq!(drawn, vec!["kite", "rainbow"]);
+    }
+
+    #[test]
+    fn finishing_a_word_cheers_aloud() {
+        let mut g = Spell::with_deck(vec!["cat", "dog"]);
+        let l = layout(&View::ipad_landscape(), 3, g.board.tiles.len());
+        crate::sfx::take_voice();
+        for ch in "cat".chars() {
+            let i = (0..g.board.tiles.len())
+                .find(|i| g.board.used[*i].is_none() && g.board.tiles[*i] == ch)
+                .unwrap();
+            g.tap_tile(i, &l);
+        }
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Great));
     }
 
     #[test]

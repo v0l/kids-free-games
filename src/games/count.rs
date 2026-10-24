@@ -1,11 +1,14 @@
-use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::learn::*;
 use crate::sfx::{self, Sfx};
+use crate::ui::Tone;
 use macroquad::prelude::*;
+
+mod art {
+    crate::sprites!("count");
+}
 
 pub const RANGES: [(i32, i32); 5] = [(1, 5), (3, 8), (5, 10), (8, 15), (11, 20)];
 pub const MAX_COUNT: i32 = 20;
@@ -17,10 +20,33 @@ pub enum Thing {
     Star,
     Fish,
     Duck,
+    Frog,
+    Pig,
+    Bee,
 }
 
 impl Thing {
-    pub const ALL: [Thing; 4] = [Thing::Apple, Thing::Star, Thing::Fish, Thing::Duck];
+    pub const ALL: [Thing; 7] = [
+        Thing::Apple,
+        Thing::Star,
+        Thing::Fish,
+        Thing::Duck,
+        Thing::Frog,
+        Thing::Pig,
+        Thing::Bee,
+    ];
+
+    pub fn sprite(self) -> &'static str {
+        match self {
+            Thing::Apple => "apple",
+            Thing::Star => "star",
+            Thing::Fish => "fish",
+            Thing::Duck => "duck",
+            Thing::Frog => "frog",
+            Thing::Pig => "pig",
+            Thing::Bee => "bee",
+        }
+    }
 
     pub fn plural(self) -> &'static str {
         match self {
@@ -28,6 +54,9 @@ impl Thing {
             Thing::Star => "stars",
             Thing::Fish => "fish",
             Thing::Duck => "ducks",
+            Thing::Frog => "frogs",
+            Thing::Pig => "pigs",
+            Thing::Bee => "bees",
         }
     }
 }
@@ -281,6 +310,10 @@ impl Count {
                     },
                 );
                 self.streak_bump.kick();
+                match u8::try_from(self.question.count) {
+                    Ok(n) if n <= 10 => sfx::say(sfx::Say::Number(n)),
+                    _ => sfx::say(sfx::Say::Great),
+                }
                 let word = if self.attempt.wrong == 0 {
                     PRAISE[rand::gen_range(0, PRAISE.len())]
                 } else {
@@ -376,6 +409,9 @@ impl Game for Count {
                 if let Some(i) = hit {
                     if self.tick_object(i) {
                         sfx::play(Sfx::Tick);
+                        if let Some(n) = self.ticks[i].filter(|n| *n <= 10) {
+                            sfx::say(sfx::Say::Number(n as u8));
+                        }
                         let col = hsv(i as f32 * 0.13, 0.5, 1.0);
                         self.particles.sparkle(points[i], col);
                     }
@@ -388,12 +424,7 @@ impl Game for Count {
     }
 
     fn draw(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(255, 226, 150, 255),
-            Color::from_rgba(185, 235, 170, 255),
-        );
-        drifting_clouds(view, self.t);
+        draw_backdrop(view, self.t);
         hud(
             view,
             &self.ladder,
@@ -427,10 +458,9 @@ impl Count {
 
     fn draw_things(&self, view: &View) {
         let area = play_area(view);
-        round_rect(
+        crate::ui::card(
             Rect::new(area.x - 20.0, area.y - 14.0, area.w + 40.0, area.h + 28.0),
-            36.0,
-            with_alpha(WHITE, 0.4),
+            with_alpha(WHITE, 0.3),
         );
         let q = &self.question;
         let (points, r) = scatter(q.count as usize, q.seed, area);
@@ -447,19 +477,19 @@ impl Count {
             draw_thing(q.thing, c, r * squash * intro, self.t + i as f32);
             if let Some(n) = self.number_shown(i) {
                 let b = r * 0.55;
-                draw_circle(
-                    c.x,
-                    c.y + r * 0.1,
-                    b + 3.0,
-                    Color::from_rgba(70, 60, 130, 255),
+                crate::ui::sprite_at(
+                    "round_blue",
+                    c + vec2(0.0, r * 0.1),
+                    b * 2.2,
+                    Default::default(),
                 );
-                draw_circle(c.x, c.y + r * 0.1, b, WHITE);
-                text_center(
+                text_outline(
                     &n.to_string(),
                     c.x,
-                    c.y + r * 0.1,
-                    b * 1.25,
-                    Color::from_rgba(70, 60, 130, 255),
+                    c.y + r * 0.08,
+                    b * 1.2,
+                    WHITE,
+                    Color::from_rgba(10, 70, 140, 255),
                 );
             }
         }
@@ -489,168 +519,89 @@ impl Count {
                 );
             }
             let correct_now = self.attempt.solved && *v == self.question.count;
-            let color = if correct_now {
-                Color::from_rgba(70, 190, 100, 255)
+            let tone = if correct_now {
+                Tone::Green
+            } else if tried {
+                Tone::Grey
             } else {
-                hsv(0.02 + i as f32 * 0.17, 0.62, 0.95)
+                [Tone::Red, Tone::Yellow, Tone::Blue, Tone::Green][i % 4]
             };
-            let label = v.to_string();
-            button(rr, &label, color, !tried);
+            crate::ui::button(rr, &v.to_string(), tone, 0.0);
         }
     }
+}
+
+fn thing_height(name: &str, r: f32) -> f32 {
+    let s = art::size(name);
+    2.2 * r * s.y / s.x.max(s.y)
 }
 
 fn draw_thing(thing: Thing, c: Vec2, r: f32, t: f32) {
-    match thing {
-        Thing::Apple => draw_apple(c, r),
-        Thing::Star => {
-            let wiggle = (t * 2.0).sin() * 0.15;
-            star(
-                c + vec2(0.0, r * 0.07),
-                r * 1.25,
-                wiggle,
-                Color::from_rgba(200, 140, 20, 255),
-            );
-            star(c, r * 1.2, wiggle, Color::from_rgba(255, 215, 60, 255));
-            draw_circle(
-                c.x - r * 0.18,
-                c.y - r * 0.25,
-                r * 0.16,
-                Color::new(1.0, 1.0, 1.0, 0.5),
-            );
-        }
-        Thing::Fish => draw_fish(c, r, t),
-        Thing::Duck => draw_duck(c, r),
+    let name = thing.sprite();
+    let wiggle = match thing {
+        Thing::Star => (t * 2.0).sin() * 0.15,
+        Thing::Fish | Thing::Bee => (t * 5.0).sin() * 0.08,
+        _ => 0.0,
+    };
+    art::sprite_at(
+        name,
+        c,
+        thing_height(name, r),
+        crate::art::Draw {
+            rotation: wiggle,
+            ..Default::default()
+        },
+    );
+}
+
+fn draw_backdrop(view: &View, t: f32) {
+    let f = view.full();
+    let side = f.w.max(f.h);
+    art::sprite(
+        "bg",
+        Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
+    );
+    for i in 0..5usize {
+        let span = view.w + 500.0;
+        let x = (i as f32 * 0.23 * span + t * (7.0 + i as f32 * 3.0)) % span - 250.0;
+        let y = hud_bottom(view) + 10.0 + (i as f32 * 0.37 % 1.0) * view.h * 0.25;
+        crate::ui::cloud(
+            i * 2 + 1,
+            vec2(x, y),
+            150.0 + (i % 3) as f32 * 50.0,
+            with_alpha(WHITE, 0.9),
+        );
     }
 }
 
-fn draw_apple(c: Vec2, r: f32) {
-    let red = Color::from_rgba(235, 60, 60, 255);
-    let dark = Color::from_rgba(170, 30, 45, 255);
-    let body = vec2(c.x, c.y + r * 0.1);
-    draw_circle(body.x - r * 0.28, body.y, r * 0.72, dark);
-    draw_circle(body.x + r * 0.28, body.y, r * 0.72, dark);
-    draw_circle(body.x, body.y + r * 0.08, r * 0.78, dark);
-    draw_circle(body.x - r * 0.28, body.y - r * 0.04, r * 0.7, red);
-    draw_circle(body.x + r * 0.28, body.y - r * 0.04, r * 0.7, red);
-    draw_circle(body.x, body.y + r * 0.04, r * 0.76, red);
-    draw_rectangle(
-        c.x - r * 0.06,
-        c.y - r * 0.85,
-        r * 0.12,
-        r * 0.38,
-        Color::from_rgba(110, 70, 40, 255),
-    );
-    draw_ellipse(
-        c.x + r * 0.3,
-        c.y - r * 0.6,
-        r * 0.3,
-        r * 0.14,
-        -0.5,
-        Color::from_rgba(90, 190, 80, 255),
-    );
-    draw_ellipse(
-        c.x - r * 0.35,
-        c.y - r * 0.15,
-        r * 0.14,
-        r * 0.24,
-        0.5,
-        Color::new(1.0, 1.0, 1.0, 0.45),
-    );
-}
-
-fn draw_fish(c: Vec2, r: f32, t: f32) {
-    let body = Color::from_rgba(255, 140, 50, 255);
-    let dark = Color::from_rgba(215, 95, 30, 255);
-    let flick = (t * 6.0).sin() * r * 0.12;
-    draw_triangle(
-        vec2(c.x - r * 0.6, c.y),
-        vec2(c.x - r * 1.15, c.y - r * 0.5 + flick),
-        vec2(c.x - r * 1.15, c.y + r * 0.5 + flick),
-        dark,
-    );
-    draw_triangle(
-        vec2(c.x - r * 0.1, c.y - r * 0.45),
-        vec2(c.x + r * 0.3, c.y - r * 0.85),
-        vec2(c.x + r * 0.45, c.y - r * 0.4),
-        dark,
-    );
-    draw_ellipse(c.x, c.y, r * 0.95, r * 0.62, 0.0, body);
-    draw_ellipse(
-        c.x + r * 0.05,
-        c.y + r * 0.22,
-        r * 0.7,
-        r * 0.28,
-        0.0,
-        Color::from_rgba(255, 190, 110, 255),
-    );
-    draw_triangle(
-        vec2(c.x - r * 0.05, c.y),
-        vec2(c.x + r * 0.2, c.y + r * 0.35),
-        vec2(c.x - r * 0.3, c.y + r * 0.3),
-        dark,
-    );
-    draw_circle(c.x + r * 0.5, c.y - r * 0.12, r * 0.17, WHITE);
-    draw_circle(
-        c.x + r * 0.55,
-        c.y - r * 0.12,
-        r * 0.08,
-        Color::from_rgba(30, 30, 50, 255),
-    );
-}
-
-fn draw_duck(c: Vec2, r: f32) {
-    let yellow = Color::from_rgba(255, 215, 60, 255);
-    let shade = Color::from_rgba(235, 175, 30, 255);
-    draw_ellipse(c.x - r * 0.05, c.y + r * 0.3, r * 0.9, r * 0.6, 0.0, shade);
-    draw_ellipse(
-        c.x - r * 0.05,
-        c.y + r * 0.26,
-        r * 0.88,
-        r * 0.58,
-        0.0,
-        yellow,
-    );
-    draw_triangle(
-        vec2(c.x - r * 0.8, c.y + r * 0.1),
-        vec2(c.x - r * 1.1, c.y - r * 0.15),
-        vec2(c.x - r * 0.6, c.y + r * 0.5),
-        yellow,
-    );
-    draw_circle(c.x + r * 0.35, c.y - r * 0.4, r * 0.46, yellow);
-    draw_triangle(
-        vec2(c.x + r * 0.7, c.y - r * 0.5),
-        vec2(c.x + r * 1.15, c.y - r * 0.32),
-        vec2(c.x + r * 0.72, c.y - r * 0.2),
-        Color::from_rgba(255, 130, 40, 255),
-    );
-    draw_circle(
-        c.x + r * 0.45,
-        c.y - r * 0.55,
-        r * 0.09,
-        Color::from_rgba(30, 30, 50, 255),
-    );
-    draw_ellipse(c.x - r * 0.15, c.y + r * 0.3, r * 0.4, r * 0.25, 0.3, shade);
-    draw_circle(
-        c.x + r * 0.6,
-        c.y - r * 0.3,
-        r * 0.1,
-        Color::from_rgba(255, 150, 140, 160),
-    );
-}
-
 pub fn icon(r: Rect) {
-    draw_rectangle(r.x, r.y, r.w, r.h, Color::from_rgba(255, 224, 140, 255));
-    draw_apple(vec2(r.x + r.w * 0.26, r.y + r.h * 0.3), r.w * 0.2);
-    draw_apple(vec2(r.x + r.w * 0.7, r.y + r.h * 0.27), r.w * 0.2);
-    draw_apple(vec2(r.x + r.w * 0.48, r.y + r.h * 0.6), r.w * 0.2);
+    art::sprite("bg", r);
+    let h = r.h * 0.34;
+    for (name, x, y) in [
+        ("apple", 0.26, 0.3),
+        ("apple", 0.7, 0.27),
+        ("apple", 0.48, 0.62),
+    ] {
+        art::sprite_at(
+            name,
+            vec2(r.x + r.w * x, r.y + r.h * y),
+            h,
+            Default::default(),
+        );
+    }
+    crate::ui::sprite_at(
+        "round_blue",
+        vec2(r.x + r.w * 0.82, r.y + r.h * 0.78),
+        r.h * 0.34,
+        Default::default(),
+    );
     text_outline(
         "3",
-        r.x + r.w * 0.84,
-        r.y + r.h * 0.78,
-        r.h * 0.4,
+        r.x + r.w * 0.82,
+        r.y + r.h * 0.77,
+        r.h * 0.24,
         WHITE,
-        Color::from_rgba(40, 30, 60, 255),
+        Color::from_rgba(10, 70, 140, 255),
     );
 }
 
@@ -665,6 +616,48 @@ mod tests {
             View::fit(390.0, 844.0),
             View::fit(1920.0, 1080.0),
         ]
+    }
+
+    #[test]
+    fn count_sprites_all_exist() {
+        let have = art::names();
+        for n in ["bg"]
+            .into_iter()
+            .chain(Thing::ALL.iter().map(|t| t.sprite()))
+        {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn every_thing_fits_inside_its_scatter_cell() {
+        for t in Thing::ALL {
+            let s = art::size(t.sprite());
+            let h = thing_height(t.sprite(), 50.0);
+            assert!(h <= 2.2 * 50.0 + 0.01);
+            assert!(h * s.x / s.y <= 2.2 * 50.0 + 0.01);
+        }
+    }
+
+    #[test]
+    fn tapping_a_thing_says_its_number() {
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        let (points, _) = scatter(g.question.count as usize, g.question.seed, play_area(&v));
+        g.update(&Input::press_at(points[0]), &v, 1.0 / 60.0);
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Number(1)));
+    }
+
+    #[test]
+    fn the_right_button_says_the_total() {
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        g.question = Question::with_count(0, 4);
+        g.load();
+        let slot = g.question.slot_of_answer();
+        let tap = g.pick(slot);
+        g.react(&v, slot, tap);
+        assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Number(4)));
     }
 
     #[test]

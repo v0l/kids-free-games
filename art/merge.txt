@@ -1,0 +1,3 @@
+bg    | physics-assets/PNG/Backgrounds/colored_desert.png | solo max=1024 keep
+tile  | puzzle-pack-2/PNG/Tiles grey/tileGrey_01.png | max=128
+crown | ui-pack/PNG/Yellow/Default/star.png | max=96
