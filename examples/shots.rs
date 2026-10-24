@@ -1,6 +1,7 @@
 use kids_games::engine::*;
 use kids_games::games;
-use kids_games::{begin_frame, menu::App, window_conf};
+use kids_games::safe::Insets;
+use kids_games::{begin_frame_safe, menu::App, window_conf};
 use macroquad::prelude::*;
 
 fn scripted(game: &str, f: usize, view: &View) -> Input {
@@ -151,11 +152,41 @@ fn app_icon(view: &View) {
 #[link(wasm_import_module = "env")]
 unsafe extern "C" {
     fn shot_index() -> i32;
+    fn shot_inset() -> i32;
 }
 
 #[cfg(target_arch = "wasm32")]
 fn pick() -> i32 {
     unsafe { shot_index() }
+}
+
+#[cfg(target_arch = "wasm32")]
+fn fake_inset() -> Insets {
+    let (w, h) = macroquad::miniquad::window::screen_size();
+    let k = unsafe { shot_inset() } as f32;
+    if k == 0.0 {
+        return Insets::default();
+    }
+    if h > w {
+        Insets {
+            left: 0.0,
+            top: k,
+            right: 0.0,
+            bottom: k * 0.35,
+        }
+    } else {
+        Insets {
+            left: k,
+            top: 0.0,
+            right: 0.0,
+            bottom: k * 0.35,
+        }
+    }
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn fake_inset() -> Insets {
+    Insets::default()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -172,7 +203,7 @@ async fn main() {
     rand::srand(42);
     let which = pick();
     next_frame().await;
-    let view = begin_frame();
+    let view = begin_frame_safe(fake_inset());
     let all = games::all();
     let mut game = (which > 0).then(|| {
         let e = &all[which as usize - 1];
@@ -189,7 +220,7 @@ async fn main() {
         app.update(&Input::default(), &view, 1.0 / 60.0);
     }
     loop {
-        let view = begin_frame();
+        let view = begin_frame_safe(fake_inset());
         match &mut game {
             Some(g) => g.draw(&view),
             None if which < 0 => app_icon(&view),

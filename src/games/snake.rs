@@ -322,12 +322,7 @@ impl Game for Snake {
         clear_background(Color::from_rgba(70, 120, 60, 255));
         let (cell, o) = self.layout(view);
         let off = self.shake.offset();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            -off.x,
-            view.h - off.y,
-            view.w,
-            -view.h,
-        )));
+        set_view_camera(view, vec2(off.x, off.y));
         let board = Rect::new(
             o.x,
             o.y,
@@ -358,9 +353,7 @@ impl Game for Snake {
         self.draw_snake(o, cell);
         self.particles.draw();
         self.popups.draw();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            0.0, view.h, view.w, -view.h,
-        )));
+        set_view_camera(view, Vec2::ZERO);
         vignette(view, 0.5);
         let apples = format!("Apples {}", self.score);
         let aw = text_size(&apples, 40.0).width;

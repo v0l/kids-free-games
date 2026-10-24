@@ -363,13 +363,7 @@ impl Bump {
 
 pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) {
     let fade = ease_out_cubic(age / 0.3);
-    draw_rectangle(
-        0.0,
-        0.0,
-        view.w,
-        view.h,
-        Color::new(0.08, 0.05, 0.15, 0.5 * fade),
-    );
+    fill_screen(view, Color::new(0.08, 0.05, 0.15, 0.5 * fade));
     let pw = 600.0f32.min(view.w - 40.0);
     let ph = 190.0 + lines.len() as f32 * 50.0;
     let s = ease_out_back(age / 0.45).max(0.01);
@@ -426,20 +420,21 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
 }
 
 pub fn vignette(view: &View, strength: f32) {
+    let f = view.full();
     let inset = view.w.min(view.h) * 0.22;
     let edge = Color::new(0.0, 0.0, 0.05, strength * 0.45);
     let clear = Color::new(0.0, 0.0, 0.05, 0.0);
     let outer = [
-        vec2(0.0, 0.0),
-        vec2(view.w, 0.0),
-        vec2(view.w, view.h),
-        vec2(0.0, view.h),
+        vec2(f.x, f.y),
+        vec2(f.x + f.w, f.y),
+        vec2(f.x + f.w, f.y + f.h),
+        vec2(f.x, f.y + f.h),
     ];
     let inner = [
-        vec2(inset, inset),
-        vec2(view.w - inset, inset),
-        vec2(view.w - inset, view.h - inset),
-        vec2(inset, view.h - inset),
+        vec2(f.x + inset, f.y + inset),
+        vec2(f.x + f.w - inset, f.y + inset),
+        vec2(f.x + f.w - inset, f.y + f.h - inset),
+        vec2(f.x + inset, f.y + f.h - inset),
     ];
     let mut vertices = vec![];
     for k in 0..4 {

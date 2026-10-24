@@ -779,7 +779,8 @@ fn window(r: Rect, night: f32, t: f32, seed: f32) {
 
 impl Hotel {
     fn draw_hud(&self, view: &View) {
-        let bar = Rect::new(0.0, 0.0, view.w, 62.0);
+        let f = view.full();
+        let bar = Rect::new(f.x, f.y, f.w, 62.0 - f.y);
         draw_rectangle(
             bar.x,
             bar.y,
@@ -787,8 +788,8 @@ impl Hotel {
             bar.h,
             Color::from_rgba(180, 70, 80, 255),
         );
-        draw_rectangle(0.0, 0.0, view.w, 10.0, Color::from_rgba(205, 95, 105, 255));
-        draw_rectangle(0.0, 62.0, view.w, 8.0, Color::from_rgba(120, 45, 55, 255));
+        draw_rectangle(f.x, f.y, f.w, 10.0, Color::from_rgba(205, 95, 105, 255));
+        draw_rectangle(f.x, 62.0, f.w, 8.0, Color::from_rgba(120, 45, 55, 255));
         let n = (view.w / 28.0) as usize + 1;
         for k in 0..n {
             let c = if k % 2 == 0 {
@@ -1312,12 +1313,7 @@ impl Game for Hotel {
         clear_background(Color::from_rgba(250, 236, 214, 255));
         let night = night_amount(self.t);
         let sh = self.shake.offset();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            -sh.x,
-            view.h - sh.y,
-            view.w,
-            -view.h,
-        )));
+        set_view_camera(view, vec2(sh.x, sh.y));
         let (lobby, rects) = Self::layout(view);
         self.draw_lobby(lobby);
         let next_locked = self.rooms.iter().position(|r| *r == Room::Locked);
@@ -1332,9 +1328,7 @@ impl Game for Hotel {
             let scale = (Self::queue_slot(lobby) / 110.0).max(0.6) * (1.0 - k) + 0.8 * k;
             draw_guest(p.x, p.y, scale, w.look, true);
         }
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            0.0, view.h, view.w, -view.h,
-        )));
+        set_view_camera(view, Vec2::ZERO);
         self.draw_hud(view);
         let target = Self::coin_target(view);
         for c in &self.flying {

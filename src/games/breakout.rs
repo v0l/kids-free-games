@@ -379,12 +379,7 @@ impl Game for Breakout {
             );
         }
         let off = self.shake.offset();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            -off.x,
-            view.h - off.y,
-            view.w,
-            -view.h,
-        )));
+        set_view_camera(view, vec2(off.x, off.y));
         for (i, b) in self.bricks.iter().enumerate() {
             if let Some(r) = b {
                 let age = self.pops[i];
@@ -461,9 +456,7 @@ impl Game for Breakout {
         );
         self.particles.draw();
         self.popups.draw();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            0.0, view.h, view.w, -view.h,
-        )));
+        set_view_camera(view, Vec2::ZERO);
         vignette(view, 0.6);
         let score = format!("Score {}", self.score);
         let sw = text_size(&score, 38.0).width;

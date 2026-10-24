@@ -614,12 +614,7 @@ impl Game for Jumper {
         }
         self.background(view);
         let sh = self.shake.offset();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            -sh.x,
-            view.h - sh.y,
-            view.w,
-            -view.h,
-        )));
+        set_view_camera(view, vec2(sh.x, sh.y));
         for p in &self.plats {
             if !p.broken {
                 self.draw_plat(p, p.y - self.cam);
@@ -663,9 +658,7 @@ impl Game for Jumper {
         self.draw_hero(view, c);
         self.particles.draw();
         self.popups.draw();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            0.0, view.h, view.w, -view.h,
-        )));
+        set_view_camera(view, Vec2::ZERO);
         score_text(
             &self.score.to_string(),
             HUD_LEFT + 50.0,

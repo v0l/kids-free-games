@@ -411,7 +411,7 @@ impl Game for Fruit {
         vignette(view, 0.8);
         self.draw_hud(view);
         if self.flash > 0.0 {
-            draw_rectangle(0.0, 0.0, view.w, view.h, with_alpha(WHITE, self.flash));
+            fill_screen(view, with_alpha(WHITE, self.flash));
         }
         match self.state {
             State::Ready => overlay(

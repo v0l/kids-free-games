@@ -589,12 +589,7 @@ impl Game for Paper {
         clear_background(Color::from_rgba(200, 208, 222, 255));
         let (cell, origin) = self.layout(view);
         let shift = origin + self.shake.offset();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            -shift.x,
-            view.h - shift.y,
-            view.w,
-            -view.h,
-        )));
+        set_view_camera(view, vec2(shift.x, shift.y));
         let board = vec2(cell * GW as f32, cell * GH as f32);
         draw_rectangle(5.0, 9.0, board.x, board.y, Color::new(0.2, 0.25, 0.4, 0.25));
         draw_rectangle(0.0, 0.0, board.x, board.y, WHITE);
@@ -716,12 +711,17 @@ impl Game for Paper {
         }
         self.particles.draw();
         self.popups.draw();
-        set_camera(&Camera2D::from_display_rect(Rect::new(
-            0.0, view.h, view.w, -view.h,
-        )));
+        set_view_camera(view, Vec2::ZERO);
         let pct = self.share(0) * 100.0;
-        draw_rectangle(0.0, 0.0, view.w, 62.0, Color::from_rgba(236, 240, 246, 235));
-        draw_rectangle(0.0, 62.0, view.w, 3.0, Color::new(0.2, 0.25, 0.4, 0.15));
+        let f = view.full();
+        draw_rectangle(
+            f.x,
+            f.y,
+            f.w,
+            62.0 - f.y,
+            Color::from_rgba(236, 240, 246, 235),
+        );
+        draw_rectangle(f.x, 62.0, f.w, 3.0, Color::new(0.2, 0.25, 0.4, 0.15));
         let pill = Rect::new(HUD_LEFT, 8.0, 220.0, 48.0);
         round_rect(
             Rect::new(pill.x, pill.y + 4.0, pill.w, pill.h),

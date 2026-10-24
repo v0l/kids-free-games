@@ -13,7 +13,7 @@ cat > "$OUT/index.html" <<'EOF'
 <!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body,canvas{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:fixed}</style></head>
 <body><canvas id="glcanvas" tabindex="1"></canvas><script src="mq_js_bundle.js"></script>
 <script>
-miniquad_add_plugin({register_plugin: function(o){ o.env.shot_index = function(){ return parseInt(location.hash.slice(1)||"0"); }; }, name: "shots", version: 1});
+miniquad_add_plugin({register_plugin: function(o){ o.env.shot_index = function(){ return parseInt(location.hash.slice(1)||"0"); }; o.env.shot_inset = function(){ return parseInt(new URLSearchParams(location.search).get("inset")||"0"); }; }, name: "shots", version: 1});
 load("shots.wasm");
 </script></body></html>
 EOF
@@ -24,7 +24,7 @@ sleep 1
 COUNT=$(grep -c "^        Entry {" src/games/mod.rs)
 for i in $(seq 0 "$COUNT"); do
   google-chrome --headless=new --no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader --hide-scrollbars \
-    --window-size="$W,$H" --virtual-time-budget=4000 --screenshot="$OUT/$i.png" "http://localhost:$PORT/index.html#$i" 2>/dev/null
+    --window-size="$W,$H" --virtual-time-budget=4000 --screenshot="$OUT/$i.png" "http://localhost:$PORT/index.html?inset=${INSET:-0}#$i" 2>/dev/null
 done
 python3 - "$OUT" <<'EOF'
 import sys

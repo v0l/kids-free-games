@@ -2,6 +2,7 @@ pub mod engine;
 pub mod fx;
 pub mod games;
 pub mod menu;
+pub mod safe;
 
 use engine::*;
 use macroquad::miniquad;
@@ -29,19 +30,30 @@ pub fn window_conf() -> Conf {
 }
 
 pub fn begin_frame() -> View {
-    let view = View::fit(screen_width(), screen_height());
-    set_text_scale(view.scale * screen_dpi_scale());
-    set_camera(&Camera2D::from_display_rect(Rect::new(
-        0.0, view.h, view.w, -view.h,
-    )));
+    begin_frame_safe(safe::Insets::default())
+}
+
+pub fn begin_frame_safe(px: safe::Insets) -> View {
+    let dpi = screen_dpi_scale();
+    let px = safe::Insets {
+        left: px.left / dpi,
+        top: px.top / dpi,
+        right: px.right / dpi,
+        bottom: px.bottom / dpi,
+    };
+    let view = View::fit_safe(screen_width(), screen_height(), px);
+    set_text_scale(view.scale * dpi);
+    set_view_camera(&view, Vec2::ZERO);
     view
 }
 
 pub async fn run() {
     let mut tracker = InputTracker::default();
     let mut app = menu::App::new();
+    let mut safe_area = safe::SafeArea::default();
     loop {
-        let view = begin_frame();
+        let (w, h) = macroquad::miniquad::window::screen_size();
+        let view = begin_frame_safe(safe_area.get((w, h)));
         let input = tracker.poll(&view);
         let dt = get_frame_time().min(1.0 / 20.0);
         app.update(&input, &view, dt);

@@ -246,9 +246,9 @@ impl Game for Flappy {
         set_view_camera(view, Vec2::ZERO);
         if self.flash > 0.0 {
             draw_rectangle(
+                view.full().x,
                 0.0,
-                0.0,
-                view.w,
+                view.full().w,
                 view.h,
                 with_alpha(WHITE, self.flash * 0.8),
             );
@@ -325,22 +325,35 @@ impl Flappy {
         for p in &self.pipes {
             Self::draw_pipe(p, view);
         }
+        let f = view.full();
         draw_rectangle(
-            0.0,
+            f.x,
             gy,
-            view.w,
-            GROUND,
+            f.w,
+            GROUND + view.inset.bottom,
             Color::from_rgba(222, 200, 130, 255),
         );
         draw_rectangle(
-            0.0,
+            view.full().x,
             gy + 34.0,
-            view.w,
+            view.full().w,
             GROUND,
             Color::from_rgba(205, 180, 110, 255),
         );
-        draw_rectangle(0.0, gy, view.w, 18.0, Color::from_rgba(110, 200, 70, 255));
-        draw_rectangle(0.0, gy, view.w, 4.0, Color::from_rgba(150, 225, 100, 255));
+        draw_rectangle(
+            view.full().x,
+            gy,
+            view.full().w,
+            18.0,
+            Color::from_rgba(110, 200, 70, 255),
+        );
+        draw_rectangle(
+            view.full().x,
+            gy,
+            view.full().w,
+            4.0,
+            Color::from_rgba(150, 225, 100, 255),
+        );
         for i in 0..((view.w / 40.0) as i32 + 2) {
             let x = i as f32 * 40.0 - self.scroll.rem_euclid(40.0);
             draw_triangle(

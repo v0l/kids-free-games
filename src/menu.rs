@@ -325,7 +325,7 @@ impl App {
             if k > 0.0 {
                 let rects = tile_rects(view, self.entries.len());
                 let c = rects[i].center() - vec2(0.0, self.scroll);
-                let rad = k * view.w.hypot(view.h);
+                let rad = k * view.full().w.hypot(view.full().h);
                 draw_circle(c.x, c.y, rad, self.entries[i].color);
             }
         }
@@ -342,7 +342,7 @@ impl App {
             .map(|(i, _)| self.entries[*i].color)
             .unwrap_or(Color::from_rgba(255, 160, 140, 255));
         let k = ease_out_cubic(self.curtain);
-        let rad = k * view.w.hypot(view.h) * 0.6;
+        let rad = k * view.full().w.hypot(view.full().h) * 0.6;
         let c = view.center();
         draw_circle(c.x, c.y, rad, color);
     }

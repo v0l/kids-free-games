@@ -16,15 +16,28 @@ pub struct View {
     pub w: f32,
     pub h: f32,
     pub scale: f32,
+    pub inset: crate::safe::Insets,
 }
 
 impl View {
     pub fn fit(screen_w: f32, screen_h: f32) -> Self {
-        let scale = (screen_w / MIN_W).min(screen_h / MIN_H).max(0.01);
+        Self::fit_safe(screen_w, screen_h, crate::safe::Insets::default())
+    }
+
+    pub fn fit_safe(screen_w: f32, screen_h: f32, px: crate::safe::Insets) -> Self {
+        let safe_w = (screen_w - px.left - px.right).max(1.0);
+        let safe_h = (screen_h - px.top - px.bottom).max(1.0);
+        let scale = (safe_w / MIN_W).min(safe_h / MIN_H).max(0.01);
         Self {
-            w: screen_w / scale,
-            h: screen_h / scale,
+            w: safe_w / scale,
+            h: safe_h / scale,
             scale,
+            inset: crate::safe::Insets {
+                left: px.left / scale,
+                top: px.top / scale,
+                right: px.right / scale,
+                bottom: px.bottom / scale,
+            },
         }
     }
 
@@ -42,6 +55,19 @@ impl View {
 
     pub fn rect(&self) -> Rect {
         Rect::new(0.0, 0.0, self.w, self.h)
+    }
+
+    pub fn full(&self) -> Rect {
+        Rect::new(
+            -self.inset.left,
+            -self.inset.top,
+            self.w + self.inset.left + self.inset.right,
+            self.h + self.inset.top + self.inset.bottom,
+        )
+    }
+
+    pub fn to_view(&self, screen: Vec2) -> Vec2 {
+        screen / self.scale - vec2(self.inset.left, self.inset.top)
     }
 }
 
@@ -167,7 +193,7 @@ pub struct InputTracker {
 impl InputTracker {
     pub fn poll(&mut self, view: &View) -> Input {
         let (mx, my) = mouse_position();
-        let pos = vec2(mx, my) / view.scale;
+        let pos = view.to_view(vec2(mx, my));
         let down = is_mouse_button_down(MouseButton::Left);
         let pressed = is_mouse_button_pressed(MouseButton::Left);
         let released = is_mouse_button_released(MouseButton::Left);
@@ -220,9 +246,13 @@ pub fn set_text_scale(scale: f32) {
     TEXT_SCALE.with(|s| s.set(scale));
 }
 
+const GLYPH_STEP: f32 = 1.12;
+
 fn font_params(size: f32) -> (u16, f32) {
     let scale = TEXT_SCALE.with(|s| s.get());
-    let px = (size * scale).round().clamp(4.0, 400.0) as u16;
+    let want = (size * scale).clamp(4.0, 400.0);
+    let bucket = (want.ln() / GLYPH_STEP.ln()).round();
+    let px = GLYPH_STEP.powf(bucket).round().clamp(4.0, 400.0) as u16;
     (px, size / px as f32)
 }
 
@@ -354,11 +384,12 @@ pub fn tick_overlay(dt: f32) {
 }
 
 pub fn set_view_camera(view: &View, shift: Vec2) {
+    let f = view.full();
     set_camera(&Camera2D::from_display_rect(Rect::new(
-        -shift.x,
-        view.h - shift.y,
-        view.w,
-        -view.h,
+        f.x - shift.x,
+        f.y + f.h - shift.y,
+        f.w,
+        -f.h,
     )));
 }
 
@@ -386,8 +417,13 @@ pub fn hsv(h: f32, s: f32, v: f32) -> Color {
     Color::new(r, g, b, 1.0)
 }
 
+pub fn fill_screen(view: &View, color: Color) {
+    let f = view.full();
+    draw_rectangle(f.x, f.y, f.w, f.h, color);
+}
+
 pub fn sky(view: &View, top: Color, bottom: Color) {
-    gradient_rect(Rect::new(0.0, 0.0, view.w, view.h), top, bottom);
+    gradient_rect(view.full(), top, bottom);
 }
 
 pub fn gradient_rect(r: Rect, top: Color, bottom: Color) {
@@ -405,11 +441,77 @@ pub fn gradient_rect(r: Rect, top: Color, bottom: Color) {
     });
 }
 
+const CLOUD_PUFFS: [(f32, f32, f32); 6] = [
+    (34.0, 6.0, 20.0),
+    (58.0, -8.0, 27.0),
+    (88.0, -2.0, 23.0),
+    (110.0, 8.0, 16.0),
+    (72.0, 12.0, 22.0),
+    (48.0, 14.0, 18.0),
+];
+const CLOUD_W: f32 = 140.0;
+const CLOUD_H: f32 = 80.0;
+const CLOUD_TOP: f32 = 44.0;
+
+fn smooth_min(a: f32, b: f32, k: f32) -> f32 {
+    let h = (0.5 + 0.5 * (b - a) / k).clamp(0.0, 1.0);
+    b + (a - b) * h - k * h * (1.0 - h)
+}
+
+pub fn cloud_mask(px: f32, py: f32) -> f32 {
+    let p = vec2(px, py - CLOUD_TOP);
+    let mut d = f32::MAX;
+    for (cx, cy, r) in CLOUD_PUFFS {
+        d = smooth_min(d.min(1e4), (p - vec2(cx, cy)).length() - r, 9.0);
+    }
+    let base = vec2((p.x - 72.0) / 46.0, (p.y - 18.0) / 12.0);
+    d = smooth_min(d, (base.length() - 1.0) * 12.0, 8.0);
+    (0.5 - d).clamp(0.0, 1.0)
+}
+
+fn cloud_texture() -> Texture2D {
+    thread_local! {
+        static TEX: std::cell::OnceCell<Texture2D> = const { std::cell::OnceCell::new() };
+    }
+    TEX.with(|t| {
+        t.get_or_init(|| {
+            let k = 4.0;
+            let (w, h) = ((CLOUD_W * k) as u16, (CLOUD_H * k) as u16);
+            let mut bytes = Vec::with_capacity(w as usize * h as usize * 4);
+            for py in 0..h {
+                for px in 0..w {
+                    let mut a = 0.0;
+                    for (ox, oy) in [(0.25, 0.25), (0.75, 0.25), (0.25, 0.75), (0.75, 0.75)] {
+                        a += cloud_mask((px as f32 + ox) / k, (py as f32 + oy) / k) * k;
+                    }
+                    let a = (a / 4.0).clamp(0.0, 1.0);
+                    let t = (py as f32 / h as f32 - 0.5).max(0.0) * 2.0;
+                    let r = (255.0 - t * 24.0) as u8;
+                    let g = (255.0 - t * 18.0) as u8;
+                    bytes.extend_from_slice(&[r, g, 255, (a * 255.0) as u8]);
+                }
+            }
+            let tex = Texture2D::from_rgba8(w, h, &bytes);
+            tex.set_filter(FilterMode::Linear);
+            tex
+        })
+        .clone()
+    })
+}
+
 pub fn cloud(x: f32, y: f32, s: f32, color: Color) {
-    draw_circle(x, y, 26.0 * s, color);
-    draw_circle(x + 30.0 * s, y - 12.0 * s, 32.0 * s, color);
-    draw_circle(x + 62.0 * s, y, 24.0 * s, color);
-    draw_rectangle(x, y - 4.0 * s, 62.0 * s, 28.0 * s, color);
+    let w = CLOUD_W * s * 0.85;
+    let h = CLOUD_H * s * 0.85;
+    draw_texture_ex(
+        &cloud_texture(),
+        x - 14.0 * s,
+        y - CLOUD_TOP * s * 0.85,
+        color,
+        DrawTextureParams {
+            dest_size: Some(vec2(w, h)),
+            ..Default::default()
+        },
+    );
 }
 
 pub fn segment_hits_circle(a: Vec2, b: Vec2, c: Vec2, r: f32) -> bool {
@@ -443,6 +545,37 @@ mod tests {
     use super::*;
 
     #[test]
+    fn safe_area_shrinks_the_layout_and_offsets_touches() {
+        let px = crate::safe::Insets {
+            left: 0.0,
+            top: 149.0,
+            right: 0.0,
+            bottom: 54.0,
+        };
+        let v = View::fit_safe(1008.0, 2244.0, px);
+        assert!((v.h * v.scale - (2244.0 - 149.0 - 54.0)).abs() < 0.5);
+        assert!(v.w >= MIN_W - 0.01 && v.h >= MIN_H - 0.01);
+        let top_left = v.to_view(vec2(0.0, 149.0));
+        assert!(top_left.length() < 0.01);
+        let f = v.full();
+        assert!((f.y * v.scale + 149.0).abs() < 0.5);
+        assert!(((f.y + f.h) * v.scale - 2244.0 + 149.0).abs() < 0.5);
+    }
+
+    #[test]
+    fn landscape_cutout_on_the_left() {
+        let px = crate::safe::Insets {
+            left: 149.0,
+            top: 0.0,
+            right: 0.0,
+            bottom: 54.0,
+        };
+        let v = View::fit_safe(2244.0, 1008.0, px);
+        assert!((v.w * v.scale - (2244.0 - 149.0)).abs() < 0.5);
+        assert!((v.to_view(vec2(149.0, 0.0))).length() < 0.01);
+    }
+
+    #[test]
     fn view_keeps_minimum_canvas_in_both_orientations() {
         let l = View::ipad_landscape();
         assert!((l.w - 960.0).abs() < 0.01 && (l.h - 720.0).abs() < 0.01);
@@ -451,6 +584,54 @@ mod tests {
         assert!(p.h > p.w);
         let wide = View::fit(1920.0, 1080.0);
         assert!((wide.h - 720.0).abs() < 0.01 && wide.w > 1200.0);
+    }
+
+    #[test]
+    fn animated_text_reuses_a_few_glyph_sizes() {
+        set_text_scale(2.625);
+        let bounce = |i: usize| 72.0 * (1.0 + 0.35 * (i as f32 / 2000.0));
+        let mut sizes: Vec<u16> = (0..2000).map(|i| font_params(bounce(i)).0).collect();
+        sizes.sort();
+        sizes.dedup();
+        assert!(
+            sizes.len() <= 4,
+            "{} distinct glyph sizes for one bouncing label",
+            sizes.len()
+        );
+        for i in 0..2000 {
+            let size = 20.0 + i as f32 * 0.05;
+            let (px, k) = font_params(size);
+            assert!((px as f32 * k - size).abs() < 1e-3);
+            assert!((px as f32 / (size * 2.625) - 1.0).abs() < 0.07);
+        }
+        set_text_scale(1.0);
+    }
+
+    #[test]
+    fn cloud_is_one_solid_shape_with_soft_edges() {
+        let inside = cloud_mask(70.0, CLOUD_TOP + 6.0);
+        assert_eq!(inside, 1.0);
+        assert_eq!(cloud_mask(2.0, 2.0), 0.0);
+        assert_eq!(cloud_mask(CLOUD_W - 2.0, CLOUD_H - 2.0), 0.0);
+        let mut max = 0.0f32;
+        for y in 0..(CLOUD_H as i32) {
+            for x in 0..(CLOUD_W as i32) {
+                max = max.max(cloud_mask(x as f32, y as f32));
+            }
+        }
+        assert!(max <= 1.0);
+        for x in 0..(CLOUD_W as i32) {
+            assert_eq!(cloud_mask(x as f32, 0.0), 0.0, "top edge clipped at x {x}");
+            assert_eq!(
+                cloud_mask(x as f32, CLOUD_H - 0.5),
+                0.0,
+                "bottom edge clipped at x {x}"
+            );
+        }
+        for y in 0..(CLOUD_H as i32) {
+            assert_eq!(cloud_mask(0.0, y as f32), 0.0);
+            assert_eq!(cloud_mask(CLOUD_W - 0.5, y as f32), 0.0);
+        }
     }
 
     #[test]

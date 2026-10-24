@@ -427,14 +427,20 @@ impl Game for Crossy {
                     } else {
                         Color::from_rgba(128, 205, 92, 255)
                     };
-                    draw_rectangle(0.0, top, view.w, ROW_PX, c);
+                    draw_rectangle(view.full().x, top, view.full().w, ROW_PX, c);
                     for k in 0..6 {
                         let gx = ((i * 37 + k * 71) % 100) as f32 / 100.0 * view.w;
                         draw_circle(gx, top + 12.0 + (k * 13 % 40) as f32, 3.0, darker(c, 0.85));
                     }
                 }
                 Lane::Road { .. } => {
-                    draw_rectangle(0.0, top, view.w, ROW_PX, Color::from_rgba(80, 84, 96, 255));
+                    draw_rectangle(
+                        view.full().x,
+                        top,
+                        view.full().w,
+                        ROW_PX,
+                        Color::from_rgba(80, 84, 96, 255),
+                    );
                     let next_road = self
                         .rows
                         .get(i + 1)
@@ -453,9 +459,9 @@ impl Game for Crossy {
                 }
                 Lane::River { .. } => {
                     draw_rectangle(
-                        0.0,
+                        view.full().x,
                         top,
-                        view.w,
+                        view.full().w,
                         ROW_PX,
                         Color::from_rgba(80, 170, 240, 255),
                     );
@@ -474,9 +480,9 @@ impl Game for Crossy {
                 }
                 Lane::Rail { .. } => {
                     draw_rectangle(
-                        0.0,
+                        view.full().x,
                         top,
-                        view.w,
+                        view.full().w,
                         ROW_PX,
                         Color::from_rgba(150, 130, 110, 255),
                     );
@@ -490,16 +496,16 @@ impl Game for Crossy {
                         );
                     }
                     draw_rectangle(
-                        0.0,
+                        view.full().x,
                         top + 22.0,
-                        view.w,
+                        view.full().w,
                         5.0,
                         Color::from_rgba(190, 190, 200, 255),
                     );
                     draw_rectangle(
-                        0.0,
+                        view.full().x,
                         top + ROW_PX - 27.0,
-                        view.w,
+                        view.full().w,
                         5.0,
                         Color::from_rgba(190, 190, 200, 255),
                     );
