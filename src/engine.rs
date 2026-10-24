@@ -299,7 +299,7 @@ pub fn round_rect(r: Rect, radius: f32, color: Color) {
     if rad <= 0.0 {
         return;
     }
-    let segs = ((rad * 0.5) as usize).clamp(3, 12);
+    let segs = ((rad * TEXT_SCALE.with(|s| s.get()) * 0.25) as usize).clamp(3, 24);
     for (c, start) in [
         (vec2(r.x + rad, r.y + rad), std::f32::consts::PI),
         (vec2(r.x + r.w - rad, r.y + rad), std::f32::consts::PI * 1.5),
@@ -415,6 +415,41 @@ pub fn hsv(h: f32, s: f32, v: f32) -> Color {
         _ => (v, p, q),
     };
     Color::new(r, g, b, 1.0)
+}
+
+pub fn circle_sides(radius_px: f32) -> u8 {
+    (radius_px * 0.6).clamp(20.0, 96.0) as u8
+}
+
+pub fn draw_circle(x: f32, y: f32, r: f32, color: Color) {
+    let px = r * TEXT_SCALE.with(|s| s.get());
+    draw_poly(x, y, circle_sides(px), r, 0.0, color);
+}
+
+pub fn draw_ellipse(x: f32, y: f32, w: f32, h: f32, rotation: f32, color: Color) {
+    use macroquad::models::{draw_mesh, Mesh, Vertex};
+    let sides = circle_sides(w.abs().max(h.abs()) * TEXT_SCALE.with(|s| s.get())) as usize;
+    let (sr, cr) = rotation.to_radians().sin_cos();
+    let mut vertices = Vec::with_capacity(sides + 2);
+    vertices.push(Vertex::new(x, y, 0.0, 0.0, 0.0, color));
+    for i in 0..=sides {
+        let a = i as f32 / sides as f32 * std::f32::consts::TAU;
+        let (px, py) = (w * a.cos(), h * a.sin());
+        vertices.push(Vertex::new(
+            x + px * cr - py * sr,
+            y + py * cr + px * sr,
+            0.0,
+            0.0,
+            0.0,
+            color,
+        ));
+    }
+    let indices = (0..sides as u16).flat_map(|i| [0, i + 1, i + 2]).collect();
+    draw_mesh(&Mesh {
+        vertices,
+        indices,
+        texture: None,
+    });
 }
 
 pub fn fill_screen(view: &View, color: Color) {
@@ -632,6 +667,13 @@ mod tests {
             assert_eq!(cloud_mask(0.0, y as f32), 0.0);
             assert_eq!(cloud_mask(CLOUD_W - 0.5, y as f32), 0.0);
         }
+    }
+
+    #[test]
+    fn big_circles_get_more_sides() {
+        assert_eq!(circle_sides(5.0), 20);
+        assert!(circle_sides(150.0) >= 80);
+        assert_eq!(circle_sides(10_000.0), 96);
     }
 
     #[test]

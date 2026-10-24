@@ -1,3 +1,5 @@
+use crate::engine::draw_circle;
+use crate::engine::draw_ellipse;
 use crate::engine::*;
 use macroquad::models::{draw_mesh, Mesh, Vertex};
 use macroquad::prelude::*;
