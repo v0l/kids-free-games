@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+fontdue = "0.9"
 macroquad = { version = "0.4", features = ["audio"] }
 [target.'cfg(target_os = "ios")'.dependencies]
 objc = { version = "0.2", package = "objc-rs" }

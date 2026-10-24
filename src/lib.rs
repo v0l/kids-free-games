@@ -3,6 +3,7 @@ pub mod fx;
 pub mod games;
 pub mod learn;
 pub mod menu;
+pub mod outline;
 pub mod safe;
 pub mod sfx;
 

@@ -233,7 +233,7 @@ thread_local! {
     static FONT: std::cell::OnceCell<Option<Font>> = const { std::cell::OnceCell::new() };
 }
 
-static FONT_BYTES: &[u8] = include_bytes!("../assets/Fredoka-SemiBold.ttf");
+pub static FONT_BYTES: &[u8] = include_bytes!("../assets/Fredoka-SemiBold.ttf");
 
 fn font() -> Option<Font> {
     FONT.with(|f| {
@@ -243,6 +243,7 @@ fn font() -> Option<Font> {
             for px in GLYPH_SIZES {
                 font.populate_font_cache(&chars, px as u16);
             }
+
             Some(font)
         })
         .clone()
@@ -255,7 +256,7 @@ pub fn set_text_scale(scale: f32) {
 
 const GLYPH_SIZES: [f32; 7] = [24.0, 36.0, 52.0, 72.0, 100.0, 140.0, 200.0];
 
-fn font_params(size: f32) -> (u16, f32) {
+pub fn font_params(size: f32) -> (u16, f32) {
     let scale = TEXT_SCALE.with(|s| s.get());
     let want = (size * scale).max(1.0);
     let px = GLYPH_SIZES

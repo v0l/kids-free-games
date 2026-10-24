@@ -310,13 +310,24 @@ impl Popups {
 }
 
 pub fn text_outline(s: &str, cx: f32, cy: f32, size: f32, fill: Color, outline: Color) {
-    let o = (size * 0.055).max(1.5);
-    text_center(s, cx, cy + o * 1.5, size, outline);
-    for k in 0..8 {
-        let a = (k as f32 + 0.5) / 8.0 * std::f32::consts::TAU;
-        text_center(s, cx + a.cos() * o, cy + a.sin() * o, size, outline);
+    let (px, k) = font_params(size);
+    let shadow = Color::new(
+        outline.r * 0.6,
+        outline.g * 0.6,
+        outline.b * 0.6,
+        outline.a * 0.55,
+    );
+    let drawn = crate::outline::with_cache(FONT_BYTES, |c| {
+        let style = crate::outline::Style {
+            fill,
+            edge: outline,
+            shadow,
+        };
+        crate::outline::draw(c, s, vec2(cx, cy), px, k, &style)
+    });
+    if drawn.is_none() {
+        text_center(s, cx, cy, size, fill);
     }
-    text_center(s, cx, cy, size, fill);
 }
 
 pub fn score_text(s: &str, cx: f32, cy: f32, size: f32, bump: f32) {
