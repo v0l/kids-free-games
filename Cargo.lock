@@ -29,7 +29,7 @@ dependencies = [
  "dasp_frame",
  "dasp_sample",
  "hound",
- "lewton",
+ "lewton 0.9.4",
 ]
 
 [[package]]
@@ -184,6 +184,7 @@ name = "kids_games"
 version = "0.1.0"
 dependencies = [
  "fontdue",
+ "lewton 0.10.2",
  "macroquad",
  "objc-rs",
 ]
@@ -195,8 +196,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8d542c1a317036c45c2aa1cf10cc9d403ca91eb2d333ef1a4917e5cb10628bd0"
 dependencies = [
  "byteorder",
- "ogg",
+ "ogg 0.7.1",
  "smallvec",
+]
+
+[[package]]
+name = "lewton"
+version = "0.10.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "777b48df9aaab155475a83a7df3070395ea1ac6902f5cd062b8f2b028075c030"
+dependencies = [
+ "byteorder",
+ "ogg 0.8.0",
+ "tinyvec",
 ]
 
 [[package]]
@@ -313,6 +325,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ogg"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6951b4e8bf21c8193da321bcce9c9dd2e13c858fe078bf9054a288b419ae5d6e"
+dependencies = [
+ "byteorder",
+]
+
+[[package]]
 name = "png"
 version = "0.17.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -367,6 +388,12 @@ checksum = "b97fcaeba89edba30f044a10c6a3cc39df9c3f17d7cd829dd1446cab35f890e0"
 dependencies = [
  "maybe-uninit",
 ]
+
+[[package]]
+name = "tinyvec"
+version = "1.13.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "ttf-parser"

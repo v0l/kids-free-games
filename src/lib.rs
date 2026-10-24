@@ -1,3 +1,4 @@
+pub mod art;
 pub mod engine;
 pub mod feel;
 pub mod fx;
@@ -7,6 +8,7 @@ pub mod menu;
 pub mod outline;
 pub mod safe;
 pub mod sfx;
+pub mod ui;
 
 use engine::*;
 use macroquad::miniquad;

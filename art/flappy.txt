@@ -1,0 +1,12 @@
+bg             | tappy-plane/PNG/background.png | solo max=800 keep
+ground         | tappy-plane/PNG/groundGrass.png | max=808 keep
+rock           | tappy-plane/PNG/rockGrass.png | max=240
+rock_down      | tappy-plane/PNG/rockGrassDown.png | max=240
+plane1         | tappy-plane/PNG/Planes/planeYellow1.png | max=88
+plane2         | tappy-plane/PNG/Planes/planeYellow2.png | max=88
+plane3         | tappy-plane/PNG/Planes/planeYellow3.png | max=88
+tap            | tappy-plane/PNG/UI/tap.png | max=128
+tap_left       | tappy-plane/PNG/UI/tapLeft.png | max=128
+tap_right      | tappy-plane/PNG/UI/tapRight.png | max=128
+get_ready      | tappy-plane/PNG/UI/textGetReady.png | max=420
+game_over      | tappy-plane/PNG/UI/textGameOver.png | max=420

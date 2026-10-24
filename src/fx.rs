@@ -186,9 +186,12 @@ impl Particles {
             let c = with_alpha(p.color, p.color.a * k.min(1.0) * (0.3 + 0.7 * k.sqrt()));
             let s = p.size * (0.4 + 0.6 * k);
             match p.shape {
+                Shape::Circle if s > 5.0 && c.r > 0.9 && c.g > 0.9 && c.b > 0.9 => {
+                    crate::ui::puff(p.pos, s * 1.3, c)
+                }
                 Shape::Circle => draw_circle(p.pos.x, p.pos.y, s, c),
                 Shape::Square => draw_poly(p.pos.x, p.pos.y, 4, s, p.angle.to_degrees(), c),
-                Shape::Star => star(p.pos, s * 1.3, p.angle, c),
+                Shape::Star => crate::ui::spark(p.pos, s * 1.5, p.angle, c),
                 Shape::Confetti => {
                     let w = s * (p.angle * 2.0).cos().abs().max(0.15);
                     draw_rectangle_ex(
@@ -367,61 +370,7 @@ impl Bump {
 }
 
 pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) {
-    let fade = ease_out_cubic(age / 0.2);
-    fill_screen(view, Color::new(0.08, 0.05, 0.15, 0.5 * fade));
-    let pw = 600.0f32.min(view.w - 40.0);
-    let ph = 190.0 + lines.len() as f32 * 50.0;
-    let s = ease_out_back(age / 0.28).max(0.01);
-    let c = view.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.28)) * 80.0);
-    let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
-    round_rect(
-        Rect::new(r.x, r.y + 10.0 * s, r.w, r.h),
-        34.0 * s,
-        Color::new(0.0, 0.0, 0.0, 0.25),
-    );
-    round_rect(r, 34.0 * s, darker(accent, 0.75));
-    round_rect(Rect::new(r.x, r.y, r.w, r.h - 8.0 * s), 34.0 * s, WHITE);
-    let band = Rect::new(r.x, r.y, r.w, 96.0 * s);
-    round_rect(band, 34.0 * s, accent);
-    draw_rectangle(band.x, band.y + band.h - 34.0 * s, band.w, 34.0 * s, accent);
-    for i in [0.07, 0.15, 0.85, 0.93] {
-        let x = band.x + band.w * i;
-        draw_circle(x, band.y + band.h * 0.3, 6.0 * s, with_alpha(WHITE, 0.15));
-    }
-    let wob = (age * 3.0).sin() * 0.03;
-    text_outline(
-        title,
-        c.x,
-        band.y + band.h / 2.0,
-        58.0 * s * (1.0 + wob),
-        WHITE,
-        darker(accent, 0.55),
-    );
-    for (i, l) in lines.iter().enumerate() {
-        let la = ((age - 0.1 - i as f32 * 0.05) / 0.18).clamp(0.0, 1.0);
-        let last = i + 1 == lines.len();
-        let y = band.y + band.h + 50.0 * s + i as f32 * 50.0 * s + (1.0 - la) * 16.0;
-        if last && lines.len() > 1 {
-            let pulse = 1.0 + (age * 5.0).sin() * 0.04;
-            let bw = (text_size(l, 32.0).width + 60.0) * s * pulse;
-            let br = Rect::new(c.x - bw / 2.0, y - 26.0 * s, bw, 52.0 * s);
-            round_rect(
-                Rect::new(br.x, br.y + 5.0, br.w, br.h),
-                26.0 * s,
-                with_alpha(darker(accent, 0.6), la),
-            );
-            round_rect(br, 26.0 * s, with_alpha(accent, la));
-            text_center(l, c.x, y, 30.0 * s * pulse, with_alpha(WHITE, la));
-        } else {
-            text_center(
-                l,
-                c.x,
-                y,
-                36.0 * s,
-                with_alpha(Color::from_rgba(70, 60, 100, 255), la),
-            );
-        }
-    }
+    crate::ui::panel(view, title, lines, age, accent);
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -458,17 +407,7 @@ pub fn chip_width(label: &str, value: &str) -> f32 {
 pub fn chip(view: &View, side: Side, label: &str, value: &str, bump: f32) -> Rect {
     let r = chip_rect(view, side, label, value);
     let k = 1.0 + 0.18 * (1.0 - ease_out_cubic(bump));
-    round_rect(
-        Rect::new(r.x, r.y + 4.0, r.w, r.h),
-        r.h / 2.0,
-        Color::new(0.0, 0.0, 0.0, 0.18),
-    );
-    round_rect(r, r.h / 2.0, with_alpha(INK, 0.7));
-    round_rect(
-        Rect::new(r.x + 3.0, r.y + 3.0, r.w - 6.0, r.h * 0.42),
-        r.h / 2.0,
-        Color::new(1.0, 1.0, 1.0, 0.08),
-    );
+    crate::ui::chip_box(r);
     let mut x = r.x + CHIP_PAD;
     if !label.is_empty() {
         let lw = crate::outline::measure(FONT_BYTES, label, CHIP_LABEL);
@@ -477,7 +416,7 @@ pub fn chip(view: &View, side: Side, label: &str, value: &str, bump: f32) -> Rec
             x + lw / 2.0,
             r.y + r.h / 2.0 + 1.0,
             CHIP_LABEL,
-            Color::new(1.0, 1.0, 1.0, 0.72),
+            crate::ui::BODY,
         );
         x += lw + 10.0;
     }
@@ -487,7 +426,7 @@ pub fn chip(view: &View, side: Side, label: &str, value: &str, bump: f32) -> Rec
         x + vw / 2.0,
         r.y + r.h / 2.0,
         CHIP_VALUE * k,
-        WHITE,
+        Color::from_rgba(255, 200, 40, 255),
         INK,
     );
     r
@@ -495,7 +434,14 @@ pub fn chip(view: &View, side: Side, label: &str, value: &str, bump: f32) -> Rec
 
 pub fn big_score(view: &View, value: &str, y: f32, bump: f32) {
     let k = 1.0 + 0.3 * (1.0 - ease_out_cubic(bump));
-    text_outline(value, view.w / 2.0, y, 76.0 * k, WHITE, INK);
+    text_outline(
+        value,
+        view.w / 2.0,
+        y,
+        76.0 * k,
+        WHITE,
+        Color::from_rgba(120, 70, 30, 255),
+    );
 }
 
 pub fn vignette(view: &View, strength: f32) {

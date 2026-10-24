@@ -1,0 +1,83 @@
+# name.take | kenney-pack/path or music file | options
+# db = loudness target (loudest 20 ms window), ladder = semitone steps rendered as name+N
+
+tap.0       | interface-sounds/Audio/click_001.ogg | db=-24
+tap.1       | interface-sounds/Audio/click_002.ogg | db=-24
+tap.2       | ui-pack/Sounds/tap-a.ogg | db=-24
+click.0     | ui-audio/Audio/click1.ogg | db=-26
+click.1     | ui-audio/Audio/click2.ogg | db=-26
+tick.0      | interface-sounds/Audio/tick_001.ogg | db=-24
+tick.1      | interface-sounds/Audio/tick_002.ogg | db=-24
+pop.0       | interface-sounds/Audio/pluck_001.ogg | db=-18 ladder=0,2,4,5,7,9,11,12
+pop.1       | interface-sounds/Audio/pluck_002.ogg | db=-18
+coin.0      | new-platformer-pack/Sounds/sfx_coin.ogg | db=-18 ladder=0,2,4,5,7,9,11,12
+coin.1      | casino-audio/Audio/chip-lay-1.ogg | db=-19
+score.0     | new-platformer-pack/Sounds/sfx_gem.ogg | db=-18 ladder=0,2,4,5,7,9,11,12
+jump.0      | new-platformer-pack/Sounds/sfx_jump.ogg | db=-21
+jump.1      | new-platformer-pack/Sounds/sfx_jump-high.ogg | db=-21
+flap.0      | rpg-audio/Audio/cloth1.ogg | db=-21
+flap.1      | rpg-audio/Audio/cloth2.ogg | db=-21
+flap.2      | rpg-audio/Audio/cloth3.ogg | db=-21
+swish.0     | interface-sounds/Audio/maximize_001.ogg | db=-21
+swish.1     | interface-sounds/Audio/maximize_002.ogg | db=-21
+slice.0     | rpg-audio/Audio/knifeSlice.ogg | db=-18
+slice.1     | rpg-audio/Audio/knifeSlice2.ogg | db=-18
+slice.2     | rpg-audio/Audio/drawKnife1.ogg | db=-18
+bounce.0    | new-platformer-pack/Sounds/sfx_bump.ogg | db=-21
+bounce.1    | impact-sounds/Audio/impactSoft_medium_000.ogg | db=-21
+bounce.2    | impact-sounds/Audio/impactSoft_medium_001.ogg | db=-21
+hit.0       | impact-sounds/Audio/impactPunch_medium_000.ogg | db=-17
+hit.1       | impact-sounds/Audio/impactPunch_medium_001.ogg | db=-17
+hit.2       | new-platformer-pack/Sounds/sfx_hurt.ogg | db=-17
+boom.0      | sci-fi-sounds/Audio/explosionCrunch_000.ogg | db=-15
+boom.1      | sci-fi-sounds/Audio/explosionCrunch_001.ogg | db=-15
+wrong.0     | interface-sounds/Audio/error_004.ogg | db=-19
+wrong.1     | interface-sounds/Audio/error_005.ogg | db=-19
+right.0     | interface-sounds/Audio/confirmation_001.ogg | db=-18 ladder=0,2,4,5,7,9,11,12
+right.1     | interface-sounds/Audio/confirmation_002.ogg | db=-18
+win.0       | music-jingles/Audio/Pizzicato jingles/jingles_PIZZI02.ogg | db=-15
+win.1       | music-jingles/Audio/Steel jingles/jingles_STEEL02.ogg | db=-15
+win.2       | music-jingles/Audio/Sax jingles/jingles_SAX02.ogg | db=-15
+levelup.0   | music-jingles/Audio/8-Bit jingles/jingles_NES12.ogg | db=-15
+levelup.1   | music-jingles/Audio/Pizzicato jingles/jingles_PIZZI04.ogg | db=-15
+lose.0      | music-jingles/Audio/Pizzicato jingles/jingles_PIZZI01.ogg | db=-17
+lose.1      | music-jingles/Audio/Steel jingles/jingles_STEEL14.ogg | db=-17
+whoosh.0    | interface-sounds/Audio/minimize_001.ogg | db=-21
+whoosh.1    | interface-sounds/Audio/minimize_002.ogg | db=-21
+splash.0    | impact-sounds/Audio/impactSoft_heavy_000.ogg | db=-18
+splash.1    | impact-sounds/Audio/impactSoft_heavy_001.ogg | db=-18
+crunch.0    | impact-sounds/Audio/impactWood_light_000.ogg | db=-18
+crunch.1    | impact-sounds/Audio/impactWood_light_001.ogg | db=-18
+crunch.2    | impact-sounds/Audio/impactWood_light_002.ogg | db=-18
+magic.0     | new-platformer-pack/Sounds/sfx_magic.ogg | db=-18
+card.0      | casino-audio/Audio/card-place-1.ogg | db=-20
+card.1      | casino-audio/Audio/card-place-2.ogg | db=-20
+card.2      | casino-audio/Audio/card-slide-1.ogg | db=-20
+
+say_correct  | voiceover-pack/Female/correct.ogg | db=-15
+say_great    | voiceover-pack/Female/objective_achieved.ogg | db=-15
+say_congrats | voiceover-pack/Female/congratulations.ogg | db=-15
+say_win      | voiceover-pack/Female/you_win.ogg | db=-15
+say_levelup  | voiceover-pack/Female/level_up.ogg | db=-15
+say_gameover | voiceover-pack/Female/game_over.ogg | db=-15
+say_ready    | voiceover-pack/Female/ready.ogg | db=-15
+say_go       | voiceover-pack/Female/go.ogg | db=-15
+say_best     | voiceover-pack/Female/new_highscore.ogg | db=-15
+say_1        | voiceover-pack/Female/1.ogg | db=-15
+say_2        | voiceover-pack/Female/2.ogg | db=-15
+say_3        | voiceover-pack/Female/3.ogg | db=-15
+say_4        | voiceover-pack/Female/4.ogg | db=-15
+say_5        | voiceover-pack/Female/5.ogg | db=-15
+say_6        | voiceover-pack/Female/6.ogg | db=-15
+say_7        | voiceover-pack/Female/7.ogg | db=-15
+say_8        | voiceover-pack/Female/8.ogg | db=-15
+say_9        | voiceover-pack/Female/9.ogg | db=-15
+say_10       | voiceover-pack/Female/10.ogg | db=-15
+
+# CC0 loops from opengameart.org, cached in ~/.cache/kids-games/music
+# carnival.ogg    https://opengameart.org/content/carnival-rides
+# summerpark.ogg  https://opengameart.org/content/summer-park-8bit-tune-loop
+# lullaby.mp3     https://opengameart.org/content/happy-lullaby-song17
+music_menu   | carnival.ogg | music db=-25
+music_arcade | summerpark.ogg | music db=-25
+music_learn  | lullaby.mp3 | music db=-25

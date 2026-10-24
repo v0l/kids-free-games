@@ -1,5 +1,3 @@
-use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -30,6 +28,56 @@ pub struct Pipe {
 
 pub fn layer_x(i: usize, spacing: f32, scroll: f32, factor: f32, span: f32, margin: f32) -> f32 {
     (i as f32 * spacing - scroll * factor).rem_euclid(span) - margin
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Spike {
+    pub cx: f32,
+    pub base_y: f32,
+    pub tip_y: f32,
+    pub half_w: f32,
+}
+
+impl Spike {
+    pub fn new(cx: f32, base_y: f32, tip_y: f32) -> Self {
+        let h = (tip_y - base_y).abs();
+        Self {
+            cx,
+            base_y,
+            tip_y,
+            half_w: (h * 0.24).clamp(PIPE_W * 0.5, PIPE_W * 0.95),
+        }
+    }
+
+    pub fn corners(&self) -> [Vec2; 3] {
+        [
+            vec2(self.cx, self.tip_y),
+            vec2(self.cx - self.half_w, self.base_y),
+            vec2(self.cx + self.half_w, self.base_y),
+        ]
+    }
+
+    pub fn hits(&self, c: Vec2, r: f32) -> bool {
+        let [a, b, d] = self.corners();
+        point_in_triangle(c, a, b, d)
+            || [(a, b), (b, d), (d, a)]
+                .iter()
+                .any(|(p, q)| segment_distance(c, *p, *q) < r)
+    }
+}
+
+fn segment_distance(c: Vec2, a: Vec2, b: Vec2) -> f32 {
+    let ab = b - a;
+    let t = ((c - a).dot(ab) / ab.length_squared().max(1e-6)).clamp(0.0, 1.0);
+    (a + ab * t).distance(c)
+}
+
+fn point_in_triangle(p: Vec2, a: Vec2, b: Vec2, c: Vec2) -> bool {
+    let s = |p: Vec2, q: Vec2, r: Vec2| (p.x - r.x) * (q.y - r.y) - (q.x - r.x) * (p.y - r.y);
+    let (d1, d2, d3) = (s(p, a, b), s(p, b, c), s(p, c, a));
+    let neg = d1 < 0.0 || d2 < 0.0 || d3 < 0.0;
+    let pos = d1 > 0.0 || d2 > 0.0 || d3 > 0.0;
+    !(neg && pos)
 }
 
 pub fn bird_scale(vy: f32, kick: f32) -> Vec2 {
@@ -87,13 +135,13 @@ impl Flappy {
         self.y = view.h * 0.42;
     }
 
-    pub fn pipe_rects(p: &Pipe, view: &View) -> [Rect; 2] {
+    pub fn spikes(p: &Pipe, view: &View) -> [Spike; 2] {
+        let cx = p.x + PIPE_W / 2.0;
         let top = p.gap_y - GAP / 2.0;
         let bottom = p.gap_y + GAP / 2.0;
-        [
-            Rect::new(p.x, -200.0, PIPE_W, top + 200.0),
-            Rect::new(p.x, bottom, PIPE_W, view.h - bottom),
-        ]
+        let roof = -view.inset.top - 20.0;
+        let floor = view.h - GROUND + 30.0;
+        [Spike::new(cx, roof, top), Spike::new(cx, floor, bottom)]
     }
 
     fn spawn_pipe(&mut self, x: f32, view: &View) {
@@ -130,6 +178,10 @@ impl Flappy {
 
     fn die(&mut self, view: &View) {
         sfx::play(Sfx::Hit);
+        sfx::play(Sfx::Lose);
+        if self.score > self.best.0 && self.best.0 > 0 {
+            sfx::say(sfx::Say::Best);
+        }
         feel::impact(Impact::Large);
         self.state = State::Dead;
         self.dead_t = 0.0;
@@ -178,6 +230,7 @@ impl Game for Flappy {
                 self.scroll += SPEED * dt;
                 if input.tap() {
                     self.state = State::Playing;
+                    sfx::say(sfx::Say::Go);
                     self.flap(view);
                 }
             }
@@ -206,9 +259,9 @@ impl Game for Flappy {
                 let mut hit = self.y + BIRD_R >= ground_y;
                 let mut scored_at = None;
                 for p in &mut self.pipes {
-                    if Self::pipe_rects(p, view)
+                    if Self::spikes(p, view)
                         .iter()
-                        .any(|r| circle_hits_rect(bird, BIRD_R - 4.0, *r))
+                        .any(|sp| sp.hits(bird, BIRD_R - 6.0))
                     {
                         hit = true;
                     }
@@ -253,273 +306,195 @@ impl Game for Flappy {
         self.popups.draw();
         set_view_camera(view, Vec2::ZERO);
         if self.flash > 0.0 {
-            draw_rectangle(
-                view.full().x,
-                0.0,
-                view.full().w,
-                view.h,
-                with_alpha(WHITE, self.flash * 0.8),
-            );
+            fill_screen(view, with_alpha(WHITE, self.flash * 0.7));
         }
-        big_score(view, &self.score.to_string(), 80.0, self.bump.t);
+        if self.state != State::Ready {
+            big_score(view, &self.score.to_string(), 80.0, self.bump.t);
+        }
         chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         match self.state {
             State::Ready => {
-                let bob = (self.t * 4.0).sin() * 4.0;
-                text_shadow(
-                    "Tap to flap!",
-                    view.w / 2.0,
-                    view.h * 0.62 + bob,
-                    56.0,
-                    WHITE,
+                let bob = (self.t * 4.0).sin() * 5.0;
+                let w = (view.w * 0.5).min(420.0);
+                art::sprite_w(
+                    "get_ready",
+                    vec2(view.w / 2.0, view.h * 0.2 + bob),
+                    w,
+                    Default::default(),
+                );
+                let bx = Self::bird_x(view);
+                let tap = vec2(bx, view.h * 0.42 + 110.0);
+                let press = ((self.t * 2.0).fract() < 0.15) as i32 as f32;
+                art::sprite_at(
+                    "tap",
+                    tap + vec2(0.0, press * 6.0),
+                    90.0,
+                    Default::default(),
+                );
+                art::sprite_at(
+                    "tap_left",
+                    vec2(bx + 110.0, view.h * 0.42),
+                    46.0,
+                    Default::default(),
+                );
+                art::sprite_at(
+                    "tap_right",
+                    vec2(bx - 110.0, view.h * 0.42),
+                    46.0,
+                    Default::default(),
                 );
             }
             State::Dead if self.dead_t > 0.4 => {
+                let age = self.dead_t - 0.4;
+                let k = crate::fx::ease_out_back((age / 0.35).min(1.0));
+                let w = (view.w * 0.55).min(440.0) * k.max(0.01);
+                art::sprite_w(
+                    "game_over",
+                    vec2(view.w / 2.0, view.h * 0.18),
+                    w,
+                    Default::default(),
+                );
                 let s = format!("Score {}   Best {}", self.score, self.best.0);
                 overlay(view, "Bonk!", &[&s, "Tap to fly again"]);
+                if let Some(m) = crate::ui::medal_for(self.score, self.best.0) {
+                    let mk = crate::fx::ease_out_back(((age - 0.35) / 0.3).clamp(0.0, 1.0));
+                    if mk > 0.0 {
+                        crate::ui::sprite_at(
+                            m,
+                            view.center() + vec2(-220.0, -40.0),
+                            110.0 * mk,
+                            crate::art::Draw {
+                                rotation: (1.0 - mk) * 2.0 - 0.2,
+                                ..Default::default()
+                            },
+                        );
+                    }
+                }
             }
             _ => {}
         }
     }
 }
 
+mod art {
+    crate::sprites!("flappy");
+}
+
 impl Flappy {
     fn draw_world(&self, view: &View) {
+        let f = view.full();
         let gy = view.h - GROUND;
-        sky(
-            view,
-            Color::from_rgba(90, 190, 240, 255),
-            Color::from_rgba(200, 240, 255, 255),
-        );
-        let sun = vec2(view.w * 0.82, 120.0);
-        draw_circle(sun.x, sun.y, 70.0, Color::new(1.0, 0.95, 0.7, 0.25));
-        draw_circle(sun.x, sun.y, 48.0, Color::new(1.0, 0.95, 0.7, 0.5));
-        draw_circle(sun.x, sun.y, 32.0, Color::from_rgba(255, 248, 200, 255));
-        let cw = view.w + 400.0;
-        for i in 0..5 {
-            let x = layer_x(i, 300.0, self.scroll, 0.25, cw, 200.0);
-            cloud(
-                x,
-                90.0 + (i * 53 % 160) as f32,
-                1.0 + (i % 3) as f32 * 0.3,
-                with_alpha(WHITE, 0.85),
-            );
-        }
-        let far = Color::from_rgba(150, 215, 190, 255);
-        for i in 0..6 {
-            let x = layer_x(i, 330.0, self.scroll, 0.12, view.w + 660.0, 330.0);
-            let h = 120.0 + (i * 37 % 80) as f32;
-            draw_ellipse(x, gy + 20.0, 230.0, h, 0.0, far);
-        }
-        let hills = Color::from_rgba(120, 200, 120, 255);
-        for i in 0..8 {
-            let x = layer_x(i, 220.0, self.scroll, 0.4, view.w + 440.0, 220.0);
-            draw_circle(x, gy + 40.0, 140.0, hills);
-        }
-        let bush = Color::from_rgba(70, 170, 80, 255);
-        for i in 0..10 {
-            let x = layer_x(i, 170.0, self.scroll, 0.7, view.w + 340.0, 170.0);
-            let s = 0.8 + (i * 31 % 5) as f32 * 0.12;
-            draw_circle(x, gy + 6.0, 34.0 * s, bush);
-            draw_circle(x + 30.0 * s, gy - 4.0, 26.0 * s, darker(bush, 1.1));
-            draw_circle(x - 28.0 * s, gy, 24.0 * s, darker(bush, 0.9));
-            draw_circle(x - 8.0 * s, gy - 16.0 * s, 8.0 * s, with_alpha(WHITE, 0.18));
+        let bg = art::size("bg");
+        let bh = f.h;
+        let bw = bh * bg.x / bg.y;
+        let off = (self.scroll * 0.25).rem_euclid(bw);
+        let mut x = f.x - off;
+        while x < f.x + f.w {
+            art::sprite("bg", Rect::new(x, f.y, bw + 1.0, bh));
+            x += bw;
         }
         for p in &self.pipes {
             Self::draw_pipe(p, view);
         }
-        let f = view.full();
-        draw_rectangle(
-            f.x,
-            gy,
-            f.w,
-            GROUND + view.inset.bottom,
-            Color::from_rgba(222, 200, 130, 255),
-        );
-        draw_rectangle(
-            view.full().x,
-            gy + 34.0,
-            view.full().w,
-            GROUND,
-            Color::from_rgba(205, 180, 110, 255),
-        );
-        draw_rectangle(
-            view.full().x,
-            gy,
-            view.full().w,
-            18.0,
-            Color::from_rgba(110, 200, 70, 255),
-        );
-        draw_rectangle(
-            view.full().x,
-            gy,
-            view.full().w,
-            4.0,
-            Color::from_rgba(150, 225, 100, 255),
-        );
-        for i in 0..((view.w / 40.0) as i32 + 2) {
-            let x = i as f32 * 40.0 - self.scroll.rem_euclid(40.0);
-            draw_triangle(
-                vec2(x, gy + 18.0),
-                vec2(x + 20.0, gy + 18.0),
-                vec2(x, gy + 30.0),
-                Color::from_rgba(90, 170, 60, 255),
-            );
+        let g = art::size("ground");
+        let gh = GROUND + 30.0 + view.inset.bottom;
+        let gw = g.x * (GROUND + 30.0) / g.y;
+        let off = self.scroll.rem_euclid(gw);
+        let mut x = f.x - off;
+        while x < f.x + f.w {
+            art::sprite("ground", Rect::new(x, gy - 30.0, gw + 1.0, gh));
+            x += gw;
         }
         self.draw_bird(view);
     }
 
     fn draw_pipe(p: &Pipe, view: &View) {
-        let body = Color::from_rgba(80, 180, 60, 255);
-        let dark = Color::from_rgba(50, 135, 45, 255);
-        let light = Color::from_rgba(140, 220, 100, 255);
-        let outline = Color::from_rgba(40, 100, 40, 255);
-        let [top, bottom] = Self::pipe_rects(p, view);
-        for (r, is_top) in [(top, true), (bottom, false)] {
-            draw_rectangle(r.x - 2.0, r.y, r.w + 4.0, r.h, outline);
-            draw_rectangle(r.x, r.y, r.w, r.h, body);
-            draw_rectangle(r.x + 6.0, r.y, 14.0, r.h, light);
-            draw_rectangle(r.x + 24.0, r.y, 6.0, r.h, with_alpha(WHITE, 0.18));
-            draw_rectangle(r.x + r.w * 0.72, r.y, r.w * 0.28, r.h, dark);
-            let lip_y = if is_top { r.y + r.h - 34.0 } else { r.y };
-            let lip = Rect::new(r.x - 8.0, lip_y, PIPE_W + 16.0, 34.0);
-            round_rect(
-                Rect::new(lip.x - 2.0, lip.y - 2.0, lip.w + 4.0, lip.h + 4.0),
-                8.0,
-                outline,
-            );
-            round_rect(lip, 7.0, body);
-            draw_rectangle(lip.x + 6.0, lip.y + 3.0, 14.0, lip.h - 6.0, light);
-            draw_rectangle(
-                lip.x + lip.w * 0.74,
-                lip.y + 3.0,
-                lip.w * 0.22,
-                lip.h - 6.0,
-                dark,
-            );
-            gloss(lip, 8.0);
+        for (sp, name) in Self::spikes(p, view).iter().zip(["rock_down", "rock"]) {
+            let top = sp.base_y.min(sp.tip_y);
+            let h = (sp.tip_y - sp.base_y).abs();
+            let w = sp.half_w * 2.0 / 0.94;
+            art::sprite(name, Rect::new(sp.cx - w * 0.6, top, w, h));
         }
     }
 
     fn draw_bird(&self, view: &View) {
         let bx = Self::bird_x(view);
         let angle = (self.vy / 900.0).clamp(-0.5, 1.2);
-        let fwd = vec2(angle.cos(), angle.sin());
-        let up = vec2(fwd.y, -fwd.x);
         let sc = bird_scale(self.vy, self.kick);
-        let c = vec2(bx, self.y);
         let ground_y = view.h - GROUND;
         let height = (ground_y - self.y).max(0.0);
         soft_shadow(
-            vec2(bx, ground_y + 14.0),
-            BIRD_R * (1.2 - (height / 600.0).min(0.6)),
+            vec2(bx, ground_y + 6.0),
+            BIRD_R * (1.4 - (height / 600.0).min(0.7)),
             5.0,
-            0.8,
+            0.6,
         );
-        let deg = angle.to_degrees();
-        let gold = Color::from_rgba(255, 210, 40, 255);
-        let tail = c - fwd * BIRD_R * 0.9;
-        for k in [-1.0, 0.0, 1.0] {
-            let tip = tail - fwd * 14.0 + up * k * 9.0;
-            draw_triangle(
-                tail + up * (k * 4.0 + 4.0),
-                tail + up * (k * 4.0 - 4.0),
-                tip,
-                Color::from_rgba(240, 160, 30, 255),
-            );
-        }
-        draw_ellipse(
-            c.x,
-            c.y,
-            (BIRD_R + 2.0) * sc.x,
-            (BIRD_R + 2.0) * sc.y,
-            deg,
-            Color::from_rgba(200, 130, 20, 255),
-        );
-        draw_ellipse(c.x, c.y, BIRD_R * sc.x, BIRD_R * sc.y, deg, gold);
-        let belly = c - up * BIRD_R * 0.35 * sc.y + fwd * 2.0;
-        draw_ellipse(
-            belly.x,
-            belly.y,
-            BIRD_R * 0.75 * sc.x,
-            BIRD_R * 0.45 * sc.y,
-            deg,
-            Color::from_rgba(255, 238, 170, 255),
-        );
-        let flap = (self.t * 18.0).sin() * 6.0 * (0.4 + self.kick);
-        let wing = c - fwd * 6.0 * sc.x + up * -flap * 0.4;
-        draw_ellipse(
-            wing.x,
-            wing.y + flap,
-            13.0 * sc.x,
-            8.0 * sc.y,
-            deg,
-            Color::from_rgba(250, 240, 200, 255),
-        );
-        draw_ellipse(
-            wing.x,
-            wing.y + flap,
-            13.0 * sc.x,
-            8.0 * sc.y,
-            deg,
-            with_alpha(Color::from_rgba(240, 170, 40, 255), 0.35),
-        );
-        let eye = c + fwd * 9.0 * sc.x + up * 8.0 * sc.y;
-        draw_circle(eye.x, eye.y, 8.0, WHITE);
-        draw_circle(eye.x + fwd.x * 3.0, eye.y + fwd.y * 3.0, 4.0, BLACK);
-        draw_circle(
-            eye.x + fwd.x * 2.0 + 1.5,
-            eye.y + fwd.y * 2.0 - 2.0,
-            1.5,
-            WHITE,
-        );
-        let cheek = c + fwd * 8.0 * sc.x - up * 3.0 * sc.y;
-        draw_circle(cheek.x, cheek.y, 4.0, Color::new(1.0, 0.45, 0.4, 0.45));
-        let beak = c + fwd * (BIRD_R * sc.x - 2.0);
-        draw_triangle(
-            beak + up * 6.0,
-            beak - up * 6.0,
-            beak + fwd * 16.0,
-            Color::from_rgba(255, 120, 40, 255),
-        );
-        draw_triangle(
-            beak + up * 6.0,
-            beak - up * 0.5,
-            beak + fwd * 16.0,
-            Color::from_rgba(255, 160, 70, 255),
+        let frame = if self.state == State::Dead {
+            "plane1"
+        } else {
+            ["plane1", "plane2", "plane3", "plane2"][(self.t * 14.0) as usize % 4]
+        };
+        let h = BIRD_R * 2.6;
+        let w = h * art::size(frame).x / art::size(frame).y;
+        art::sprite_ex(
+            frame,
+            Rect::new(
+                bx - w * sc.x / 2.0,
+                self.y - h * sc.y / 2.0,
+                w * sc.x,
+                h * sc.y,
+            ),
+            crate::art::Draw {
+                rotation: angle,
+                ..Default::default()
+            },
         );
     }
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(
-        r.x + r.w * 0.62,
-        r.y,
-        r.w * 0.2,
-        r.h * 0.3,
-        Color::from_rgba(80, 180, 60, 255),
+    art::sprite(
+        "bg",
+        Rect::new(r.x - r.w * 0.3, r.y, r.h * 800.0 / 480.0, r.h),
     );
-    draw_rectangle(
-        r.x + r.w * 0.62,
-        r.y + r.h * 0.72,
-        r.w * 0.2,
-        r.h * 0.28,
-        Color::from_rgba(80, 180, 60, 255),
+    art::sprite(
+        "rock",
+        Rect::new(r.x + r.w * 0.62, r.y + r.h * 0.45, r.w * 0.3, r.h * 0.6),
     );
-    let c = vec2(r.x + r.w * 0.35, r.y + r.h * 0.5);
-    draw_circle(c.x, c.y, r.w * 0.16, Color::from_rgba(255, 210, 40, 255));
-    draw_circle(c.x + r.w * 0.06, c.y - r.w * 0.05, r.w * 0.05, WHITE);
-    draw_triangle(
-        vec2(c.x + r.w * 0.13, c.y - 6.0),
-        vec2(c.x + r.w * 0.13, c.y + 6.0),
-        vec2(c.x + r.w * 0.24, c.y),
-        Color::from_rgba(255, 120, 40, 255),
+    art::sprite(
+        "rock_down",
+        Rect::new(r.x + r.w * 0.62, r.y - r.h * 0.05, r.w * 0.3, r.h * 0.35),
+    );
+    art::sprite_at(
+        "plane1",
+        vec2(r.x + r.w * 0.36, r.y + r.h * 0.5),
+        r.h * 0.34,
+        Default::default(),
     );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn flappy_sprites_all_exist() {
+        let have = art::names();
+        for n in [
+            "bg",
+            "ground",
+            "rock",
+            "rock_down",
+            "plane1",
+            "plane2",
+            "plane3",
+            "tap",
+            "get_ready",
+            "game_over",
+        ] {
+            assert!(have.iter().any(|h| h == n), "missing {n}");
+        }
+    }
 
     #[test]
     fn flapping_and_crashing_make_sounds() {
@@ -573,12 +548,25 @@ mod tests {
         g.state = State::Playing;
         g.y = 100.0;
         g.pipes.push(Pipe {
-            x: Flappy::bird_x(&v) - 10.0,
+            x: Flappy::bird_x(&v) - PIPE_W / 2.0,
             gap_y: 450.0,
             scored: false,
         });
         g.update(&Input::press_at(Vec2::ZERO), &v, 1.0 / 60.0);
         assert_eq!(g.state, State::Dead);
+    }
+
+    #[test]
+    fn spike_tips_are_forgiving_but_their_bodies_are_not() {
+        let s = Spike::new(500.0, 700.0, 400.0);
+        assert!(s.hits(vec2(500.0, 600.0), 10.0));
+        assert!(s.hits(vec2(500.0, 395.0), 10.0));
+        assert!(!s.hits(vec2(500.0, 380.0), 10.0));
+        assert!(!s.hits(vec2(500.0 + s.half_w * 0.5, 420.0), 10.0));
+        assert!(s.hits(vec2(500.0 + s.half_w * 0.5, 650.0), 10.0));
+        let down = Spike::new(500.0, 0.0, 300.0);
+        assert!(down.hits(vec2(500.0, 100.0), 10.0));
+        assert!(!down.hits(vec2(500.0, 320.0), 10.0));
     }
 
     #[test]
@@ -616,7 +604,7 @@ mod tests {
         g.state = State::Playing;
         g.y = 100.0;
         g.pipes.push(Pipe {
-            x: Flappy::bird_x(&v) - 10.0,
+            x: Flappy::bird_x(&v) - PIPE_W / 2.0,
             gap_y: 450.0,
             scored: false,
         });

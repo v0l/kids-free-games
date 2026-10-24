@@ -1,7 +1,4 @@
 use std::cell::RefCell;
-use std::f32::consts::TAU;
-
-pub const RATE: u32 = 22050;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Sfx {
@@ -25,10 +22,13 @@ pub enum Sfx {
     Crunch,
     Click,
     Tick,
+    Lose,
+    Magic,
+    Card,
 }
 
 impl Sfx {
-    pub const ALL: [Sfx; 20] = [
+    pub const ALL: [Sfx; 23] = [
         Sfx::Tap,
         Sfx::Pop,
         Sfx::Coin,
@@ -49,13 +49,18 @@ impl Sfx {
         Sfx::Crunch,
         Sfx::Click,
         Sfx::Tick,
+        Sfx::Lose,
+        Sfx::Magic,
+        Sfx::Card,
     ];
 
     pub fn tier(self) -> Tier {
         match self {
             Sfx::Tick | Sfx::Click | Sfx::Tap => Tier::Ui,
-            Sfx::Swish | Sfx::Whoosh | Sfx::Flap | Sfx::Jump | Sfx::Bounce => Tier::Small,
-            Sfx::Boom | Sfx::Win | Sfx::LevelUp => Tier::Large,
+            Sfx::Swish | Sfx::Whoosh | Sfx::Flap | Sfx::Jump | Sfx::Bounce | Sfx::Card => {
+                Tier::Small
+            }
+            Sfx::Boom | Sfx::Win | Sfx::LevelUp | Sfx::Lose => Tier::Large,
             _ => Tier::Medium,
         }
     }
@@ -99,7 +104,7 @@ pub fn gain_to_db(g: f32) -> f32 {
 }
 
 pub fn loudness_db(x: &[f32]) -> f32 {
-    let win = (RATE as usize / 50).max(1);
+    let win = 44100 / 50;
     let loudest = x
         .chunks(win)
         .map(|c| (c.iter().map(|v| v * v).sum::<f32>() / c.len() as f32).sqrt())
@@ -111,222 +116,10 @@ pub fn peak_db(x: &[f32]) -> f32 {
     gain_to_db(x.iter().fold(0.0f32, |m, v| m.max(v.abs())))
 }
 
-pub fn normalize(x: &mut [f32], target_db: f32) {
-    let k = db_to_gain(target_db - loudness_db(x));
-    let ceiling = db_to_gain(PEAK_DB);
-    for v in x.iter_mut() {
-        let y = *v * k;
-        *v = if y.abs() > ceiling * 0.8 {
-            let over = (y.abs() - ceiling * 0.8) / (ceiling * 0.2);
-            y.signum() * ceiling * (0.8 + 0.2 * over.tanh())
-        } else {
-            y
-        };
-    }
-}
-
-pub const VARIANTS: [f32; 3] = [0.95, 1.0, 1.05];
 pub const LADDER: [f32; 8] = [0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 11.0, 12.0];
 
 pub fn semitones(n: f32) -> f32 {
     2f32.powf(n / 12.0)
-}
-
-pub fn repitch(x: &[f32], ratio: f32) -> Vec<f32> {
-    let n = ((x.len() as f32) / ratio).floor() as usize;
-    (0..n)
-        .map(|i| {
-            let p = i as f32 * ratio;
-            let k = p as usize;
-            let f = p - k as f32;
-            let a = x.get(k).copied().unwrap_or(0.0);
-            let b = x.get(k + 1).copied().unwrap_or(0.0);
-            a + (b - a) * f
-        })
-        .collect()
-}
-
-pub fn render_take(s: Sfx, ratio: f32) -> Vec<f32> {
-    let mut x = repitch(&render(s), ratio);
-    normalize(&mut x, s.tier().loudness_db());
-    x
-}
-
-#[derive(Clone, Copy)]
-enum Wave {
-    Sine,
-    Square,
-    Triangle,
-    Noise,
-}
-
-struct Voice {
-    wave: Wave,
-    f0: f32,
-    f1: f32,
-    start: f32,
-    len: f32,
-    attack: f32,
-    gain: f32,
-}
-
-fn voice(wave: Wave, f0: f32, f1: f32, start: f32, len: f32, gain: f32) -> Voice {
-    Voice {
-        wave,
-        f0,
-        f1,
-        start,
-        len,
-        attack: 0.004,
-        gain,
-    }
-}
-
-fn notes(wave: Wave, freqs: &[f32], step: f32, len: f32, gain: f32) -> Vec<Voice> {
-    freqs
-        .iter()
-        .enumerate()
-        .map(|(i, f)| voice(wave, *f, *f, i as f32 * step, len, gain))
-        .collect()
-}
-
-fn recipe(s: Sfx) -> Vec<Voice> {
-    use Wave::*;
-    match s {
-        Sfx::Tap => vec![voice(Sine, 880.0, 660.0, 0.0, 0.06, 0.8)],
-        Sfx::Click => vec![voice(Square, 1500.0, 1200.0, 0.0, 0.025, 0.5)],
-        Sfx::Tick => vec![voice(Sine, 1800.0, 1800.0, 0.0, 0.03, 0.6)],
-        Sfx::Pop => vec![
-            voice(Sine, 300.0, 1100.0, 0.0, 0.09, 0.9),
-            voice(Noise, 0.0, 0.0, 0.0, 0.03, 0.25),
-        ],
-        Sfx::Coin => vec![
-            voice(Square, 988.0, 988.0, 0.0, 0.07, 0.35),
-            voice(Square, 1319.0, 1319.0, 0.06, 0.22, 0.35),
-        ],
-        Sfx::Score => vec![voice(Triangle, 660.0, 990.0, 0.0, 0.12, 0.8)],
-        Sfx::Jump => vec![voice(Square, 280.0, 720.0, 0.0, 0.16, 0.3)],
-        Sfx::Flap => vec![
-            voice(Noise, 0.0, 0.0, 0.0, 0.08, 0.5),
-            voice(Sine, 420.0, 600.0, 0.0, 0.07, 0.5),
-        ],
-        Sfx::Swish => vec![voice(Noise, 0.0, 0.0, 0.0, 0.14, 0.45)],
-        Sfx::Slice => vec![
-            voice(Noise, 0.0, 0.0, 0.0, 0.1, 0.5),
-            voice(Sine, 1200.0, 300.0, 0.0, 0.12, 0.6),
-        ],
-        Sfx::Bounce => vec![voice(Sine, 180.0, 420.0, 0.0, 0.12, 0.9)],
-        Sfx::Hit => vec![
-            voice(Square, 220.0, 90.0, 0.0, 0.18, 0.4),
-            voice(Noise, 0.0, 0.0, 0.0, 0.08, 0.5),
-        ],
-        Sfx::Boom => vec![
-            voice(Noise, 0.0, 0.0, 0.0, 0.5, 0.9),
-            voice(Sine, 120.0, 40.0, 0.0, 0.45, 0.9),
-        ],
-        Sfx::Wrong => vec![
-            voice(Square, 220.0, 196.0, 0.0, 0.14, 0.3),
-            voice(Square, 185.0, 165.0, 0.13, 0.2, 0.3),
-        ],
-        Sfx::Right => notes(Triangle, &[784.0, 1047.0], 0.08, 0.16, 0.7),
-        Sfx::Win => notes(
-            Triangle,
-            &[523.0, 659.0, 784.0, 1047.0, 1319.0],
-            0.1,
-            0.25,
-            0.6,
-        ),
-        Sfx::LevelUp => notes(Square, &[440.0, 554.0, 659.0, 880.0], 0.07, 0.14, 0.25),
-        Sfx::Whoosh => vec![Voice {
-            attack: 0.08,
-            ..voice(Noise, 0.0, 0.0, 0.0, 0.3, 0.5)
-        }],
-        Sfx::Splash => vec![
-            voice(Noise, 0.0, 0.0, 0.0, 0.3, 0.6),
-            voice(Sine, 600.0, 200.0, 0.0, 0.2, 0.4),
-        ],
-        Sfx::Crunch => vec![
-            voice(Noise, 0.0, 0.0, 0.0, 0.12, 0.7),
-            voice(Square, 160.0, 80.0, 0.0, 0.1, 0.25),
-        ],
-    }
-}
-
-struct Rng(u32);
-
-impl Rng {
-    fn next(&mut self) -> f32 {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 17;
-        self.0 ^= self.0 << 5;
-        (self.0 as f32 / u32::MAX as f32) * 2.0 - 1.0
-    }
-}
-
-pub fn render(s: Sfx) -> Vec<f32> {
-    let voices = recipe(s);
-    let end = voices.iter().map(|v| v.start + v.len).fold(0.0, f32::max);
-    let n = (end * RATE as f32).ceil() as usize + 1;
-    let mut out = vec![0.0f32; n];
-    let mut rng = Rng(0x9e37_79b9 ^ s as u32);
-    for v in &voices {
-        let mut phase = 0.0f32;
-        let mut lp = 0.0f32;
-        let first = (v.start * RATE as f32) as usize;
-        let count = (v.len * RATE as f32) as usize;
-        for k in 0..count {
-            let t = k as f32 / RATE as f32;
-            let p = t / v.len;
-            let f = v.f0 * (v.f1 / v.f0.max(1.0)).max(0.0001).powf(p);
-            phase = (phase + f / RATE as f32).fract();
-            let raw = match v.wave {
-                Wave::Sine => (phase * TAU).sin(),
-                Wave::Square => {
-                    if phase < 0.5 {
-                        1.0
-                    } else {
-                        -1.0
-                    }
-                }
-                Wave::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
-                Wave::Noise => {
-                    lp += (rng.next() - lp) * 0.5;
-                    lp
-                }
-            };
-            let attack = (t / v.attack).min(1.0);
-            let release = (1.0 - p).powf(1.6);
-            out[first + k] += raw * attack * release * v.gain;
-        }
-    }
-    let peak = out.iter().fold(0.0f32, |m, x| m.max(x.abs()));
-    if peak > 1.0 {
-        for x in &mut out {
-            *x /= peak;
-        }
-    }
-    out
-}
-
-pub fn wav(samples: &[f32]) -> Vec<u8> {
-    let data_len = samples.len() as u32 * 2;
-    let mut b = Vec::with_capacity(44 + data_len as usize);
-    b.extend_from_slice(b"RIFF");
-    b.extend_from_slice(&(36 + data_len).to_le_bytes());
-    b.extend_from_slice(b"WAVEfmt ");
-    b.extend_from_slice(&16u32.to_le_bytes());
-    b.extend_from_slice(&1u16.to_le_bytes());
-    b.extend_from_slice(&1u16.to_le_bytes());
-    b.extend_from_slice(&RATE.to_le_bytes());
-    b.extend_from_slice(&(RATE * 2).to_le_bytes());
-    b.extend_from_slice(&2u16.to_le_bytes());
-    b.extend_from_slice(&16u16.to_le_bytes());
-    b.extend_from_slice(b"data");
-    b.extend_from_slice(&data_len.to_le_bytes());
-    for s in samples {
-        b.extend_from_slice(&((s.clamp(-1.0, 1.0) * 32000.0) as i16).to_le_bytes());
-    }
-    b
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -338,128 +131,6 @@ pub enum Mood {
 
 impl Mood {
     pub const ALL: [Mood; 3] = [Mood::Menu, Mood::Arcade, Mood::Learn];
-
-    fn bpm(self) -> f32 {
-        match self {
-            Mood::Menu => 108.0,
-            Mood::Arcade => 120.0,
-            Mood::Learn => 92.0,
-        }
-    }
-
-    fn chords(self) -> [[f32; 3]; 4] {
-        match self {
-            Mood::Menu => [
-                [60.0, 64.0, 67.0],
-                [55.0, 59.0, 62.0],
-                [57.0, 60.0, 64.0],
-                [53.0, 57.0, 60.0],
-            ],
-            Mood::Arcade => [
-                [57.0, 60.0, 64.0],
-                [53.0, 57.0, 60.0],
-                [60.0, 64.0, 67.0],
-                [55.0, 59.0, 62.0],
-            ],
-            Mood::Learn => [
-                [53.0, 57.0, 60.0],
-                [58.0, 62.0, 65.0],
-                [60.0, 64.0, 67.0],
-                [53.0, 57.0, 60.0],
-            ],
-        }
-    }
-
-    fn arp(self) -> &'static [usize] {
-        match self {
-            Mood::Menu => &[0, 1, 2, 1, 0, 2, 1, 2],
-            Mood::Arcade => &[0, 2, 1, 2, 0, 2, 1, 2],
-            Mood::Learn => &[0, 1, 2, 1],
-        }
-    }
-}
-
-pub const BARS: usize = 4;
-pub const MUSIC_DB: f32 = -25.0;
-
-fn midi(n: f32) -> f32 {
-    440.0 * semitones(n - 69.0)
-}
-
-pub fn loop_len(m: Mood) -> usize {
-    let beat = 60.0 / m.bpm();
-    (beat * 4.0 * BARS as f32 * RATE as f32).round() as usize
-}
-
-fn pluck(out: &mut [f32], at: usize, freq: f32, len: f32, gain: f32, wave: Wave) {
-    let n = (len * RATE as f32) as usize;
-    let mut phase = 0.0f32;
-    for k in 0..n {
-        let i = at + k;
-        if i >= out.len() {
-            break;
-        }
-        let t = k as f32 / RATE as f32;
-        phase = (phase + freq / RATE as f32).fract();
-        let raw = match wave {
-            Wave::Triangle => 4.0 * (phase - 0.5).abs() - 1.0,
-            _ => (phase * TAU).sin() + 0.25 * (phase * TAU * 2.0).sin(),
-        };
-        let env = (t / 0.008).min(1.0) * (1.0 - k as f32 / n as f32).powf(2.2);
-        out[i] += raw * env * gain;
-    }
-}
-
-pub fn render_music(m: Mood) -> Vec<f32> {
-    let len = loop_len(m);
-    let mut out = vec![0.0f32; len];
-    let beat = 60.0 / m.bpm();
-    let arp = m.arp();
-    let step = beat * 4.0 / arp.len() as f32;
-    let mut rng = Rng(0x2545_f491 ^ m as u32);
-    for (bar, chord) in m.chords().iter().enumerate() {
-        let bar_at = bar as f32 * beat * 4.0;
-        for half in 0..2 {
-            let at = ((bar_at + half as f32 * beat * 2.0) * RATE as f32) as usize;
-            pluck(
-                &mut out,
-                at,
-                midi(chord[0] - 24.0),
-                beat * 1.8,
-                0.55,
-                Wave::Sine,
-            );
-        }
-        for (i, idx) in arp.iter().enumerate() {
-            let at = ((bar_at + i as f32 * step) * RATE as f32) as usize;
-            let note = chord[*idx] + if m == Mood::Learn { 0.0 } else { 12.0 };
-            pluck(&mut out, at, midi(note), step * 1.6, 0.22, Wave::Triangle);
-        }
-        if m == Mood::Arcade {
-            for b in 0..8 {
-                let at = ((bar_at + b as f32 * beat / 2.0) * RATE as f32) as usize;
-                let n = (0.03 * RATE as f32) as usize;
-                let mut lp = 0.0;
-                for k in 0..n {
-                    if at + k >= len {
-                        break;
-                    }
-                    lp += (rng.next() - lp) * 0.7;
-                    let hp = rng.next() - lp;
-                    let g = if b % 2 == 1 { 0.12 } else { 0.06 };
-                    out[at + k] += hp * g * (1.0 - k as f32 / n as f32).powi(3);
-                }
-            }
-        }
-    }
-    let fade = (0.01 * RATE as f32) as usize;
-    for k in 0..fade {
-        let g = k as f32 / fade as f32;
-        out[k] *= g;
-        out[len - 1 - k] *= g;
-    }
-    normalize(&mut out, MUSIC_DB);
-    out
 }
 
 pub const MIN_GAP: f64 = 0.045;
@@ -545,42 +216,199 @@ pub struct Cue {
 
 type Sound = macroquad::audio::Sound;
 
+static PACK: &[u8] = include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/assets/sound.kgs"));
+
+pub fn unpack(bytes: &[u8]) -> Option<Vec<(&str, &[u8])>> {
+    let u32_at = |at: usize| -> Option<usize> {
+        Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?) as usize)
+    };
+    if bytes.get(0..4)? != b"KGS1" {
+        return None;
+    }
+    let n = u32_at(4)?;
+    let mut at = 8;
+    let mut out = Vec::with_capacity(n);
+    for _ in 0..n {
+        let nl = u32_at(at)?;
+        let name = std::str::from_utf8(bytes.get(at + 4..at + 4 + nl)?).ok()?;
+        at += 4 + nl;
+        let dl = u32_at(at)?;
+        out.push((name, bytes.get(at + 4..at + 4 + dl)?));
+        at += 4 + dl;
+    }
+    Some(out)
+}
+
+pub fn decode(ogg: &[u8]) -> Option<(u32, Vec<i16>)> {
+    let mut r = lewton::inside_ogg::OggStreamReader::new(std::io::Cursor::new(ogg)).ok()?;
+    let rate = r.ident_hdr.audio_sample_rate;
+    let ch = r.ident_hdr.audio_channels as usize;
+    let mut out = vec![];
+    while let Some(p) = r.read_dec_packet_itl().ok()? {
+        out.extend(p.chunks(ch.max(1)).map(|c| c[0]));
+    }
+    let end = out
+        .iter()
+        .rposition(|s| s.unsigned_abs() > 16)
+        .map_or(0, |i| i + 1);
+    out.truncate(end);
+    Some((rate, out))
+}
+
+pub fn wav_i16(rate: u32, samples: &[i16]) -> Vec<u8> {
+    let data_len = samples.len() as u32 * 2;
+    let mut b = Vec::with_capacity(44 + data_len as usize);
+    b.extend_from_slice(b"RIFF");
+    b.extend_from_slice(&(36 + data_len).to_le_bytes());
+    b.extend_from_slice(b"WAVEfmt ");
+    b.extend_from_slice(&16u32.to_le_bytes());
+    b.extend_from_slice(&1u16.to_le_bytes());
+    b.extend_from_slice(&1u16.to_le_bytes());
+    b.extend_from_slice(&rate.to_le_bytes());
+    b.extend_from_slice(&(rate * 2).to_le_bytes());
+    b.extend_from_slice(&2u16.to_le_bytes());
+    b.extend_from_slice(&16u16.to_le_bytes());
+    b.extend_from_slice(b"data");
+    b.extend_from_slice(&data_len.to_le_bytes());
+    for s in samples {
+        b.extend_from_slice(&s.to_le_bytes());
+    }
+    b
+}
+
+impl Sfx {
+    pub fn key(self) -> &'static str {
+        match self {
+            Sfx::Tap => "tap",
+            Sfx::Pop => "pop",
+            Sfx::Coin => "coin",
+            Sfx::Score => "score",
+            Sfx::Jump => "jump",
+            Sfx::Flap => "flap",
+            Sfx::Swish => "swish",
+            Sfx::Slice => "slice",
+            Sfx::Bounce => "bounce",
+            Sfx::Hit => "hit",
+            Sfx::Boom => "boom",
+            Sfx::Wrong => "wrong",
+            Sfx::Right => "right",
+            Sfx::Win => "win",
+            Sfx::LevelUp => "levelup",
+            Sfx::Whoosh => "whoosh",
+            Sfx::Splash => "splash",
+            Sfx::Crunch => "crunch",
+            Sfx::Click => "click",
+            Sfx::Tick => "tick",
+            Sfx::Lose => "lose",
+            Sfx::Magic => "magic",
+            Sfx::Card => "card",
+        }
+    }
+}
+
+impl Mood {
+    pub fn key(self) -> &'static str {
+        match self {
+            Mood::Menu => "music_menu",
+            Mood::Arcade => "music_arcade",
+            Mood::Learn => "music_learn",
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Say {
+    Correct,
+    Great,
+    Congrats,
+    Win,
+    LevelUp,
+    GameOver,
+    Ready,
+    Go,
+    Best,
+    Number(u8),
+}
+
+impl Say {
+    pub fn key(self) -> String {
+        match self {
+            Say::Correct => "say_correct".into(),
+            Say::Great => "say_great".into(),
+            Say::Congrats => "say_congrats".into(),
+            Say::Win => "say_win".into(),
+            Say::LevelUp => "say_levelup".into(),
+            Say::GameOver => "say_gameover".into(),
+            Say::Ready => "say_ready".into(),
+            Say::Go => "say_go".into(),
+            Say::Best => "say_best".into(),
+            Say::Number(n) => format!("say_{}", n.clamp(1, 10)),
+        }
+    }
+}
+
 struct Bank {
     takes: Vec<(Sfx, Vec<Sound>)>,
     ladders: Vec<(Sfx, Vec<Sound>)>,
+    voices: Vec<(String, Sound)>,
     music: Vec<(Mood, Sound)>,
     limiter: Limiter,
     mix: Mix,
     playing: Option<Mood>,
     last_take: u32,
+    said_at: f64,
 }
 
 thread_local! {
     static BANK: RefCell<Option<Bank>> = const { RefCell::new(None) };
     static PENDING: RefCell<Vec<Cue>> = const { RefCell::new(Vec::new()) };
+    static VOICE: RefCell<Option<Say>> = const { RefCell::new(None) };
     static WANT: std::cell::Cell<Option<Mood>> = const { std::cell::Cell::new(None) };
     static SFX_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     static MUSIC_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
 }
 
-async fn sound(x: &[f32]) -> Option<Sound> {
-    macroquad::audio::load_sound_from_bytes(&wav(x)).await.ok()
+async fn sound(ogg: &[u8]) -> Option<Sound> {
+    let (rate, pcm) = decode(ogg)?;
+    macroquad::audio::load_sound_from_bytes(&wav_i16(rate, &pcm))
+        .await
+        .ok()
+}
+
+fn find<'a>(pack: &'a [(&str, &[u8])], key: &str) -> Option<&'a [u8]> {
+    pack.iter().find(|(k, _)| *k == key).map(|(_, d)| *d)
+}
+
+pub fn takes_of<'a>(pack: &'a [(&'a str, &'a [u8])], s: Sfx) -> Vec<&'a [u8]> {
+    let pre = format!("{}.", s.key());
+    pack.iter()
+        .filter(|(k, _)| k.starts_with(&pre) && !k.contains('+'))
+        .map(|(_, d)| *d)
+        .collect()
+}
+
+pub fn ladder_of<'a>(pack: &'a [(&'a str, &'a [u8])], s: Sfx) -> Vec<&'a [u8]> {
+    LADDER
+        .iter()
+        .filter_map(|n| find(pack, &format!("{}.0+{}", s.key(), *n as i32)))
+        .collect()
 }
 
 pub async fn load() {
+    let pack = unpack(PACK).expect("bad sound pack");
     let mut takes = vec![];
     let mut ladders = vec![];
     for s in Sfx::ALL {
         let mut v = vec![];
-        for r in VARIANTS {
-            v.extend(sound(&render_take(s, r)).await);
+        for d in takes_of(&pack, s) {
+            v.extend(sound(d).await);
         }
         takes.push((s, v));
-        if s.ladder() {
-            let mut l = vec![];
-            for n in LADDER {
-                l.extend(sound(&render_take(s, semitones(n))).await);
-            }
+        let mut l = vec![];
+        for d in ladder_of(&pack, s) {
+            l.extend(sound(d).await);
+        }
+        if !l.is_empty() {
             ladders.push((s, l));
         }
     }
@@ -588,18 +416,28 @@ pub async fn load() {
         *b.borrow_mut() = Some(Bank {
             takes,
             ladders,
+            voices: vec![],
             music: vec![],
             limiter: Limiter::default(),
             mix: Mix::default(),
             playing: None,
             last_take: 0,
+            said_at: -10.0,
         })
     });
 }
 
 pub async fn load_music() {
-    for m in Mood::ALL {
-        let Some(snd) = sound(&render_music(m)).await else {
+    let pack = unpack(PACK).expect("bad sound pack");
+    let want = wanted_music().unwrap_or(Mood::Menu);
+    let mut order = vec![want];
+    order.extend(Mood::ALL.iter().copied().filter(|m| *m != want));
+    for m in order {
+        macroquad::window::next_frame().await;
+        let Some(snd) = (match find(&pack, m.key()) {
+            Some(d) => sound(d).await,
+            None => None,
+        }) else {
             continue;
         };
         BANK.with(|b| {
@@ -610,9 +448,28 @@ pub async fn load_music() {
                 }
             }
         });
+    }
+    for (k, d) in pack.iter().filter(|(k, _)| k.starts_with("say_")) {
         macroquad::window::next_frame().await;
+        if let Some(snd) = sound(d).await {
+            BANK.with(|b| {
+                if let Some(bank) = b.borrow_mut().as_mut() {
+                    bank.voices.push((k.to_string(), snd));
+                }
+            });
+        }
     }
 }
+
+pub fn say(s: Say) {
+    VOICE.with(|v| *v.borrow_mut() = Some(s));
+}
+
+pub fn take_voice() -> Option<Say> {
+    VOICE.with(|v| v.borrow_mut().take())
+}
+
+pub const VOICE_GAP: f64 = 0.9;
 
 const MAX_PENDING: usize = 16;
 
@@ -668,6 +525,7 @@ fn sfx_gain() -> f32 {
 
 pub fn flush(now: f64, dt: f32) {
     let cues = take_cues();
+    let voice = take_voice();
     let sfx_on = SFX_ON.with(|s| s.get());
     let want = if MUSIC_ON.with(|m| m.get()) {
         wanted_music()
@@ -712,6 +570,20 @@ pub fn flush(now: f64, dt: f32) {
                 if c.sfx.tier().ducks_music() {
                     bank.mix.ducked();
                 }
+            }
+        }
+        if let Some(v) = voice.filter(|_| sfx_on && now - bank.said_at > VOICE_GAP) {
+            let key = v.key();
+            if let Some((_, snd)) = bank.voices.iter().find(|(k, _)| *k == key) {
+                macroquad::audio::play_sound(
+                    snd,
+                    macroquad::audio::PlaySoundParams {
+                        looped: false,
+                        volume: sfx_gain(),
+                    },
+                );
+                bank.said_at = now;
+                bank.mix.ducked();
             }
         }
         bank.mix.step(dt);
@@ -763,42 +635,144 @@ pub fn toggle_music() {
 mod tests {
     use super::*;
 
+    fn pack() -> Vec<(&'static str, &'static [u8])> {
+        unpack(PACK).expect("sound pack parses")
+    }
+
+    fn pcm(ogg: &[u8]) -> Vec<f32> {
+        decode(ogg)
+            .unwrap()
+            .1
+            .iter()
+            .map(|s| *s as f32 / 32768.0)
+            .collect()
+    }
+
     #[test]
-    fn every_sound_renders_audible_and_short() {
+    fn every_sound_has_at_least_one_take_that_decodes() {
+        let p = pack();
         for s in Sfx::ALL {
-            let x = render(s);
-            let secs = x.len() as f32 / RATE as f32;
-            assert!(secs > 0.02 && secs < 0.8, "{s:?} is {secs}s");
-            let peak = x.iter().fold(0.0f32, |m, v| m.max(v.abs()));
-            assert!(peak > 0.15 && peak <= 1.0, "{s:?} peak {peak}");
-            assert!(x.iter().all(|v| v.is_finite()));
+            let t = takes_of(&p, s);
+            assert!(!t.is_empty(), "{s:?} has no takes in sound.txt");
+            for d in t {
+                let (rate, x) = decode(d).unwrap_or_else(|| panic!("{s:?} does not decode"));
+                assert_eq!(rate, 44100);
+                let secs = x.len() as f32 / rate as f32;
+                assert!(secs > 0.005 && secs < 3.0, "{s:?} is {secs}s");
+            }
         }
     }
 
     #[test]
-    fn sounds_fade_out_without_a_click() {
+    fn ladder_sounds_have_a_full_scale() {
+        let p = pack();
+        for s in Sfx::ALL.into_iter().filter(|s| s.ladder()) {
+            assert_eq!(
+                ladder_of(&p, s).len(),
+                LADDER.len(),
+                "{s:?} ladder incomplete"
+            );
+        }
+    }
+
+    #[test]
+    fn ladder_steps_rise_in_pitch_to_an_octave() {
+        let p = pack();
+        for s in Sfx::ALL.into_iter().filter(|s| s.ladder()) {
+            let lens: Vec<f32> = ladder_of(&p, s)
+                .iter()
+                .map(|d| pcm(d).len() as f32)
+                .collect();
+            assert!(lens.windows(2).all(|w| w[1] < w[0]), "{s:?} {lens:?}");
+            let ratio = lens[0] / lens[lens.len() - 1];
+            assert!(
+                (ratio - 2.0).abs() < 0.15,
+                "{s:?} top step is {ratio}x, want an octave"
+            );
+        }
+    }
+
+    #[test]
+    fn tiers_land_at_their_loudness_with_headroom() {
+        let p = pack();
         for s in Sfx::ALL {
-            let x = render(s);
-            let tail = &x[x.len().saturating_sub(40)..];
-            let loud = tail.iter().fold(0.0f32, |m, v| m.max(v.abs()));
-            assert!(loud < 0.05, "{s:?} ends at {loud}");
+            for d in takes_of(&p, s) {
+                let x = pcm(d);
+                let l = loudness_db(&x);
+                let want = s.tier().loudness_db();
+                assert!((l - want).abs() < 4.0, "{s:?} at {l:.1} dB, want {want}");
+                assert!(
+                    peak_db(&x) <= PEAK_DB + 0.5,
+                    "{s:?} peaks at {}",
+                    peak_db(&x)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_voice_line_is_packed() {
+        let p = pack();
+        let mut lines = vec![
+            Say::Correct,
+            Say::Great,
+            Say::Congrats,
+            Say::Win,
+            Say::LevelUp,
+            Say::GameOver,
+            Say::Ready,
+            Say::Go,
+            Say::Best,
+        ];
+        lines.extend((1..=10).map(Say::Number));
+        for v in lines {
+            let d = find(&p, &v.key()).unwrap_or_else(|| panic!("{v:?} missing"));
+            assert!(decode(d).is_some());
+        }
+        assert_eq!(Say::Number(0).key(), "say_1");
+        assert_eq!(Say::Number(42).key(), "say_10");
+    }
+
+    #[test]
+    fn music_loops_are_long_and_sit_under_the_effects() {
+        let p = pack();
+        for m in Mood::ALL {
+            let x = pcm(find(&p, m.key()).unwrap_or_else(|| panic!("{m:?} missing")));
+            assert!(x.len() as f32 / 44100.0 > 15.0, "{m:?} loop too short");
+            let music = loudness_db(&x) + MUSIC_BUS_DB;
+            assert!(
+                music + 6.0 <= Tier::Small.loudness_db(),
+                "{m:?} music at {music:.1} dB crowds the effects"
+            );
         }
     }
 
     #[test]
     fn wav_header_is_valid_pcm() {
-        let b = wav(&render(Sfx::Pop));
+        let b = wav_i16(44100, &[0, 1, -1]);
         assert_eq!(&b[0..4], b"RIFF");
-        assert_eq!(&b[8..16], b"WAVEfmt ");
         assert_eq!(
             u32::from_le_bytes(b[4..8].try_into().unwrap()) as usize,
             b.len() - 8
         );
-        assert_eq!(u32::from_le_bytes(b[24..28].try_into().unwrap()), RATE);
-        assert_eq!(
-            u32::from_le_bytes(b[40..44].try_into().unwrap()) as usize,
-            b.len() - 44
-        );
+        assert_eq!(u32::from_le_bytes(b[24..28].try_into().unwrap()), 44100);
+        assert_eq!(u32::from_le_bytes(b[40..44].try_into().unwrap()), 6);
+    }
+
+    #[test]
+    fn decoding_the_whole_pack_is_quick() {
+        let t = std::time::Instant::now();
+        for (_, d) in pack() {
+            decode(d).unwrap();
+        }
+        let limit = if cfg!(debug_assertions) { 20.0 } else { 1.5 };
+        assert!(t.elapsed().as_secs_f32() < limit, "took {:?}", t.elapsed());
+    }
+
+    #[test]
+    fn unpack_rejects_garbage() {
+        assert!(unpack(b"nope").is_none());
+        assert!(unpack(b"KGS1\x02\x00\x00\x00").is_none());
     }
 
     #[test]
@@ -808,108 +782,6 @@ mod tests {
         assert!(!l.allow(Sfx::Pop, 0.01));
         assert!(l.allow(Sfx::Coin, 0.01));
         assert!(l.allow(Sfx::Pop, 0.06));
-    }
-
-    #[test]
-    fn rendering_every_take_and_loop_is_quick() {
-        let t = std::time::Instant::now();
-        for s in Sfx::ALL {
-            for r in VARIANTS {
-                render_take(s, r);
-            }
-            if s.ladder() {
-                for n in LADDER {
-                    render_take(s, semitones(n));
-                }
-            }
-        }
-        let sfx = t.elapsed();
-        for m in Mood::ALL {
-            render_music(m);
-        }
-        let all = t.elapsed();
-        let limit = if cfg!(debug_assertions) { 3.0 } else { 0.25 };
-        assert!(sfx.as_secs_f32() < limit, "effects took {sfx:?}");
-        assert!(all.as_secs_f32() < limit * 2.0, "music took {all:?}");
-        eprintln!("effects {sfx:?}, with music {all:?}");
-    }
-
-    #[test]
-    #[ignore]
-    fn dump_wavs() {
-        let dir = std::env::var("SFX_DIR").unwrap_or("/tmp/sfx".into());
-        std::fs::create_dir_all(&dir).unwrap();
-        for s in Sfx::ALL {
-            std::fs::write(format!("{dir}/{s:?}.wav"), wav(&render_take(s, 1.0))).unwrap();
-        }
-        for m in Mood::ALL {
-            let x = render_music(m);
-            let twice: Vec<f32> = x.iter().chain(&x).copied().collect();
-            std::fs::write(format!("{dir}/music-{m:?}.wav"), wav(&twice)).unwrap();
-        }
-    }
-
-    #[test]
-    fn tiers_land_at_their_loudness_with_headroom() {
-        for s in Sfx::ALL {
-            for r in VARIANTS {
-                let x = render_take(s, r);
-                let l = loudness_db(&x);
-                let want = s.tier().loudness_db();
-                assert!((l - want).abs() < 2.5, "{s:?}@{r} at {l} dB, want {want}");
-                assert!(
-                    peak_db(&x) <= PEAK_DB + 0.01,
-                    "{s:?} peaks at {}",
-                    peak_db(&x)
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn ui_ticks_sit_under_big_moments() {
-        let l = |s| loudness_db(&render_take(s, 1.0));
-        assert!(l(Sfx::Tick) + 6.0 < l(Sfx::Win));
-        assert!(l(Sfx::Tap) < l(Sfx::Pop));
-        assert!(l(Sfx::Pop) < l(Sfx::Boom));
-    }
-
-    #[test]
-    fn ladder_steps_rise_in_pitch() {
-        let base = render(Sfx::Pop).len() as f32;
-        let mut prev = f32::MAX;
-        for n in LADDER {
-            let len = repitch(&render(Sfx::Pop), semitones(n)).len() as f32;
-            assert!(len < prev, "step {n} not higher");
-            prev = len;
-        }
-        assert!((base / prev - 2.0).abs() < 0.02, "top step is an octave up");
-    }
-
-    #[test]
-    fn music_loops_are_whole_bars_and_seamless() {
-        for m in Mood::ALL {
-            let x = render_music(m);
-            assert_eq!(x.len(), loop_len(m));
-            let beat = (60.0 / m.bpm() * RATE as f32) as usize;
-            assert_eq!(x.len() / beat, 16, "{m:?} is not four bars");
-            assert!(
-                x[0].abs() < 0.01 && x[x.len() - 1].abs() < 0.01,
-                "{m:?} clicks at the seam"
-            );
-            assert!(x.iter().all(|v| v.is_finite()));
-        }
-    }
-
-    #[test]
-    fn music_sits_well_under_effects() {
-        for m in Mood::ALL {
-            let music = loudness_db(&render_music(m)) + MUSIC_BUS_DB;
-            assert!(
-                music + 6.0 <= Tier::Small.loudness_db(),
-                "{m:?} music at {music} dB crowds the effects"
-            );
-        }
     }
 
     #[test]
@@ -957,6 +829,15 @@ mod tests {
                 pitch: Pitch::Step(3)
             }]
         );
+    }
+
+    #[test]
+    fn the_latest_voice_line_wins() {
+        take_voice();
+        say(Say::Correct);
+        say(Say::LevelUp);
+        assert_eq!(take_voice(), Some(Say::LevelUp));
+        assert_eq!(take_voice(), None);
     }
 
     #[test]

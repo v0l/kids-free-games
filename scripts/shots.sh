@@ -22,7 +22,7 @@ srv=$!
 trap 'kill $srv' EXIT
 sleep 1
 COUNT=$(grep -c "^        Entry {" src/games/mod.rs)
-for i in $(seq 0 "$COUNT"); do
+for i in ${ONLY:-$(seq 0 "$COUNT")}; do
   google-chrome --headless=new --no-sandbox --use-angle=swiftshader --enable-unsafe-swiftshader --hide-scrollbars \
     --window-size="$W,$H" --virtual-time-budget=4000 --screenshot="$OUT/$i.png" "http://localhost:$PORT/index.html?inset=${INSET:-0}#$i" 2>/dev/null
 done
@@ -31,7 +31,7 @@ import sys
 from PIL import Image
 out = sys.argv[1]
 import glob
-ims = [Image.open(f"{out}/{i}.png") for i in range(len(glob.glob(f"{out}/[0-9]*.png")))]
+ims = [Image.open(f) for f in sorted(glob.glob(f"{out}/[0-9]*.png"), key=lambda f: int(f.split("/")[-1][:-4]))]
 w, h = ims[0].size
 cols = 3
 rows = (len(ims) + cols - 1) // cols
