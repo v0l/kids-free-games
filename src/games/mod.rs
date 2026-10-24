@@ -1,3 +1,4 @@
+pub mod blocks;
 pub mod breakout;
 pub mod crossy;
 pub mod flappy;
@@ -107,6 +108,13 @@ pub fn all() -> Vec<Entry> {
             color: Color::from_rgba(255, 130, 70, 255),
             make: || Box::new(helix::Helix::new()),
             icon: helix::icon,
+        },
+        Entry {
+            name: "Block Drop",
+            like: "Tetris",
+            color: Color::from_rgba(110, 90, 210, 255),
+            make: || Box::new(blocks::Blocks::new()),
+            icon: blocks::icon,
         },
     ]
 }

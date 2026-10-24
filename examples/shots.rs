@@ -57,6 +57,15 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                 i.pos = vec2(c.x + (f as f32 * 0.05).sin() * 300.0, c.y);
             }
         }
+        "Block Drop" => {
+            if f == 1 {
+                i.pressed = true;
+            }
+            if f > 5 && f.is_multiple_of(20) {
+                i.key_dir =
+                    Some([Dir::Left, Dir::Down, Dir::Right, Dir::Up, Dir::Down][(f / 20) % 5]);
+            }
+        }
         "Road Hopper" if f.is_multiple_of(30) && f < 200 => i.swipe = Some(Dir::Up),
         "Brick Breaker" => {
             if f == 2 {
