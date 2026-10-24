@@ -1,5 +1,4 @@
 use crate::engine::draw_circle;
-use crate::engine::draw_ellipse;
 use crate::engine::*;
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
@@ -501,166 +500,63 @@ impl Default for Hotel {
     }
 }
 
-const SKIN: [(u8, u8, u8); 6] = [
-    (255, 220, 180),
-    (230, 180, 140),
-    (190, 130, 90),
-    (140, 90, 60),
-    (255, 205, 160),
-    (210, 160, 120),
-];
-const SHIRT: [(u8, u8, u8); 6] = [
-    (240, 90, 90),
-    (80, 150, 240),
-    (120, 200, 90),
-    (250, 180, 50),
-    (180, 100, 220),
-    (60, 190, 190),
-];
-
-fn rgb(c: (u8, u8, u8)) -> Color {
-    Color::from_rgba(c.0, c.1, c.2, 255)
+mod art {
+    crate::sprites!("hotel");
 }
 
-const HAIR: [(u8, u8, u8); 6] = [
-    (70, 45, 30),
-    (30, 25, 25),
-    (240, 190, 70),
-    (150, 70, 40),
-    (200, 200, 205),
-    (40, 30, 60),
-];
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum Pose {
+    Idle,
+    Think,
+    Cheer,
+    Walk(f32),
+}
 
-fn draw_guest(x: f32, y: f32, s: f32, look: u8, happy: bool) {
+fn guest_sprite(look: u8, mood: Pose) -> String {
     let l = look as usize % 6;
-    let shirt = rgb(SHIRT[l]);
-    soft_shadow(vec2(x, y + 40.0 * s), 22.0 * s, 5.0 * s, 0.6);
-    round_rect(
-        Rect::new(x - 18.0 * s, y + 3.0 * s, 36.0 * s, 40.0 * s),
-        12.0 * s,
-        darker(shirt, 0.75),
-    );
-    let body = Rect::new(x - 18.0 * s, y, 36.0 * s, 40.0 * s);
-    round_rect(body, 12.0 * s, shirt);
-    gloss(body, 12.0 * s);
-    draw_circle(x, y - 6.0 * s, 20.0 * s, darker(rgb(SKIN[l]), 0.85));
-    draw_circle(x, y - 7.0 * s, 19.5 * s, rgb(SKIN[l]));
-    draw_circle_segment(x, y - 8.0 * s, 20.5 * s, rgb(HAIR[l]));
-    draw_circle(
-        x - 12.0 * s,
-        y - 2.0 * s,
-        4.0 * s,
-        Color::new(1.0, 0.4, 0.4, 0.3),
-    );
-    draw_circle(
-        x + 12.0 * s,
-        y - 2.0 * s,
-        4.0 * s,
-        Color::new(1.0, 0.4, 0.4, 0.3),
-    );
-    for dx in [-7.0, 7.0] {
-        draw_circle(x + dx * s, y - 9.0 * s, 3.2 * s, BLACK);
-        draw_circle(x + dx * s + s, y - 10.0 * s, 1.1 * s, WHITE);
+    match mood {
+        Pose::Idle => format!("g{l}_idle"),
+        Pose::Think => format!("g{l}_think"),
+        Pose::Cheer => format!("g{l}_cheer"),
+        Pose::Walk(t) => format!("g{l}_walk{}", (t * 11.0) as usize % 8),
     }
-    let mouth = if happy { 4.0 } else { -3.0 };
-    draw_line(
-        x - 6.0 * s,
-        y + 1.0 * s,
-        x,
-        y + (1.0 + mouth) * s,
-        2.0 * s,
-        BLACK,
-    );
-    draw_line(
-        x,
-        y + (1.0 + mouth) * s,
-        x + 6.0 * s,
-        y + 1.0 * s,
-        2.0 * s,
-        BLACK,
-    );
 }
 
-fn draw_circle_segment(x: f32, y: f32, r: f32, color: Color) {
-    let n = 12;
-    for k in 0..n {
-        let a0 = std::f32::consts::PI * (1.0 + k as f32 / n as f32);
-        let a1 = std::f32::consts::PI * (1.0 + (k + 1) as f32 / n as f32);
-        draw_triangle(
-            vec2(x, y),
-            vec2(x + a0.cos() * r, y + a0.sin() * r),
-            vec2(x + a1.cos() * r, y + a1.sin() * r),
-            color,
-        );
-    }
+pub fn guest_height(s: f32) -> f32 {
+    95.0 * s
+}
+
+fn draw_guest(x: f32, y: f32, s: f32, look: u8, mood: Pose) {
+    let feet = y + 42.0 * s;
+    soft_shadow(vec2(x, feet), 22.0 * s, 5.0 * s, 0.6);
+    let h = guest_height(s);
+    art::sprite_at(
+        &guest_sprite(look, mood),
+        vec2(x, feet - h / 2.0),
+        h,
+        crate::art::Draw::default(),
+    );
 }
 
 fn draw_coin(c: Vec2, r: f32, spin: f32) {
-    let w = r * spin.cos().abs().max(0.2);
-    draw_ellipse(c.x, c.y, w, r, 0.0, Color::from_rgba(200, 140, 20, 255));
-    draw_ellipse(
-        c.x,
-        c.y,
-        w * 0.85,
-        r * 0.85,
-        0.0,
-        Color::from_rgba(255, 210, 60, 255),
+    let w = r * 2.0 * spin.cos().abs().max(0.2);
+    crate::ui::sprite_ex(
+        "coin",
+        Rect::new(c.x - w / 2.0, c.y - r, w, r * 2.0),
+        crate::art::Draw::default(),
     );
-    if w > r * 0.5 {
-        text_center("$", c.x, c.y, r * 1.1, Color::from_rgba(170, 120, 20, 255));
+}
+
+fn need_sprite(need: Need) -> &'static str {
+    match need {
+        Need::Towel => "need_towel",
+        Need::Food => "need_food",
+        Need::Music => "need_music",
     }
 }
 
 fn draw_need(c: Vec2, need: Need) {
-    match need {
-        Need::Towel => {
-            draw_rectangle(
-                c.x - 12.0,
-                c.y - 10.0,
-                24.0,
-                20.0,
-                Color::from_rgba(120, 200, 255, 255),
-            );
-            draw_rectangle(c.x - 12.0, c.y + 2.0, 24.0, 4.0, WHITE);
-        }
-        Need::Food => {
-            draw_circle(c.x, c.y + 2.0, 12.0, Color::from_rgba(250, 170, 60, 255));
-            draw_circle(
-                c.x - 3.0,
-                c.y - 2.0,
-                3.0,
-                Color::from_rgba(200, 60, 50, 255),
-            );
-            draw_circle(
-                c.x + 4.0,
-                c.y + 4.0,
-                3.0,
-                Color::from_rgba(200, 60, 50, 255),
-            );
-        }
-        Need::Music => {
-            draw_circle(
-                c.x - 5.0,
-                c.y + 7.0,
-                5.0,
-                Color::from_rgba(150, 80, 220, 255),
-            );
-            draw_rectangle(
-                c.x - 1.0,
-                c.y - 12.0,
-                3.0,
-                19.0,
-                Color::from_rgba(150, 80, 220, 255),
-            );
-            draw_rectangle(
-                c.x - 1.0,
-                c.y - 12.0,
-                11.0,
-                4.0,
-                Color::from_rgba(150, 80, 220, 255),
-            );
-        }
-    }
+    art::sprite_at(need_sprite(need), c, 34.0, crate::art::Draw::default());
 }
 
 const WALLS: [Color; 3] = [
@@ -668,6 +564,12 @@ const WALLS: [Color; 3] = [
     Color::new(0.86, 0.94, 1.0, 1.0),
     Color::new(1.0, 0.9, 0.98, 1.0),
 ];
+
+const WOOD: Color = Color::new(0.78, 0.56, 0.42, 1.0);
+
+fn frame(r: Rect, scale: f32, tint: Color) {
+    crate::ui::nine("panel", r, 14.0, scale, tint);
+}
 
 fn wallpaper(r: Rect, lvl: u8) {
     let ink = darker(WALLS[(lvl - 1) as usize], 0.93);
@@ -706,125 +608,100 @@ fn wallpaper(r: Rect, lvl: u8) {
     }
 }
 
-fn window(r: Rect, night: f32, t: f32, seed: f32) {
-    let day = Color::from_rgba(150, 215, 255, 255);
-    let dark = Color::from_rgba(30, 36, 90, 255);
-    let sky = Color::new(
-        day.r + (dark.r - day.r) * night,
-        day.g + (dark.g - day.g) * night,
-        day.b + (dark.b - day.b) * night,
-        1.0,
-    );
-    round_rect(
-        Rect::new(r.x - 4.0, r.y - 4.0, r.w + 8.0, r.h + 8.0),
-        8.0,
-        Color::from_rgba(150, 110, 80, 255),
-    );
-    draw_rectangle(r.x, r.y, r.w, r.h, sky);
+fn window_size(h: f32) -> Vec2 {
+    let s = art::size("window");
+    vec2(h * s.x / s.y, h)
+}
+
+pub fn glass_rect(w: Rect) -> Rect {
+    Rect::new(
+        w.x + w.w * 8.0 / 48.0,
+        w.y + w.h * 14.0 / 112.0,
+        w.w * 22.0 / 48.0,
+        w.h * 82.0 / 112.0,
+    )
+}
+
+fn window(c: Vec2, h: f32, night: f32, t: f32, seed: f32) {
+    let sz = window_size(h);
+    let r = Rect::new(c.x - sz.x / 2.0, c.y - sz.y / 2.0, sz.x, sz.y);
+    let g = glass_rect(r);
+    let day_top = Color::from_rgba(120, 200, 255, 255);
+    let day_bottom = Color::from_rgba(205, 238, 255, 255);
+    let dark_top = Color::from_rgba(20, 26, 80, 255);
+    let dark_bottom = Color::from_rgba(70, 70, 140, 255);
+    let mix = |a: Color, b: Color| {
+        Color::new(
+            a.r + (b.r - a.r) * night,
+            a.g + (b.g - a.g) * night,
+            a.b + (b.b - a.b) * night,
+            1.0,
+        )
+    };
+    gradient_rect(g, mix(day_top, dark_top), mix(day_bottom, dark_bottom));
     if night > 0.4 {
         let a = (night - 0.4) / 0.6;
         for k in 0..4 {
             let f = k as f32 + seed;
-            let sx = r.x + 6.0 + (f * 37.0) % (r.w - 12.0);
-            let sy = r.y + 6.0 + (f * 23.0) % (r.h * 0.6);
+            let sx = g.x + 4.0 + (f * 37.0) % (g.w - 8.0);
+            let sy = g.y + 4.0 + (f * 23.0) % (g.h * 0.5);
             let tw = 0.5 + 0.5 * (t * 3.0 + f * 2.0).sin();
-            draw_circle(sx, sy, 1.3 + tw, with_alpha(WHITE, a * (0.5 + 0.5 * tw)));
+            draw_circle(sx, sy, 1.0 + tw, with_alpha(WHITE, a * (0.5 + 0.5 * tw)));
         }
-        draw_circle(
-            r.x + r.w * 0.7,
-            r.y + r.h * 0.3,
-            r.w * 0.14,
-            with_alpha(Color::from_rgba(255, 245, 200, 255), a),
-        );
-        draw_circle(
-            r.x + r.w * 0.76,
-            r.y + r.h * 0.26,
-            r.w * 0.12,
-            with_alpha(sky, a),
+        art::sprite_at(
+            "moon",
+            vec2(g.x + g.w * 0.55, g.y + g.h * 0.28),
+            g.w * 0.6,
+            crate::art::Draw {
+                tint: with_alpha(WHITE, a),
+                ..Default::default()
+            },
         );
     } else {
         let a = 1.0 - night / 0.4;
-        cloud(
-            r.x + 4.0 + (t * 4.0 + seed * 9.0) % (r.w * 0.6),
-            r.y + r.h * 0.5,
-            0.28,
-            with_alpha(WHITE, a * 0.9),
+        let drift = (t * 3.0 + seed * 9.0) % (g.w * 0.5);
+        crate::ui::cloud(
+            seed as usize,
+            vec2(g.x + g.w * 0.3 + drift, g.y + g.h * 0.28),
+            g.w * 0.55,
+            with_alpha(WHITE, a * 0.95),
         );
     }
-    draw_rectangle(
-        r.x + r.w / 2.0 - 1.5,
-        r.y,
-        3.0,
-        r.h,
-        Color::from_rgba(150, 110, 80, 255),
-    );
-    draw_rectangle(
-        r.x,
-        r.y + r.h / 2.0 - 1.5,
-        r.w,
-        3.0,
-        Color::from_rgba(150, 110, 80, 255),
-    );
-    draw_triangle(
-        vec2(r.x, r.y),
-        vec2(r.x + r.w * 0.5, r.y),
-        vec2(r.x, r.y + r.h * 0.5),
-        Color::new(1.0, 1.0, 1.0, 0.18),
-    );
-    let curtain = Color::from_rgba(220, 90, 110, 255);
-    draw_rectangle(r.x - 3.0, r.y - 2.0, r.w * 0.2, r.h + 4.0, curtain);
-    draw_rectangle(
-        r.x + r.w * 0.8 + 3.0,
-        r.y - 2.0,
-        r.w * 0.2,
-        r.h + 4.0,
-        curtain,
-    );
-    draw_rectangle(
-        r.x - 5.0,
-        r.y - 7.0,
-        r.w + 10.0,
-        4.0,
-        Color::from_rgba(120, 80, 50, 255),
-    );
+    art::sprite("window", r);
+}
+
+fn bar(r: Rect, k: f32, fill: &str) {
+    let scale = r.h / 16.0;
+    art::nine("bar_back", r, 8.0, scale, WHITE);
+    if k > 0.02 {
+        let w = (r.w * k).max(r.h);
+        art::nine(fill, Rect::new(r.x, r.y, w, r.h), 8.0, scale, WHITE);
+    }
 }
 
 impl Hotel {
     fn draw_hud(&self, view: &View) {
         let f = view.full();
-        let bar = Rect::new(f.x, f.y, f.w, 62.0 - f.y);
-        draw_rectangle(
-            bar.x,
-            bar.y,
-            bar.w,
-            bar.h,
-            Color::from_rgba(180, 70, 80, 255),
-        );
-        draw_rectangle(f.x, f.y, f.w, 10.0, Color::from_rgba(205, 95, 105, 255));
-        draw_rectangle(f.x, 62.0, f.w, 8.0, Color::from_rgba(120, 45, 55, 255));
-        let n = (view.w / 28.0) as usize + 1;
+        let ink = Color::from_rgba(100, 35, 45, 255);
+        let top = Rect::new(f.x - 8.0, f.y - 8.0, f.w + 16.0, 62.0 - f.y + 8.0);
+        frame(top, 0.9, Color::from_rgba(215, 95, 105, 255));
+        let n = (f.w / 28.0) as usize + 2;
         for k in 0..n {
-            let c = if k % 2 == 0 {
-                Color::from_rgba(250, 236, 214, 255)
-            } else {
-                Color::from_rgba(180, 70, 80, 255)
-            };
-            draw_circle(k as f32 * 28.0 + 14.0, 70.0, 14.0, c);
+            let name = if k % 2 == 0 { "bulb_white" } else { "bulb_red" };
+            art::sprite_at(
+                name,
+                vec2(f.x + k as f32 * 28.0 + 14.0, 68.0),
+                30.0,
+                crate::art::Draw::default(),
+            );
         }
-        text_outline(
-            "Hotel Hop",
-            HUD_LEFT + 80.0,
-            38.0,
-            40.0,
-            WHITE,
-            Color::from_rgba(100, 35, 45, 255),
-        );
+        text_outline("Hotel Hop", HUD_LEFT + 80.0, 38.0, 40.0, WHITE, ink);
         let target = Self::coin_target(view);
         let k = self.coin_bump.scale(0.3);
-        draw_coin(target, 19.0 * k, 0.0);
+        draw_coin(target, 21.0 * k, 0.0);
         score_text(
             &self.coins.to_string(),
-            target.x + 28.0 + text_size(&self.coins.to_string(), 38.0).width / 2.0,
+            target.x + 32.0 + text_size(&self.coins.to_string(), 38.0).width / 2.0,
             target.y + 3.0,
             38.0,
             self.coin_bump.t,
@@ -832,17 +709,18 @@ impl Hotel {
         for s in 0..5 {
             let x = view.w * 0.62 + s as f32 * 38.0;
             let filled = self.stars - s as f32;
-            let c = if filled >= 0.5 {
-                Color::from_rgba(255, 210, 60, 255)
-            } else {
-                Color::from_rgba(120, 40, 50, 255)
-            };
-            let wob = if filled >= 0.5 {
+            let on = filled >= 0.5;
+            let wob = if on {
                 1.0 + 0.06 * (self.t * 3.0 + s as f32).sin()
             } else {
                 1.0
             };
-            star(vec2(x, 35.0), 17.0 * wob, 0.0, c);
+            crate::ui::sprite_at(
+                if on { "star" } else { "star_empty" },
+                vec2(x, 35.0),
+                34.0 * wob,
+                crate::art::Draw::default(),
+            );
         }
         text_outline(
             &format!("Guests {}", self.served),
@@ -850,49 +728,33 @@ impl Hotel {
             35.0,
             30.0,
             WHITE,
-            Color::from_rgba(100, 35, 45, 255),
+            ink,
         );
     }
 
     fn draw_lobby(&self, lobby: Rect) {
-        round_rect(
-            Rect::new(lobby.x, lobby.y + 5.0, lobby.w, lobby.h),
-            18.0,
-            Color::from_rgba(130, 90, 60, 255),
-        );
-        round_rect(lobby, 18.0, Color::from_rgba(200, 160, 120, 255));
+        frame(lobby, 0.9, WOOD);
         let carpet = Rect::new(
             lobby.x + 8.0,
             lobby.y + 92.0,
             lobby.w - 16.0,
-            lobby.h - 100.0,
+            lobby.h - 104.0,
         );
-        round_rect(carpet, 10.0, Color::from_rgba(170, 60, 70, 255));
-        round_rect(
-            Rect::new(
-                carpet.x + 6.0,
-                carpet.y + 6.0,
-                carpet.w - 12.0,
-                carpet.h - 12.0,
-            ),
-            8.0,
-            Color::from_rgba(190, 80, 90, 255),
-        );
+        frame(carpet, 0.45, Color::from_rgba(235, 110, 125, 255));
         let sign = Rect::new(lobby.x + 10.0, lobby.y + 10.0, lobby.w - 20.0, 70.0);
-        round_rect(
-            Rect::new(sign.x, sign.y + 4.0, sign.w, sign.h),
-            12.0,
-            Color::from_rgba(80, 45, 25, 255),
+        frame(sign, 0.8, Color::from_rgba(190, 120, 80, 255));
+        art::sprite_at(
+            "plant",
+            vec2(sign.x + 22.0, sign.y + sign.h - 28.0),
+            52.0,
+            crate::art::Draw::default(),
         );
-        round_rect(sign, 12.0, Color::from_rgba(130, 80, 50, 255));
-        for dx in [14.0, sign.w - 14.0] {
-            draw_circle(
-                sign.x + dx,
-                sign.y + 14.0,
-                4.0,
-                Color::from_rgba(255, 210, 60, 255),
-            );
-        }
+        art::sprite_at(
+            "lamp",
+            vec2(sign.x + sign.w - 18.0, sign.y + sign.h * 0.5),
+            sign.h - 8.0,
+            crate::art::Draw::default(),
+        );
         let glow = 0.8 + 0.2 * (self.t * 2.0).sin();
         text_outline(
             "Lobby",
@@ -909,14 +771,14 @@ impl Hotel {
             if i == 0 {
                 let pulse = 0.5 + 0.5 * (self.t * 4.0).sin();
                 let card = Rect::new(lobby.x + 10.0, y, lobby.w - 20.0, slot - 8.0);
-                round_rect(card, 12.0, Color::from_rgba(255, 240, 200, 255));
+                frame(card, 0.5, Color::from_rgba(255, 244, 214, 255));
                 draw_rectangle_lines(
                     card.x,
                     card.y,
                     card.w,
                     card.h,
                     3.0,
-                    with_alpha(Color::from_rgba(255, 190, 60, 255), 0.4 + 0.5 * pulse),
+                    with_alpha(Color::from_rgba(255, 190, 60, 255), 0.3 + 0.5 * pulse),
                 );
             }
             let urgent = g.patience < PATIENCE * 0.25;
@@ -926,29 +788,36 @@ impl Hotel {
                 0.0
             };
             let bob = (self.t * 3.0 + i as f32 * 1.3).sin().abs() * 3.0;
+            let waiting = g.patience > PATIENCE * 0.4;
+            let s = (slot / 110.0).max(0.6);
             draw_guest(
                 cx + shake,
-                y + slot * 0.45 - bob,
-                (slot / 110.0).max(0.6),
+                y + slot * 0.42 - bob,
+                s,
                 g.look,
-                g.patience > PATIENCE * 0.4,
+                if waiting { Pose::Idle } else { Pose::Think },
             );
-            let bw = lobby.w - 120.0;
-            let k = g.patience / PATIENCE;
-            let bar = Rect::new(lobby.x + 100.0, y + slot * 0.4, bw, 14.0);
-            round_rect(bar, 7.0, Color::from_rgba(120, 80, 60, 255));
-            let c = if k > 0.5 {
-                Color::from_rgba(90, 200, 90, 255)
-            } else if k > 0.25 {
-                Color::from_rgba(250, 160, 40, 255)
-            } else {
-                Color::from_rgba(240, 70, 60, 255)
-            };
-            if k > 0.02 {
-                let fill = Rect::new(bar.x, bar.y, (bar.w * k).max(14.0), bar.h);
-                round_rect(fill, 7.0, c);
-                gloss(fill, 7.0);
+            if urgent {
+                art::sprite_at(
+                    "face_sad",
+                    vec2(cx + 30.0 * s, y + slot * 0.42 - 40.0 * s - bob),
+                    26.0,
+                    crate::art::Draw::default(),
+                );
             }
+            let k = g.patience / PATIENCE;
+            let fill = if k > 0.5 {
+                "bar_green"
+            } else if k > 0.25 {
+                "bar_yellow"
+            } else {
+                "bar_red"
+            };
+            bar(
+                Rect::new(lobby.x + 100.0, y + slot * 0.4, lobby.w - 120.0, 16.0),
+                k,
+                fill,
+            );
         }
         if self.queue.is_empty() {
             text_center(
@@ -956,8 +825,51 @@ impl Hotel {
                 lobby.x + lobby.w / 2.0,
                 lobby.y + 140.0,
                 26.0,
-                Color::from_rgba(255, 235, 200, 255),
+                Color::from_rgba(255, 245, 225, 255),
             );
+        }
+    }
+
+    fn draw_locked(&self, i: usize, r: Rect, next_locked: Option<usize>) {
+        frame(r, 0.55, Color::from_rgba(240, 222, 196, 255));
+        let inner = Rect::new(r.x + 6.0, r.y + 6.0, r.w - 12.0, r.h - 14.0);
+        frame(inner, 0.3, Color::from_rgba(205, 185, 160, 255));
+        let c = r.center();
+        if next_locked != Some(i) {
+            crate::ui::sprite_at(
+                "icon_lock",
+                c,
+                44.0,
+                crate::art::Draw {
+                    tint: Color::from_rgba(120, 110, 100, 255),
+                    ..Default::default()
+                },
+            );
+            return;
+        }
+        let can = self.coins >= room_price(i);
+        text_outline(
+            "Build",
+            c.x,
+            r.y + r.h * 0.34,
+            32.0,
+            WHITE,
+            Color::from_rgba(90, 70, 55, 255),
+        );
+        let press = if can {
+            0.5 + 0.5 * (self.t * 6.0).sin()
+        } else {
+            0.0
+        };
+        let tone = if can {
+            crate::ui::Tone::Green
+        } else {
+            crate::ui::Tone::Grey
+        };
+        let b = Rect::new(r.x + 14.0, c.y - 6.0, r.w - 28.0, 60.0);
+        crate::ui::button(b, &format!("${}", room_price(i)), tone, press * 0.4);
+        if can {
+            shine_sweep(r, self.t + i as f32);
         }
     }
 
@@ -967,148 +879,82 @@ impl Hotel {
         let c = r.center();
         let r = Rect::new(c.x - r.w * k / 2.0, c.y - r.h * k / 2.0, r.w * k, r.h * k);
         if self.rooms[i] == Room::Locked {
-            round_rect(
-                Rect::new(r.x, r.y + 4.0, r.w, r.h),
-                14.0,
-                Color::from_rgba(150, 140, 125, 255),
-            );
-            round_rect(r, 14.0, Color::from_rgba(200, 190, 175, 255));
-            for gy in 0..3 {
-                let by = r.y + 10.0 + gy as f32 * (r.h - 20.0) / 3.0;
-                draw_rectangle(
-                    r.x + 10.0,
-                    by,
-                    r.w - 20.0,
-                    4.0,
-                    Color::from_rgba(185, 175, 160, 255),
-                );
-            }
-            if next_locked == Some(i) {
-                let can = self.coins >= room_price(i);
-                let col = if can {
-                    Color::from_rgba(50, 150, 60, 255)
-                } else {
-                    Color::from_rgba(110, 100, 90, 255)
-                };
-                let pulse = if can {
-                    1.0 + 0.06 * (self.t * 6.0).sin()
-                } else {
-                    1.0
-                };
-                text_center(
-                    "Build",
-                    r.x + r.w / 2.0,
-                    r.y + r.h * 0.38,
-                    30.0 * pulse,
-                    col,
-                );
-                text_center(
-                    &format!("${}", room_price(i)),
-                    r.x + r.w / 2.0,
-                    r.y + r.h * 0.66,
-                    34.0 * pulse,
-                    col,
-                );
-                if can {
-                    shine_sweep(r, self.t + i as f32);
-                    draw_rectangle_lines(
-                        r.x + 2.0,
-                        r.y + 2.0,
-                        r.w - 4.0,
-                        r.h - 4.0,
-                        4.0,
-                        with_alpha(GREEN, 0.4 + 0.4 * (self.t * 5.0).sin().abs()),
-                    );
-                }
-            } else {
-                text_center(
-                    "?",
-                    r.x + r.w / 2.0,
-                    r.y + r.h / 2.0,
-                    40.0,
-                    Color::from_rgba(150, 140, 130, 255),
-                );
-            }
+            self.draw_locked(i, r, next_locked);
             return;
         }
-        round_rect(
-            Rect::new(r.x, r.y + 4.0, r.w, r.h),
-            14.0,
-            Color::from_rgba(150, 120, 90, 255),
+        frame(r, 0.55, WOOD);
+        let inner = Rect::new(r.x + 6.0, r.y + 6.0, r.w - 12.0, r.h - 14.0);
+        art::sprite_ex(
+            "wall",
+            inner,
+            crate::art::Draw {
+                tint: WALLS[(lvl - 1) as usize],
+                ..Default::default()
+            },
         );
-        round_rect(r, 14.0, WALLS[(lvl - 1) as usize]);
-        let wall = Rect::new(r.x + 6.0, r.y + 6.0, r.w - 12.0, r.h - 30.0);
-        wallpaper(wall, lvl);
-        let floor = Rect::new(r.x + 4.0, r.y + r.h - 24.0, r.w - 8.0, 20.0);
-        round_rect(floor, 8.0, Color::from_rgba(190, 140, 90, 255));
-        for k in 0..((floor.w / 30.0) as usize) {
-            draw_rectangle(
-                floor.x + 20.0 + k as f32 * 30.0,
-                floor.y + 2.0,
-                2.0,
-                floor.h - 6.0,
-                Color::from_rgba(160, 110, 70, 255),
-            );
+        let floor_h = 16.0;
+        wallpaper(Rect::new(inner.x, inner.y, inner.w, inner.h - floor_h), lvl);
+        let floor = Rect::new(inner.x, inner.y + inner.h - floor_h, inner.w, floor_h);
+        art::sprite("floor", floor);
+        let floor_y = floor.y + 4.0;
+        let win_h = (inner.h * 0.46).min(inner.w * 0.62 / 0.43);
+        window(
+            vec2(
+                inner.x + inner.w * 0.36,
+                inner.y + inner.h * 0.12 + win_h / 2.0,
+            ),
+            win_h,
+            night,
+            self.t,
+            i as f32,
+        );
+        let draw = crate::art::Draw::default();
+        let lamp_at = vec2(inner.x + 14.0, floor_y);
+        if lvl >= 2 {
+            let lh = (inner.h * 0.5).min(110.0);
+            art::sprite_at("lamp", lamp_at - vec2(0.0, lh / 2.0), lh, draw);
+            if night > 0.4 {
+                draw_circle(
+                    lamp_at.x + 2.0,
+                    lamp_at.y - lh + 6.0,
+                    26.0,
+                    Color::new(1.0, 0.9, 0.5, 0.2 * night),
+                );
+            }
         }
-        let win = Rect::new(r.x + r.w * 0.36, r.y + r.h * 0.2, r.w * 0.28, r.h * 0.26);
-        window(win, night, self.t, i as f32);
-        let bed = Rect::new(r.x + 12.0, r.y + r.h - 56.0, r.w * 0.55, 38.0);
-        let bed_c = [
-            Color::from_rgba(90, 140, 220, 255),
-            Color::from_rgba(230, 120, 160, 255),
-            Color::from_rgba(240, 190, 60, 255),
-        ][(lvl - 1) as usize];
-        round_rect(
-            Rect::new(bed.x, bed.y + 3.0, bed.w, bed.h),
-            8.0,
-            darker(bed_c, 0.7),
+        let bed_w = inner.w * 0.78;
+        let bed = if lvl >= 2 { "bed2" } else { "bed1" };
+        let bs = art::size(bed);
+        let bed_h = bed_w * bs.y / bs.x;
+        art::sprite_ex(
+            bed,
+            Rect::new(inner.x + 8.0, floor_y - bed_h, bed_w, bed_h),
+            draw,
         );
-        round_rect(bed, 8.0, bed_c);
-        round_rect(Rect::new(bed.x + 4.0, bed.y + 4.0, 26.0, 16.0), 5.0, WHITE);
-        draw_rectangle(
-            bed.x + 34.0,
-            bed.y + 22.0,
-            bed.w - 40.0,
-            3.0,
-            with_alpha(WHITE, 0.4),
-        );
-        let lamp = vec2(r.x + r.w - 20.0, r.y + r.h - 46.0);
-        draw_rectangle(
-            lamp.x - 2.0,
-            lamp.y,
-            4.0,
-            22.0,
-            Color::from_rgba(120, 90, 60, 255),
-        );
-        draw_triangle(
-            vec2(lamp.x - 10.0, lamp.y),
-            vec2(lamp.x + 10.0, lamp.y),
-            vec2(lamp.x, lamp.y - 14.0),
-            Color::from_rgba(255, 220, 130, 255),
-        );
-        if night > 0.4 {
-            draw_circle(
-                lamp.x,
-                lamp.y + 2.0,
-                20.0,
-                Color::new(1.0, 0.9, 0.5, 0.18 * night),
+        if lvl >= 3 {
+            let ph = (inner.h * 0.3).min(70.0);
+            art::sprite_at(
+                "plant",
+                vec2(inner.x + inner.w - 14.0, floor_y - ph / 2.0),
+                ph,
+                draw,
             );
         }
         let badge = Rect::new(r.x + 6.0, r.y + 6.0, 34.0, 30.0);
-        round_rect(badge, 8.0, Color::from_rgba(140, 100, 70, 230));
+        frame(badge, 0.45, Color::from_rgba(150, 100, 70, 255));
         text_center(
             &format!("{}", i + 1),
             badge.x + badge.w / 2.0,
-            badge.y + badge.h / 2.0,
+            badge.y + badge.h / 2.0 - 1.0,
             24.0,
             WHITE,
         );
         for s in 0..lvl {
-            star(
-                vec2(r.x + 56.0 + s as f32 * 18.0, r.y + 21.0),
-                9.0 + (self.pop[i].t < 1.0) as u8 as f32 * 2.0,
-                0.0,
-                Color::from_rgba(255, 190, 40, 255),
+            crate::ui::sprite_at(
+                "star",
+                vec2(r.x + 56.0 + s as f32 * 19.0, r.y + 21.0),
+                18.0 + (self.pop[i].t < 1.0) as u8 as f32 * 3.0,
+                draw,
             );
         }
         match self.rooms[i] {
@@ -1128,9 +974,9 @@ impl Hotel {
                 );
                 text_outline(
                     "Free",
-                    r.x + r.w * 0.6,
-                    r.y + r.h * 0.62,
-                    28.0,
+                    r.x + r.w * 0.62,
+                    r.y + r.h * 0.6,
+                    30.0,
                     Color::from_rgba(80, 190, 90, 255),
                     WHITE,
                 );
@@ -1144,35 +990,36 @@ impl Hotel {
                 let walking = self.walkers.iter().any(|w| w.room == i);
                 if !walking {
                     let bob = (self.t * 2.5 + i as f32).sin() * 1.5;
-                    draw_guest(
-                        r.x + r.w * 0.78,
-                        r.y + r.h - 60.0 + bob,
-                        0.8,
-                        guest,
-                        mood >= 0,
-                    );
-                    if need.is_none() && mood > 1 {
+                    let happy = need.is_none() && mood > 1;
+                    let pose = if happy {
+                        Pose::Cheer
+                    } else if mood >= 0 {
+                        Pose::Idle
+                    } else {
+                        Pose::Think
+                    };
+                    let spot = Self::room_spot(r);
+                    draw_guest(spot.x, spot.y + bob, 0.95, guest, pose);
+                    if happy {
                         let hp = vec2(
-                            r.x + r.w * 0.78 + 20.0,
-                            r.y + r.h - 96.0 - (self.t * 2.0 + i as f32).sin().abs() * 6.0,
+                            spot.x + 26.0,
+                            spot.y - 38.0 - (self.t * 2.0 + i as f32).sin().abs() * 6.0,
                         );
-                        draw_circle(hp.x, hp.y, 5.0, Color::from_rgba(255, 110, 150, 255));
-                        draw_circle(hp.x + 6.0, hp.y, 5.0, Color::from_rgba(255, 110, 150, 255));
-                        draw_triangle(
-                            vec2(hp.x - 5.0, hp.y + 2.0),
-                            vec2(hp.x + 11.0, hp.y + 2.0),
-                            vec2(hp.x + 3.0, hp.y + 12.0),
-                            Color::from_rgba(255, 110, 150, 255),
-                        );
+                        art::sprite_at("heart", hp, 28.0, draw);
                     }
                 }
-                let k = left / STAY;
-                let bar = Rect::new(r.x + 10.0, r.y + r.h - 8.0, (r.w - 20.0) * k, 5.0);
-                if bar.w > 1.0 {
-                    round_rect(bar, 2.5, Color::from_rgba(120, 180, 250, 255));
-                }
+                bar(
+                    Rect::new(
+                        inner.x + 8.0,
+                        floor.y + floor.h * 0.5 - 4.0,
+                        inner.w - 16.0,
+                        8.0,
+                    ),
+                    (left / STAY).min(1.0),
+                    "bar_blue",
+                );
                 if let Some((n, w)) = need {
-                    let c = vec2(r.x + r.w * 0.45, r.y + r.h * 0.38);
+                    let c = vec2(r.x + r.w * 0.66, r.y + r.h * 0.4);
                     let bob = (self.t * 6.0).sin() * 3.0;
                     let urgent = w < 2.0;
                     let pulse = if urgent {
@@ -1181,31 +1028,41 @@ impl Hotel {
                         1.0
                     };
                     draw_triangle(
-                        vec2(c.x - 8.0, c.y + 22.0 + bob),
-                        vec2(c.x + 8.0, c.y + 22.0 + bob),
-                        vec2(c.x + 4.0, c.y + 34.0 + bob),
+                        vec2(c.x - 8.0, c.y + 26.0 + bob),
+                        vec2(c.x + 8.0, c.y + 26.0 + bob),
+                        vec2(c.x + 4.0, c.y + 38.0 + bob),
                         WHITE,
                     );
-                    draw_circle(
-                        c.x,
-                        c.y + bob,
-                        28.0 * pulse,
-                        if urgent { RED } else { ORANGE },
+                    let tint = if urgent {
+                        Color::from_rgba(255, 130, 130, 255)
+                    } else {
+                        Color::from_rgba(255, 215, 150, 255)
+                    };
+                    let d = 62.0 * pulse;
+                    crate::ui::sprite_ex(
+                        "round_white",
+                        Rect::new(c.x - d / 2.0, c.y + bob - d / 2.0, d, d),
+                        crate::art::Draw {
+                            tint,
+                            ..Default::default()
+                        },
                     );
-                    draw_circle(c.x, c.y + bob, 25.0 * pulse, WHITE);
-                    draw_need(vec2(c.x, c.y + bob), n);
+                    draw_need(vec2(c.x, c.y + bob - 2.0), n);
                 }
             }
             Room::Dirty { cleaning } => {
                 for k in 0..5 {
                     let fx = r.x + 20.0 + (k * 37 % 70) as f32 / 70.0 * (r.w - 40.0);
                     let fy = r.y + 50.0 + (k * 53 % 50) as f32 / 50.0 * (r.h - 110.0).max(10.0);
-                    draw_circle(fx, fy, 8.0, Color::from_rgba(150, 120, 80, 200));
-                    draw_circle(
-                        fx - 2.0,
-                        fy - 2.0,
-                        3.0,
-                        Color::from_rgba(190, 160, 120, 200),
+                    art::sprite_at(
+                        if k % 2 == 0 { "dirt1" } else { "dirt2" },
+                        vec2(fx, fy),
+                        18.0 + (k % 3) as f32 * 5.0,
+                        crate::art::Draw {
+                            tint: Color::from_rgba(120, 85, 55, 210),
+                            rotation: k as f32,
+                            ..Default::default()
+                        },
                     );
                 }
                 match cleaning {
@@ -1220,18 +1077,14 @@ impl Hotel {
                                 + (life * 9.0 + f).sin() * 6.0;
                             let by = r.y + r.h - 40.0 - life * (r.h - 80.0);
                             let br = 4.0 + (f * 7.0) % 8.0;
-                            draw_circle(
-                                bx,
-                                by,
-                                br,
-                                Color::new(0.7, 0.88, 1.0, 0.35 * (1.0 - life)),
-                            );
-                            draw_circle_lines(
-                                bx,
-                                by,
-                                br,
-                                1.5,
-                                Color::new(1.0, 1.0, 1.0, 0.8 * (1.0 - life)),
+                            crate::ui::sprite_at(
+                                "bubble",
+                                vec2(bx, by),
+                                br * 2.4,
+                                crate::art::Draw {
+                                    tint: with_alpha(WHITE, 0.9 * (1.0 - life)),
+                                    ..Default::default()
+                                },
                             );
                         }
                         text_outline(
@@ -1242,11 +1095,11 @@ impl Hotel {
                             Color::from_rgba(80, 140, 200, 255),
                             WHITE,
                         );
-                        let bar = Rect::new(r.x + 14.0, r.y + r.h * 0.55, r.w - 28.0, 12.0);
-                        round_rect(bar, 6.0, Color::from_rgba(200, 220, 240, 255));
-                        let fill = Rect::new(bar.x, bar.y, (bar.w * k).max(12.0), bar.h);
-                        round_rect(fill, 6.0, Color::from_rgba(80, 160, 230, 255));
-                        gloss(fill, 6.0);
+                        bar(
+                            Rect::new(r.x + 14.0, r.y + r.h * 0.55, r.w - 28.0, 16.0),
+                            k,
+                            "bar_blue",
+                        );
                     }
                     None => {
                         let pulse = 1.0 + 0.05 * (self.t * 6.0).sin();
@@ -1266,25 +1119,23 @@ impl Hotel {
         if matches!(self.rooms[i], Room::Free | Room::Dirty { .. }) && lvl < MAX_LEVEL {
             let up = Self::upgrade_rect(r);
             let can = self.coins >= upgrade_price(lvl);
-            let col = if can {
-                Color::from_rgba(250, 180, 40, 255)
-            } else {
-                Color::from_rgba(200, 190, 180, 255)
-            };
             let bob = if can {
                 (self.t * 5.0 + i as f32).sin() * 2.0
             } else {
                 0.0
             };
-            let up = Rect::new(up.x, up.y + bob, up.w, up.h);
-            round_rect(
-                Rect::new(up.x, up.y + 4.0, up.w, up.h),
-                10.0,
-                darker(col, 0.7),
+            let c = up.center() + vec2(0.0, bob);
+            let base = if can { "round_yellow" } else { "round_white" };
+            crate::ui::sprite_at(base, c, up.h, draw);
+            art::sprite_at(
+                "plus",
+                c - vec2(0.0, 2.0),
+                up.h * 0.5,
+                crate::art::Draw {
+                    tint: if can { WHITE } else { crate::ui::BODY },
+                    ..draw
+                },
             );
-            round_rect(up, 10.0, col);
-            gloss(up, 10.0);
-            text_center("+", up.x + up.w / 2.0, up.y + up.h / 2.0, 34.0, WHITE);
         }
     }
 }
@@ -1337,8 +1188,8 @@ impl Game for Hotel {
             let to = Self::room_spot(rects[w.room]);
             let k = w.t / WALK;
             let p = walk_pos(from, to, k);
-            let scale = (Self::queue_slot(lobby) / 110.0).max(0.6) * (1.0 - k) + 0.8 * k;
-            draw_guest(p.x, p.y, scale, w.look, true);
+            let scale = (Self::queue_slot(lobby) / 110.0).max(0.6) * (1.0 - k) + 0.95 * k;
+            draw_guest(p.x, p.y, scale, w.look, Pose::Walk(w.t));
         }
         set_view_camera(view, Vec2::ZERO);
         self.draw_hud(view);
@@ -1356,47 +1207,111 @@ impl Game for Hotel {
 }
 
 pub fn icon(r: Rect) {
-    draw_rectangle(
-        r.x + r.w * 0.2,
-        r.y + r.h * 0.2,
-        r.w * 0.6,
-        r.h * 0.75,
-        Color::from_rgba(180, 70, 80, 255),
+    let draw = crate::art::Draw::default();
+    art::sprite(
+        "wall",
+        Rect::new(r.x - r.w * 0.05, r.y - r.h * 0.05, r.w * 1.1, r.h * 1.1),
     );
-    draw_triangle(
-        vec2(r.x + r.w * 0.12, r.y + r.h * 0.22),
-        vec2(r.x + r.w * 0.88, r.y + r.h * 0.22),
-        vec2(r.x + r.w * 0.5, r.y + r.h * 0.04),
-        Color::from_rgba(120, 50, 60, 255),
+    art::sprite("floor", Rect::new(r.x, r.y + r.h * 0.86, r.w, r.h * 0.16));
+    let wh = r.h * 0.5;
+    art::sprite_at("window", vec2(r.x + r.w * 0.27, r.y + r.h * 0.3), wh, draw);
+    let bs = art::size("bed2");
+    let bw = r.w * 0.62;
+    art::sprite(
+        "bed2",
+        Rect::new(
+            r.x + r.w * 0.02,
+            r.y + r.h * 0.92 - bw * bs.y / bs.x,
+            bw,
+            bw * bs.y / bs.x,
+        ),
     );
-    for row in 0..3 {
-        for col in 0..2 {
-            let lit = (row + col) % 2 == 0;
-            draw_rectangle(
-                r.x + r.w * (0.29 + col as f32 * 0.25),
-                r.y + r.h * (0.3 + row as f32 * 0.17),
-                r.w * 0.17,
-                r.h * 0.11,
-                if lit {
-                    Color::from_rgba(255, 220, 100, 255)
-                } else {
-                    Color::from_rgba(250, 236, 214, 255)
-                },
-            );
-        }
-    }
-    draw_rectangle(
-        r.x + r.w * 0.42,
-        r.y + r.h * 0.8,
-        r.w * 0.16,
-        r.h * 0.15,
-        Color::from_rgba(90, 50, 40, 255),
+    art::sprite_at(
+        "lamp",
+        vec2(r.x + r.w * 0.52, r.y + r.h * 0.55),
+        r.h * 0.5,
+        draw,
+    );
+    art::sprite_at(
+        "g3_cheer",
+        vec2(r.x + r.w * 0.76, r.y + r.h * 0.6),
+        r.h * 0.62,
+        draw,
+    );
+    crate::ui::sprite_at(
+        "coin",
+        vec2(r.x + r.w * 0.88, r.y + r.h * 0.16),
+        r.h * 0.2,
+        draw,
     );
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn hotel_sprites_all_exist() {
+        let have = art::names();
+        let mut want: Vec<String> = [
+            "wall",
+            "floor",
+            "window",
+            "bed1",
+            "bed2",
+            "lamp",
+            "plant",
+            "need_towel",
+            "need_food",
+            "need_music",
+            "dirt1",
+            "dirt2",
+            "moon",
+            "plus",
+            "bulb_red",
+            "bulb_white",
+            "bar_back",
+            "bar_green",
+            "bar_yellow",
+            "bar_red",
+            "bar_blue",
+            "face_sad",
+            "heart",
+        ]
+        .iter()
+        .map(|s| s.to_string())
+        .collect();
+        for look in 0..6 {
+            for pose in [Pose::Idle, Pose::Think, Pose::Cheer] {
+                want.push(guest_sprite(look, pose));
+            }
+            for k in 0..8 {
+                want.push(guest_sprite(look, Pose::Walk(k as f32 / 11.0)));
+            }
+        }
+        for n in &want {
+            assert!(have.iter().any(|h| h == n), "hotel sheet lacks {n}");
+        }
+        for need in [Need::Towel, Need::Food, Need::Music] {
+            assert!(have.iter().any(|h| h == need_sprite(need)));
+        }
+    }
+
+    #[test]
+    fn walk_cycle_uses_all_eight_frames() {
+        let frames: std::collections::HashSet<String> = (0..80)
+            .map(|k| guest_sprite(0, Pose::Walk(k as f32 / 80.0 * WALK)))
+            .collect();
+        assert_eq!(frames.len(), 8);
+    }
+
+    #[test]
+    fn glass_sits_inside_the_window_frame() {
+        let w = Rect::new(0.0, 0.0, 48.0, 112.0);
+        let g = glass_rect(w);
+        assert!(w.contains(g.point()) && w.contains(g.point() + g.size()));
+        assert!(g.w > 0.0 && g.h > 0.0);
+    }
 
     fn with_guest() -> Hotel {
         let mut h = Hotel::new();
