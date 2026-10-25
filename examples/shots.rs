@@ -92,7 +92,18 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
         "Road Hopper" if f.is_multiple_of(30) && f < 200 => i.swipe = Some(Dir::Up),
         "Brick Breaker" => {
             if f == 2 {
+                i.pressed = true;
+                i.down = true;
+            }
+            if f == 30 {
                 i.released = true;
+            }
+            if f > 30 {
+                i.down = true;
+                i.pos = vec2(
+                    view.w * (0.5 + 0.38 * (f as f32 * 0.045).sin()),
+                    view.h - 60.0,
+                );
             }
         }
         "Sky Jumper" => {
