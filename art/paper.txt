@@ -1,15 +1,11 @@
-tile_blue      | puzzle-pack-2/PNG/Tiles blue/tileBlue_01.png | max=48
-tile_red       | puzzle-pack-2/PNG/Tiles red/tileRed_01.png | max=48
-tile_yellow    | puzzle-pack-2/PNG/Tiles yellow/tileYellow_01.png | max=48
-tile_green     | puzzle-pack-2/PNG/Tiles green/tileGreen_01.png | max=48
-tile_pink      | puzzle-pack-2/PNG/Tiles pink/tilePink_01.png | max=48
-dot            | puzzle-pack-2/PNG/Tiles grey/tileGrey_11.png | max=48
-panda          | animal-pack/PNG/Round/panda.png | max=128
-parrot         | animal-pack/PNG/Round/parrot.png | max=128
-giraffe        | animal-pack/PNG/Round/giraffe.png | max=128
-snake          | animal-pack/PNG/Round/snake.png | max=128
-pig            | animal-pack/PNG/Round/pig.png | max=128
-tuft1          | background-elements/PNG/grass2.png | max=32
-tuft2          | background-elements/PNG/grass4.png | max=32
-tuft3          | background-elements/PNG/grass5.png | max=32
-fence          | background-elements/PNG/fence_piece.png | max=96
+# Painted with FLUX.1-dev via art/gen/flux.py (prompts in art/gen/prompts/paper.json and pa_*.json), cut with rembg birefnet
+grass  | gen:paper_lawn.png | solo jpg max=512 keep
+tile   | gen:paper_tile_gray.png | max=96
+head0  | gen:paper_head0_cut.png | max=192
+head1  | gen:paper_head1_cut.png | max=192
+head2  | gen:paper_head2_cut.png | max=192
+head3  | gen:paper_head3_cut.png | max=192
+head4  | gen:paper_head4_cut.png | max=192
+tuft0  | gen:paper_tuft0_cut.png | max=64
+tuft1  | gen:paper_tuft1_cut.png | max=64
+fence  | gen:paper_fence_cut.png | max=512

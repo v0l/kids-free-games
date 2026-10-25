@@ -1,0 +1,18 @@
+[
+ {
+  "name": "paper_head2",
+  "w": 768,
+  "h": 768,
+  "seed": 90,
+  "cut": true,
+  "prompt": "Cute chubby round bright yellow blob monster character with a big happy smile, huge glossy eyes, tiny stubby arms, front view, entirely bright yellow body. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "paper_tile3",
+  "w": 512,
+  "h": 512,
+  "seed": 83,
+  "cut": true,
+  "prompt": "A single glossy square candy jelly game tile block, bright lime green, slightly rounded corners, thick bevelled edge, shiny white highlight, seen straight from above. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ }
+]
