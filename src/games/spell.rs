@@ -1245,7 +1245,7 @@ mod tests {
 
     #[test]
     fn there_are_enough_words_in_every_level() {
-        for level in 0..LEVELS.len() {
+        for (level, spec) in LEVELS.iter().enumerate() {
             assert!(words_in(level).len() >= QUESTIONS * 2, "level {level}");
         }
         let mut seen: Vec<&str> = WORDS.iter().map(|(w, _)| *w).collect();
@@ -1428,10 +1428,10 @@ mod tests {
         assert_eq!(lens[4], (5, 5));
         assert_eq!(lens[6], (6, 6));
         assert!(lens[..8].windows(2).all(|w| w[0].0 <= w[1].0));
-        for level in 0..LEVELS.len() {
+        for (level, spec) in LEVELS.iter().enumerate() {
             for w in words_in(level) {
                 assert!(
-                    (LEVELS[level].min_len..=LEVELS[level].max_len).contains(&w.len()),
+                    (spec.min_len..=LEVELS[level].max_len).contains(&w.len()),
                     "{w} in level {level}"
                 );
             }
@@ -1444,11 +1444,11 @@ mod tests {
         assert!(LEVELS[8].decoys > LEVELS[1].decoys);
         assert!(LEVELS.windows(2).skip(1).all(|w| w[0].hints >= w[1].hints));
         assert!(LEVELS[7].hints < LEVELS[2].hints);
-        for level in 0..LEVELS.len() {
+        for (level, spec) in LEVELS.iter().enumerate() {
             let g = fresh(level);
-            let need = g.word().len() + LEVELS[level].decoys;
+            let need = g.word().len() + spec.decoys;
             assert_eq!(g.board.tiles.len(), need);
-            assert_eq!(g.hints_left, LEVELS[level].hints);
+            assert_eq!(g.hints_left, spec.hints);
         }
     }
 
