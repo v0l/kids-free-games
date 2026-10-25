@@ -549,11 +549,7 @@ fn with_tiles(f: impl FnOnce(&Texture2D, &crate::art::Index)) {
         let (tex, index) = t.get_or_insert_with(|| {
             let index = crate::art::parse(art::bytes()).expect("bad helix sheet");
             let (at, len) = index.pages[0];
-            let tex = Texture2D::from_file_with_format(
-                &art::bytes()[at..at + len],
-                Some(ImageFormat::Png),
-            );
-            tex.set_filter(FilterMode::Linear);
+            let tex = crate::art::upload(&art::bytes()[at..at + len]);
             (tex, index)
         });
         f(tex, index);
@@ -677,6 +673,13 @@ mod tests {
         g.y = Helix::floor_y(floor) - BALL_R - 5.0;
         g.vy = 400.0;
         g.state = State::Playing;
+    }
+
+    #[test]
+    fn helix_tile_page_decodes_whatever_its_format() {
+        let index = crate::art::parse(art::bytes()).unwrap();
+        let (at, len) = index.pages[0];
+        assert!(crate::art::decode_page(&art::bytes()[at..at + len]).is_some());
     }
 
     #[test]

@@ -104,7 +104,7 @@ pub fn decode_page(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
     Some((w, h, im.into_raw()))
 }
 
-fn upload(bytes: &[u8]) -> Texture2D {
+pub fn upload(bytes: &[u8]) -> Texture2D {
     let Some((w, h, px)) = decode_page(bytes) else {
         return Texture2D::empty();
     };
