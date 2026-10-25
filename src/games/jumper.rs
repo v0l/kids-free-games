@@ -12,7 +12,7 @@ pub const PLAT_H: f32 = 22.0;
 pub const HERO_R: f32 = 26.0;
 pub const MOVE: f32 = 520.0;
 pub const SPRING_H: f32 = 30.0;
-const HERO_H: f32 = 84.0;
+const HERO_H: f32 = 104.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
@@ -64,6 +64,15 @@ pub struct Crumb {
 }
 
 pub const CRUMB_LIFE: f32 = 1.2;
+
+pub fn hero_height(frame: &str) -> f32 {
+    match frame {
+        "bunny_jump" => 0.95,
+        "bunny_ready" => 0.82,
+        "bunny_hurt" => 0.78,
+        _ => 1.0,
+    }
+}
 
 pub fn squash_stretch(squish: f32, vy: f32) -> (f32, f32) {
     let stretch = (vy.abs() / 1400.0).min(1.0) * 0.2;
@@ -408,56 +417,55 @@ impl Jumper {
     fn background(&self, view: &View) {
         let f = view.full();
         let climb = (-self.cam / 24000.0).clamp(0.0, 1.0);
-        let mix = |a: [f32; 3], b: [f32; 3]| {
-            Color::new(
-                a[0] + (b[0] - a[0]) * climb,
-                a[1] + (b[1] - a[1]) * climb,
-                a[2] + (b[2] - a[2]) * climb,
-                1.0,
-            )
-        };
-        sky(
-            view,
-            mix([0.30, 0.62, 0.95], [0.10, 0.14, 0.42]),
-            mix([0.62, 0.86, 1.0], [0.30, 0.38, 0.70]),
+        let night = 1.0 - climb * 0.6;
+        let dusk = Color::new(night, night * (1.0 - climb * 0.1), 1.0 - climb * 0.3, 1.0);
+        let sky_s = art::size("sky");
+        let sky_h = f.h.max(f.w * sky_s.y / sky_s.x);
+        let sky_w = sky_h * sky_s.x / sky_s.y;
+        art::sprite_ex(
+            "sky",
+            Rect::new(f.x + (f.w - sky_w) / 2.0, f.y + f.h - sky_h, sky_w, sky_h),
+            crate::art::Draw {
+                tint: dusk,
+                ..Default::default()
+            },
         );
-        let side = view.w.max(view.h * 0.8);
-        let night = 1.0 - climb * 0.55;
-        for (name, factor, base) in [
-            ("hills_far", 0.08, [0.80, 0.92, 0.95]),
-            ("hills_mid", 0.16, [0.62, 0.86, 0.78]),
-            ("hills_near", 0.3, [0.46, 0.80, 0.62]),
-        ] {
-            let tint = Color::new(base[0] * night, base[1] * night, base[2] * night, 1.0);
+        for (name, factor, height) in [("hills_far", 0.08, 0.5), ("hills", 0.2, 0.42)] {
+            let h = view.h * height;
+            let s = art::size(name);
+            let w = h * s.x / s.y;
             let bottom = view.h + view.inset.bottom - self.cam * factor;
-            if bottom - side > f.y + f.h {
+            if bottom - h > f.y + f.h {
                 continue;
             }
-            let off = (self.t * 3.0 * factor).rem_euclid(side);
-            let mut x = f.x - off;
-            while x < f.x + f.w {
+            let shade = if name == "hills" { 1.0 } else { 0.95 };
+            let tint = Color::new(night * shade, night * shade, night.max(0.55) * shade, 1.0);
+            for x in crate::games::flappy::tile_x(f.x, f.w, w, self.t * 3.0 * factor) {
                 art::sprite_ex(
                     name,
-                    Rect::new(x, bottom - side, side + 1.0, side),
+                    Rect::new(x, bottom - h, w + 1.0, h),
                     crate::art::Draw {
                         tint,
                         ..Default::default()
                     },
                 );
-                x += side;
             }
         }
-        for k in 0..9 {
+        for k in 0..7 {
             let f = k as f32;
             let span = view.h + 260.0;
             let x = (f * 211.0) % (view.w + 120.0) - 60.0;
             let y = parallax_y(f * 157.0, self.cam, 0.14 + (f % 3.0) * 0.06, span);
-            let w = 130.0 + (f * 53.0) % 110.0;
-            crate::ui::cloud(
-                k,
+            let w = 110.0 + (f * 53.0) % 90.0;
+            let name = ["cloud1", "cloud2", "cloud3"][k % 3];
+            art::sprite_w(
+                name,
                 vec2(x + (self.t * (4.0 + f)) % 40.0, y),
                 w,
-                Color::new(1.0, 1.0, 1.0, 0.85 - climb * 0.35),
+                crate::art::Draw {
+                    tint: Color::new(1.0, 1.0, 1.0, 0.8 - climb * 0.4),
+                    ..Default::default()
+                },
             );
         }
     }
@@ -468,9 +476,16 @@ impl Jumper {
             Kind::Moving(_) => "stone",
             Kind::Crumble => "wood_cracked",
         };
-        let w = PLAT_W + 12.0;
+        let (w, lift) = match name {
+            "grass" => (PLAT_W + 36.0, 0.17),
+            "stone" => (PLAT_W + 30.0, 0.1),
+            _ => (PLAT_W + 24.0, 0.12),
+        };
         let h = w * art::size(name).y / art::size(name).x;
-        art::sprite(name, Rect::new(p.x - 6.0, y - 3.0, w, h));
+        art::sprite(
+            name,
+            Rect::new(p.x + PLAT_W / 2.0 - w / 2.0, y - h * lift, w, h),
+        );
         if p.kind == Kind::Spring {
             let ext = self.boing_age(p).map_or(1.0, spring_extension);
             let frame = if ext < 0.7 {
@@ -480,11 +495,11 @@ impl Jumper {
             } else {
                 "spring"
             };
-            let sw = 56.0;
-            let sh = sw * art::size(frame).y / art::size(frame).x;
+            let sh = 64.0;
+            let sw = sh * art::size(frame).x / art::size(frame).y;
             art::sprite(
                 frame,
-                Rect::new(p.x + PLAT_W / 2.0 - sw / 2.0, y + 2.0 - sh, sw, sh),
+                Rect::new(p.x + PLAT_W / 2.0 - sw / 2.0, y + 4.0 - sh, sw, sh),
             );
         }
     }
@@ -504,9 +519,9 @@ impl Jumper {
     fn draw_hero(&self, view: &View, c: Vec2) {
         let (sx, sy) = squash_stretch(self.squish, self.vel.y);
         let frame = self.hero_frame();
-        let unit = HERO_H / art::size("bunny_stand").y;
-        let w = art::size(frame).x * unit * sx;
-        let h = art::size(frame).y * unit * sy;
+        let fh = HERO_H * hero_height(frame);
+        let w = fh * art::size(frame).x / art::size(frame).y * sx;
+        let h = fh * sy;
         let anchor = c.y + HERO_R + 2.0;
         for dx in [0.0, -view.w, view.w] {
             let cx = c.x + dx;
@@ -660,44 +675,7 @@ impl Game for Jumper {
 }
 
 pub fn icon(r: Rect) {
-    gradient_rect(
-        r,
-        Color::from_rgba(125, 205, 255, 255),
-        Color::from_rgba(205, 240, 255, 255),
-    );
-    let side = r.w.max(r.h);
-    art::sprite("hills_mid", Rect::new(r.x, r.y + r.h - side, r.w, side));
-    art::sprite("hills_near", Rect::new(r.x, r.y + r.h - side, r.w, side));
-    crate::ui::cloud(
-        1,
-        vec2(r.x + r.w * 0.78, r.y + r.h * 0.18),
-        r.w * 0.34,
-        WHITE,
-    );
-    art::sprite_w(
-        "grass",
-        vec2(r.x + r.w * 0.24, r.y + r.h * 0.72),
-        r.w * 0.46,
-        Default::default(),
-    );
-    art::sprite_w(
-        "stone",
-        vec2(r.x + r.w * 0.76, r.y + r.h * 0.5),
-        r.w * 0.46,
-        Default::default(),
-    );
-    art::sprite_w(
-        "spring",
-        vec2(r.x + r.w * 0.24, r.y + r.h * 0.6),
-        r.w * 0.16,
-        Default::default(),
-    );
-    art::sprite_at(
-        "bunny_jump",
-        vec2(r.x + r.w * 0.6, r.y + r.h * 0.28),
-        r.h * 0.4,
-        Default::default(),
-    );
+    crate::ui::icon("jumper", r);
 }
 
 #[cfg(test)]
@@ -722,9 +700,12 @@ mod tests {
     fn jumper_sprites_all_exist() {
         let have = art::names();
         for n in [
+            "sky",
             "hills_far",
-            "hills_mid",
-            "hills_near",
+            "hills",
+            "cloud1",
+            "cloud2",
+            "cloud3",
             "grass",
             "stone",
             "wood_cracked",

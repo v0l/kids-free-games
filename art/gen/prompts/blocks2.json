@@ -1,0 +1,58 @@
+[
+ {
+  "name": "blocks_tile0",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy cyan sky blue jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_tile1",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy royal blue jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_tile2",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy orange jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_tile3",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy golden yellow jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_tile4",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy lime green jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_tile5",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy purple violet jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_tile6",
+  "w": 512,
+  "h": 512,
+  "seed": 611,
+  "cut": true,
+  "prompt": "Flat 2D match-three game tile icon, viewed perfectly face-on straight from the front with no perspective, a square glossy red jelly gem tile with rounded corners, a bright lighter bevelled border frame and a softly glowing inner face with a white shine highlight in the top left corner, like Candy Crush or Toon Blast pieces. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]

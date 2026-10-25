@@ -1,0 +1,138 @@
+[
+ {
+  "name": "jumper_sky",
+  "w": 768,
+  "h": 1344,
+  "seed": 301,
+  "cut": false,
+  "prompt": "Mobile game vertical sky background, bright sunny blue sky fading to pale turquoise near the bottom, a few soft puffy stylised clouds, subtle light rays, completely empty sky, no characters, no ground, no buildings. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "jumper_hills",
+  "w": 1344,
+  "h": 512,
+  "seed": 63,
+  "cut": true,
+  "prompt": "Side-scrolling mobile game parallax layer, wide panorama strip: a continuous row of soft rolling bright green cartoon hills with scattered round trees and bushes only, no buildings, no houses, the hills touch both the left and right edges at the same height, flat front view, top half of the image is plain flat pure white. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "jumper_hills_far",
+  "w": 1344,
+  "h": 512,
+  "seed": 71,
+  "cut": true,
+  "prompt": "Side-scrolling mobile game parallax layer, wide panorama strip: a continuous row of distant pale blue-green misty mountains and hills with soft haze, no buildings, the hills touch both the left and right edges at the same height, flat front view, top half of the image is plain flat pure white. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "jumper_bunny_stand",
+  "w": 1024,
+  "h": 1024,
+  "seed": 311,
+  "cut": true,
+  "prompt": "Cute chubby cream-white cartoon bunny character with tall pink-lined ears, big glossy eyes, pink nose, tiny blue backpack, side view facing right, sitting upright calmly on the ground with ears up, front paws down, happy smile. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_bunny_jump",
+  "w": 1024,
+  "h": 1024,
+  "seed": 311,
+  "cut": true,
+  "prompt": "Cute chubby cream-white cartoon bunny character with tall pink-lined ears, big glossy eyes, pink nose, tiny blue backpack, side view facing right, leaping upwards high in the air, legs stretched down, arms raised up, ears streaming down, excited open smile. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_bunny_ready",
+  "w": 1024,
+  "h": 1024,
+  "seed": 311,
+  "cut": true,
+  "prompt": "Cute chubby cream-white cartoon bunny character with tall pink-lined ears, big glossy eyes, pink nose, tiny blue backpack, side view facing right, crouched low squashed down on the ground ready to jump, ears pressed down, determined face. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_bunny_hurt",
+  "w": 1024,
+  "h": 1024,
+  "seed": 311,
+  "cut": true,
+  "prompt": "Cute chubby cream-white cartoon bunny character with tall pink-lined ears, big glossy eyes, pink nose, tiny blue backpack, side view facing right, falling upside down with dizzy swirly eyes, mouth open in a surprised O, ears flapping. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_grass",
+  "w": 1344,
+  "h": 640,
+  "seed": 321,
+  "cut": true,
+  "prompt": "Floating island platform for a platformer game, side view, wide flat slab of earth with a thick lush bright green grass top with tiny flowers and a brown soil underside with small rocks, rounded bottom, perfectly horizontal. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_stone",
+  "w": 1344,
+  "h": 640,
+  "seed": 322,
+  "cut": true,
+  "prompt": "Floating stone platform for a platformer game, side view, wide flat slab of smooth blue-grey carved stone bricks with a thin layer of moss on top, rounded bottom, perfectly horizontal. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_wood",
+  "w": 1344,
+  "h": 640,
+  "seed": 323,
+  "cut": true,
+  "prompt": "Cracked broken wooden plank platform for a platformer game, side view, wide flat slab of old brown wood boards with deep cracks, splintered edges and nails, perfectly horizontal. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_spring_in",
+  "w": 768,
+  "h": 768,
+  "seed": 331,
+  "cut": true,
+  "prompt": "Red coil spring jump pad, side view, fully compressed squashed flat, coiled metal spring with a round red cap on top and a yellow base. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_spring",
+  "w": 768,
+  "h": 768,
+  "seed": 331,
+  "cut": true,
+  "prompt": "Red coil spring jump pad, side view, half compressed, coiled metal spring with a round red cap on top and a yellow base. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_spring_out",
+  "w": 768,
+  "h": 768,
+  "seed": 331,
+  "cut": true,
+  "prompt": "Red coil spring jump pad, side view, fully stretched tall extended, coiled metal spring with a round red cap on top and a yellow base. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_crumb",
+  "w": 512,
+  "h": 512,
+  "seed": 341,
+  "cut": true,
+  "prompt": "A small chunk of broken brown wood plank with splinters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_cloud1",
+  "w": 1024,
+  "h": 640,
+  "seed": 351,
+  "cut": true,
+  "prompt": "Soft puffy white stylised cartoon cloud with gentle blue-grey shading underneath. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_cloud2",
+  "w": 1024,
+  "h": 640,
+  "seed": 352,
+  "cut": true,
+  "prompt": "Soft puffy white stylised cartoon cloud, wide and flat-bottomed, with gentle blue-grey shading underneath. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "jumper_cloud3",
+  "w": 1024,
+  "h": 640,
+  "seed": 353,
+  "cut": true,
+  "prompt": "Small round fluffy white stylised cartoon cloud with gentle blue-grey shading underneath. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]

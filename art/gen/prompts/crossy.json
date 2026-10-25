@@ -1,0 +1,170 @@
+[
+ {
+  "name": "crossy_grass",
+  "w": 1344,
+  "h": 320,
+  "seed": 401,
+  "cut": false,
+  "prompt": "Lush bright green cartoon lawn grass texture with tiny flowers and soft light and dark mowing patches, flat orthographic top-down view, seamless repeating horizontal texture strip filling the whole frame edge to edge, no objects, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "crossy_road",
+  "w": 1344,
+  "h": 320,
+  "seed": 402,
+  "cut": false,
+  "prompt": "Dark grey smooth cartoon asphalt road surface texture with subtle cracks and tiny pebbles, no lane markings, flat orthographic top-down view, seamless repeating horizontal texture strip filling the whole frame edge to edge, no objects, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "crossy_kerb",
+  "w": 1344,
+  "h": 192,
+  "seed": 403,
+  "cut": false,
+  "prompt": "A row of light grey stone kerb curb blocks with a thin strip of green grass above, cartoon style, flat orthographic top-down view, seamless repeating horizontal texture strip filling the whole frame edge to edge, no objects, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "crossy_water",
+  "w": 1344,
+  "h": 320,
+  "seed": 404,
+  "cut": false,
+  "prompt": "Sparkling bright turquoise cartoon river water with soft white ripples and light glints, flat orthographic top-down view, seamless repeating horizontal texture strip filling the whole frame edge to edge, no objects, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "crossy_rail",
+  "w": 1344,
+  "h": 320,
+  "seed": 405,
+  "cut": false,
+  "prompt": "Railway track seen from above: two horizontal steel rails on brown wooden sleepers over grey gravel ballast, rails running left to right across the whole frame, flat orthographic top-down view, seamless repeating horizontal texture strip filling the whole frame edge to edge, no objects, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "crossy_tree",
+  "w": 1024,
+  "h": 1024,
+  "seed": 411,
+  "cut": true,
+  "prompt": "Round fluffy cartoon tree with a thick brown trunk and a big bright green leafy crown. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_bush",
+  "w": 1024,
+  "h": 768,
+  "seed": 412,
+  "cut": true,
+  "prompt": "Round green cartoon bush with a few small red berries. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_rock",
+  "w": 1024,
+  "h": 768,
+  "seed": 413,
+  "cut": true,
+  "prompt": "Grey cartoon boulder rock with moss patches. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_car_red",
+  "w": 1024,
+  "h": 640,
+  "seed": 421,
+  "cut": true,
+  "prompt": "Cute chunky cartoon red hatchback car, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_car_blue",
+  "w": 1024,
+  "h": 640,
+  "seed": 422,
+  "cut": true,
+  "prompt": "Cute chunky cartoon blue sedan car, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_car_yellow",
+  "w": 1024,
+  "h": 640,
+  "seed": 423,
+  "cut": true,
+  "prompt": "Cute chunky cartoon yellow taxi car, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_car_green",
+  "w": 1024,
+  "h": 640,
+  "seed": 424,
+  "cut": true,
+  "prompt": "Cute chunky cartoon green mini car, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_car_orange",
+  "w": 1024,
+  "h": 640,
+  "seed": 425,
+  "cut": true,
+  "prompt": "Cute chunky cartoon orange pickup truck, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_car_purple",
+  "w": 1024,
+  "h": 640,
+  "seed": 426,
+  "cut": true,
+  "prompt": "Cute chunky cartoon purple sports car, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_bus",
+  "w": 1344,
+  "h": 640,
+  "seed": 431,
+  "cut": true,
+  "prompt": "Cute chunky cartoon yellow school bus, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_truck",
+  "w": 1344,
+  "h": 704,
+  "seed": 432,
+  "cut": true,
+  "prompt": "Cute chunky cartoon red delivery box truck, side view facing right, shiny paint, big round wheels, glossy windows, friendly headlights. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_engine",
+  "w": 1344,
+  "h": 640,
+  "seed": 441,
+  "cut": true,
+  "prompt": "Cute chunky cartoon blue and red steam-diesel train locomotive, side view facing right, shiny paint, big round wheels, glossy windows, small headlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_wagon",
+  "w": 1344,
+  "h": 640,
+  "seed": 442,
+  "cut": true,
+  "prompt": "Cute chunky cartoon blue passenger train carriage, side view, shiny paint, small wheels, row of glossy windows with warm light, flat ends. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_log",
+  "w": 1344,
+  "h": 448,
+  "seed": 451,
+  "cut": true,
+  "prompt": "Thick brown cartoon tree log lying horizontally, side view, bark texture with moss, light wood grain rings visible on both flat ends, perfectly horizontal. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_hopper",
+  "w": 1024,
+  "h": 1024,
+  "seed": 461,
+  "cut": true,
+  "prompt": "Cute chubby round white cartoon chicken character with a small red comb and orange beak, big glossy eyes, side view facing right, standing, wings at its sides. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "crossy_hopper_air",
+  "w": 1024,
+  "h": 1024,
+  "seed": 461,
+  "cut": true,
+  "prompt": "Cute chubby round white cartoon chicken character with a small red comb and orange beak, big glossy eyes, side view facing right, jumping in the air with wings spread wide open and legs tucked. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]
