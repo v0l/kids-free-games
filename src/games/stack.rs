@@ -855,9 +855,9 @@ impl Stack {
         }
         text_outline(
             "GOAL",
-            0.0,
-            y - 30.0,
-            34.0,
+            300.0,
+            y - 26.0,
+            30.0,
             Color::from_rgba(255, 220, 80, 255),
             Color::from_rgba(70, 30, 100, 255),
         );
