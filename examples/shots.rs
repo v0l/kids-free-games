@@ -110,6 +110,17 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             if f == 1 {
                 i.pressed = true;
             }
+            if f > 5 {
+                i.down = true;
+                i.pos = vec2(
+                    if (f / 40).is_multiple_of(2) {
+                        100.0
+                    } else {
+                        view.w - 100.0
+                    },
+                    c.y,
+                );
+            }
         }
         "Memory Match" if f.is_multiple_of(30) && f < 300 => {
             let n = 16;
@@ -332,6 +343,10 @@ async fn main() {
                 kids_games::profile::submit("flappy", score, kids_games::profile::Better::Higher);
             }
         }
+        if idle && e.name == "Sky Jumper" {
+            kids_games::profile::create("Mia", 2);
+            kids_games::profile::set(e.icon_key, "runs", 5);
+        }
         let mut g = (e.make)();
         let frames = if idle && e.name == "Fruit Slice" {
             kids_games::profile::create("Mia", 2);
@@ -344,6 +359,11 @@ async fn main() {
         for f in 0..frames {
             let input = if idle && e.name == "Stack Tower" && (f == 1 || f == 5) {
                 Input::press_at(view.center())
+            } else if idle && f > 1 && e.name == "Sky Jumper" {
+                Input {
+                    right: f > 30,
+                    ..Default::default()
+                }
             } else if idle && f > 1 && e.name != "Paper Land" {
                 Input::default()
             } else if idle && e.name != "Paper Land" {
