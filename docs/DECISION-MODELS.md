@@ -39,3 +39,14 @@ N=80 python3 tools/play/bench.py <name> <url> [model]
 ## The harness to build (not started)
 
 Step the real game code headless frame by frame. At each decision point turn the state into described outcomes per action, ask Jev 1.13 in one batched call while the game waits, and apply the answer. Run a perfect code bot (simulates ahead) alongside as the reference that proves every stage can be beaten, and a "kid" bot (slow, makes mistakes) to check onboarding. Report per game: how far each player gets on attempts 1, 2, 3 and on (saves carry over), what ended each run, and calls and cost. Real Jev runs only from a separate command; `cargo test` uses a stub.
+
+## Watching Jev play
+
+```
+cargo run --release -- --jev flappy
+cargo run --release -- --jev crossy
+```
+
+The key comes from `YALR_KEY`, or from `providers.yalr.apiKey` in `~/.pi/agent/models.json`. In a web build, open `?jev=flappy&key=<yalr key>`. The game runs in real time, and Jev is asked again as soon as each answer lands, so it decides about 3.5 times a second. Each question describes the outcome of every action as of when the answer will arrive (`src/jev.rs`). If replies get slower than 320 ms, the game slows down to match. A panel shows the calls, latency, runs, best score, the last question and the last six answers.
+
+First real-time runs (2026-10-25, about 270 ms per call): Flappy best 15 pipes; Road Hopper best 43 rows.

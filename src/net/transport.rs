@@ -43,6 +43,14 @@ pub const API_URL: &str = match option_env!("KG_API_URL") {
     None => "https://kids-games-api.wrk-cf.workers.dev",
 };
 
+pub fn full_url(path: &str) -> String {
+    if path.starts_with("https://") {
+        path.to_string()
+    } else {
+        format!("{API_URL}{path}")
+    }
+}
+
 pub fn default_transport() -> Box<dyn Transport> {
     if cfg!(test) {
         Box::new(Offline)
@@ -81,7 +89,7 @@ mod platform {
         let agent = ureq::AgentBuilder::new()
             .timeout(Duration::from_secs(15))
             .build();
-        let mut r = agent.request(req.method, &format!("{API_URL}{}", req.path));
+        let mut r = agent.request(req.method, &full_url(&req.path));
         if let Some(t) = &req.token {
             r = r.set("Authorization", &format!("Bearer {t}"));
         }
@@ -152,7 +160,7 @@ mod platform {
 
     impl Transport for Platform {
         fn start(&mut self, req: HttpRequest) -> u32 {
-            let url = format!("{API_URL}{}", req.path);
+            let url = full_url(&req.path);
             let token = req.token.unwrap_or_default();
             let body = req.body.unwrap_or_default();
             unsafe {

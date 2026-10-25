@@ -46,6 +46,14 @@ miniquad_add_plugin({name: "kg_http", version: 1, register_plugin: function (o) 
   o.env.kg_http_free = function (id) { delete jobs[id]; };
 }});
 </script>
+<script>
+miniquad_add_plugin({name: "kg_jev", version: 1, register_plugin: function (o) {
+  var q = new URLSearchParams(location.search), v = q.get("jev") ? q.get("jev") + "," + (q.get("key") || "") : "";
+  var b = new TextEncoder().encode(v);
+  o.env.kg_jev_len = function () { return b.length; };
+  o.env.kg_jev_read = function (ptr, len) { new Uint8Array(wasm_memory.buffer, ptr, len).set(b.subarray(0, len)); };
+}});
+</script>
 <script>load("kids_games.wasm");</script>
 </body>
 </html>

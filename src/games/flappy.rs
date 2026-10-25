@@ -74,6 +74,7 @@ pub enum State {
     Dead,
 }
 
+#[derive(Clone)]
 pub struct Pipe {
     pub x: f32,
     pub gap_y: f32,

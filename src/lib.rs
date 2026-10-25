@@ -3,6 +3,7 @@ pub mod engine;
 pub mod feel;
 pub mod fx;
 pub mod games;
+pub mod jev;
 pub mod learn;
 pub mod link;
 pub mod mastery;
@@ -60,6 +61,10 @@ pub fn begin_frame_safe(px: safe::Insets) -> View {
 }
 
 pub async fn run() {
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    if let Some((kind, key)) = jev::arg() {
+        return jev::run(kind, key).await;
+    }
     sfx::load().await;
     macroquad::experimental::coroutines::start_coroutine(sfx::load_music());
     let mut tracker = InputTracker::default();
