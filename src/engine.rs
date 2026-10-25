@@ -4,6 +4,10 @@ use std::cell::Cell;
 pub const MIN_W: f32 = 960.0;
 pub const MIN_H: f32 = 720.0;
 pub const SWIPE_DIST: f32 = 36.0;
+pub const SWIPE_MM: f32 = 6.0;
+pub const TAP_SLOP_MM: f32 = 4.0;
+pub const FALLBACK_MM: f32 = 6.0;
+const AXIS_RATIO: f32 = 1.3;
 pub const HUD_LEFT: f32 = 90.0;
 
 pub trait Game {
@@ -132,6 +136,10 @@ pub struct Input {
     pub right: bool,
     pub action: bool,
     pub back: bool,
+    pub start: Vec2,
+    pub travel: f32,
+    pub swiped: bool,
+    pub mm: f32,
 }
 
 impl Input {
@@ -147,10 +155,23 @@ impl Input {
         self.pressed && r.contains(self.pos)
     }
 
+    pub fn mm(&self) -> f32 {
+        if self.mm > 0.0 {
+            self.mm
+        } else {
+            FALLBACK_MM
+        }
+    }
+
+    pub fn tap_released(&self) -> bool {
+        self.released && !self.swiped && self.travel < TAP_SLOP_MM * self.mm()
+    }
+
     pub fn press_at(pos: Vec2) -> Self {
         Self {
             pos,
             prev_pos: pos,
+            start: pos,
             down: true,
             pressed: true,
             ..Default::default()
@@ -165,34 +186,86 @@ impl Input {
     }
 }
 
+pub fn clear_swipe(delta: Vec2, threshold: f32) -> Option<Dir> {
+    let len = delta.length();
+    if len < threshold {
+        return None;
+    }
+    let (major, minor) = if delta.x.abs() > delta.y.abs() {
+        (delta.x.abs(), delta.y.abs())
+    } else {
+        (delta.y.abs(), delta.x.abs())
+    };
+    (major >= minor * AXIS_RATIO || len >= threshold * 2.0).then(|| Dir::from_vec(delta))
+}
+
 #[derive(Default)]
 pub struct SwipeTracker {
     anchor: Option<Vec2>,
+    last: Option<Dir>,
+    pub start: Vec2,
+    pub travel: f32,
+    pub swiped: bool,
 }
 
 impl SwipeTracker {
-    pub fn track(&mut self, pos: Vec2, down: bool, pressed: bool) -> Option<Dir> {
+    pub fn track(&mut self, pos: Vec2, down: bool, pressed: bool, threshold: f32) -> Option<Dir> {
         if pressed {
             self.anchor = Some(pos);
+            self.last = None;
+            self.start = pos;
+            self.travel = 0.0;
+            self.swiped = false;
+        }
+        if self.anchor.is_some() {
+            self.travel = self.travel.max(pos.distance(self.start));
         }
         if !down {
             self.anchor = None;
             return None;
         }
-        let dir = swipe_dir(pos - self.anchor?, SWIPE_DIST)?;
+        let dir = clear_swipe(pos - self.anchor?, threshold)?;
         self.anchor = Some(pos);
+        if self.last == Some(dir) {
+            return None;
+        }
+        self.last = Some(dir);
+        self.swiped = true;
         Some(dir)
     }
+}
+
+pub fn guess_units_per_mm(screen_w: f32, screen_h: f32) -> f32 {
+    let short = screen_w.min(screen_h);
+    let dpi = if short < 520.0 {
+        160.0
+    } else if short < 1050.0 {
+        132.0
+    } else {
+        96.0
+    };
+    dpi / 25.4
 }
 
 #[derive(Default)]
 pub struct InputTracker {
     swipes: SwipeTracker,
     last: Vec2,
+    units_per_mm: Option<f32>,
 }
 
 impl InputTracker {
+    fn view_mm(&mut self, view: &View) -> f32 {
+        let per_mm = *self.units_per_mm.get_or_insert_with(|| {
+            crate::safe::screen_units_per_mm()
+                .map(|px| px / screen_dpi_scale())
+                .unwrap_or_else(|| guess_units_per_mm(screen_width(), screen_height()))
+        });
+        per_mm / view.scale
+    }
+
     pub fn poll(&mut self, view: &View) -> Input {
+        let mm = self.view_mm(view);
         let (mx, my) = mouse_position();
         let pos = view.to_view(vec2(mx, my));
         let down = is_mouse_button_down(MouseButton::Left);
@@ -200,7 +273,7 @@ impl InputTracker {
         let released = is_mouse_button_released(MouseButton::Left);
         let prev_pos = if pressed { pos } else { self.last };
         self.last = pos;
-        let swipe = self.swipes.track(pos, down, pressed);
+        let swipe = self.swipes.track(pos, down, pressed, SWIPE_MM * mm);
         let key_dir = [
             (KeyCode::Up, Dir::Up),
             (KeyCode::W, Dir::Up),
@@ -226,6 +299,10 @@ impl InputTracker {
             right: is_key_down(KeyCode::Right) || is_key_down(KeyCode::D),
             action: is_key_pressed(KeyCode::Space) || is_key_pressed(KeyCode::Enter),
             back: is_key_pressed(KeyCode::Escape) || is_key_pressed(KeyCode::Backspace),
+            start: self.swipes.start,
+            travel: self.swipes.travel,
+            swiped: self.swipes.swiped,
+            mm,
         }
     }
 }
@@ -797,13 +874,67 @@ mod tests {
     }
 
     #[test]
-    fn one_drag_can_chain_two_swipes() {
+    fn one_drag_can_turn_but_never_repeats_a_direction() {
         let mut t = SwipeTracker::default();
-        assert_eq!(t.track(vec2(100.0, 100.0), true, true), None);
-        assert_eq!(t.track(vec2(150.0, 100.0), true, false), Some(Dir::Right));
-        assert_eq!(t.track(vec2(160.0, 100.0), true, false), None);
-        assert_eq!(t.track(vec2(160.0, 40.0), true, false), Some(Dir::Up));
-        assert_eq!(t.track(vec2(160.0, 0.0), false, false), None);
+        assert_eq!(t.track(vec2(100.0, 100.0), true, true, 36.0), None);
+        assert_eq!(
+            t.track(vec2(150.0, 100.0), true, false, 36.0),
+            Some(Dir::Right)
+        );
+        assert_eq!(t.track(vec2(200.0, 100.0), true, false, 36.0), None);
+        assert_eq!(t.track(vec2(300.0, 100.0), true, false, 36.0), None);
+        assert_eq!(t.track(vec2(300.0, 40.0), true, false, 36.0), Some(Dir::Up));
+        assert_eq!(t.track(vec2(300.0, 0.0), false, false, 36.0), None);
+        assert!(t.swiped);
+    }
+
+    #[test]
+    fn a_phone_tap_wobble_is_not_a_swipe() {
+        let phone = View::fit_safe(2992.0, 1344.0, crate::safe::Insets::default());
+        let mm = (495.0 / 25.4) / phone.scale;
+        let mut t = SwipeTracker::default();
+        t.track(vec2(500.0, 400.0), true, true, SWIPE_MM * mm);
+        let wobble = vec2(500.0 - 3.5 * mm, 400.0 + 1.0 * mm);
+        assert_eq!(t.track(wobble, true, false, SWIPE_MM * mm), None);
+        t.track(wobble, false, false, SWIPE_MM * mm);
+        let input = Input {
+            released: true,
+            travel: t.travel,
+            swiped: t.swiped,
+            mm,
+            ..Default::default()
+        };
+        assert!(input.tap_released());
+    }
+
+    #[test]
+    fn a_diagonal_drag_waits_until_it_picks_an_axis() {
+        let mut t = SwipeTracker::default();
+        t.track(vec2(0.0, 0.0), true, true, 40.0);
+        assert_eq!(t.track(vec2(32.0, -30.0), true, false, 40.0), None);
+        assert_eq!(t.track(vec2(36.0, -70.0), true, false, 40.0), Some(Dir::Up));
+    }
+
+    #[test]
+    fn a_long_drag_is_not_a_tap() {
+        let mut t = SwipeTracker::default();
+        t.track(vec2(0.0, 0.0), true, true, 40.0);
+        t.track(vec2(20.0, 20.0), true, false, 40.0);
+        t.track(vec2(0.0, 0.0), false, false, 40.0);
+        let input = Input {
+            released: true,
+            travel: t.travel,
+            mm: 5.0,
+            ..Default::default()
+        };
+        assert!(!input.tap_released());
+    }
+
+    #[test]
+    fn density_guess_is_sane() {
+        assert!((guess_units_per_mm(412.0, 915.0) - 160.0 / 25.4).abs() < 0.01);
+        assert!((guess_units_per_mm(1024.0, 768.0) - 132.0 / 25.4).abs() < 0.01);
+        assert!((guess_units_per_mm(1920.0, 1080.0) - 96.0 / 25.4).abs() < 0.01);
     }
 
     #[test]

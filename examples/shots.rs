@@ -1,5 +1,5 @@
 use kids_games::engine::*;
-use kids_games::games::{self, count, mathpop};
+use kids_games::games::{self, count, mathpop, merge};
 use kids_games::safe::Insets;
 use kids_games::{begin_frame_safe, menu::App, window_conf};
 use macroquad::prelude::*;
@@ -23,9 +23,16 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             if f == 1 {
                 i.pressed = true;
             }
-            let leg = (f / 50) % 4;
-            if f.is_multiple_of(50) {
-                i.swipe = Some([Dir::Up, Dir::Right, Dir::Down, Dir::Left][leg]);
+            let legs = [
+                (2, Dir::Right),
+                (125, Dir::Down),
+                (248, Dir::Left),
+                (371, Dir::Up),
+            ];
+            for (at, dir) in legs {
+                if f == at {
+                    i.swipe = Some(dir);
+                }
             }
         }
         "Snake" => {
@@ -36,7 +43,8 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                 i.swipe = Some([Dir::Down, Dir::Right, Dir::Up, Dir::Right][(f / 60) % 4]);
             }
         }
-        "2048" if f.is_multiple_of(5) => i.swipe = Some(Dir::ALL[(f / 5) % 4]),
+        "2048" if f == 300 => tap(&mut i, merge::complete_buttons(view).1.center()),
+        "2048" if f < 300 && f.is_multiple_of(5) => i.swipe = Some(Dir::ALL[(f / 5) % 4]),
         "Fruit Slice" => {
             if f == 1 {
                 i.pressed = true;
@@ -85,12 +93,34 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
         "Road Hopper" if f.is_multiple_of(30) && f < 200 => i.swipe = Some(Dir::Up),
         "Brick Breaker" => {
             if f == 2 {
+                i.pressed = true;
+                i.down = true;
+            }
+            if f == 30 {
                 i.released = true;
+            }
+            if f > 30 {
+                i.down = true;
+                i.pos = vec2(
+                    view.w * (0.5 + 0.38 * (f as f32 * 0.045).sin()),
+                    view.h - 60.0,
+                );
             }
         }
         "Sky Jumper" => {
             if f == 1 {
                 i.pressed = true;
+            }
+            if f > 5 {
+                i.down = true;
+                i.pos = vec2(
+                    if (f / 40).is_multiple_of(2) {
+                        100.0
+                    } else {
+                        view.w - 100.0
+                    },
+                    c.y,
+                );
             }
         }
         "Memory Match" if f.is_multiple_of(30) && f < 300 => {
@@ -135,7 +165,7 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             let gx = 16.0 + lobby_w + 16.0;
             let cw = (view.w - gx - 16.0) / 4.0;
             let ch = (view.h - top - 16.0) / 3.0;
-            let room = (f / 45) % 3;
+            let room = (f / 45) % 2;
             tap(
                 &mut i,
                 vec2(
@@ -147,38 +177,6 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
         _ => {}
     }
     i
-}
-
-fn helix_scene(mode: &str, view: &View) -> Box<dyn Game> {
-    use kids_games::games::helix::*;
-    let mut g = Helix::new();
-    let k = segment_at(ball_angle(), g.angle);
-    match mode {
-        "dead" => {
-            g.floors[0].segs[k] = Seg::Danger;
-            g.state = State::Playing;
-            g.y = Helix::floor_y(0) - BALL_R - 5.0;
-            g.vy = 400.0;
-            g.score = 24;
-        }
-        "won" => {
-            let n = g.floors.len();
-            g.floors[n - 1].segs[k] = Seg::Gap;
-            g.passed = n - 1;
-            g.score = 60;
-            g.bounces = 6;
-            g.state = State::Playing;
-            g.y = Helix::floor_y(n - 1) - BALL_R - 5.0;
-            g.vy = 400.0;
-        }
-        "select" => g.open_select(),
-        _ => {}
-    }
-    for _ in 0..150 {
-        g.update(&Input::default(), view, 1.0 / 60.0);
-        tick_overlay(1.0 / 60.0);
-    }
-    Box::new(g)
 }
 
 fn learn_tiles_x(view: &View, n: usize) -> Vec2 {
@@ -291,6 +289,38 @@ fn fake_inset() -> Insets {
     Insets::default()
 }
 
+fn helix_scene(mode: &str, view: &View) -> Box<dyn Game> {
+    use kids_games::games::helix::*;
+    let mut g = Helix::new();
+    let k = segment_at(ball_angle(), g.angle);
+    match mode {
+        "dead" => {
+            g.floors[0].segs[k] = Seg::Danger;
+            g.state = State::Playing;
+            g.y = Helix::floor_y(0) - BALL_R - 5.0;
+            g.vy = 400.0;
+            g.score = 24;
+        }
+        "won" => {
+            let n = g.floors.len();
+            g.floors[n - 1].segs[k] = Seg::Gap;
+            g.passed = n - 1;
+            g.score = 60;
+            g.bounces = 6;
+            g.state = State::Playing;
+            g.y = Helix::floor_y(n - 1) - BALL_R - 5.0;
+            g.vy = 400.0;
+        }
+        "select" => g.open_select(),
+        _ => {}
+    }
+    for _ in 0..150 {
+        g.update(&Input::default(), view, 1.0 / 60.0);
+        tick_overlay(1.0 / 60.0);
+    }
+    Box::new(g)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn pick() -> i32 {
     std::env::var("SHOT")
@@ -301,7 +331,7 @@ fn pick() -> i32 {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let frames = 420;
+    let frames = if pick() == 102 { 760 } else { 420 };
     rand::srand(42);
     let which = pick();
     next_frame().await;
@@ -325,27 +355,92 @@ async fn main() {
         }
         kids_games::profile::set_level("helix", 7);
     }
-    let mut game = (which > 0).then(|| {
-        let e = &all[which as usize - 1];
-        set_accent(e.color);
-        let mut g = (e.make)();
-        if let Some(mode) = helix_mode {
-            return helix_scene(mode, &view);
+    if which == 7 {
+        kids_games::profile::unlock("stack", 4);
+        kids_games::profile::set_level("stack", 4);
+        kids_games::profile::set("stack", "taught", 1);
+    }
+    let special: Option<Box<dyn Game>> = if which == -5 || which == -6 {
+        kids_games::profile::create("Mia", 2);
+        kids_games::profile::unlock("stack", 6);
+        kids_games::profile::award_stars("stack", 1, 3);
+        kids_games::profile::award_stars("stack", 2, 2);
+        kids_games::profile::award_stars("stack", 3, 1);
+        let mut g = games::stack::Stack::for_level(2);
+        if which == -5 {
+            for _ in 0..g.goal {
+                g.moving.x = g.tower.last().unwrap().x;
+                g.drop_block();
+            }
+        } else {
+            g.picking = true;
         }
-        for f in 0..frames {
-            let input = if idle && f > 1 {
-                Input::default()
-            } else if idle {
-                Input::press_at(view.center())
-            } else {
-                scripted(e.name, f, &view)
-            };
-            g.update(&input, &view, 1.0 / 60.0);
+        for _ in 0..60 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
             tick_overlay(1.0 / 60.0);
         }
-        g
+        Some(Box::new(g))
+    } else {
+        None
+    };
+    let mut game = special.or_else(|| {
+        (which > 0).then(|| {
+            let e = &all[which as usize - 1];
+            set_accent(e.color);
+            if idle && e.name == "Flappy Bird" {
+                kids_games::profile::set("flappy", "passed", 1);
+                for score in [14, 6] {
+                    kids_games::profile::submit(
+                        "flappy",
+                        score,
+                        kids_games::profile::Better::Higher,
+                    );
+                }
+            }
+            if idle && e.name == "Sky Jumper" {
+                kids_games::profile::create("Mia", 2);
+                kids_games::profile::set(e.icon_key, "runs", 5);
+            }
+            let mut g = (e.make)();
+            if let Some(mode) = helix_mode {
+                return helix_scene(mode, &view);
+            }
+            let frames = if idle && e.name == "Fruit Slice" {
+                kids_games::profile::create("Mia", 2);
+                kids_games::profile::set_level("fruit", 12);
+                g = (e.make)();
+                1500
+            } else {
+                frames
+            };
+            for f in 0..frames {
+                let input = if idle && e.name == "Stack Tower" && (f == 1 || f == 5) {
+                    Input::press_at(view.center())
+                } else if idle && f > 1 && e.name == "Sky Jumper" {
+                    Input {
+                        right: f > 30,
+                        ..Default::default()
+                    }
+                } else if idle && f > 1 && e.name == "Block Drop" {
+                    if f % 3 == 0 {
+                        Input::key(Dir::Down)
+                    } else {
+                        Input::default()
+                    }
+                } else if idle && f > 1 && e.name != "Paper Land" {
+                    Input::default()
+                } else if idle && e.name != "Paper Land" {
+                    Input::press_at(view.center())
+                } else {
+                    scripted(e.name, f, &view)
+                };
+                g.update(&input, &view, 1.0 / 60.0);
+                tick_overlay(1.0 / 60.0);
+            }
+            g
+        })
     });
-    if which != -3 && which != -4 && helix_mode.is_none() {
+    if which != -3 && which != -4 && which != -5 && which != -6 {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];

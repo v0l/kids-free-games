@@ -1,5 +1,6 @@
 use crate::engine::*;
 use crate::feel::{self, Impact};
+use crate::fx::approach as feel_approach;
 use crate::fx::*;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
@@ -14,6 +15,9 @@ pub const SMASH_FLOORS: u32 = 3;
 pub const GAME: &str = "helix";
 pub const MAX_LEVEL: u32 = 30;
 pub const GRID_COLS: usize = 6;
+const DRAG_DEADZONE_MM: f32 = 1.0;
+const DRAG_TURN: f32 = 0.012;
+const DRAG_EASE: f32 = 28.0;
 const WIN_DELAY: f32 = 0.8;
 const STAR_START: f32 = 0.3;
 const STAR_GAP: f32 = 0.25;
@@ -67,6 +71,8 @@ pub struct Helix {
     bump: Bump,
     end_t: f32,
     last_x: Option<f32>,
+    pending: f32,
+    engaged: bool,
 }
 
 pub fn ball_angle() -> f32 {
@@ -213,6 +219,8 @@ impl Helix {
             bump: Bump::default(),
             end_t: 0.0,
             last_x: None,
+            pending: 0.0,
+            engaged: false,
         }
     }
 
@@ -284,6 +292,32 @@ impl Helix {
         None
     }
 
+    fn follow_finger(&mut self, input: &Input, dt: f32) {
+        if input.down {
+            if input.pressed {
+                self.engaged = false;
+                self.pending = 0.0;
+            }
+            if !self.engaged && (input.pos.x - input.start.x).abs() > DRAG_DEADZONE_MM * input.mm()
+            {
+                self.engaged = true;
+                self.last_x = Some(input.pos.x);
+            }
+            if self.engaged {
+                if let Some(lx) = self.last_x {
+                    self.pending += (input.pos.x - lx) * DRAG_TURN;
+                }
+                self.last_x = Some(input.pos.x);
+            }
+        } else {
+            self.last_x = None;
+            self.engaged = false;
+        }
+        let left = feel_approach(self.pending, 0.0, DRAG_EASE, dt);
+        self.angle += self.pending - left;
+        self.pending = left;
+    }
+
     fn finish_level(&mut self, view: &View) {
         self.state = State::Won;
         self.end_t = 0.0;
@@ -333,14 +367,7 @@ impl Game for Helix {
                 f.broken += dt;
             }
         }
-        if input.down {
-            if let Some(lx) = self.last_x {
-                self.angle += (input.pos.x - lx) * 0.012;
-            }
-            self.last_x = Some(input.pos.x);
-        } else {
-            self.last_x = None;
-        }
+        self.follow_finger(input, dt);
         if input.left {
             self.angle -= 3.5 * dt;
         }
@@ -1392,5 +1419,54 @@ mod tests {
         g.enter(2);
         assert_eq!(Helix::new().level, 2);
         assert_eq!(crate::profile::unlocked(GAME), 6);
+    }
+
+    fn drag(g: &mut Helix, view: &View, from: f32, to: f32, frames: usize) {
+        let mut i = Input::press_at(vec2(from, 300.0));
+        i.mm = 4.0;
+        g.update(&i, view, 1.0 / 60.0);
+        for k in 1..=frames {
+            let x = from + (to - from) * k as f32 / frames as f32;
+            let mut m = Input {
+                pos: vec2(x, 300.0),
+                prev_pos: vec2(x, 300.0),
+                start: vec2(from, 300.0),
+                down: true,
+                mm: 4.0,
+                ..Default::default()
+            };
+            m.travel = (x - from).abs();
+            g.update(&m, view, 1.0 / 60.0);
+        }
+    }
+
+    #[test]
+    fn a_wobbling_finger_under_a_millimetre_does_not_spin_the_tower() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Helix::new();
+        g.state = State::Playing;
+        let before = g.angle;
+        drag(&mut g, &view, 400.0, 403.0, 6);
+        assert_eq!(g.angle, before);
+    }
+
+    #[test]
+    fn a_real_drag_turns_the_tower_smoothly_and_settles() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Helix::new();
+        g.state = State::Playing;
+        let before = g.angle;
+        drag(&mut g, &view, 400.0, 520.0, 12);
+        let mid = g.angle - before;
+        assert!(mid > 0.5);
+        let steady = Input::default();
+        for _ in 0..30 {
+            g.update(&steady, &view, 1.0 / 60.0);
+        }
+        let done = g.angle - before;
+        assert!(done > mid);
+        assert!(done > 1.2 && done < 1.5);
     }
 }
