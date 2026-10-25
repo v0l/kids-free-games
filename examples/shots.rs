@@ -280,6 +280,9 @@ async fn main() {
     let mut game = (which > 0).then(|| {
         let e = &all[which as usize - 1];
         set_accent(e.color);
+        if idle && e.name == "Flappy Bird" {
+            kids_games::profile::set("flappy", "passed", 1);
+        }
         let mut g = (e.make)();
         for f in 0..frames {
             let input = if idle && f > 1 {
