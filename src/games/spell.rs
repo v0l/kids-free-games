@@ -1245,7 +1245,7 @@ mod tests {
 
     #[test]
     fn there_are_enough_words_in_every_level() {
-        for (level, spec) in LEVELS.iter().enumerate() {
+        for level in 0..LEVELS.len() {
             assert!(words_in(level).len() >= QUESTIONS * 2, "level {level}");
         }
         let mut seen: Vec<&str> = WORDS.iter().map(|(w, _)| *w).collect();
