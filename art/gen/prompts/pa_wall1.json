@@ -1,0 +1,18 @@
+[
+ {
+  "name": "hotel_wall3",
+  "w": 768,
+  "h": 768,
+  "seed": 402,
+  "cut": false,
+  "prompt": "Flat seamless wallpaper texture, perfectly flat front view filling the whole frame, rich pink damask wallpaper with golden diamond pattern, even lighting, no shadows, no light beams, no perspective, no objects, no furniture, no window, no door. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "hotel_floor",
+  "w": 1344,
+  "h": 384,
+  "seed": 410,
+  "cut": false,
+  "prompt": "Flat front view strip of warm wooden plank floor boards with a white baseboard along the top edge, even lighting, no shadows, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]

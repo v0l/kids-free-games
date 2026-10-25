@@ -1,3 +1,4 @@
+use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -562,17 +563,10 @@ mod art {
 }
 
 const GRASS_OUTER: Color = Color::new(0.45, 0.72, 0.38, 1.0);
-const GRASS_LIGHT: Color = Color::new(0.84, 0.94, 0.74, 1.0);
-const GRASS_DARK: Color = Color::new(0.79, 0.91, 0.69, 1.0);
-const HEADS: [&str; 5] = ["panda", "parrot", "giraffe", "snake", "pig"];
-const TILES: [&str; 5] = [
-    "tile_blue",
-    "tile_red",
-    "tile_yellow",
-    "tile_green",
-    "tile_pink",
-];
-const TUFTS: [&str; 3] = ["tuft1", "tuft2", "tuft3"];
+const HEADS: [&str; 5] = ["head0", "head1", "head2", "head3", "head4"];
+const TUFTS: [&str; 2] = ["tuft0", "tuft1"];
+const GRASS_TILE_CELLS: i32 = 10;
+const GRASS_TILE_CELLS_Y: i32 = 11;
 
 pub fn tuft_at(x: i32, y: i32) -> Option<usize> {
     let h = (x.wrapping_mul(73856093) ^ y.wrapping_mul(19349663)) as u32;
@@ -585,6 +579,33 @@ pub fn tuft_at(x: i32, y: i32) -> Option<usize> {
 }
 
 impl Paper {
+    fn draw_lawn(&self, board: Vec2, origin: Vec2, view: &View) {
+        let tiles = (GW / GRASS_TILE_CELLS, GH / GRASS_TILE_CELLS_Y);
+        let size = vec2(board.x / tiles.0 as f32, board.y / tiles.1 as f32);
+        let seen = Rect::new(-origin.x, -origin.y, view.w, view.h);
+        for ty in 0..tiles.1 {
+            for tx in 0..tiles.0 {
+                let at = vec2(tx as f32 * size.x, ty as f32 * size.y);
+                if at.x > seen.x + seen.w
+                    || at.y > seen.y + seen.h
+                    || at.x + size.x < seen.x
+                    || at.y + size.y < seen.y
+                {
+                    continue;
+                }
+                art::sprite_ex(
+                    "grass",
+                    Rect::new(at.x, at.y, size.x + 0.5, size.y + 0.5),
+                    crate::art::Draw {
+                        flip_x: tx % 2 == 1,
+                        flip_y: ty % 2 == 1,
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+    }
+
     fn draw_fence(&self, board: Vec2, origin: Vec2, view: &View, cell: f32) {
         let ph = cell * 2.4;
         let pw = art::size("fence").x * ph / art::size("fence").y;
@@ -681,7 +702,7 @@ impl Game for Paper {
         set_view_camera(view, vec2(shift.x, shift.y));
         let board = vec2(cell * GW as f32, cell * GH as f32);
         draw_rectangle(5.0, 9.0, board.x, board.y, Color::new(0.1, 0.25, 0.1, 0.25));
-        draw_rectangle(0.0, 0.0, board.x, board.y, GRASS_LIGHT);
+        self.draw_lawn(board, origin, view);
         let x0 = ((-origin.x / cell).floor() as i32).max(0);
         let y0 = ((-origin.y / cell).floor() as i32).max(0);
         let x1 = (((view.w - origin.x) / cell).ceil() as i32).min(GW);
@@ -700,9 +721,20 @@ impl Game for Paper {
                     };
                     let d = (cell + 0.5) * pop;
                     let c = vec2(px + cell / 2.0, py + cell / 2.0);
-                    art::sprite(
-                        TILES[o as usize % TILES.len()],
+                    draw_rectangle(
+                        px,
+                        py,
+                        cell + 0.5,
+                        cell + 0.5,
+                        darker(color(o as usize), 0.75),
+                    );
+                    art::sprite_ex(
+                        "tile",
                         Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d),
+                        crate::art::Draw {
+                            tint: color(o as usize),
+                            ..Default::default()
+                        },
                     );
                     if (0.0..0.3).contains(&age) {
                         draw_rectangle(
@@ -714,17 +746,14 @@ impl Game for Paper {
                         );
                     }
                 } else {
-                    if (x + y) % 2 == 0 {
-                        draw_rectangle(px, py, cell + 0.5, cell + 0.5, GRASS_DARK);
-                    }
                     if let Some(t) = tuft_at(x, y) {
-                        let s = cell * (0.7 + 0.12 * (t % 3) as f32);
+                        let s = cell * (0.95 + 0.15 * (t % 3) as f32);
                         art::sprite_at(
                             TUFTS[t % TUFTS.len()],
                             vec2(px + cell * 0.5, py + cell * 0.55),
                             s,
                             crate::art::Draw {
-                                tint: with_alpha(WHITE, 0.85),
+                                tint: WHITE,
                                 ..Default::default()
                             },
                         );
@@ -735,13 +764,23 @@ impl Game for Paper {
                     let base = color(t as usize);
                     let d = cell * (0.62 + 0.1 * pulse);
                     let c = vec2(px + cell / 2.0, py + cell / 2.0);
-                    art::sprite_ex(
-                        "dot",
-                        Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d),
-                        crate::art::Draw {
-                            tint: Color::from_vec(base.to_vec() * 0.6 + vec4(0.4, 0.4, 0.4, 0.0)),
-                            ..Default::default()
-                        },
+                    draw_circle(
+                        c.x,
+                        c.y + d * 0.1,
+                        d * 0.5,
+                        with_alpha(darker(base, 0.5), 0.5),
+                    );
+                    draw_circle(
+                        c.x,
+                        c.y,
+                        d * 0.5,
+                        Color::from_vec(base.to_vec() * 0.55 + vec4(0.45, 0.45, 0.45, 0.0)),
+                    );
+                    draw_circle(
+                        c.x - d * 0.14,
+                        c.y - d * 0.16,
+                        d * 0.17,
+                        with_alpha(WHITE, 0.85),
                     );
                 }
             }
@@ -787,12 +826,28 @@ impl Game for Paper {
         set_view_camera(view, Vec2::ZERO);
         let pct = self.share(0) * 100.0;
         let f = view.full();
-        crate::ui::card(
-            Rect::new(f.x - 8.0, f.y - 8.0, f.w + 16.0, 62.0 - f.y + 8.0),
-            Color::from_rgba(240, 250, 235, 245),
+        let bar = Rect::new(f.x - 8.0, f.y - 8.0, f.w + 16.0, 62.0 - f.y + 8.0);
+        gradient_rect(
+            bar,
+            Color::from_rgba(70, 150, 60, 255),
+            Color::from_rgba(40, 110, 50, 255),
         );
-        let pill = Rect::new(HUD_LEFT, 6.0, 220.0, 52.0);
-        crate::ui::button(pill, "", crate::ui::Tone::Blue, 0.0);
+        draw_rectangle(
+            bar.x,
+            bar.y + bar.h,
+            bar.w,
+            4.0,
+            Color::from_rgba(25, 70, 35, 255),
+        );
+        draw_rectangle(
+            bar.x,
+            bar.y + bar.h - 2.0,
+            bar.w,
+            2.0,
+            Color::from_rgba(150, 220, 110, 255),
+        );
+        let pill = Rect::new(HUD_LEFT, 4.0, 220.0, 56.0);
+        crate::ui::painted_button(pill, "", "blue", 0.0, 1.0);
         score_text(
             &format!("{pct:.1}%"),
             pill.x + pill.w / 2.0,
@@ -847,44 +902,7 @@ impl Game for Paper {
 }
 
 pub fn icon(r: Rect) {
-    let n = 6;
-    let c = r.w / n as f32;
-    for y in 0..n {
-        for x in 0..n {
-            draw_rectangle(
-                r.x + x as f32 * c,
-                r.y + y as f32 * c,
-                c + 0.5,
-                c + 0.5,
-                if (x + y) % 2 == 0 {
-                    GRASS_DARK
-                } else {
-                    GRASS_LIGHT
-                },
-            );
-        }
-    }
-    let draw = crate::art::Draw::default();
-    for (gx, gy, w, h, tile) in [(0, 1, 3, 3, "tile_blue"), (3, 3, 3, 3, "tile_red")] {
-        for x in gx..gx + w {
-            for y in gy..gy + h {
-                art::sprite(
-                    tile,
-                    Rect::new(r.x + x as f32 * c, r.y + y as f32 * c, c + 0.5, c + 0.5),
-                );
-            }
-        }
-    }
-    for k in 0..3 {
-        art::sprite_at(
-            "dot",
-            vec2(r.x + c * (3.5 + k as f32 * 0.0), r.y + c * (3.6 - k as f32)),
-            c * 0.55,
-            draw,
-        );
-    }
-    art::sprite_at("panda", vec2(r.x + c * 3.0, r.y + c * 1.6), c * 2.1, draw);
-    art::sprite_at("parrot", vec2(r.x + c * 4.5, r.y + c * 4.5), c * 1.9, draw);
+    crate::ui::icon("paper", r);
 }
 
 #[cfg(test)]
@@ -911,14 +929,12 @@ mod tests {
         let have = art::names();
         for n in HEADS
             .iter()
-            .chain(&TILES)
             .chain(&TUFTS)
-            .chain(&["dot", "fence"])
+            .chain(&["grass", "fence", "tile"])
         {
             assert!(have.iter().any(|h| h == n), "paper sheet lacks {n}");
         }
         assert_eq!(HEADS.len(), COLORS.len());
-        assert_eq!(TILES.len(), COLORS.len());
     }
 
     #[test]

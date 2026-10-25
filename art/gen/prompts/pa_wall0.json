@@ -1,0 +1,18 @@
+[
+ {
+  "name": "hotel_wall1",
+  "w": 768,
+  "h": 768,
+  "seed": 400,
+  "cut": false,
+  "prompt": "Flat seamless wallpaper texture, perfectly flat front view filling the whole frame, cream wallpaper with soft vertical yellow stripes, even lighting, no shadows, no light beams, no perspective, no objects, no furniture, no window, no door. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "hotel_wall2",
+  "w": 768,
+  "h": 768,
+  "seed": 401,
+  "cut": false,
+  "prompt": "Flat seamless wallpaper texture, perfectly flat front view filling the whole frame, light sky blue wallpaper with small white polka dots, even lighting, no shadows, no light beams, no perspective, no objects, no furniture, no window, no door. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]
