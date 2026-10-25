@@ -45,4 +45,13 @@ import android.view.DisplayCutout;
         }
         return out;
     }
+
+    public float pixelsPerMm() {
+        android.util.DisplayMetrics m = getResources().getDisplayMetrics();
+        float dpi = (m.xdpi + m.ydpi) / 2.0f;
+        if (dpi < 100.0f || dpi > 900.0f) {
+            dpi = m.densityDpi;
+        }
+        return dpi / 25.4f;
+    }
 //% END

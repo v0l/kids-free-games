@@ -328,7 +328,7 @@ impl App {
         }
         if let (true, Some((start, s0))) = (input.down, self.drag_from) {
             let dy = input.pos.y - start.y;
-            if dy.abs() > 12.0 {
+            if dy.abs() > TAP_SLOP_MM * input.mm() {
                 self.dragged = true;
                 self.pressed_tile = None;
             }
@@ -666,6 +666,48 @@ mod tests {
                 "title runs under the mute button in {v:?}"
             );
         }
+    }
+
+    #[test]
+    fn a_tile_tap_that_wobbles_three_mm_still_opens_the_game() {
+        let v = View::fit(2992.0 / 2.625, 1344.0 / 2.625);
+        let mm = (495.0 / 25.4 / 2.625) / v.scale;
+        let mut app = App::new();
+        app.profiles = None;
+        let tile = app.layout(&v).tiles[0];
+        let at = tile.center();
+        app.update(
+            &Input {
+                mm,
+                ..Input::press_at(at)
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        let moved = at + vec2(0.0, 3.0 * mm);
+        app.update(
+            &Input {
+                pos: moved,
+                prev_pos: at,
+                down: true,
+                mm,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        app.update(
+            &Input {
+                pos: moved,
+                prev_pos: moved,
+                released: true,
+                mm,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        assert!(app.launch.is_some());
     }
 
     #[test]

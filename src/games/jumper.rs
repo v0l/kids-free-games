@@ -11,6 +11,7 @@ pub const PLAT_W: f32 = 120.0;
 pub const PLAT_H: f32 = 22.0;
 pub const HERO_R: f32 = 26.0;
 pub const MOVE: f32 = 520.0;
+pub const STEER_EASE: f32 = 14.0;
 pub const SPRING_H: f32 = 30.0;
 const HERO_H: f32 = 104.0;
 pub const KEY: &str = "jumper";
@@ -190,6 +191,7 @@ pub struct Jumper {
     last_x: f32,
     pub rank: Option<usize>,
     steered: bool,
+    steer_v: f32,
     run_t: f32,
     fallen_t: f32,
     confetti: Particles,
@@ -226,6 +228,7 @@ impl Jumper {
             last_x: 0.0,
             rank: None,
             steered: false,
+            steer_v: 0.0,
             run_t: 0.0,
             fallen_t: 0.0,
             confetti: Particles::default(),
@@ -740,7 +743,8 @@ impl Game for Jumper {
                 if steer != 0.0 && self.run_t > 0.5 {
                     self.steered = true;
                 }
-                self.physics(steer, view, dt);
+                self.steer_v = approach(self.steer_v, steer, STEER_EASE, dt);
+                self.physics(self.steer_v, view, dt);
                 self.fill(view);
                 if self.pos.y - HERO_R > self.cam + view.h {
                     if self.rescues > 0 && self.score < RESCUE_LIMIT {
@@ -1168,6 +1172,25 @@ mod tests {
     fn start(j: &mut Jumper, v: &View) {
         j.update(&Input::press_at(vec2(100.0, 100.0)), v, 1.0 / 60.0);
         assert_eq!(j.state, State::Playing);
+    }
+
+    #[test]
+    fn steering_eases_in_instead_of_snapping_to_full_speed() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut j = Jumper::new();
+        start(&mut j, &v);
+        let hold = Input {
+            down: true,
+            pos: vec2(v.w - 10.0, 300.0),
+            ..Default::default()
+        };
+        j.update(&hold, &v, 1.0 / 60.0);
+        assert!(j.vel.x > 0.0 && j.vel.x < MOVE * 0.5, "{}", j.vel.x);
+        for _ in 0..20 {
+            j.update(&hold, &v, 1.0 / 60.0);
+        }
+        assert!(j.vel.x > MOVE * 0.95, "{}", j.vel.x);
     }
 
     #[test]

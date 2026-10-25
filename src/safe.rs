@@ -93,6 +93,65 @@ pub fn insets_px() -> Insets {
     }
 }
 
+#[cfg(target_os = "android")]
+pub fn screen_units_per_mm() -> Option<f32> {
+    use macroquad::miniquad::native::android::{attach_jni_env, ACTIVITY};
+    unsafe {
+        let env = attach_jni_env();
+        let activity = ACTIVITY;
+        if activity.is_null() {
+            return None;
+        }
+        let get_class = (**env).GetObjectClass.unwrap();
+        let get_method = (**env).GetMethodID.unwrap();
+        let call_float = (**env).CallFloatMethod.unwrap();
+        let exception_check = (**env).ExceptionCheck.unwrap();
+        let exception_clear = (**env).ExceptionClear.unwrap();
+        let delete_local = (**env).DeleteLocalRef.unwrap();
+        let class = get_class(env, activity);
+        let method = get_method(env, class, c"pixelsPerMm".as_ptr(), c"()F".as_ptr());
+        if method.is_null() || exception_check(env) != 0 {
+            exception_clear(env);
+            delete_local(env, class);
+            return None;
+        }
+        let per_mm = call_float(env, activity, method);
+        if exception_check(env) != 0 {
+            exception_clear(env);
+            delete_local(env, class);
+            return None;
+        }
+        delete_local(env, class);
+        (per_mm.is_finite() && per_mm > 1.0).then_some(per_mm)
+    }
+}
+
+#[cfg(target_os = "ios")]
+pub fn screen_units_per_mm() -> Option<f32> {
+    use objc::runtime::Object;
+    use objc::{class, msg_send, sel, sel_impl};
+    unsafe {
+        let screen: *mut Object = msg_send![class!(UIScreen), mainScreen];
+        if screen.is_null() {
+            return None;
+        }
+        let scale: f64 = msg_send![screen, scale];
+        let device: *mut Object = msg_send![class!(UIDevice), currentDevice];
+        let idiom: i64 = if device.is_null() {
+            0
+        } else {
+            msg_send![device, userInterfaceIdiom]
+        };
+        let points_per_inch = if idiom == 1 { 132.0 } else { 163.0 };
+        Some((scale * points_per_inch / 25.4) as f32)
+    }
+}
+
+#[cfg(not(any(target_os = "android", target_os = "ios")))]
+pub fn screen_units_per_mm() -> Option<f32> {
+    None
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 pub fn insets_px() -> Insets {
     Insets::default()

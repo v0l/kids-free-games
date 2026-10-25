@@ -8,6 +8,7 @@ use macroquad::prelude::*;
 pub const KEY: &str = "breakout";
 pub const ROWS: usize = 6;
 pub const COLS: usize = 10;
+pub const PADDLE_EASE: f32 = 30.0;
 pub const BALL_R: f32 = 11.0;
 pub const PADDLE_W: f32 = 170.0;
 pub const PADDLE_H: f32 = 27.0;
@@ -666,7 +667,7 @@ impl Game for Breakout {
         }
         self.size = vec2(view.w, view.h);
         if input.down {
-            self.paddle_x = input.pos.x;
+            self.paddle_x = approach(self.paddle_x, input.pos.x, PADDLE_EASE, dt);
         }
         if input.left {
             self.paddle_x -= 700.0 * dt;
@@ -1157,6 +1158,35 @@ mod tests {
         b.start_level(LEVELS as u32, View::fit(MIN_W, MIN_H));
         b.state = State::Playing;
         b
+    }
+
+    #[test]
+    fn a_jittery_finger_does_not_jerk_the_paddle() {
+        let mut b = playing();
+        let v = View::fit(MIN_W, MIN_H);
+        b.paddle_x = 400.0;
+        b.update(
+            &Input {
+                pos: vec2(430.0, 600.0),
+                down: true,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        assert!(b.paddle_x > 400.0 && b.paddle_x < 425.0, "{}", b.paddle_x);
+        for _ in 0..15 {
+            b.update(
+                &Input {
+                    pos: vec2(430.0, 600.0),
+                    down: true,
+                    ..Default::default()
+                },
+                &v,
+                1.0 / 60.0,
+            );
+        }
+        assert!((b.paddle_x - 430.0).abs() < 1.0, "{}", b.paddle_x);
     }
 
     #[test]

@@ -498,12 +498,14 @@ impl Game for Blocks {
             if input.down {
                 if let (Some(dx0), Some(dy0)) = (self.drag_x, self.drag_y) {
                     let step = cell * 0.9;
-                    while input.pos.x - self.drag_x.unwrap() > step {
+                    let slop = TAP_SLOP_MM * input.mm();
+                    let need = |moved: bool| if moved { step } else { step.max(slop) };
+                    while input.pos.x - self.drag_x.unwrap() > need(self.moved) {
                         self.shift(1);
                         self.drag_x = Some(self.drag_x.unwrap() + step);
                         self.moved = true;
                     }
-                    while self.drag_x.unwrap() - input.pos.x > step {
+                    while self.drag_x.unwrap() - input.pos.x > need(self.moved) {
                         self.shift(-1);
                         self.drag_x = Some(self.drag_x.unwrap() - step);
                         self.moved = true;
@@ -877,6 +879,50 @@ mod tests {
         let mut g = Blocks::new();
         g.state = State::Playing;
         g
+    }
+
+    #[test]
+    fn a_phone_tap_that_slides_a_little_still_rotates() {
+        let v = View::fit(2992.0 / 2.625, 1344.0 / 2.625);
+        let mm = (495.0 / 25.4 / 2.625) / v.scale;
+        let mut g = empty();
+        g.piece.kind = 2;
+        let (x, rot) = (g.piece.x, g.piece.rot);
+        let at = v.center();
+        g.update(
+            &Input {
+                mm,
+                ..Input::press_at(at)
+            },
+            &v,
+            0.001,
+        );
+        let slid = at + vec2(3.5 * mm, 0.0);
+        g.update(
+            &Input {
+                pos: slid,
+                prev_pos: at,
+                down: true,
+                mm,
+                ..Default::default()
+            },
+            &v,
+            0.001,
+        );
+        g.update(
+            &Input {
+                pos: slid,
+                prev_pos: slid,
+                released: true,
+                travel: 3.5 * mm,
+                mm,
+                ..Default::default()
+            },
+            &v,
+            0.001,
+        );
+        assert_eq!(g.piece.x, x);
+        assert_ne!(g.piece.rot, rot);
     }
 
     #[test]

@@ -13,6 +13,12 @@ pub const GAME: &str = "crossy";
 const RAIL_WARN: f32 = 1.8;
 pub const MAX_CHECKPOINT: i32 = 4;
 const BANNER_TIME: f32 = 2.4;
+pub const MAX_QUEUED: usize = 2;
+
+fn hop_intent(input: &Input, press_seen: bool) -> Option<Dir> {
+    let tapped = (press_seen && input.tap_released()) || input.action;
+    input.dir().or(tapped.then_some(Dir::Up))
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Lane {
@@ -73,6 +79,8 @@ pub struct Crossy {
     shake: Shake,
     bump: Bump,
     dead_t: f32,
+    queued: Vec<Dir>,
+    press_seen: bool,
 }
 
 pub fn saved_stage() -> i32 {
@@ -360,6 +368,8 @@ impl Crossy {
             shake: Shake::default(),
             bump: Bump::default(),
             dead_t: 0.0,
+            queued: Vec::new(),
+            press_seen: false,
         };
         g.ensure_rows();
         g
@@ -478,6 +488,12 @@ impl Crossy {
                 .is_some_and(|r| r.trees.contains(&col))
     }
 
+    pub fn queue(&mut self, d: Dir) {
+        if self.queued.len() < MAX_QUEUED {
+            self.queued.push(d);
+        }
+    }
+
     pub fn try_hop(&mut self, d: Dir) -> bool {
         if self.hop < 1.0 || self.state == State::Dead {
             return false;
@@ -518,6 +534,7 @@ impl Crossy {
         if self.state == State::Dead {
             return;
         }
+        self.queued.clear();
         sfx::play(match how {
             Death::Water => Sfx::Splash,
             Death::Train => Sfx::Boom,
@@ -597,6 +614,9 @@ impl Crossy {
 impl Game for Crossy {
     fn update(&mut self, input: &Input, view: &View, dt: f32) {
         self.t += dt;
+        if input.pressed {
+            self.press_seen = true;
+        }
         self.oops = (self.oops - dt).max(0.0);
         if let Some((_, age)) = &mut self.banner {
             *age += dt;
@@ -618,24 +638,18 @@ impl Game for Crossy {
                 let offer = self.checkpoint_offer();
                 if let Some(n) = offer.filter(|_| input.tapped_in(self.checkpoint_button(view))) {
                     self.begin_at(n, input);
-                } else if input.tap() || input.dir().is_some() {
+                } else if let Some(d) = hop_intent(input, self.press_seen) {
                     self.state = State::Playing;
                     sfx::say(sfx::Say::Go);
-                    self.try_hop(input.dir().unwrap_or(Dir::Up));
+                    self.try_hop(d);
                 }
             }
             State::Playing => {
-                let d = input.dir().or(
-                    if input.released
-                        && input.swipe.is_none()
-                        && (input.pos - input.prev_pos).length() < 20.0
-                    {
-                        Some(Dir::Up)
-                    } else {
-                        None
-                    },
-                );
-                if let Some(d) = d {
+                if let Some(d) = hop_intent(input, self.press_seen) {
+                    self.queue(d);
+                }
+                if self.hop >= 1.0 && !self.queued.is_empty() {
+                    let d = self.queued.remove(0);
                     if self.try_hop(d) {
                         sfx::play(Sfx::Tap);
                         let (cell, ox) = self.col_x(view);
@@ -1130,6 +1144,108 @@ mod tests {
         };
         assert!(road.hits(2.0));
         assert!(!road.hits(3.5));
+    }
+
+    fn frame(g: &mut Crossy, input: Input) {
+        g.update(&input, &View::ipad_landscape(), 1.0 / 60.0);
+    }
+
+    #[test]
+    fn two_quick_taps_both_hop() {
+        let mut g = flat_world();
+        for _ in 0..2 {
+            frame(&mut g, Input::press_at(vec2(480.0, 400.0)));
+            frame(
+                &mut g,
+                Input {
+                    released: true,
+                    mm: 5.0,
+                    ..Default::default()
+                },
+            );
+        }
+        for _ in 0..30 {
+            frame(&mut g, Input::default());
+        }
+        assert_eq!(g.row, 2);
+    }
+
+    #[test]
+    fn a_wobbly_tap_still_hops() {
+        let mut g = flat_world();
+        frame(&mut g, Input::press_at(vec2(480.0, 400.0)));
+        frame(
+            &mut g,
+            Input {
+                pos: vec2(455.0, 404.0),
+                prev_pos: vec2(480.0, 400.0),
+                released: true,
+                travel: 25.3,
+                mm: 10.4,
+                ..Default::default()
+            },
+        );
+        assert_eq!(g.row, 1);
+    }
+
+    #[test]
+    fn a_swipe_does_not_also_hop_forward_on_release() {
+        let mut g = flat_world();
+        frame(&mut g, Input::press_at(vec2(480.0, 400.0)));
+        frame(
+            &mut g,
+            Input {
+                down: true,
+                swipe: Some(Dir::Left),
+                swiped: true,
+                travel: 40.0,
+                mm: 5.0,
+                ..Default::default()
+            },
+        );
+        for _ in 0..20 {
+            frame(&mut g, Input::default());
+        }
+        frame(
+            &mut g,
+            Input {
+                released: true,
+                swiped: true,
+                travel: 40.0,
+                mm: 5.0,
+                ..Default::default()
+            },
+        );
+        for _ in 0..20 {
+            frame(&mut g, Input::default());
+        }
+        assert_eq!((g.row, g.x as i32), (0, COLS / 2 - 1));
+    }
+
+    #[test]
+    fn the_restart_tap_does_not_hop_on_release() {
+        let mut g = Crossy::new();
+        frame(
+            &mut g,
+            Input {
+                released: true,
+                mm: 5.0,
+                ..Default::default()
+            },
+        );
+        assert_eq!(g.state, State::Ready);
+    }
+
+    #[test]
+    fn queue_holds_at_most_two_moves() {
+        let mut g = flat_world();
+        for _ in 0..5 {
+            frame(&mut g, Input::key(Dir::Up));
+        }
+        for _ in 0..60 {
+            frame(&mut g, Input::default());
+        }
+        assert_eq!(g.row, 1 + MAX_QUEUED as i32);
     }
 
     #[test]
