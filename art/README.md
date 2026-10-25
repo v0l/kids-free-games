@@ -11,5 +11,5 @@ Pages are lossy WebP unless an entry says `png`. Options: `max=N` longest side i
 In code: `crate::sprites!("<sheet>");` inside a module gives `sprite`, `sprite_ex`,
 `sprite_at` (by height), `sprite_w` (by width), `nine` (9-slice), `size` and `names`.
 
-All art and sound effects are Kenney (www.kenney.nl), CC0.
+Game art is generated with FLUX.1-dev (see `docs/DESIGN.md`); a few UI icons and sound effects are Kenney (www.kenney.nl), CC0.
 Music: Carnival Rides, Summer Park and Happy Lullaby from opengameart.org, CC0.

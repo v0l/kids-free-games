@@ -1,18 +1,21 @@
 # Style guide
 
-The rules every game and screen follows. The tests named here check them.
+The rules every game and screen follows. The tests named here check them. How the art is made is in `docs/DESIGN.md`.
 
 ## Look
 
-- Shapes are round and chunky. Corners are about 14% of a tile's width. Nothing has a sharp corner a child could read as dangerous unless it is (spikes, red danger segments).
-- Each game owns one accent colour (`Entry::color` in `src/games/mod.rs`). Panels, the curtain and the launch wipe use it.
-- Text is Fredoka SemiBold. Big numbers and titles use `text_outline` (white fill, `fx::INK` edge). Body text uses `text_center`.
-- Light comes from the top: `gloss` on the upper third, a darker lip under tiles and buttons, `soft_shadow` under things that stand on the ground.
+- Painted 3D-cartoon art in the style of Supercell, King and Rovio: glossy, saturated, soft light from the top. All of it comes from the FLUX pipeline in `docs/DESIGN.md`; no flat clipart and no shapes drawn in code where a painted sprite can go.
+- Shapes are round and chunky. Nothing has a sharp corner a child could read as dangerous unless it is (spikes, red danger segments).
+- Each game owns one accent colour (`Entry::color` in `src/games/mod.rs`) used by the curtain and launch wipe.
+- No text inside images. Text is Fredoka SemiBold drawn in code: titles and numbers with `text_outline` (white fill, dark plum edge), body text with `text_center`.
+- Menu icons are painted squares with 22% rounded corners and the game's name under them.
+- Dialogs use the painted kit in `src/ui.rs`: a lilac panel, a red ribbon title and a green jelly button for the action.
 
 ## HUD
 
 - The top band is for the HOME button (top left), stats and nothing else.
-- Stats use `fx::chip`: a dark pill with a small caps label and a big number, `Side::Left` for the live stat, `Side::Right` for BEST.
+- Stats use `fx::chip`: a dark translucent pill with a small caps label and a gold number, `Side::Left` for the live stat, `Side::Right` for BEST.
+- The HOME, music and sound buttons are `ui::painted_round` gold buttons.
 - Games where the score is the whole point (Flappy, Stack, Helix, Road Hopper) put it centre stage with `fx::big_score`.
 - The score number kicks (`Bump::kick`) when it changes.
 
@@ -31,9 +34,10 @@ Every event belongs to one tier. Use `feel::impact` for Medium and Large; Small 
 
 ## Sound
 
-- Sounds are synthesised in `src/sfx.rs` and normalised by tier: Ui -24, Small -21, Medium -18, Large -15 dB (loudest 20 ms window), peaks under -1 dBFS (`tiers_land_at_their_loudness_with_headroom`).
-- Each sound has three takes at 0.95, 1.0 and 1.05 pitch so repeats do not sound robotic.
-- Music is three four-bar loops built from chords in code: Menu (108 bpm), Arcade (120 bpm, with hats), Learn (92 bpm, softer and lower). It sits at least 6 dB under the quietest game sound (`music_sits_well_under_effects`) and ducks 9 dB for 0.5 s under any Large sound.
+- Effects are Kenney CC0 recordings listed in `sound.txt`, normalised by tier: Ui -24, Small -21, Medium -18, Large -15 dB (loudest 20 ms window), peaks under -1 dBFS (`tiers_land_at_their_loudness_with_headroom`).
+- Each effect has two or three takes, picked at random, so repeats do not sound robotic.
+- Big moments add a voice line with `sfx::say`: `Go` when a round starts, `Correct`/`Great` for right answers, `Best` on a new best, numbers in Count It. Game over plays `Sfx::Lose`.
+- Music is three CC0 loops (menu, arcade, learn) that sit at least 6 dB under the quietest effect (`music_loops_are_long_and_sit_under_the_effects`) and duck 9 dB for 0.5 s under any Large sound or voice line.
 - The menu has separate toggles for music (top left) and sound (top right).
 
 ## Menu
