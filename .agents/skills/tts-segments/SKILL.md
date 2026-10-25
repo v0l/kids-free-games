@@ -13,6 +13,8 @@ Don't mix voices or bring in stock voice packs.
 
 ## Generate
 
+The shared `agentbench-tts` skill (`~/.agents/skills/agentbench-tts`) covers the API, voices,
+checking and expression. This repo's copy of its script defaults to writing into `sound/`.
 `scripts/tts.py` calls `POST $AGENTBENCH_URL/v1/audio/speech` (Kokoro on the agentbench host,
 needs `AGENTBENCH_TOKEN`) and writes mono Ogg files into `sound/`:
 
