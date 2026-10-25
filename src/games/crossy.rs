@@ -106,7 +106,7 @@ impl Row {
                 }
             }
             Lane::Road { gap, .. } => {
-                row.len = if rand::gen_range(0, 4) == 0 { 2.0 } else { 1.2 };
+                row.len = if rand::gen_range(0, 4) == 0 { 1.7 } else { 1.2 };
                 let mut x = rand::gen_range(-2.0, 0.0);
                 while x < COLS as f32 + 4.0 {
                     row.things.push(x);
@@ -188,19 +188,16 @@ impl Row {
 }
 
 const ROW_PX: f32 = 72.0;
-const HOPPER_H: f32 = 62.0;
+const HOPPER_H: f32 = 84.0;
 const CHICKEN_HALF: f32 = 0.3;
 const CAR_INSET: f32 = 0.05;
-const CARS: [&str; 9] = [
+const CARS: [&str; 6] = [
     "car_red",
-    "car_red2",
     "car_blue",
-    "car_blue2",
-    "car_green",
-    "car_green2",
     "car_yellow",
-    "car_yellow2",
-    "car_black",
+    "car_green",
+    "car_orange",
+    "car_purple",
 ];
 
 pub fn car_span(t: f32, len: f32) -> (f32, f32) {
@@ -466,13 +463,13 @@ impl Game for Crossy {
                 .is_some_and(|n| matches!(n.lane, Lane::Road { .. }));
             match r.lane {
                 Lane::Grass => {
-                    let k = if i % 2 == 0 { 1.0 } else { 0.93 };
-                    tiled("grass", f, top, ROW_PX, Color::new(k, k, k, 1.0));
+                    let k = if i % 2 == 0 { 1.0 } else { 0.9 };
+                    tiled_offset("grass", f, top, ROW_PX, Color::new(k, k, k, 1.0), i);
                 }
                 Lane::Road { .. } => {
-                    tiled("road", f, top, ROW_PX, WHITE);
+                    tiled_offset("road", f, top, ROW_PX, WHITE, i);
                     if !above_road {
-                        tiled("kerb_top", f, top, 14.0, WHITE);
+                        tiled_strip("kerb", f, top, KERB_H, false);
                     } else {
                         for k in 0..((f.w / 60.0) as i32 + 2) {
                             fill_dash(f.x + k as f32 * 60.0 + 10.0, top - 3.0);
@@ -480,11 +477,11 @@ impl Game for Crossy {
                     }
                     let below_is_road = i > 0 && matches!(self.rows[i - 1].lane, Lane::Road { .. });
                     if !below_is_road {
-                        tiled("kerb_bottom", f, top + ROW_PX - 14.0, 14.0, WHITE);
+                        tiled_strip("kerb", f, top + ROW_PX - KERB_H, KERB_H, true);
                     }
                 }
                 Lane::River { .. } => {
-                    tiled("water", f, top, ROW_PX, Color::new(0.5, 0.78, 1.0, 1.0));
+                    tiled_offset("water", f, top, ROW_PX, WHITE, i);
                     for k in 0..((f.w / 50.0) as i32 + 2) {
                         let wx = (k as f32 * 50.0 + self.t * 20.0 + i as f32 * 13.0)
                             .rem_euclid(f.w + 50.0)
@@ -500,31 +497,7 @@ impl Game for Crossy {
                     }
                 }
                 Lane::Rail { .. } => {
-                    tiled("sand", f, top, ROW_PX, WHITE);
-                    let sleeper = ROW_PX - 22.0;
-                    for k in 0..((f.w / 26.0) as i32 + 2) {
-                        art::sprite_ex(
-                            "log",
-                            Rect::new(
-                                f.x + k as f32 * 26.0 + 6.0 - sleeper / 2.0 + 7.0,
-                                y - 7.0,
-                                sleeper,
-                                14.0,
-                            ),
-                            crate::art::Draw {
-                                rotation: std::f32::consts::FRAC_PI_2,
-                                tint: Color::new(0.8, 0.65, 0.55, 1.0),
-                                ..Default::default()
-                            },
-                        );
-                    }
-                    for dy in [-14.0, 8.0] {
-                        let mut x = f.x;
-                        while x < f.x + f.w {
-                            art::sprite("rail_bar", Rect::new(x, y + dy, 210.0, 7.0));
-                            x += 210.0;
-                        }
-                    }
+                    tiled("rail", f, top, ROW_PX, WHITE);
                     let lit = r.warning() && (self.t * 8.0).sin() > 0.0;
                     let px = ox - 30.0;
                     crate::ui::sprite_at(
@@ -546,60 +519,41 @@ impl Game for Crossy {
                 let tx = ox + (*c as f32 + 0.5) * cell;
                 soft_shadow(vec2(tx, y + 20.0), cell * 0.38, 9.0, 0.45);
                 let (name, h) = match (*c as usize + i) % 3 {
-                    0 => ("bush", cell * 0.95),
-                    1 => ("bush_small", cell * 0.85),
-                    _ => ("rock", cell * 0.6),
+                    0 => ("tree", ROW_PX * 1.7),
+                    1 => ("bush", ROW_PX * 0.95),
+                    _ => ("rock", ROW_PX * 0.8),
                 };
-                art::sprite_at(name, vec2(tx, y - 2.0), h, Default::default());
+                art::sprite_at(name, vec2(tx, y + 24.0 - h / 2.0), h, Default::default());
             }
             match r.lane {
                 Lane::Road { speed, .. } => {
                     for (k, t) in r.things.iter().enumerate() {
                         let (a, b) = car_span(*t, r.len);
                         let cx = ox + (a + b) / 2.0 * cell;
-                        let len_px = (b - a) * cell;
-                        let name = if r.len > 1.5 {
-                            ["bus", "coach"][(r.hue * 2.0) as usize % 2]
-                        } else {
-                            CARS[((r.hue * 9.0) as usize + k) % 9]
-                        };
-                        let s = art::size(name);
-                        let (long_side, other) = if r.len > 1.5 {
-                            (len_px, len_px * s.y / s.x)
-                        } else {
-                            (len_px, len_px * s.x / s.y)
-                        };
-                        soft_shadow(vec2(cx, y + other * 0.4), long_side * 0.45, 8.0, 0.4);
-                        if r.len > 1.5 {
-                            art::sprite_ex(
-                                name,
-                                Rect::new(cx - long_side / 2.0, y - other / 2.0, long_side, other),
-                                crate::art::Draw {
-                                    flip_x: speed < 0.0,
-                                    ..Default::default()
-                                },
-                            );
-                        } else {
-                            art::sprite_ex(
-                                name,
-                                Rect::new(cx - other / 2.0, y - long_side / 2.0, other, long_side),
-                                crate::art::Draw {
-                                    rotation: std::f32::consts::FRAC_PI_2 * speed.signum(),
-                                    ..Default::default()
-                                },
-                            );
-                        }
+                        let w = (b - a) * cell;
+                        let name = vehicle(r, k);
+                        let h = w * art::size(name).y / art::size(name).x;
+                        soft_shadow(vec2(cx, y + 24.0), w * 0.42, 8.0, 0.4);
+                        art::sprite_ex(
+                            name,
+                            Rect::new(cx - w / 2.0, y + 28.0 - h, w, h),
+                            crate::art::Draw {
+                                flip_x: speed < 0.0,
+                                ..Default::default()
+                            },
+                        );
                     }
                 }
                 Lane::River { .. } => {
                     for t in &r.things {
                         let x = ox + t * cell;
                         let w = r.len * cell;
+                        soft_shadow(vec2(x + w / 2.0, y + 22.0), w * 0.45, 8.0, 0.3);
                         art::nine(
                             "log",
-                            Rect::new(x + 3.0, y - 24.0, w - 6.0, 48.0),
-                            24.0,
-                            0.8,
+                            Rect::new(x + 3.0, y - 28.0, w - 6.0, 56.0),
+                            46.0,
+                            0.5,
                             WHITE,
                         );
                     }
@@ -607,11 +561,13 @@ impl Game for Crossy {
                 Lane::Rail { .. } => {
                     for t in &r.things {
                         for k in 0..6 {
-                            let w = 2.0 * cell - 8.0;
-                            let name = if k == 0 { "coach" } else { "windows" };
-                            let h = w * art::size(name).y / art::size(name).x;
-                            let x = ox + (t + k as f32 * 2.0) * cell + 4.0;
-                            art::sprite(name, Rect::new(x, y - h / 2.0, w, h));
+                            let slot = 2.0 * cell;
+                            let name = if k == 5 { "engine" } else { "wagon" };
+                            let x = ox + (t + k as f32 * 2.0) * cell;
+                            let h = if k == 5 { 118.0 } else { 92.0 };
+                            let w = h * art::size(name).x / art::size(name).y;
+                            let w = w.min(slot + 8.0);
+                            art::sprite(name, Rect::new(x + slot - w, y + 30.0 - h, w, h));
                         }
                     }
                 }
@@ -636,13 +592,12 @@ impl Game for Crossy {
         }
         match self.state {
             State::Ready => {
-                let a = 0.6 + (self.t * 3.0).sin() * 0.4;
-                text_shadow(
+                let pulse = 1.0 + (self.t * 5.0).sin() * 0.05;
+                crate::ui::hint(
+                    view,
                     "Tap to hop, swipe to turn",
-                    view.w / 2.0,
-                    view.h * 0.3,
-                    40.0,
-                    with_alpha(WHITE, a),
+                    vec2(view.w / 2.0, view.h * 0.3),
+                    pulse,
                 );
             }
             State::Dead if self.dead_t > 0.6 => {
@@ -661,16 +616,47 @@ impl Game for Crossy {
     }
 }
 
+pub fn vehicle(r: &Row, k: usize) -> &'static str {
+    if r.len > 1.5 {
+        ["bus", "truck"][((r.hue * 2.0) as usize + k) % 2]
+    } else {
+        CARS[((r.hue * CARS.len() as f32) as usize + k) % CARS.len()]
+    }
+}
+
+const KERB_H: f32 = 15.0;
+
 fn tiled(name: &str, f: Rect, top: f32, h: f32, tint: Color) {
+    tiled_offset(name, f, top, h, tint, 0);
+}
+
+fn tiled_offset(name: &str, f: Rect, top: f32, h: f32, tint: Color, shift: usize) {
     let s = art::size(name);
     let w = h.max(ROW_PX) * s.x / s.y;
-    let mut x = f.x;
+    let mut x = f.x - (shift as f32 * w * 0.37).rem_euclid(w);
     while x < f.x + f.w {
         art::sprite_ex(
             name,
             Rect::new(x, top, w + 1.0, h),
             crate::art::Draw {
                 tint,
+                ..Default::default()
+            },
+        );
+        x += w;
+    }
+}
+
+fn tiled_strip(name: &str, f: Rect, top: f32, h: f32, flip_y: bool) {
+    let s = art::size(name);
+    let w = h * s.x / s.y;
+    let mut x = f.x;
+    while x < f.x + f.w {
+        art::sprite_ex(
+            name,
+            Rect::new(x, top, w + 1.0, h),
+            crate::art::Draw {
+                flip_y,
                 ..Default::default()
             },
         );
@@ -707,11 +693,16 @@ impl Crossy {
             let s = 1.0 - (self.hop * std::f32::consts::PI).sin() * 0.12;
             (s, 2.0 - s)
         };
+        let frame = if arc > 6.0 && !flat {
+            "hopper_air"
+        } else {
+            "hopper"
+        };
         let h = HOPPER_H * sy;
-        let w = HOPPER_H * art::size("hopper").x / art::size("hopper").y * sx;
-        let bottom = c.y + 24.0;
+        let w = HOPPER_H * art::size(frame).x / art::size(frame).y * sx;
+        let bottom = c.y + 26.0;
         art::sprite_ex(
-            "hopper",
+            frame,
             Rect::new(c.x - w / 2.0, bottom - h, w, h),
             crate::art::Draw {
                 flip_x: self.facing == Dir::Left,
@@ -722,35 +713,7 @@ impl Crossy {
 }
 
 pub fn icon(r: Rect) {
-    let band = r.h / 3.0;
-    art::sprite("grass", Rect::new(r.x, r.y, r.w, band + 1.0));
-    art::sprite("road", Rect::new(r.x, r.y + band, r.w, band + 1.0));
-    art::sprite("grass", Rect::new(r.x, r.y + band * 2.0, r.w, band));
-    art::sprite_at(
-        "bush",
-        vec2(r.x + r.w * 0.16, r.y + band * 0.55),
-        band * 0.95,
-        Default::default(),
-    );
-    art::sprite_ex(
-        "car_blue",
-        Rect::new(
-            r.x + r.w * 0.34 - r.w * 0.09,
-            r.y + band * 1.5 - r.w * 0.22,
-            r.w * 0.18,
-            r.w * 0.44,
-        ),
-        crate::art::Draw {
-            rotation: std::f32::consts::FRAC_PI_2,
-            ..Default::default()
-        },
-    );
-    art::sprite_at(
-        "hopper",
-        vec2(r.x + r.w * 0.66, r.y + r.h * 0.8),
-        r.h * 0.34,
-        Default::default(),
-    );
+    crate::ui::icon("crossy", r);
 }
 
 #[cfg(test)]
@@ -783,20 +746,20 @@ mod tests {
         let have = art::names();
         let mut names = vec![
             "grass",
-            "sand",
             "road",
-            "kerb_top",
-            "kerb_bottom",
+            "kerb",
             "water",
+            "rail",
+            "tree",
             "bush",
-            "bush_small",
             "rock",
             "bus",
-            "coach",
-            "windows",
+            "truck",
+            "engine",
+            "wagon",
             "log",
-            "rail_bar",
             "hopper",
+            "hopper_air",
         ];
         names.extend(CARS);
         for n in names {
@@ -1005,6 +968,26 @@ mod tests {
                 assert_eq!(r.lane, Lane::Grass);
             }
             assert!(!g.rows[0].trees.contains(&(COLS / 2)));
+        }
+    }
+
+    #[test]
+    fn every_vehicle_the_lanes_pick_has_a_sprite() {
+        let have = art::names();
+        for hue in [0.0, 0.3, 0.6, 0.99] {
+            for len in [1.2, 1.7] {
+                for k in 0..12 {
+                    let row = Row {
+                        lane: Lane::Grass,
+                        things: vec![],
+                        trees: vec![],
+                        len,
+                        hue,
+                    };
+                    let name = vehicle(&row, k);
+                    assert!(have.iter().any(|h| h == name), "missing {name}");
+                }
+            }
         }
     }
 }

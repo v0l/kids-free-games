@@ -1,24 +1,21 @@
-grass          | racing-pack/PNG/Tiles/Grass/land_grass04.png | solo max=128 keep crop=0,28,128,72
-sand           | racing-pack/PNG/Tiles/Sand/land_sand05.png | solo max=128 keep crop=0,28,128,72
-road           | racing-pack/PNG/Tiles/Asphalt road/road_asphalt02.png | solo max=128 keep crop=0,40,128,48
-kerb_top       | racing-pack/PNG/Tiles/Asphalt road/road_asphalt02.png | solo max=128 keep crop=0,0,128,40
-kerb_bottom    | racing-pack/PNG/Tiles/Asphalt road/road_asphalt02.png | solo max=128 keep crop=0,88,128,40
-water          | pirate-pack/PNG/Default size/Tiles/tile_73.png | solo max=64 keep
-bush           | racing-pack/PNG/Objects/tree_large.png | max=180
-bush_small     | racing-pack/PNG/Objects/tree_small.png | max=140
-rock           | racing-pack/PNG/Objects/rock1.png | max=100
-car_red        | racing-pack/PNG/Cars/car_red_1.png | max=131
-car_red2       | racing-pack/PNG/Cars/car_red_4.png | max=131
-car_blue       | racing-pack/PNG/Cars/car_blue_3.png | max=131
-car_blue2      | racing-pack/PNG/Cars/car_blue_1.png | max=131
-car_green      | racing-pack/PNG/Cars/car_green_2.png | max=131
-car_green2     | racing-pack/PNG/Cars/car_green_5.png | max=131
-car_yellow     | racing-pack/PNG/Cars/car_yellow_5.png | max=131
-car_yellow2    | racing-pack/PNG/Cars/car_yellow_2.png | max=131
-car_black      | racing-pack/PNG/Cars/car_black_4.png | max=131
-bus            | racing-pack/PNG/Objects/tribune_overhang_striped.png | max=448
-coach          | racing-pack/PNG/Objects/tribune_overhang_red.png | max=448
-windows        | racing-pack/PNG/Objects/tribune_empty.png | max=448
-log            | physics-assets/PNG/Wood elements/elementWood012.png | max=220 keep
-rail_bar       | racing-pack/PNG/Objects/barrier_white.png | max=210 keep crop=0,4,210,22
-hopper         | animal-pack/PNG/Round/rabbit.png | max=160
+grass       | gen:crossy_grass_tile.png | solo jpg max=1400 keep
+road        | gen:crossy_asphalt_tile.png | solo jpg max=1400 keep
+water       | gen:crossy_water_tile.png | solo jpg max=1400 keep
+rail        | gen:crossy_rail_tile.png | solo jpg max=1400 keep
+kerb        | gen:crossy_kerb_strip.png | solo max=1400 keep
+tree        | gen:crossy_tree_cut.png | max=256
+bush        | gen:crossy_bush2_cut.png | max=200
+rock        | gen:crossy_rock_cut.png | max=200
+car_red     | gen:crossy_car_red_cut.png | max=224
+car_blue    | gen:crossy_car_blue_cut.png | max=224
+car_yellow  | gen:crossy_car_yellow_cut.png | max=224
+car_green   | gen:crossy_car_green_cut.png | max=224
+car_orange  | gen:crossy_car_orange_cut.png | max=224
+car_purple  | gen:crossy_car_purple_cut.png | max=224
+bus         | gen:crossy_bus_cut.png | max=360
+truck       | gen:crossy_truck_cut.png | max=360
+engine      | gen:crossy_engine_cut.png | max=360
+wagon       | gen:crossy_wagon_body.png | max=360
+log         | gen:crossy_log_cut.png | max=480
+hopper      | gen:crossy_hopper_cut.png | max=220
+hopper_air  | gen:crossy_hopper_air_cut.png | max=220

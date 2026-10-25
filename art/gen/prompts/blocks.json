@@ -1,0 +1,82 @@
+[
+ {
+  "name": "blocks_bg",
+  "w": 1344,
+  "h": 768,
+  "seed": 501,
+  "cut": false,
+  "prompt": "Mobile game background, magical twilight sky in deep purple and indigo with soft glowing bokeh lights, tiny stars and gentle pink clouds, distant silhouettes of dreamy hills at the bottom, empty centre, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "blocks_bg_p",
+  "w": 768,
+  "h": 1344,
+  "seed": 501,
+  "cut": false,
+  "prompt": "Mobile game background, magical twilight sky in deep purple and indigo with soft glowing bokeh lights, tiny stars and gentle pink clouds, distant silhouettes of dreamy hills at the bottom, empty centre, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "blocks_blk0",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright cyan sky blue colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_blk1",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright royal blue colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_blk2",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright orange colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_blk3",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright golden yellow colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_blk4",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright lime green colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_blk5",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright purple violet colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_blk6",
+  "w": 512,
+  "h": 512,
+  "seed": 511,
+  "cut": true,
+  "prompt": "Single glossy candy jelly game block, perfectly square front view, rounded corners, bevelled edges, bright red colour with a lighter top highlight and a darker thick bottom edge, like a Tetris block in Candy Crush. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "blocks_frame",
+  "w": 1024,
+  "h": 1280,
+  "seed": 521,
+  "cut": true,
+  "prompt": "An empty rounded rectangle picture frame made of thick glossy purple candy jelly with gold trim, the inside of the frame is plain flat pure white, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]

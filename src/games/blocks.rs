@@ -25,16 +25,6 @@ const SPRITES: [&str; 7] = [
     "blk_i", "blk_j", "blk_l", "blk_o", "blk_s", "blk_t", "blk_z",
 ];
 
-const TINTS: [(u8, u8, u8); 7] = [
-    (255, 255, 255),
-    (120, 130, 255),
-    (255, 255, 255),
-    (255, 255, 255),
-    (255, 255, 255),
-    (255, 255, 255),
-    (255, 255, 255),
-];
-
 mod art {
     crate::sprites!("blocks");
 }
@@ -346,43 +336,29 @@ pub fn sprite_for(kind: u8) -> &'static str {
 }
 
 fn block(x: f32, y: f32, s: f32, kind: u8, wash: f32) {
-    let (r, g, b) = TINTS[kind as usize % 7];
-    let k = |v: u8| v as f32 / 255.0;
-    art::sprite_ex(
+    art::sprite(
         sprite_for(kind),
         Rect::new(x + 0.5, y + 0.5, s - 1.0, s - 1.0),
-        crate::art::Draw {
-            tint: Color::new(k(r), k(g), k(b), 1.0),
-            ..Default::default()
-        },
     );
     if wash > 0.0 {
         round_rect(
             Rect::new(x + 1.0, y + 1.0, s - 2.0, s - 2.0),
-            s * 0.12,
+            s * 0.2,
             Color::new(1.0, 1.0, 1.0, wash * 0.9),
         );
     }
 }
 
-fn tile_screen(view: &View, name: &str, size: f32, tint: Color) {
+fn backdrop(view: &View) {
     let f = view.full();
-    let mut y = f.y;
-    while y < f.y + f.h {
-        let mut x = f.x;
-        while x < f.x + f.w {
-            art::sprite_ex(
-                name,
-                Rect::new(x, y, size + 0.5, size + 0.5),
-                crate::art::Draw {
-                    tint,
-                    ..Default::default()
-                },
-            );
-            x += size;
-        }
-        y += size;
-    }
+    let name = if view.w > view.h { "bg" } else { "bg_p" };
+    let s = art::size(name);
+    let k = (f.w / s.x).max(f.h / s.y);
+    let (w, h) = (s.x * k, s.y * k);
+    art::sprite(
+        name,
+        Rect::new(f.x + (f.w - w) / 2.0, f.y + (f.h - h) / 2.0, w, h),
+    );
 }
 
 impl Game for Blocks {
@@ -511,42 +487,43 @@ impl Game for Blocks {
     }
 
     fn draw(&self, view: &View) {
-        sky(
-            view,
-            Color::from_rgba(40, 40, 90, 255),
-            Color::from_rgba(90, 50, 130, 255),
-        );
-        tile_screen(view, "quilt", 96.0, Color::new(0.5, 0.42, 0.9, 0.14));
+        backdrop(view);
         let (cell, o, side) = Self::layout(view);
         let sh = self.shake.offset();
         let o = o + sh + vec2(0.0, self.land * 3.0);
         let bw = cell * W as f32;
         let bh = cell * H as f32;
         round_rect(
-            Rect::new(o.x - 10.0, o.y - 10.0, bw + 20.0, bh + 20.0),
-            18.0,
-            Color::from_rgba(30, 25, 60, 255),
+            Rect::new(o.x - 4.0, o.y - 2.0, bw + 8.0, bh + 12.0),
+            26.0,
+            Color::from_rgba(255, 215, 120, 255),
         );
         round_rect(
             Rect::new(o.x - 4.0, o.y - 4.0, bw + 8.0, bh + 8.0),
-            12.0,
-            Color::from_rgba(50, 45, 95, 255),
+            24.0,
+            Color::from_rgba(186, 120, 235, 255),
+        );
+        round_rect(
+            Rect::new(o.x - 1.0, o.y - 1.0, bw + 2.0, bh + 2.0),
+            20.0,
+            Color::from_rgba(24, 14, 62, 255),
+        );
+        round_rect(
+            Rect::new(o.x, o.y, bw, bh),
+            19.0,
+            Color::from_rgba(40, 26, 92, 245),
         );
         for y in 0..H {
             for x in 0..W {
-                art::sprite_ex(
-                    "cell",
-                    Rect::new(
+                if (x + y) % 2 == 0 {
+                    draw_rectangle(
                         o.x + x as f32 * cell,
                         o.y + y as f32 * cell,
-                        cell + 0.5,
-                        cell + 0.5,
-                    ),
-                    crate::art::Draw {
-                        tint: Color::new(0.2, 0.17, 0.42, 1.0),
-                        ..Default::default()
-                    },
-                );
+                        cell,
+                        cell,
+                        Color::new(1.0, 1.0, 1.0, 0.035),
+                    );
+                }
             }
         }
         let flash = self
@@ -591,7 +568,7 @@ impl Game for Blocks {
                         sprite_for(self.piece.kind),
                         Rect::new(r.x - 3.0, r.y - 3.0, cell, cell),
                         crate::art::Draw {
-                            tint: Color::new(1.0, 1.0, 1.0, 0.28),
+                            tint: Color::new(1.0, 1.0, 1.0, 0.3),
                             ..Default::default()
                         },
                     );
@@ -612,17 +589,17 @@ impl Game for Blocks {
         let panel_x = if side { o.x + bw + 30.0 } else { o.x };
         let panel_y = if side { o.y } else { 20.0 };
         if side {
-            round_rect(
+            crate::ui::painted_panel(
                 Rect::new(panel_x, panel_y, 170.0, 150.0),
-                18.0,
-                Color::new(1.0, 1.0, 1.0, 0.12),
+                Color::new(1.0, 1.0, 1.0, 0.95),
             );
-            text_center(
+            crate::fx::text_outline(
                 "NEXT",
                 panel_x + 85.0,
-                panel_y + 24.0,
-                24.0,
-                Color::new(1.0, 1.0, 1.0, 0.8),
+                panel_y + 28.0,
+                26.0,
+                WHITE,
+                Color::from_rgba(110, 50, 170, 255),
             );
             let pc = Piece {
                 kind: self.next,
@@ -659,9 +636,24 @@ impl Game for Blocks {
             .enumerate()
             {
                 let y = panel_y + 180.0 + k as f32 * 80.0;
-                text(label, panel_x, y, 22.0, Color::new(1.0, 1.0, 1.0, 0.6));
+                text(
+                    label,
+                    panel_x,
+                    y,
+                    22.0,
+                    Color::from_rgba(255, 225, 150, 255),
+                );
                 let sc = if k == 0 { self.bump.scale(0.25) } else { 1.0 };
-                text(&v.to_string(), panel_x, y + 40.0, 40.0 * sc, WHITE);
+                let digits = v.to_string();
+                let tw = crate::outline::measure(FONT_BYTES, &digits, 40.0 * sc);
+                crate::fx::text_outline(
+                    &digits,
+                    panel_x + tw / 2.0,
+                    y + 24.0,
+                    40.0 * sc,
+                    WHITE,
+                    Color::from_rgba(70, 30, 120, 255),
+                );
             }
         } else {
             text_shadow(
@@ -701,42 +693,7 @@ impl Game for Blocks {
 }
 
 pub fn icon(r: Rect) {
-    gradient_rect(
-        r,
-        Color::from_rgba(60, 50, 120, 255),
-        Color::from_rgba(30, 25, 70, 255),
-    );
-    let s = r.w / 5.0;
-    for y in 0..5 {
-        for x in 0..5 {
-            art::sprite_ex(
-                "cell",
-                Rect::new(r.x + x as f32 * s, r.y + y as f32 * s, s, s),
-                crate::art::Draw {
-                    tint: Color::new(0.2, 0.17, 0.42, 1.0),
-                    ..Default::default()
-                },
-            );
-        }
-    }
-    for (x, y, k) in [
-        (0, 4, 0),
-        (1, 4, 0),
-        (2, 4, 0),
-        (3, 4, 3),
-        (4, 4, 3),
-        (0, 3, 0),
-        (3, 3, 3),
-        (4, 3, 2),
-        (2, 3, 6),
-        (4, 2, 2),
-        (1, 1, 5),
-        (1, 0, 5),
-        (0, 1, 5),
-        (2, 1, 5),
-    ] {
-        block(r.x + x as f32 * s, r.y + y as f32 * s, s, k, 0.0);
-    }
+    crate::ui::icon("blocks", r);
 }
 
 #[cfg(test)]
@@ -746,7 +703,7 @@ mod tests {
     #[test]
     fn blocks_sprites_all_exist() {
         let have = art::names();
-        for n in SPRITES.iter().chain(&["quilt", "cell"]) {
+        for n in SPRITES.iter().chain(&["bg", "bg_p"]) {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
         for k in 0..7 {
