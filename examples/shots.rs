@@ -494,64 +494,91 @@ async fn main() {
     };
     let memory_game: Option<Box<dyn Game>> = memory.map(|m| Box::new(m) as Box<dyn Game>);
     let has_memory = memory_game.is_some();
-    let mut game = special.or(spell).or(memory_game).or_else(|| {
-        (which > 0).then(|| {
-            let e = &all[which as usize - 1];
-            set_accent(e.color);
-            if idle && e.name == "Flappy Bird" {
-                kids_games::profile::set("flappy", "passed", 1);
-                for score in [14, 6] {
-                    kids_games::profile::submit(
-                        "flappy",
-                        score,
-                        kids_games::profile::Better::Higher,
-                    );
-                }
-            }
-            if idle && e.name == "Sky Jumper" {
-                kids_games::profile::create("Mia", 2);
-                kids_games::profile::set(e.icon_key, "runs", 5);
-            }
-            let mut g = (e.make)();
-            if let Some(mode) = helix_mode {
-                return helix_scene(mode, &view);
-            }
-            let frames = if idle && e.name == "Fruit Slice" {
-                kids_games::profile::create("Mia", 2);
-                kids_games::profile::set_level("fruit", 12);
-                g = (e.make)();
-                1500
+    let mathpop_done: Option<Box<dyn Game>> = (which == -10).then(|| {
+        kids_games::profile::create("Mia", 2);
+        kids_games::profile::set("mathpop", "played", 1);
+        let mut g = mathpop::MathPop::new();
+        for n in 0..mathpop::QUESTIONS * 60 * 4 {
+            let f = n as usize;
+            let input = if f % 240 == 120 {
+                Input::press_at(mathpop::balloon_rest(&view, g.question.slot_of_answer()))
             } else {
-                frames
+                Input::default()
             };
-            for f in 0..frames {
-                let input = if idle && e.name == "Stack Tower" && (f == 1 || f == 5) {
-                    Input::press_at(view.center())
-                } else if idle && f > 1 && e.name == "Sky Jumper" {
-                    Input {
-                        right: f > 30,
-                        ..Default::default()
-                    }
-                } else if idle && f > 1 && e.name == "Block Drop" {
-                    if f % 3 == 0 {
-                        Input::key(Dir::Down)
-                    } else {
-                        Input::default()
-                    }
-                } else if idle && f > 1 && e.name != "Paper Land" {
-                    Input::default()
-                } else if idle && e.name != "Paper Land" {
-                    Input::press_at(view.center())
-                } else {
-                    scripted(e.name, f, &view)
-                };
-                g.update(&input, &view, 1.0 / 60.0);
-                tick_overlay(1.0 / 60.0);
-            }
-            g
-        })
+            g.update(&input, &view, 1.0 / 60.0);
+        }
+        Box::new(g) as Box<dyn Game>
     });
-    if which != -3 && which != -4 && which != -5 && which != -6 && !has_memory && !has_spell {
+    let has_mathpop = mathpop_done.is_some();
+    let mut game = special
+        .or(mathpop_done)
+        .or(spell)
+        .or(memory_game)
+        .or_else(|| {
+            (which > 0).then(|| {
+                let e = &all[which as usize - 1];
+                set_accent(e.color);
+                if idle && e.name == "Flappy Bird" {
+                    kids_games::profile::set("flappy", "passed", 1);
+                    for score in [14, 6] {
+                        kids_games::profile::submit(
+                            "flappy",
+                            score,
+                            kids_games::profile::Better::Higher,
+                        );
+                    }
+                }
+                if idle && e.name == "Sky Jumper" {
+                    kids_games::profile::create("Mia", 2);
+                    kids_games::profile::set(e.icon_key, "runs", 5);
+                }
+                let mut g = (e.make)();
+                if let Some(mode) = helix_mode {
+                    return helix_scene(mode, &view);
+                }
+                let frames = if idle && e.name == "Fruit Slice" {
+                    kids_games::profile::create("Mia", 2);
+                    kids_games::profile::set_level("fruit", 12);
+                    g = (e.make)();
+                    1500
+                } else {
+                    frames
+                };
+                for f in 0..frames {
+                    let input = if idle && e.name == "Stack Tower" && (f == 1 || f == 5) {
+                        Input::press_at(view.center())
+                    } else if idle && f > 1 && e.name == "Sky Jumper" {
+                        Input {
+                            right: f > 30,
+                            ..Default::default()
+                        }
+                    } else if idle && f > 1 && e.name == "Block Drop" {
+                        if f % 3 == 0 {
+                            Input::key(Dir::Down)
+                        } else {
+                            Input::default()
+                        }
+                    } else if idle && f > 1 && e.name != "Paper Land" {
+                        Input::default()
+                    } else if idle && e.name != "Paper Land" {
+                        Input::press_at(view.center())
+                    } else {
+                        scripted(e.name, f, &view)
+                    };
+                    g.update(&input, &view, 1.0 / 60.0);
+                    tick_overlay(1.0 / 60.0);
+                }
+                g
+            })
+        });
+    if which != -3
+        && which != -4
+        && which != -5
+        && which != -6
+        && !has_memory
+        && !has_spell
+        && !has_mathpop
+    {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];
