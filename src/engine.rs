@@ -247,11 +247,109 @@ pub fn guess_units_per_mm(screen_w: f32, screen_h: f32) -> f32 {
     dpi / 25.4
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Finger {
+    Started,
+    Held,
+    Ended,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Pointer {
+    pub pos: Vec2,
+    pub down: bool,
+    pub pressed: bool,
+    pub released: bool,
+}
+
+#[derive(Default)]
+pub struct PrimaryFinger {
+    id: Option<u64>,
+    pending: Option<u64>,
+    known: Vec<u64>,
+    pos: Vec2,
+}
+
+impl PrimaryFinger {
+    pub fn update(&mut self, touches: &[(u64, Finger, Vec2)]) -> Pointer {
+        let find = |id: u64| touches.iter().find(|t| t.0 == id).copied();
+        let fresh = |known: &[u64], skip: Option<u64>| {
+            touches
+                .iter()
+                .find(|t| Some(t.0) != skip && t.1 != Finger::Ended && !known.contains(&t.0))
+                .or_else(|| {
+                    touches
+                        .iter()
+                        .find(|t| Some(t.0) != skip && t.1 == Finger::Started)
+                })
+                .map(|t| t.0)
+        };
+        let mut out = Pointer {
+            pos: self.pos,
+            ..Default::default()
+        };
+        if let Some(id) = self.id {
+            match find(id) {
+                Some((_, f, p)) if f != Finger::Ended => {
+                    out.pos = p;
+                    out.down = true;
+                }
+                hit => {
+                    out.pos = hit.map_or(self.pos, |t| t.2);
+                    out.released = true;
+                    self.id = None;
+                    self.pending = fresh(&self.known, Some(id));
+                }
+            }
+        } else {
+            let pending = self
+                .pending
+                .take()
+                .filter(|id| find(*id).is_some_and(|t| t.1 != Finger::Ended));
+            let tap = touches
+                .iter()
+                .find(|t| t.1 == Finger::Ended && !self.known.contains(&t.0))
+                .copied();
+            if let Some((id, _, p)) = pending
+                .and_then(find)
+                .or_else(|| fresh(&self.known, None).and_then(find))
+            {
+                self.id = Some(id);
+                out = Pointer {
+                    pos: p,
+                    down: true,
+                    pressed: true,
+                    released: false,
+                };
+            } else if let Some((_, _, p)) = tap {
+                out = Pointer {
+                    pos: p,
+                    down: false,
+                    pressed: true,
+                    released: true,
+                };
+            }
+        }
+        self.known = touches
+            .iter()
+            .filter(|t| t.1 != Finger::Ended)
+            .map(|t| t.0)
+            .collect();
+        self.pos = out.pos;
+        out
+    }
+
+    pub fn active(&self) -> bool {
+        self.id.is_some() || self.pending.is_some()
+    }
+}
+
 #[derive(Default)]
 pub struct InputTracker {
     swipes: SwipeTracker,
     last: Vec2,
     units_per_mm: Option<f32>,
+    fingers: PrimaryFinger,
 }
 
 impl InputTracker {
@@ -264,13 +362,40 @@ impl InputTracker {
         per_mm / view.scale
     }
 
+    fn pointer(&mut self) -> Pointer {
+        let dpi = screen_dpi_scale();
+        let touches: Vec<(u64, Finger, Vec2)> = touches()
+            .into_iter()
+            .map(|t| {
+                let f = match t.phase {
+                    TouchPhase::Started => Finger::Started,
+                    TouchPhase::Ended | TouchPhase::Cancelled => Finger::Ended,
+                    _ => Finger::Held,
+                };
+                (t.id, f, t.position / dpi)
+            })
+            .collect();
+        if !touches.is_empty() || self.fingers.active() {
+            return self.fingers.update(&touches);
+        }
+        let (mx, my) = mouse_position();
+        Pointer {
+            pos: vec2(mx, my),
+            down: is_mouse_button_down(MouseButton::Left),
+            pressed: is_mouse_button_pressed(MouseButton::Left),
+            released: is_mouse_button_released(MouseButton::Left),
+        }
+    }
+
     pub fn poll(&mut self, view: &View) -> Input {
         let mm = self.view_mm(view);
-        let (mx, my) = mouse_position();
-        let pos = view.to_view(vec2(mx, my));
-        let down = is_mouse_button_down(MouseButton::Left);
-        let pressed = is_mouse_button_pressed(MouseButton::Left);
-        let released = is_mouse_button_released(MouseButton::Left);
+        let Pointer {
+            pos,
+            down,
+            pressed,
+            released,
+        } = self.pointer();
+        let pos = view.to_view(pos);
         let prev_pos = if pressed { pos } else { self.last };
         self.last = pos;
         let swipe = self.swipes.track(pos, down, pressed, SWIPE_MM * mm);
@@ -928,6 +1053,54 @@ mod tests {
             ..Default::default()
         };
         assert!(!input.tap_released());
+    }
+
+    #[test]
+    fn a_second_finger_cannot_move_or_release_the_first() {
+        let mut f = PrimaryFinger::default();
+        let a = vec2(100.0, 100.0);
+        let b = vec2(900.0, 700.0);
+        let p = f.update(&[(1, Finger::Started, a)]);
+        assert!(p.pressed && p.down && p.pos == a);
+        let p = f.update(&[(1, Finger::Held, a), (2, Finger::Started, b)]);
+        assert!(!p.pressed && p.down && p.pos == a);
+        let p = f.update(&[(1, Finger::Held, a), (2, Finger::Ended, b)]);
+        assert!(!p.released && p.down && p.pos == a);
+        let p = f.update(&[(1, Finger::Ended, a)]);
+        assert!(p.released && !p.down && p.pos == a);
+    }
+
+    #[test]
+    fn a_finger_left_behind_is_not_picked_up_again() {
+        let mut f = PrimaryFinger::default();
+        let (a, b) = (vec2(10.0, 10.0), vec2(500.0, 500.0));
+        f.update(&[(1, Finger::Started, a)]);
+        f.update(&[(1, Finger::Held, a), (2, Finger::Started, b)]);
+        let p = f.update(&[(1, Finger::Ended, a), (2, Finger::Held, b)]);
+        assert!(p.released);
+        let p = f.update(&[(2, Finger::Held, b)]);
+        assert!(!p.pressed && !p.down);
+    }
+
+    #[test]
+    fn a_new_tap_as_the_old_finger_lifts_is_kept_for_the_next_frame() {
+        let mut f = PrimaryFinger::default();
+        let (a, b) = (vec2(10.0, 10.0), vec2(500.0, 500.0));
+        f.update(&[(1, Finger::Started, a)]);
+        let p = f.update(&[(1, Finger::Ended, a), (2, Finger::Started, b)]);
+        assert!(p.released && p.pos == a);
+        let p = f.update(&[(2, Finger::Held, b)]);
+        assert!(p.pressed && p.down && p.pos == b);
+    }
+
+    #[test]
+    fn a_tap_inside_one_frame_presses_and_releases() {
+        let mut f = PrimaryFinger::default();
+        let a = vec2(42.0, 24.0);
+        let p = f.update(&[(7, Finger::Ended, a)]);
+        assert!(p.pressed && p.released && p.pos == a);
+        let p = f.update(&[]);
+        assert!(!p.pressed && !p.released && !p.down);
     }
 
     #[test]
