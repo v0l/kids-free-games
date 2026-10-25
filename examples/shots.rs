@@ -364,6 +364,12 @@ async fn main() {
                     right: f > 30,
                     ..Default::default()
                 }
+            } else if idle && f > 1 && e.name == "Block Drop" {
+                if f % 3 == 0 {
+                    Input::key(Dir::Down)
+                } else {
+                    Input::default()
+                }
             } else if idle && f > 1 && e.name != "Paper Land" {
                 Input::default()
             } else if idle && e.name != "Paper Land" {
