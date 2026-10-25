@@ -95,7 +95,7 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             if f > 5 {
                 i.down = true;
                 i.pos = vec2(
-                    if (f / 40) % 2 == 0 {
+                    if (f / 40).is_multiple_of(2) {
                         100.0
                     } else {
                         view.w - 100.0
