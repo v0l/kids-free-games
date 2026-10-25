@@ -243,7 +243,6 @@ pub struct Spell {
     wobble: Vec<f32>,
     pop: Vec<f32>,
     slide: Vec<f32>,
-    held: Option<(usize, Vec2)>,
     press: f32,
     t: f32,
     fx: Particles,
@@ -306,7 +305,6 @@ impl Spell {
             wobble: vec![0.0; n],
             pop: vec![0.0; 8],
             slide: vec![1.0; n],
-            held: None,
             press: 0.0,
             t: 0.0,
             fx: Particles::default(),
@@ -351,7 +349,6 @@ impl Spell {
         self.slide = vec![1.0; n];
         self.pop = vec![0.0; self.board.word.len()];
         self.hint_on = None;
-        self.held = None;
         self.idle = 0.0;
         self.phase = Phase::Playing;
         self.picture_bump.kick();
@@ -835,26 +832,7 @@ impl Game for Spell {
             }
             if let Some(i) = l.tiles.iter().position(|r| r.contains(input.pos)) {
                 if self.board.used[i].is_none() {
-                    if let Some((h, _)) = self.held.take() {
-                        self.tap_tile(h, &l);
-                        self.tap_tile(i, &l);
-                    } else {
-                        self.held = Some((i, input.pos));
-                    }
-                }
-            }
-        }
-        if input.released {
-            if let Some((i, from)) = self.held.take() {
-                let moved = input.pos.distance(from);
-                let near_slot = l.slots.get(self.board.filled).is_some_and(|s| {
-                    Rect::new(s.x - s.w * 0.4, s.y - s.h * 0.4, s.w * 1.8, s.h * 1.8)
-                        .contains(input.pos)
-                });
-                if moved < TAP_SLOP_MM * input.mm() || near_slot {
                     self.tap_tile(i, &l);
-                } else {
-                    self.wobble[i] = 0.5;
                 }
             }
         }
@@ -981,9 +959,6 @@ impl Game for Spell {
                 continue;
             }
             let mut rr = *r;
-            if self.held.is_some_and(|(h, _)| h == i) {
-                rr.y -= rr.h * 0.08;
-            }
             let w = self.wobble[i];
             rr.x += (w * 30.0).sin() * w * 14.0;
             let hinted = glow == Some(i);
@@ -1447,6 +1422,43 @@ mod tests {
         );
         assert_eq!(g.board.filled, 2);
         assert_eq!(g.board.mistakes, 0);
+    }
+
+    #[test]
+    fn a_second_finger_lifting_elsewhere_does_not_reject_the_letter() {
+        let mut g = Spell::with_level_deck(2, vec!["cat"]);
+        let (l, view, order) = quick_word(&mut g);
+        let a = l.tiles[order[0]].center();
+        let thumb = vec2(view.w - 20.0, view.h - 20.0);
+        g.update(
+            &Input {
+                mm: 5.0,
+                ..Input::press_at(a)
+            },
+            &view,
+            0.016,
+        );
+        g.update(
+            &Input {
+                mm: 5.0,
+                ..Input::press_at(thumb)
+            },
+            &view,
+            0.016,
+        );
+        g.update(
+            &Input {
+                pos: thumb,
+                prev_pos: thumb,
+                released: true,
+                mm: 5.0,
+                ..Default::default()
+            },
+            &view,
+            0.016,
+        );
+        assert_eq!(g.board.filled, 1);
+        assert!(g.wobble.iter().all(|w| *w == 0.0));
     }
 
     #[test]
