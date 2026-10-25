@@ -333,6 +333,14 @@ async fn main() {
             }
         }
         let mut g = (e.make)();
+        let frames = if idle && e.name == "Fruit Slice" {
+            kids_games::profile::create("Mia", 2);
+            kids_games::profile::set_level("fruit", 12);
+            g = (e.make)();
+            1500
+        } else {
+            frames
+        };
         for f in 0..frames {
             let input = if idle && e.name == "Stack Tower" && (f == 1 || f == 5) {
                 Input::press_at(view.center())
