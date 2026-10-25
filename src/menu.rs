@@ -195,12 +195,14 @@ impl App {
 
     pub fn open(&mut self, i: usize) {
         set_accent(self.entries[i].color);
+        crate::net::begin_play(self.entries[i].icon_key);
         self.current = Some((i, (self.entries[i].make)()));
         self.curtain = 1.0;
     }
 
     fn go_home(&mut self) {
         sfx::play(Sfx::Whoosh);
+        crate::net::end_play();
         self.current = None;
         self.since_menu = 0.0;
         self.curtain = 1.0;
@@ -230,6 +232,7 @@ impl App {
             self.feel.hit(i, c);
         }
         let game_dt = self.feel.game_dt(dt);
+        crate::net::update(dt, crate::net::active(input));
         sfx::music(match &self.current {
             Some((i, _)) => self.entries[*i].kind.mood(),
             None => sfx::Mood::Menu,

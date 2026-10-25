@@ -292,9 +292,43 @@ pub fn results_rows(board_len: usize, rank: Option<usize>) -> Vec<usize> {
     rows
 }
 
+pub struct ShownRow {
+    pub place: usize,
+    pub name: String,
+    pub avatar: usize,
+    pub score: i64,
+    pub mine: bool,
+}
+
+pub fn shown_rows(game: &str, rank: Option<usize>) -> Vec<ShownRow> {
+    if let Some(online) = crate::net::online_board(game) {
+        return online
+            .into_iter()
+            .map(|r| ShownRow {
+                place: r.place,
+                name: r.name,
+                avatar: r.avatar,
+                score: r.score,
+                mine: r.mine,
+            })
+            .collect();
+    }
+    let board = crate::profile::board(game);
+    results_rows(board.len(), rank)
+        .into_iter()
+        .map(|i| ShownRow {
+            place: i + 1,
+            name: crate::profile::player_name(&board[i].player),
+            avatar: crate::profile::player_avatar(&board[i].player),
+            score: board[i].score,
+            mine: Some(i) == rank,
+        })
+        .collect()
+}
+
 pub fn results(view: &View, r: &Results, age: f32) {
-    let board = crate::profile::board(r.game);
-    let rows = results_rows(board.len(), r.rank);
+    let board = shown_rows(r.game, r.rank);
+    let rows: Vec<usize> = (0..board.len()).collect();
     let fade = ease_out_cubic(age / 0.2);
     fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55 * fade));
     let row_h = 46.0;
@@ -341,7 +375,7 @@ pub fn results(view: &View, r: &Results, age: f32) {
         let e = &board[*idx];
         let y = top + i as f32 * row_h * s;
         let la = a(0.2 + i as f32 * 0.05);
-        let mine = Some(*idx) == r.rank;
+        let mine = e.mine;
         let row = Rect::new(p.x + 40.0 * s, y, p.w - 80.0 * s, (row_h - 6.0) * s);
         if mine {
             round_rect(
@@ -353,17 +387,13 @@ pub fn results(view: &View, r: &Results, age: f32) {
             round_rect(row, row.h / 2.0, Color::new(0.4, 0.3, 0.6, 0.08 * la));
         }
         let cy = row.center().y;
-        let place = format!("{}", idx + 1);
+        let place = format!("{}", e.place);
         text_center(&place, row.x + 26.0 * s, cy, 26.0 * s, with_alpha(BODY, la));
-        if *idx == 0 {
+        if e.place == 1 {
             crate::profiles::crown(vec2(row.x + 26.0 * s, cy - 24.0 * s), 26.0 * s);
         }
-        crate::profiles::avatar(
-            crate::profile::player_avatar(&e.player),
-            vec2(row.x + 72.0 * s, cy),
-            row.h * 0.95,
-        );
-        let name = crate::profile::player_name(&e.player);
+        crate::profiles::avatar(e.avatar, vec2(row.x + 72.0 * s, cy), row.h * 0.95);
+        let name = e.name.clone();
         let nw = crate::outline::measure(FONT_BYTES, &name, 26.0) * s;
         text_center(
             &name,

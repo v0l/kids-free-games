@@ -1,0 +1,27 @@
+name = "kids-games-api"
+main = "build/worker/shim.mjs"
+compatibility_date = "2025-06-01"
+
+[build]
+command = "worker-build --release"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "kids-games"
+database_id = "f072742f-3e0e-4a0c-98a0-cb9224a766aa"
+migrations_dir = "migrations"
+
+[[ratelimits]]
+name = "RL_API"
+namespace_id = "7101"
+simple = { limit = 120, period = 60 }
+
+[[ratelimits]]
+name = "RL_REGISTER"
+namespace_id = "7102"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "RL_LINK"
+namespace_id = "7103"
+simple = { limit = 10, period = 60 }

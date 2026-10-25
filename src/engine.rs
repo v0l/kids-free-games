@@ -574,12 +574,17 @@ pub fn results(view: &View, r: &crate::ui::Results) {
     let age = OVERLAY.with(|o| {
         let mut o = o.borrow_mut();
         o.seen = true;
-        if o.title != key {
+        let fresh = o.title != key;
+        if fresh {
             o.title = key;
             o.age = 0.0;
         }
-        o.age
+        (o.age, fresh)
     });
+    if age.1 {
+        crate::net::request_board(r.game);
+    }
+    let age = age.0;
     crate::ui::results(view, r, age);
 }
 
