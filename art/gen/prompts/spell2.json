@@ -1,0 +1,266 @@
+[
+ {
+  "name": "w_cow",
+  "w": 768,
+  "h": 768,
+  "seed": 300,
+  "cut": true,
+  "prompt": "A cute black and white spotted dairy cow standing, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_fox",
+  "w": 768,
+  "h": 768,
+  "seed": 301,
+  "cut": true,
+  "prompt": "A cute orange fox sitting with a fluffy white-tipped tail, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_owl",
+  "w": 768,
+  "h": 768,
+  "seed": 302,
+  "cut": true,
+  "prompt": "A cute chubby brown owl with big round eyes, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_hen",
+  "w": 768,
+  "h": 768,
+  "seed": 303,
+  "cut": true,
+  "prompt": "A cute plump white hen chicken with a red comb, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_key",
+  "w": 768,
+  "h": 768,
+  "seed": 304,
+  "cut": true,
+  "prompt": "A shiny golden door key with a round head. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_bed",
+  "w": 768,
+  "h": 768,
+  "seed": 305,
+  "cut": true,
+  "prompt": "A cosy child's bed with a blue blanket and a white pillow, three quarter view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_bear",
+  "w": 768,
+  "h": 768,
+  "seed": 306,
+  "cut": true,
+  "prompt": "A cute chubby brown teddy bear sitting, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_bird",
+  "w": 768,
+  "h": 768,
+  "seed": 307,
+  "cut": true,
+  "prompt": "A cute small blue bird perched with a yellow beak, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_lion",
+  "w": 768,
+  "h": 768,
+  "seed": 308,
+  "cut": true,
+  "prompt": "A friendly cartoon lion with a big golden mane, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_shoe",
+  "w": 768,
+  "h": 768,
+  "seed": 309,
+  "cut": true,
+  "prompt": "A single bright red sneaker shoe with white laces, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_drum",
+  "w": 768,
+  "h": 768,
+  "seed": 310,
+  "cut": true,
+  "prompt": "A red and gold toy drum with two wooden drumsticks. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_bell",
+  "w": 768,
+  "h": 768,
+  "seed": 311,
+  "cut": true,
+  "prompt": "A shiny golden bell with a small clapper. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_horse",
+  "w": 768,
+  "h": 768,
+  "seed": 312,
+  "cut": true,
+  "prompt": "A cute brown horse with a dark mane standing, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_mouse",
+  "w": 768,
+  "h": 768,
+  "seed": 313,
+  "cut": true,
+  "prompt": "A cute small grey mouse with big round ears and a pink nose, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_zebra",
+  "w": 768,
+  "h": 768,
+  "seed": 314,
+  "cut": true,
+  "prompt": "A cute black and white striped zebra standing, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_tiger",
+  "w": 768,
+  "h": 768,
+  "seed": 315,
+  "cut": true,
+  "prompt": "A cute orange tiger with black stripes sitting, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_clock",
+  "w": 768,
+  "h": 768,
+  "seed": 316,
+  "cut": true,
+  "prompt": "A round red alarm clock with two bells on top and white face with clock hands. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_chair",
+  "w": 768,
+  "h": 768,
+  "seed": 317,
+  "cut": true,
+  "prompt": "A simple cheerful wooden chair painted blue, three quarter view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_lemon",
+  "w": 768,
+  "h": 768,
+  "seed": 318,
+  "cut": true,
+  "prompt": "A shiny ripe yellow lemon with a green leaf. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_robot",
+  "w": 768,
+  "h": 768,
+  "seed": 319,
+  "cut": true,
+  "prompt": "A cute friendly little silver robot with an antenna and round blue eyes, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_whale",
+  "w": 768,
+  "h": 768,
+  "seed": 320,
+  "cut": true,
+  "prompt": "A cute smiling blue whale spouting water, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_plane",
+  "w": 768,
+  "h": 768,
+  "seed": 321,
+  "cut": true,
+  "prompt": "A cute little red and white aeroplane flying, three quarter view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_monkey",
+  "w": 768,
+  "h": 768,
+  "seed": 322,
+  "cut": true,
+  "prompt": "A cute brown monkey with a long curly tail sitting, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_rabbit",
+  "w": 768,
+  "h": 768,
+  "seed": 323,
+  "cut": true,
+  "prompt": "A cute white rabbit with long upright ears sitting, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_orange",
+  "w": 768,
+  "h": 768,
+  "seed": 324,
+  "cut": true,
+  "prompt": "A shiny round juicy orange fruit with a green leaf. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_turtle",
+  "w": 768,
+  "h": 768,
+  "seed": 325,
+  "cut": true,
+  "prompt": "A cute green turtle with a patterned shell walking, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_spider",
+  "w": 768,
+  "h": 768,
+  "seed": 326,
+  "cut": true,
+  "prompt": "A cute friendly purple spider with eight legs and big eyes, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_guitar",
+  "w": 768,
+  "h": 768,
+  "seed": 327,
+  "cut": true,
+  "prompt": "A wooden acoustic guitar with six strings, upright. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_castle",
+  "w": 768,
+  "h": 768,
+  "seed": 328,
+  "cut": true,
+  "prompt": "A fairy tale stone castle with blue pointed towers and red flags. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_pencil",
+  "w": 768,
+  "h": 768,
+  "seed": 329,
+  "cut": true,
+  "prompt": "A sharp yellow pencil with a pink eraser, standing at an angle. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_penguin",
+  "w": 768,
+  "h": 768,
+  "seed": 330,
+  "cut": true,
+  "prompt": "A cute chubby black and white penguin waddling, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_giraffe",
+  "w": 768,
+  "h": 768,
+  "seed": 331,
+  "cut": true,
+  "prompt": "A cute tall yellow giraffe with brown spots, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "w_dolphin",
+  "w": 768,
+  "h": 768,
+  "seed": 332,
+  "cut": true,
+  "prompt": "A cute smiling grey-blue dolphin leaping, side view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]
