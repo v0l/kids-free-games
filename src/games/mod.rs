@@ -67,7 +67,7 @@ pub fn all() -> Vec<Entry> {
             icon_key: "hotel",
             name: "Hotel Hop",
             kind: Kind::Arcade,
-            like: "Hotel Empire, Doorman Story",
+            like: "My Perfect Hotel",
             color: Color::from_rgba(180, 70, 80, 255),
             make: || Box::new(hotel::Hotel::new()),
             icon: hotel::icon,

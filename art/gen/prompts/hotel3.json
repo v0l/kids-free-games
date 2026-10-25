@@ -1,0 +1,16 @@
+[
+ {
+  "name": "hotel_parquet",
+  "w": 1024,
+  "h": 1024,
+  "seed": 320,
+  "prompt": "Flat top down orthographic view of a warm honey wooden parquet floor, herringbone planks filling the whole frame edge to edge, even lighting, seamless texture. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "hotel_roomfloor",
+  "w": 1024,
+  "h": 1024,
+  "seed": 321,
+  "prompt": "Flat top down orthographic view of a soft plush teal blue carpet with a subtle small diamond pattern, filling the whole frame edge to edge, even lighting, seamless texture. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]
