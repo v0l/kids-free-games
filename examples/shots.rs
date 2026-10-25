@@ -177,7 +177,7 @@ fn memory_clear(m: &mut Memory) {
 fn memory_shot(raw: i32, view: &View) -> Option<Memory> {
     let dt = 1.0 / 60.0;
     let mut m = match raw {
-        10 | 110 | -5 | -6 | -7 | -8 => {
+        10 | 110 | 210 | 310 | 410 | 510 => {
             kids_games::profile::create("Mia", 2);
             Memory::for_level(1)
         }
@@ -207,21 +207,21 @@ fn memory_shot(raw: i32, view: &View) -> Option<Memory> {
                 m.update(&Input::default(), view, dt);
             }
         }
-        -5 => {
+        210 => {
             m = Memory::for_level(3);
             m.pick(0);
             for _ in 0..30 {
                 m.update(&Input::default(), view, dt);
             }
         }
-        -8 => {
+        510 => {
             m = Memory::for_level(5);
             m.pick(0);
             for _ in 0..30 {
                 m.update(&Input::default(), view, dt);
             }
         }
-        -6 => {
+        310 => {
             m = Memory::for_level(2);
             memory_clear(&mut m);
             for _ in 0..200 {
