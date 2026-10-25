@@ -109,14 +109,14 @@ impl Question {
     }
 
     pub fn fresh(level: usize, previous: Option<&Question>) -> Self {
-        let mut q = Self::generate(level);
-        for _ in 0..8 {
-            if previous.is_none_or(|p| p.count != q.count) {
-                break;
-            }
-            q = Self::generate(level);
+        let (low, high) = RANGES[level];
+        let counts: Vec<i32> = (low..=high)
+            .filter(|c| previous.is_none_or(|p| p.count != *c))
+            .collect();
+        match counts.len() {
+            0 => Self::generate(level),
+            n => Self::with_count(level, counts[rand::gen_range(0, n)]),
         }
-        q
     }
 
     pub fn slot_of_answer(&self) -> usize {
@@ -1015,12 +1015,14 @@ mod tests {
 
     #[test]
     fn the_next_count_differs_from_the_last() {
-        rand::srand(21);
-        let mut q = Question::fresh(0, None);
-        for _ in 0..200 {
-            let next = Question::fresh(0, Some(&q));
-            assert_ne!(q.count, next.count);
-            q = next;
+        for seed in 0..40 {
+            rand::srand(seed);
+            let mut q = Question::fresh(0, None);
+            for _ in 0..500 {
+                let next = Question::fresh(0, Some(&q));
+                assert_ne!(q.count, next.count, "seed {seed}");
+                q = next;
+            }
         }
     }
 

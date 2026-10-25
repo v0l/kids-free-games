@@ -11,7 +11,7 @@ pub const PLAT_W: f32 = 120.0;
 pub const PLAT_H: f32 = 22.0;
 pub const HERO_R: f32 = 26.0;
 pub const MOVE: f32 = 520.0;
-pub const STEER_EASE: f32 = 14.0;
+pub const STEER_EASE: f32 = 40.0;
 pub const SPRING_H: f32 = 30.0;
 const HERO_H: f32 = 104.0;
 pub const KEY: &str = "jumper";
@@ -1186,8 +1186,8 @@ mod tests {
             ..Default::default()
         };
         j.update(&hold, &v, 1.0 / 60.0);
-        assert!(j.vel.x > 0.0 && j.vel.x < MOVE * 0.5, "{}", j.vel.x);
-        for _ in 0..20 {
+        assert!(j.vel.x > 0.0 && j.vel.x < MOVE * 0.75, "{}", j.vel.x);
+        for _ in 0..6 {
             j.update(&hold, &v, 1.0 / 60.0);
         }
         assert!(j.vel.x > MOVE * 0.95, "{}", j.vel.x);
@@ -1405,12 +1405,19 @@ mod tests {
 
     #[test]
     fn a_steering_player_climbs_past_the_first_milestone() {
-        fresh_player();
-        crate::profile::set(KEY, "runs", 5);
         let v = View::ipad_landscape();
-        let mut j = Jumper::new();
-        start(&mut j, &v);
-        autopilot(&mut j, &v, 40.0, false);
-        assert!(j.score >= MILESTONE, "score {}", j.score);
+        let mut short = vec![];
+        for seed in 0..300 {
+            rand::srand(seed);
+            fresh_player();
+            crate::profile::set(KEY, "runs", 5);
+            let mut j = Jumper::new();
+            start(&mut j, &v);
+            autopilot(&mut j, &v, 40.0, false);
+            if j.score < MILESTONE {
+                short.push((seed, j.score));
+            }
+        }
+        assert!(short.len() <= 3, "fell short: {short:?}");
     }
 }
