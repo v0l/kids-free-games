@@ -92,8 +92,45 @@ const FRUITS: [Species; 6] = [
     },
 ];
 
+pub const GAME: &str = "fruit";
+pub const FRUIT_PER_LEVEL: u32 = 10;
+pub const FIRST_BOMB_LEVEL: u32 = 4;
+pub const MAX_START_LEVEL: u32 = 3;
+const _: () = assert!(MAX_START_LEVEL < FIRST_BOMB_LEVEL);
+const CALM_WAVES: u32 = 3;
 const FRUIT_SPAN: f32 = 2.3;
 const BOMB_SPAN: f32 = 2.5;
+
+pub fn start_level(saved: u32) -> u32 {
+    (saved / 2).clamp(1, MAX_START_LEVEL)
+}
+
+pub fn bomb_chance(level: u32) -> f32 {
+    if level < FIRST_BOMB_LEVEL {
+        0.0
+    } else {
+        (0.06 + 0.02 * (level - FIRST_BOMB_LEVEL) as f32).min(0.25)
+    }
+}
+
+pub fn wave_size(level: u32) -> (usize, usize) {
+    let d = level.saturating_sub(1) as usize;
+    let lo = 1 + d / 5;
+    let hi = (1 + d / 2).max(lo);
+    (lo.min(5), hi.min(6))
+}
+
+pub fn wave_gap(level: u32) -> f32 {
+    (1.7 - 0.08 * level.saturating_sub(1) as f32).max(0.6)
+}
+
+pub fn fruit_radius_bonus(level: u32) -> f32 {
+    (12.0 - 4.0 * level.saturating_sub(1) as f32).max(0.0)
+}
+
+pub fn misses_cost_lives(level: u32) -> bool {
+    level > 1
+}
 
 pub fn combo_bonus(n: u32) -> u32 {
     if n >= 3 {
@@ -126,8 +163,15 @@ pub struct Fruit {
     pub blade: Vec<(Vec2, f32)>,
     pub score: u32,
     pub best: Best,
+    pub rank: Option<usize>,
     pub lives: u32,
     pub state: State,
+    pub sliced: u32,
+    pub start_level: u32,
+    level_up_pending: bool,
+    calm: u32,
+    bomb_hint_pending: bool,
+    bomb_hint_time: f32,
     wave_in: f32,
     time: f32,
     flash: f32,
@@ -154,9 +198,16 @@ impl Fruit {
             stains: vec![],
             blade: vec![],
             score: 0,
-            best: Best::default(),
+            best: Best::load(GAME),
+            rank: None,
             lives: LIVES,
             state: State::Ready,
+            sliced: 0,
+            start_level: start_level(crate::profile::level(GAME)),
+            level_up_pending: false,
+            calm: 0,
+            bomb_hint_pending: crate::profile::get(GAME, "bomb_hint") == 0,
+            bomb_hint_time: 0.0,
             wave_in: 0.8,
             time: 0.0,
             flash: 0.0,
@@ -168,12 +219,21 @@ impl Fruit {
         }
     }
 
+    pub fn level(&self) -> u32 {
+        self.start_level + self.sliced / FRUIT_PER_LEVEL
+    }
+
     fn launch_wave(&mut self, view: &View) {
-        let count = 1 + (self.time / 20.0) as usize + rand::gen_range(0, 3);
-        let bomb_chance = (0.08 + self.time * 0.003).min(0.25);
-        for _ in 0..count.min(6) {
+        let level = self.level();
+        let (lo, hi) = wave_size(level);
+        let calm = self.calm > 0;
+        self.calm = self.calm.saturating_sub(1);
+        let count = if calm { 1 } else { rand::gen_range(lo, hi + 1) };
+        let bomb_chance = if calm { 0.0 } else { bomb_chance(level) };
+        let bonus = fruit_radius_bonus(level);
+        for _ in 0..count {
             let x = rand::gen_range(view.w * 0.15, view.w * 0.85);
-            let peak = rand::gen_range(view.h * 0.12, view.h * 0.45);
+            let peak = rand::gen_range(view.h * 0.12 + bonus * 4.0, view.h * 0.45);
             let vy = -(2.0 * GRAVITY * (view.h + 40.0 - peak)).sqrt();
             let vx = (view.w / 2.0 - x) * rand::gen_range(0.2, 0.6);
             let kind = if rand::gen_range(0.0, 1.0) < bomb_chance {
@@ -187,7 +247,7 @@ impl Fruit {
                 r: if kind == Kind::Bomb {
                     34.0
                 } else {
-                    rand::gen_range(34.0, 46.0)
+                    rand::gen_range(34.0, 46.0) + bonus
                 },
                 kind,
                 spin: rand::gen_range(-3.0, 3.0),
@@ -274,6 +334,32 @@ impl Fruit {
         self.fx.puff(at, Color::from_rgba(60, 60, 70, 255));
     }
 
+    fn level_up(&mut self, view: &View) {
+        let level = self.level();
+        if level > crate::profile::level(GAME) {
+            crate::profile::set_level(GAME, level);
+        }
+        sfx::play(Sfx::LevelUp);
+        sfx::say(sfx::Say::LevelUp);
+        let gold = Color::from_rgba(255, 210, 60, 255);
+        feel::impact_tinted(Impact::Large, gold);
+        self.fx.confetti(view);
+        self.popups.add(
+            vec2(view.w / 2.0, view.h * 0.4),
+            format!("Level {}!", level),
+            gold,
+            76.0,
+        );
+        if self.lives < LIVES {
+            self.lives += 1;
+            self.heart_bump.kick();
+        }
+    }
+
+    fn bomb_on_screen(&self) -> bool {
+        self.things.iter().any(|t| t.kind == Kind::Bomb)
+    }
+
     pub fn slice(&mut self, a: Vec2, b: Vec2) {
         if a.distance(b) < MIN_SLICE_SPEED {
             return;
@@ -299,6 +385,10 @@ impl Fruit {
                     combo += 1;
                     centre += t.pos;
                     self.score += 1;
+                    self.sliced += 1;
+                    if self.sliced.is_multiple_of(FRUIT_PER_LEVEL) {
+                        self.level_up_pending = true;
+                    }
                     self.score_bump.kick();
                     let side = vec2(-dir.y, dir.x) * 120.0;
                     let angle = dir.y.atan2(dir.x) - std::f32::consts::FRAC_PI_2;
@@ -414,16 +504,28 @@ impl Game for Fruit {
                     }
                     !gone
                 });
-                if missed > 0 {
+                if missed > 0 && misses_cost_lives(self.level()) {
                     sfx::play(Sfx::Wrong);
                     self.heart_bump.kick();
                     self.shake.add(0.2);
+                    self.calm = CALM_WAVES;
+                    self.lives = self.lives.saturating_sub(missed);
                 }
-                self.lives = self.lives.saturating_sub(missed);
+                if self.level_up_pending {
+                    self.level_up_pending = false;
+                    self.level_up(view);
+                }
+                if self.bomb_hint_pending && self.bomb_on_screen() {
+                    self.bomb_hint_time += dt;
+                    if self.bomb_hint_time > 4.0 {
+                        self.bomb_hint_pending = false;
+                        crate::profile::set(GAME, "bomb_hint", 1);
+                    }
+                }
                 self.wave_in -= dt;
                 if self.wave_in <= 0.0 && self.things.is_empty() {
                     self.launch_wave(view);
-                    self.wave_in = (1.2 - self.time * 0.005).max(0.5);
+                    self.wave_in = wave_gap(self.level()) * 0.6;
                 }
                 if self.lives == 0 {
                     self.state = State::Over;
@@ -431,14 +533,12 @@ impl Game for Fruit {
                     if self.score > self.best.0 && self.best.0 > 0 {
                         sfx::say(sfx::Say::Best);
                     }
-                    self.best.offer(self.score);
+                    self.rank = self.best.submit(GAME, self.score);
                 }
             }
             State::Over => {
                 if input.tap() && self.flash == 0.0 {
-                    let best = self.best;
                     *self = Self::new();
-                    self.best = best;
                     self.state = State::Playing;
                     sfx::say(sfx::Say::Go);
                 }
@@ -468,20 +568,37 @@ impl Game for Fruit {
             fill_screen(view, with_alpha(WHITE, self.flash));
         }
         match self.state {
-            State::Ready => overlay(
-                view,
-                "Fruit Slice",
-                &[
-                    "Swipe across fruit to slice it",
-                    "Don't touch the bombs!",
-                    "Tap to start",
-                ],
-            ),
-            State::Over => {
-                let s = format!("Score {}   Best {}", self.score, self.best.0);
-                overlay(view, "Game over", &[&s, "Tap to play again"]);
+            State::Ready => {
+                let resume = format!("Starting at level {}", self.start_level);
+                if self.start_level > 1 {
+                    overlay(
+                        view,
+                        "Fruit Slice",
+                        &["Swipe across fruit to slice it", &resume, "Tap to start"],
+                    );
+                } else {
+                    overlay(
+                        view,
+                        "Fruit Slice",
+                        &["Swipe across fruit to slice it", "Tap to start"],
+                    );
+                }
             }
-            State::Playing => {}
+            State::Over => {
+                let line = format!("Score {}   Level {}", self.score, self.level());
+                results(
+                    view,
+                    &crate::ui::Results {
+                        game: GAME,
+                        title: "Game over",
+                        line: &line,
+                        rank: self.rank,
+                        action: "Play again",
+                        format: crate::ui::plain_score,
+                    },
+                );
+            }
+            State::Playing => self.draw_hints(view),
         }
     }
 }
@@ -619,7 +736,38 @@ impl Fruit {
         }
     }
 
+    fn draw_hints(&self, view: &View) {
+        let pulse = 1.0 + (self.time * 5.0).sin() * 0.04;
+        let at = vec2(view.w / 2.0, view.h * 0.86);
+        if self.best.0 == 0 && self.sliced < 3 {
+            crate::ui::hint(view, "Swipe across the fruit!", at, pulse);
+        } else if self.bomb_hint_pending && self.bomb_on_screen() {
+            crate::ui::hint(view, "Don't slice the bombs!", at, pulse);
+        }
+    }
+
+    fn draw_level_bar(&self, view: &View) {
+        let w = 240.0f32.min(view.w * 0.32);
+        let cx = view.w / 2.0;
+        text_outline(
+            &format!("Level {}", self.level()),
+            cx,
+            30.0,
+            30.0,
+            WHITE,
+            Color::from_rgba(40, 30, 60, 255),
+        );
+        let track = Rect::new(cx - w / 2.0, 54.0, w, 18.0);
+        round_rect(track, 9.0, Color::new(0.1, 0.05, 0.2, 0.55));
+        let k = (self.sliced % FRUIT_PER_LEVEL) as f32 / FRUIT_PER_LEVEL as f32;
+        if k > 0.0 {
+            let fill = Rect::new(track.x + 2.0, track.y + 2.0, (w - 4.0) * k, 14.0);
+            round_rect(fill, 7.0, Color::from_rgba(255, 210, 60, 255));
+        }
+    }
+
     fn draw_hud(&self, view: &View) {
+        self.draw_level_bar(view);
         let s = self.score.to_string();
         text_outline(
             &s,
@@ -703,6 +851,7 @@ mod tests {
     fn losing_plays_the_lose_jingle() {
         let v = View::ipad_landscape();
         let mut g = with(Kind::Fruit(1), vec2(300.0, v.h + 100.0));
+        g.start_level = 2;
         g.lives = 1;
         g.things[0].vel = vec2(0.0, 10.0);
         crate::sfx::take_pending();
@@ -745,6 +894,7 @@ mod tests {
     fn dropped_fruit_costs_a_life() {
         let v = View::ipad_landscape();
         let mut g = with(Kind::Fruit(1), vec2(300.0, v.h + 100.0));
+        g.start_level = 2;
         g.things[0].vel = vec2(0.0, 10.0);
         g.update(&Input::default(), &v, 0.01);
         assert_eq!(g.lives, LIVES - 1);
@@ -816,8 +966,196 @@ mod tests {
     fn missed_fruit_pulses_the_heart() {
         let v = View::ipad_landscape();
         let mut g = with(Kind::Fruit(1), vec2(300.0, v.h + 100.0));
+        g.start_level = 2;
         g.things[0].vel = vec2(0.0, 10.0);
         g.update(&Input::default(), &v, 0.01);
         assert!(g.heart_bump.t < 1.0);
+    }
+
+    fn fresh_player() -> Fruit {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        Fruit::new()
+    }
+
+    fn start(g: &mut Fruit, v: &View) {
+        g.update(&Input::press_at(vec2(100.0, 100.0)), v, 0.01);
+        assert_eq!(g.state, State::Playing);
+    }
+
+    #[test]
+    fn a_child_who_never_swipes_survives_the_first_stretch() {
+        let v = View::ipad_landscape();
+        let mut g = fresh_player();
+        start(&mut g, &v);
+        for _ in 0..(40 * 60) {
+            g.update(&Input::default(), &v, 1.0 / 60.0);
+            assert!(!g.things.iter().any(|t| t.kind == Kind::Bomb));
+        }
+        assert_eq!(g.state, State::Playing);
+        assert_eq!(g.lives, LIVES);
+        assert_eq!(g.level(), 1);
+    }
+
+    #[test]
+    fn no_bombs_before_level_four() {
+        let v = View::ipad_landscape();
+        for level in 1..FIRST_BOMB_LEVEL {
+            assert_eq!(bomb_chance(level), 0.0);
+            let mut g = fresh_player();
+            g.start_level = level;
+            g.state = State::Playing;
+            for _ in 0..200 {
+                g.things.clear();
+                g.launch_wave(&v);
+                assert!(!g.things.iter().any(|t| t.kind == Kind::Bomb));
+            }
+        }
+        assert!(bomb_chance(FIRST_BOMB_LEVEL) > 0.0);
+    }
+
+    #[test]
+    fn difficulty_rises_with_level() {
+        assert!(bomb_chance(8) > bomb_chance(4));
+        assert!(bomb_chance(99) <= 0.25);
+        assert!(wave_size(10).1 > wave_size(1).1);
+        assert!(wave_gap(10) < wave_gap(1));
+        assert!(wave_gap(99) >= 0.6);
+        assert!(fruit_radius_bonus(1) > fruit_radius_bonus(3));
+        assert_eq!(fruit_radius_bonus(5), 0.0);
+        assert!(!misses_cost_lives(1));
+        assert!(misses_cost_lives(2));
+    }
+
+    #[test]
+    fn first_level_waves_are_one_big_fruit() {
+        let v = View::ipad_landscape();
+        let mut g = fresh_player();
+        for _ in 0..100 {
+            g.things.clear();
+            g.launch_wave(&v);
+            assert_eq!(g.things.len(), 1);
+            assert!(g.things[0].r >= 44.0);
+        }
+    }
+
+    #[test]
+    fn ten_fruit_reach_the_next_level_with_a_cheer() {
+        let v = View::ipad_landscape();
+        let mut g = fresh_player();
+        g.start_level = 2;
+        start(&mut g, &v);
+        g.lives = 1;
+        crate::sfx::take_pending();
+        for _ in 0..FRUIT_PER_LEVEL {
+            g.things.push(Thing {
+                pos: vec2(300.0, 300.0),
+                vel: Vec2::ZERO,
+                r: 40.0,
+                kind: Kind::Fruit(0),
+                spin: 0.0,
+            });
+            g.slice(vec2(200.0, 300.0), vec2(400.0, 300.0));
+        }
+        g.update(&Input::default(), &v, 0.01);
+        assert_eq!(g.level(), 3);
+        assert!(crate::sfx::take_pending().contains(&Sfx::LevelUp));
+        assert!(g.popups.list.iter().any(|p| p.text == "Level 3!"));
+        assert_eq!(g.lives, 2);
+        assert_eq!(crate::profile::level(GAME), 3);
+    }
+
+    #[test]
+    fn a_missed_fruit_calms_the_next_waves() {
+        let v = View::ipad_landscape();
+        let mut g = fresh_player();
+        g.start_level = 8;
+        g.state = State::Playing;
+        g.things.push(Thing {
+            pos: vec2(300.0, v.h + 100.0),
+            vel: vec2(0.0, 10.0),
+            r: 40.0,
+            kind: Kind::Fruit(1),
+            spin: 0.0,
+        });
+        g.update(&Input::default(), &v, 0.01);
+        assert_eq!(g.calm, CALM_WAVES);
+        for _ in 0..CALM_WAVES {
+            g.things.clear();
+            g.launch_wave(&v);
+            assert_eq!(g.things.len(), 1);
+            assert_ne!(g.things[0].kind, Kind::Bomb);
+        }
+    }
+
+    #[test]
+    fn a_new_run_starts_gently_but_not_at_the_bottom() {
+        assert_eq!(start_level(0), 1);
+        assert_eq!(start_level(1), 1);
+        assert_eq!(start_level(4), 2);
+        assert_eq!(start_level(6), 3);
+        assert_eq!(start_level(30), MAX_START_LEVEL);
+    }
+
+    #[test]
+    fn progress_saves_per_player_and_resumes() {
+        let v = View::ipad_landscape();
+        crate::save::reset_for_test();
+        let mia = crate::profile::create("Mia", 0).unwrap();
+        crate::profile::set_level(GAME, 8);
+        let leo = crate::profile::create("Leo", 1).unwrap();
+        assert_eq!(Fruit::new().start_level, 1);
+        crate::profile::select(&mia.id);
+        let g = Fruit::new();
+        assert_eq!(g.start_level, 3);
+        assert_eq!(g.level(), 3);
+        crate::profile::select(&leo.id);
+        assert_eq!(Fruit::new().start_level, 1);
+        let _ = v;
+    }
+
+    #[test]
+    fn game_over_posts_the_score_and_keeps_the_rank() {
+        let v = View::ipad_landscape();
+        let mut g = fresh_player();
+        g.start_level = 2;
+        start(&mut g, &v);
+        g.score = 14;
+        g.lives = 1;
+        g.things.push(Thing {
+            pos: vec2(300.0, v.h + 100.0),
+            vel: vec2(0.0, 10.0),
+            r: 40.0,
+            kind: Kind::Fruit(1),
+            spin: 0.0,
+        });
+        g.update(&Input::default(), &v, 0.01);
+        assert_eq!(g.state, State::Over);
+        assert_eq!(g.rank, Some(0));
+        assert_eq!(Best::load(GAME).0, 14);
+        assert_eq!(Fruit::new().best.0, 14);
+    }
+
+    #[test]
+    fn the_bomb_warning_shows_once() {
+        let v = View::ipad_landscape();
+        let mut g = fresh_player();
+        g.start_level = 5;
+        start(&mut g, &v);
+        g.things.push(Thing {
+            pos: vec2(300.0, 100.0),
+            vel: Vec2::ZERO,
+            r: 34.0,
+            kind: Kind::Bomb,
+            spin: 0.0,
+        });
+        for _ in 0..(5 * 60) {
+            g.things[0].pos = vec2(300.0, 100.0);
+            g.things[0].vel = Vec2::ZERO;
+            g.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert!(!g.bomb_hint_pending);
+        assert_eq!(crate::profile::get(GAME, "bomb_hint"), 1);
+        assert!(!Fruit::new().bomb_hint_pending);
     }
 }
