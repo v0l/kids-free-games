@@ -23,9 +23,16 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             if f == 1 {
                 i.pressed = true;
             }
-            let leg = (f / 50) % 4;
-            if f.is_multiple_of(50) {
-                i.swipe = Some([Dir::Up, Dir::Right, Dir::Down, Dir::Left][leg]);
+            let legs = [
+                (2, Dir::Right),
+                (125, Dir::Down),
+                (248, Dir::Left),
+                (371, Dir::Up),
+            ];
+            for (at, dir) in legs {
+                if f == at {
+                    i.swipe = Some(dir);
+                }
             }
         }
         "Snake" => {
@@ -269,7 +276,7 @@ fn pick() -> i32 {
 
 #[macroquad::main(window_conf)]
 async fn main() {
-    let frames = 420;
+    let frames = if pick() == 102 { 760 } else { 420 };
     rand::srand(42);
     let which = pick();
     next_frame().await;
@@ -288,9 +295,9 @@ async fn main() {
         }
         let mut g = (e.make)();
         for f in 0..frames {
-            let input = if idle && f > 1 {
+            let input = if idle && f > 1 && e.name != "Paper Land" {
                 Input::default()
-            } else if idle {
+            } else if idle && e.name != "Paper Land" {
                 Input::press_at(view.center())
             } else {
                 scripted(e.name, f, &view)

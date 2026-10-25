@@ -1,16 +1,25 @@
+pub mod arena;
+
 use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
+use crate::profile::{self, Better};
 use crate::sfx::{self, Sfx};
+use arena::{Arena, MAX_LEVEL};
 use macroquad::prelude::*;
 use std::collections::VecDeque;
+
+pub const GAME: &str = "paper";
 
 pub const GW: i32 = 60;
 pub const GH: i32 = 44;
 pub const STEP: f32 = 0.11;
 pub const START_R: i32 = 2;
 const RESPAWN: f32 = 3.0;
+const HUNT_RANGE: i32 = 10;
+const TOP: f32 = 100.0;
+const END_DELAY: f32 = 0.5;
 const VISIBLE_CELLS: f32 = 28.0;
 
 pub const COLORS: [(u8, u8, u8); 5] = [
@@ -67,6 +76,7 @@ pub struct Player {
     pub bot: bool,
     bot_steps: i32,
     bot_turns: i32,
+    pace_acc: f32,
 }
 
 impl Player {
@@ -82,6 +92,7 @@ impl Player {
             bot,
             bot_steps: 0,
             bot_turns: 0,
+            pace_acc: 0.0,
         }
     }
 }
@@ -91,6 +102,7 @@ pub enum State {
     Playing,
     Lost,
     Won,
+    Select,
 }
 
 pub struct Paper {
@@ -98,7 +110,6 @@ pub struct Paper {
     pub trail: Vec<Option<u8>>,
     pub players: Vec<Player>,
     pub state: State,
-    pub best: f32,
     pub deaths: Vec<Death>,
     timer: f32,
     clock: f32,
@@ -110,7 +121,22 @@ pub struct Paper {
     popups: Popups,
     shake: Shake,
     bump: Bump,
-    start_best: f32,
+    pub arena: Arena,
+    pub started: bool,
+    pub elapsed: f32,
+    pub training: bool,
+    pub grabbed: bool,
+    pub rank: Option<usize>,
+    pub stars: u8,
+    pace: f32,
+    aggro: f32,
+    step: f32,
+    fails: u32,
+    since_end: f32,
+    since_start: f32,
+    halfway: bool,
+    forgiven: u32,
+    home: IVec2,
 }
 
 pub fn idx(p: IVec2) -> usize {
@@ -128,7 +154,6 @@ impl Paper {
             trail: vec![None; (GW * GH) as usize],
             players: vec![],
             state: State::Playing,
-            best: 0.0,
             deaths: vec![],
             timer: 0.0,
             clock: 0.0,
@@ -140,27 +165,60 @@ impl Paper {
             popups: Popups::default(),
             shake: Shake::default(),
             bump: Bump::default(),
-            start_best: 0.0,
+            arena: Arena::for_level(1, 0),
+            started: true,
+            elapsed: 0.0,
+            training: false,
+            grabbed: false,
+            rank: None,
+            stars: 0,
+            pace: 1.0,
+            aggro: 0.0,
+            step: STEP,
+            fails: 0,
+            since_end: 0.0,
+            since_start: 0.0,
+            halfway: false,
+            forgiven: 0,
+            home: ivec2(GW / 2, GH / 2),
         }
     }
 
     pub fn new() -> Self {
+        let level = profile::level(GAME).clamp(1, MAX_LEVEL);
+        Self::with_arena(level, profile::get(GAME, "fails").max(0) as u32)
+    }
+
+    pub fn with_arena(level: u32, fails: u32) -> Self {
+        let arena = Arena::for_level(level, fails);
         let mut g = Self::empty();
+        g.arena = arena;
+        g.pace = arena.pace;
+        g.aggro = arena.aggro;
+        g.step = STEP / arena.tempo;
+        g.fails = fails;
+        g.started = false;
+        g.training = arena.level == 1 && profile::stars(GAME, 1) == 0;
         let spots = [
-            ivec2(GW / 2, GH / 2),
+            ivec2(GW - 11, GH - 10),
             ivec2(10, 9),
             ivec2(GW - 11, 9),
             ivec2(10, GH - 10),
-            ivec2(GW - 11, GH - 10),
         ];
-        for (i, s) in spots.iter().enumerate() {
-            g.add_player(*s, if i == 0 { Dir::Right } else { Dir::Up }, i != 0);
+        g.add_player(g.home, Dir::Right, false);
+        for s in spots.iter().take(arena.bots) {
+            g.add_player(*s, Dir::Up, true);
         }
+        profile::set_level(GAME, arena.level);
+        profile::unlock(GAME, arena.level);
         g
     }
 
     pub fn add_player(&mut self, at: IVec2, dir: Dir, bot: bool) -> usize {
         let id = self.players.len();
+        if id == 0 {
+            self.home = at;
+        }
         self.players.push(Player::spawn(at, dir, bot));
         self.claim_square(id, at);
         self.seen = self.owner.clone();
@@ -188,10 +246,14 @@ impl Paper {
     }
 
     pub fn kill_by(&mut self, id: usize, killer: Option<usize>) {
-        let p = &mut self.players[id];
-        if !p.alive {
+        if !self.players[id].alive {
             return;
         }
+        if id == 0 && self.training && !self.grabbed {
+            self.forgive();
+            return;
+        }
+        let p = &mut self.players[id];
         self.deaths.push(Death {
             victim: id,
             killer,
@@ -205,6 +267,23 @@ impl Paper {
                 *c = None;
             }
         }
+    }
+
+    fn forgive(&mut self) {
+        for c in self.trail.iter_mut() {
+            if *c == Some(0) {
+                *c = None;
+            }
+        }
+        let home = self.home;
+        self.claim_square(0, home);
+        let p = &mut self.players[0];
+        p.trail.clear();
+        p.pos = home;
+        p.prev = home;
+        p.dir = Dir::Right;
+        p.next_dir = None;
+        self.forgiven += 1;
     }
 
     pub fn close_loop(&mut self, id: usize) {
@@ -250,13 +329,23 @@ impl Paper {
     }
 
     pub fn tick(&mut self) {
-        for id in 0..self.players.len() {
-            if self.players[id].bot && self.players[id].alive {
-                self.bot_think(id);
+        let mut moving = vec![true; self.players.len()];
+        for (id, go) in moving.iter_mut().enumerate() {
+            let p = &mut self.players[id];
+            if !p.bot || !p.alive {
+                continue;
             }
+            p.pace_acc += self.pace;
+            if p.pace_acc < 1.0 {
+                *go = false;
+                p.prev = p.pos;
+                continue;
+            }
+            p.pace_acc -= 1.0;
+            self.bot_think(id);
         }
-        for id in 0..self.players.len() {
-            if !self.players[id].alive {
+        for (id, go) in moving.into_iter().enumerate() {
+            if !self.players[id].alive || !go {
                 continue;
             }
             let p = &mut self.players[id];
@@ -312,7 +401,43 @@ impl Paper {
             && !(d == p.dir.opposite() && !p.trail.is_empty())
     }
 
+    fn hunt_dir(&self, id: usize) -> Option<Dir> {
+        let prey = self.players.first().filter(|p| p.alive && !p.bot)?;
+        let me = &self.players[id];
+        if self.aggro <= 0.0 || me.trail.len() > 14 || rand::gen_range(0.0, 1.0) >= self.aggro {
+            return None;
+        }
+        let target = prey
+            .trail
+            .iter()
+            .copied()
+            .min_by_key(|t| (*t - me.pos).abs().element_sum())?;
+        let delta = target - me.pos;
+        if delta.abs().element_sum() > HUNT_RANGE {
+            return None;
+        }
+        let mut order = vec![];
+        if delta.x != 0 {
+            order.push((
+                delta.x.abs(),
+                if delta.x < 0 { Dir::Left } else { Dir::Right },
+            ));
+        }
+        if delta.y != 0 {
+            order.push((delta.y.abs(), if delta.y < 0 { Dir::Up } else { Dir::Down }));
+        }
+        order.sort_by_key(|(far, _)| -far);
+        order
+            .into_iter()
+            .map(|(_, d)| d)
+            .find(|d| self.safe(id, *d))
+    }
+
     fn bot_think(&mut self, id: usize) {
+        if let Some(d) = self.hunt_dir(id) {
+            self.players[id].next_dir = Some(d);
+            return;
+        }
         let me = Some(id as u8);
         let pos = self.players[id].pos;
         let home = self.owner[idx(pos)] == me;
@@ -466,6 +591,7 @@ impl Paper {
             if id == 0 {
                 let pct = *n as f32 / self.owner.len() as f32 * 100.0;
                 if pct >= 0.1 {
+                    self.grabbed = true;
                     sfx::play(Sfx::Coin);
                     self.popups.add(
                         at - vec2(0.0, cell * 1.4),
@@ -506,7 +632,7 @@ impl Paper {
     }
 
     fn layout(&self, view: &View) -> (f32, Vec2) {
-        let top = 64.0;
+        let top = TOP;
         let area = vec2(view.w - 20.0, view.h - top - 10.0);
         let fit = (area.x / GW as f32).min(area.y / GH as f32);
         let cell = fit.max(view.w.min(view.h) / VISIBLE_CELLS).floor();
@@ -516,7 +642,7 @@ impl Paper {
         let head = (p
             .prev
             .as_vec2()
-            .lerp(p.pos.as_vec2(), (self.timer / STEP).clamp(0.0, 1.0))
+            .lerp(p.pos.as_vec2(), (self.timer / self.step).clamp(0.0, 1.0))
             + 0.5)
             * cell;
         let axis = |board: f32, area: f32, head: f32, center: f32, lo: f32| {
@@ -650,48 +776,67 @@ impl Paper {
 
 impl Game for Paper {
     fn update(&mut self, input: &Input, view: &View, dt: f32) {
-        if self.clock == 0.0 {
-            sfx::say(sfx::Say::Go);
-        }
         self.clock += dt;
         self.particles.update(dt);
         self.screen_fx.update(dt);
         self.popups.update(dt);
         self.shake.update(dt);
         self.bump.update(dt);
-        if self.state != State::Playing {
-            if input.tap() {
-                let best = self.best;
-                *self = Self::new();
-                self.best = best;
-                self.start_best = best;
+        match self.state {
+            State::Select => return self.update_select(input, view, dt),
+            State::Won | State::Lost => return self.update_end(input, view, dt),
+            State::Playing => {}
+        }
+        if !self.started {
+            if input.tapped_in(arenas_button(view)) {
+                self.open_select();
+            } else if input.dir().is_some() || input.tap() {
+                self.started = true;
+                sfx::say(sfx::Say::Go);
+            } else {
+                return;
             }
-            return;
         }
         if let Some(d) = input.dir() {
             self.players[0].next_dir = Some(d);
         }
+        self.since_start += dt;
+        self.elapsed += dt;
         self.timer += dt;
-        while self.timer >= STEP {
-            self.timer -= STEP;
+        let forgiven = self.forgiven;
+        while self.timer >= self.step {
+            self.timer -= self.step;
             self.tick();
-            self.respawn_bots(STEP);
+            self.respawn_bots(self.step);
         }
         let (cell, _) = self.layout(view);
+        if self.forgiven > forgiven {
+            let at = (self.home.as_vec2() + vec2(0.5, -1.0)) * cell;
+            self.popups.add(
+                at,
+                "Oops! Try again",
+                Color::from_rgba(255, 220, 80, 255),
+                cell * 1.2,
+            );
+            sfx::play(Sfx::Wrong);
+        }
         self.react(cell);
         let share = self.share(0);
-        self.best = self.best.max(share);
+        if !self.halfway && share >= self.arena.target / 2.0 && share < self.arena.target {
+            self.halfway = true;
+            sfx::play(Sfx::Score);
+            sfx::say(sfx::Say::Great);
+            self.popups.add(
+                vec2(view.w / 2.0 - cell * 8.0, cell * 6.0),
+                "Halfway there!",
+                WHITE,
+                cell * 1.6,
+            );
+        }
         if !self.players[0].alive {
-            self.state = State::Lost;
-            sfx::play(Sfx::Lose);
-            if self.start_best > 0.0 && self.best > self.start_best {
-                sfx::say(sfx::Say::Best);
-            }
-        } else if share >= 0.5 {
-            self.state = State::Won;
-            sfx::play(Sfx::Win);
-            sfx::say(sfx::Say::Win);
-            self.screen_fx.confetti(view);
+            self.finish_loss();
+        } else if share >= self.arena.target {
+            self.finish_win(view);
         }
     }
 
@@ -786,7 +931,7 @@ impl Game for Paper {
             }
         }
         self.draw_fence(board, origin, view, cell);
-        let frac = (self.timer / STEP).clamp(0.0, 1.0);
+        let frac = (self.timer / self.step).clamp(0.0, 1.0);
         for (id, p) in self.players.iter().enumerate() {
             if !p.alive {
                 continue;
@@ -826,7 +971,7 @@ impl Game for Paper {
         set_view_camera(view, Vec2::ZERO);
         let pct = self.share(0) * 100.0;
         let f = view.full();
-        let bar = Rect::new(f.x - 8.0, f.y - 8.0, f.w + 16.0, 62.0 - f.y + 8.0);
+        let bar = Rect::new(f.x - 8.0, f.y - 8.0, f.w + 16.0, TOP - 4.0 - f.y + 8.0);
         gradient_rect(
             bar,
             Color::from_rgba(70, 150, 60, 255),
@@ -885,20 +1030,461 @@ impl Game for Paper {
                 crate::ui::INK,
             );
         }
+        self.draw_goal(view);
         self.screen_fx.draw();
         match self.state {
+            State::Playing => self.draw_hints(view),
             State::Lost => {
-                let s = format!("You had {:.1}%   Best {:.1}%", pct, self.best * 100.0);
-                overlay(view, "Oops!", &[&s, "Tap to try again"]);
+                let line = format!(
+                    "Arena {}: {:.0}% of {:.0}%",
+                    self.arena.level,
+                    pct,
+                    self.arena.target * 100.0
+                );
+                results(
+                    view,
+                    &crate::ui::Results {
+                        game: GAME,
+                        title: "Oops!",
+                        line: &line,
+                        rank: self.rank,
+                        action: "Try again",
+                        format: arena::score_label,
+                    },
+                );
+                crate::ui::painted_button(lost_arenas_button(view), "Arenas", "blue", 0.0, 1.0);
             }
-            State::Won => overlay(
-                view,
-                "You win!",
-                &["Half the map is yours!", "Tap to play again"],
-            ),
-            State::Playing => {}
+            State::Won => self.draw_win(view),
+            State::Select => self.draw_select(view),
         }
     }
+}
+
+pub fn arenas_button(view: &View) -> Rect {
+    Rect::new(view.w / 2.0 - 110.0, view.h - 175.0, 220.0, 64.0)
+}
+
+pub fn win_arenas_button(view: &View) -> Rect {
+    let r = win_panel(view);
+    Rect::new(
+        r.x + r.w / 2.0 + 10.0,
+        r.y + r.h - 96.0,
+        r.w / 2.0 - 40.0,
+        70.0,
+    )
+}
+
+pub fn win_next_button(view: &View) -> Rect {
+    let r = win_panel(view);
+    Rect::new(r.x + 30.0, r.y + r.h - 96.0, r.w / 2.0 - 40.0, 70.0)
+}
+
+pub fn lost_arenas_button(view: &View) -> Rect {
+    Rect::new(view.w / 2.0 - 100.0, view.h - 64.0, 200.0, 52.0)
+}
+
+pub fn win_panel(view: &View) -> Rect {
+    let w = 560.0f32.min(view.w - 40.0);
+    let h = 440.0;
+    let c = view.center() + vec2(0.0, 20.0);
+    Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h)
+}
+
+pub fn select_back_button(view: &View) -> Rect {
+    Rect::new(view.w / 2.0 - 100.0, view.h - 110.0, 200.0, 64.0)
+}
+
+pub fn select_cells(view: &View) -> Vec<Rect> {
+    let cols = if view.w >= view.h { 4 } else { 3 };
+    let rows = (MAX_LEVEL as usize).div_ceil(cols);
+    let top = 176.0;
+    let area = vec2(view.w - 60.0, view.h - top - 120.0);
+    let gap = 16.0;
+    let size = ((area.x - gap * (cols - 1) as f32) / cols as f32)
+        .min((area.y - gap * (rows - 1) as f32) / rows as f32)
+        .min(190.0);
+    let total = vec2(
+        size * cols as f32 + gap * (cols - 1) as f32,
+        size * rows as f32 + gap * (rows - 1) as f32,
+    );
+    let o = vec2(view.w / 2.0 - total.x / 2.0, top + (area.y - total.y) / 2.0);
+    (0..MAX_LEVEL as usize)
+        .map(|i| {
+            Rect::new(
+                o.x + (i % cols) as f32 * (size + gap),
+                o.y + (i / cols) as f32 * (size + gap),
+                size,
+                size,
+            )
+        })
+        .collect()
+}
+
+pub fn unlocked_arenas() -> u32 {
+    profile::unlocked(GAME).clamp(1, MAX_LEVEL)
+}
+
+impl Paper {
+    pub fn open_select(&mut self) {
+        self.state = State::Select;
+        self.since_end = 0.0;
+    }
+
+    fn update_select(&mut self, input: &Input, view: &View, dt: f32) {
+        self.since_end += dt;
+        if !input.pressed {
+            return;
+        }
+        if input.tapped_in(select_back_button(view)) {
+            sfx::play(Sfx::Click);
+            self.restart_at(profile::level(GAME).max(1), 0);
+            return;
+        }
+        let open = unlocked_arenas();
+        for (i, r) in select_cells(view).iter().enumerate() {
+            let level = i as u32 + 1;
+            if r.contains(input.pos) {
+                if level <= open {
+                    sfx::play(Sfx::Pop);
+                    self.restart_at(level, 0);
+                } else {
+                    sfx::play(Sfx::Wrong);
+                }
+                return;
+            }
+        }
+    }
+
+    fn update_end(&mut self, input: &Input, view: &View, dt: f32) {
+        self.since_end += dt;
+        if self.since_end < END_DELAY || !input.tap() {
+            return;
+        }
+        let level = self.arena.level;
+        let won = self.state == State::Won;
+        let again = if won && level >= MAX_LEVEL {
+            level
+        } else if won {
+            level + 1
+        } else {
+            level
+        };
+        let button = if won {
+            win_arenas_button(view)
+        } else {
+            lost_arenas_button(view)
+        };
+        if input.pressed && button.contains(input.pos) {
+            sfx::play(Sfx::Click);
+            self.open_select();
+        } else {
+            let fails = if won { 0 } else { self.fails + 1 };
+            self.restart_at(again, fails);
+        }
+    }
+
+    fn restart_at(&mut self, level: u32, fails: u32) {
+        let clock = self.clock;
+        *self = Self::with_arena(level, fails);
+        self.clock = clock;
+    }
+
+    fn finish_loss(&mut self) {
+        self.state = State::Lost;
+        self.since_end = 0.0;
+        sfx::play(Sfx::Lose);
+        sfx::say(sfx::Say::GameOver);
+        let score = arena::score(self.arena.level, self.share(0), false);
+        self.rank = profile::submit(GAME, score, Better::Higher);
+        profile::set(GAME, "fails", self.fails as i64 + 1);
+    }
+
+    fn finish_win(&mut self, view: &View) {
+        let level = self.arena.level;
+        self.state = State::Won;
+        self.since_end = 0.0;
+        self.stars = self.arena.stars(self.elapsed);
+        let next = arena::next_level(level);
+        profile::award_stars(GAME, level, self.stars);
+        profile::unlock(GAME, next);
+        profile::set_level(GAME, next);
+        profile::set(GAME, "fails", 0);
+        let score = arena::score(level, self.share(0), true);
+        self.rank = profile::submit(GAME, score, Better::Higher);
+        sfx::play(Sfx::Win);
+        sfx::say(if level >= MAX_LEVEL {
+            sfx::Say::Congrats
+        } else {
+            sfx::Say::Win
+        });
+        feel::impact_tinted(Impact::Large, color(0));
+        self.screen_fx.confetti(view);
+    }
+}
+
+impl Paper {
+    fn draw_goal(&self, view: &View) {
+        let want = self.arena.target;
+        let have = (self.share(0) / want).clamp(0.0, 1.0);
+        let r = Rect::new(HUD_LEFT, 66.0, view.w - HUD_LEFT - 24.0, 22.0);
+        round_rect(r, r.h / 2.0, Color::new(0.05, 0.2, 0.08, 0.55));
+        if have > 0.0 {
+            let w = (r.w * have).max(r.h);
+            round_rect(
+                Rect::new(r.x, r.y, w, r.h),
+                r.h / 2.0,
+                Color::from_rgba(255, 205, 60, 255),
+            );
+            round_rect(
+                Rect::new(r.x + 4.0, r.y + 3.0, (w - 8.0).max(0.0), r.h * 0.35),
+                r.h * 0.18,
+                Color::new(1.0, 1.0, 1.0, 0.35),
+            );
+        }
+        let label = format!(
+            "Arena {}: grab {:.0}% of the land",
+            self.arena.level,
+            want * 100.0
+        );
+        text_outline(
+            &label,
+            r.x + r.w / 2.0,
+            r.center().y + 1.0,
+            20.0,
+            WHITE,
+            Color::from_rgba(30, 80, 40, 255),
+        );
+        let (fast, slow) = self.arena.par();
+        let live = if self.elapsed <= fast {
+            3
+        } else if self.elapsed <= slow {
+            2
+        } else {
+            1
+        };
+        let clock = arena::clock_label(self.elapsed);
+        let cw = text_size(&clock, 22.0).width + 90.0;
+        let chip = Rect::new(HUD_LEFT + 232.0, 12.0, cw, 40.0);
+        if chip.x + chip.w < view.w - 20.0 - self.players.len().saturating_sub(1) as f32 * 90.0 {
+            crate::ui::chip_box(chip);
+            for i in 0..3 {
+                crate::ui::sprite_at(
+                    if i < live { "star" } else { "star_empty" },
+                    vec2(chip.x + 24.0 + i as f32 * 22.0, chip.y + chip.h / 2.0),
+                    22.0,
+                    crate::art::Draw::default(),
+                );
+            }
+            text_center(
+                &clock,
+                chip.x + 82.0 + (chip.w - 82.0) / 2.0 - 4.0,
+                chip.y + chip.h / 2.0 + 2.0,
+                22.0,
+                WHITE,
+            );
+        }
+    }
+
+    fn draw_hints(&self, view: &View) {
+        let pulse = 1.0 + (self.clock * 4.0).sin() * 0.04;
+        let at = vec2(view.w / 2.0, view.h - 60.0);
+        if !self.started {
+            fill_screen(view, Color::new(0.05, 0.15, 0.08, 0.28));
+            let c = vec2(view.w / 2.0, view.h * 0.3);
+            crate::ui::ribbon(view, &format!("Arena {}", self.arena.level), c, self.clock);
+            let goal = format!("Grab {:.0}% of the land to win", self.arena.target * 100.0);
+            text_outline(
+                &goal,
+                c.x,
+                c.y + 80.0,
+                36.0,
+                WHITE,
+                Color::from_rgba(30, 80, 40, 255),
+            );
+            crate::ui::hint(view, "Swipe to start", at, pulse);
+            crate::ui::painted_button(arenas_button(view), "Arenas", "blue", 0.0, 1.0);
+        } else if self.training && !self.grabbed {
+            let label = if self.players[0].trail.is_empty() {
+                "Swipe to go out onto the grass"
+            } else {
+                "Now swipe round and come back home"
+            };
+            crate::ui::hint(view, label, at, pulse);
+        }
+    }
+
+    fn draw_win(&self, view: &View) {
+        let age = self.since_end;
+        fill_screen(
+            view,
+            Color::new(0.06, 0.04, 0.16, 0.5 * ease_out_cubic(age / 0.2)),
+        );
+        let s = ease_out_back(age / 0.32).max(0.01);
+        let r = win_panel(view);
+        let c = r.center();
+        let r = Rect::new(
+            c.x - r.w * s / 2.0,
+            c.y - r.h * s / 2.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0,
+            r.w * s,
+            r.h * s,
+        );
+        crate::ui::painted_panel(r, WHITE);
+        crate::ui::ribbon(
+            view,
+            &format!("Arena {} clear!", self.arena.level),
+            vec2(c.x, r.y + 8.0 * s),
+            age,
+        );
+        for i in 0..3usize {
+            let k = ease_out_back(((age - 0.3 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
+            let name = if (i as u8) < self.stars {
+                "star"
+            } else {
+                "star_empty"
+            };
+            let size = 110.0 * s * if i == 1 { 1.15 } else { 1.0 };
+            crate::ui::sprite_at(
+                name,
+                vec2(
+                    c.x + (i as f32 - 1.0) * 120.0 * s,
+                    r.y + 140.0 * s - if i == 1 { 10.0 } else { 0.0 },
+                ),
+                size * k.max(0.01),
+                crate::art::Draw {
+                    rotation: (i as f32 - 1.0) * 0.18,
+                    ..Default::default()
+                },
+            );
+        }
+        let line = format!(
+            "{:.0}% of the land in {}",
+            self.share(0) * 100.0,
+            arena::clock_label(self.elapsed)
+        );
+        text_center(&line, c.x, r.y + 250.0 * s, 32.0 * s, crate::ui::BODY);
+        let note = if self.rank == Some(0) {
+            Some("New best!")
+        } else if self.arena.level >= MAX_LEVEL {
+            Some("You cleared every arena!")
+        } else if self.stars < 3 {
+            Some("Win faster for more stars")
+        } else {
+            None
+        };
+        if let Some(n) = note {
+            text_outline(
+                n,
+                c.x,
+                r.y + 300.0 * s,
+                32.0 * s,
+                Color::from_rgba(255, 200, 40, 255),
+                Color::from_rgba(130, 50, 0, 255),
+            );
+        }
+        let pulse = 1.0 + (age * 4.5).sin() * 0.03;
+        let next = if self.arena.level >= MAX_LEVEL {
+            "Again"
+        } else {
+            "Next"
+        };
+        let a = ((age - 0.4) / 0.2).clamp(0.0, 1.0);
+        let nb = win_next_button(view);
+        let ab = win_arenas_button(view);
+        crate::ui::painted_button(scale_about(nb, pulse), next, "green", 0.0, a);
+        crate::ui::painted_button(ab, "Arenas", "blue", 0.0, a);
+    }
+
+    fn draw_select(&self, view: &View) {
+        sky(
+            view,
+            Color::from_rgba(150, 215, 120, 255),
+            Color::from_rgba(70, 150, 70, 255),
+        );
+        let t = self.since_end;
+        crate::ui::ribbon(view, "Arenas", vec2(view.w / 2.0, 70.0), self.clock);
+        let open = unlocked_arenas();
+        let current = profile::level(GAME).max(1);
+        let stars = profile::total_stars(GAME);
+        let tally = format!("{} / {}", stars, MAX_LEVEL * 3);
+        let tw = text_size(&tally, 30.0).width + 60.0;
+        let chip = Rect::new(view.w / 2.0 - tw / 2.0, 118.0, tw, 40.0);
+        crate::ui::chip_box(chip);
+        crate::ui::sprite_at(
+            "star",
+            vec2(chip.x + 24.0, chip.center().y),
+            28.0,
+            crate::art::Draw::default(),
+        );
+        text_center(
+            &tally,
+            chip.x + 44.0 + (chip.w - 44.0) / 2.0 - 6.0,
+            chip.center().y + 2.0,
+            26.0,
+            WHITE,
+        );
+        for (i, r) in select_cells(view).iter().enumerate() {
+            let level = i as u32 + 1;
+            let pop = ease_out_back(((t - i as f32 * 0.03) / 0.25).clamp(0.0, 1.0));
+            let r = scale_about(*r, pop.max(0.01));
+            let locked = level > open;
+            let tint = if locked {
+                Color::new(0.75, 0.75, 0.8, 1.0)
+            } else {
+                WHITE
+            };
+            crate::ui::painted_panel(r, tint);
+            if locked {
+                crate::ui::sprite_at(
+                    "icon_lock",
+                    r.center(),
+                    r.h * 0.4,
+                    crate::art::Draw {
+                        tint: Color::new(0.45, 0.4, 0.55, 1.0),
+                        ..Default::default()
+                    },
+                );
+                continue;
+            }
+            let ring = if level == current {
+                Color::from_rgba(255, 190, 40, 255)
+            } else {
+                Color::from_rgba(60, 120, 60, 255)
+            };
+            text_outline(
+                &level.to_string(),
+                r.center().x,
+                r.y + r.h * 0.42,
+                r.h * 0.42,
+                WHITE,
+                ring,
+            );
+            let got = profile::stars(GAME, level);
+            for k in 0..3u8 {
+                crate::ui::sprite_at(
+                    if k < got { "star" } else { "star_empty" },
+                    vec2(
+                        r.center().x + (k as f32 - 1.0) * r.w * 0.25,
+                        r.y + r.h * 0.76,
+                    ),
+                    r.h * 0.22,
+                    crate::art::Draw::default(),
+                );
+            }
+        }
+        let pulse = 1.0 + (self.clock * 4.5).sin() * 0.03;
+        crate::ui::painted_button(
+            scale_about(select_back_button(view), pulse),
+            "Play",
+            "green",
+            0.0,
+            1.0,
+        );
+    }
+}
+
+fn scale_about(r: Rect, k: f32) -> Rect {
+    let c = r.center();
+    Rect::new(c.x - r.w * k / 2.0, c.y - r.h * k / 2.0, r.w * k, r.h * k)
 }
 
 pub fn icon(r: Rect) {
@@ -1177,6 +1763,351 @@ mod tests {
         assert!(g.shake.active());
         assert!(g.deaths.is_empty());
         assert!(!g.particles.list.is_empty());
+    }
+
+    fn fresh_player() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+    }
+
+    fn start(g: &mut Paper, v: &View) {
+        g.update(&Input::press_at(v.center()), v, 0.01);
+        assert!(g.started);
+    }
+
+    fn run(g: &mut Paper, v: &View, secs: f32) {
+        for _ in 0..(secs * 60.0) as usize {
+            g.update(&Input::default(), v, 1.0 / 60.0);
+        }
+    }
+
+    fn box_loop(g: &mut Paper) {
+        walk(
+            g,
+            &[
+                (Dir::Right, 6),
+                (Dir::Down, 6),
+                (Dir::Left, 6),
+                (Dir::Up, 4),
+            ],
+        );
+    }
+
+    fn self_cross(g: &mut Paper) {
+        walk(
+            g,
+            &[
+                (Dir::Left, 12),
+                (Dir::Down, 3),
+                (Dir::Right, 2),
+                (Dir::Up, 3),
+            ],
+        );
+    }
+
+    fn nearest_trail(g: &Paper, id: usize) -> i32 {
+        let me = g.players[id].pos;
+        g.players[0]
+            .trail
+            .iter()
+            .map(|t| (*t - me).abs().element_sum())
+            .min()
+            .unwrap()
+    }
+
+    #[test]
+    fn a_new_player_starts_in_a_gentle_first_arena() {
+        fresh_player();
+        let g = Paper::new();
+        assert_eq!(g.arena.level, 1);
+        assert!(g.training);
+        assert!(!g.started);
+        assert_eq!(g.players.len(), 2);
+        assert!(g.arena.target <= 0.1);
+        assert!(g.step > STEP);
+    }
+
+    #[test]
+    fn the_game_waits_for_the_first_swipe() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Paper::new();
+        run(&mut g, &v, 3.0);
+        assert_eq!(g.players[0].pos, g.home);
+        assert_eq!(g.elapsed, 0.0);
+        g.update(
+            &Input {
+                swipe: Some(Dir::Right),
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        run(&mut g, &v, 1.0);
+        assert!(g.players[0].pos.x > g.home.x);
+    }
+
+    #[test]
+    fn training_forgives_a_mistake_and_sends_you_home() {
+        fresh_player();
+        let mut g = Paper::new();
+        self_cross(&mut g);
+        assert!(g.players[0].alive);
+        assert_eq!(g.forgiven, 1);
+        assert_eq!(g.players[0].pos, g.home);
+        assert!(g.players[0].trail.is_empty());
+        assert!(g.trail.iter().all(|t| *t != Some(0)));
+        assert!(g.deaths.is_empty());
+        assert!(g.owner[idx(g.home)] == Some(0));
+    }
+
+    #[test]
+    fn training_ends_after_the_first_grab() {
+        fresh_player();
+        let mut g = Paper::new();
+        box_loop(&mut g);
+        g.react(20.0);
+        assert!(g.grabbed);
+        self_cross(&mut g);
+        assert!(!g.players[0].alive);
+    }
+
+    #[test]
+    fn later_arenas_do_not_forgive() {
+        fresh_player();
+        let mut g = Paper::with_arena(2, 0);
+        assert!(!g.training);
+        self_cross(&mut g);
+        assert!(!g.players[0].alive);
+        crate::profile::award_stars(GAME, 1, 1);
+        let mut again = Paper::with_arena(1, 0);
+        assert!(!again.training);
+        self_cross(&mut again);
+        assert!(!again.players[0].alive);
+    }
+
+    #[test]
+    fn a_slow_looper_survives_the_first_ten_seconds() {
+        for seed in 0..8 {
+            rand::srand(seed);
+            fresh_player();
+            crate::profile::award_stars(GAME, 1, 1);
+            let v = View::ipad_landscape();
+            let mut g = Paper::new();
+            start(&mut g, &v);
+            let plan = [Dir::Right, Dir::Down, Dir::Left, Dir::Up];
+            for f in 0..600 {
+                let swipe = (f % 60 == 0).then(|| plan[(f / 60) % 4]);
+                g.update(
+                    &Input {
+                        swipe,
+                        ..Default::default()
+                    },
+                    &v,
+                    1.0 / 60.0,
+                );
+            }
+            assert_eq!(g.state, State::Playing, "seed {seed}");
+        }
+    }
+
+    #[test]
+    fn first_arena_bots_are_slow_and_peaceful() {
+        fresh_player();
+        let mut g = Paper::new();
+        let bot = 1;
+        let mut moves = 0;
+        for _ in 0..100 {
+            let before = g.players[bot].pos;
+            g.tick();
+            if g.players[bot].pos != before {
+                moves += 1;
+            }
+        }
+        assert!(moves < 55 && moves > 25, "{moves}");
+        assert_eq!(g.aggro, 0.0);
+    }
+
+    #[test]
+    fn deeper_arenas_have_more_and_faster_bots() {
+        fresh_player();
+        let shallow = Paper::with_arena(1, 0);
+        let deep = Paper::with_arena(MAX_LEVEL, 0);
+        assert!(deep.players.len() > shallow.players.len() + 2);
+        assert!(deep.pace > shallow.pace);
+        assert!(deep.step < shallow.step);
+        assert!(deep.aggro > shallow.aggro);
+        assert!(deep.arena.target > shallow.arena.target);
+    }
+
+    #[test]
+    fn aggressive_bots_chase_your_trail() {
+        rand::srand(3);
+        let mut g = Paper::empty();
+        g.add_player(ivec2(10, 10), Dir::Right, false);
+        let bot = g.add_player(ivec2(30, 10), Dir::Up, true);
+        g.aggro = 1.0;
+        for _ in 0..8 {
+            g.players[0].next_dir = Some(Dir::Right);
+            g.tick();
+        }
+        g.players[bot].pos = ivec2(16, 16);
+        g.players[bot].prev = ivec2(16, 16);
+        g.players[bot].dir = Dir::Left;
+        let before = nearest_trail(&g, bot);
+        g.hunt_dir(bot).expect("hunting");
+        g.tick();
+        assert!(nearest_trail(&g, bot) < before);
+    }
+
+    #[test]
+    fn peaceful_bots_never_hunt() {
+        let mut g = Paper::empty();
+        g.add_player(ivec2(10, 10), Dir::Right, false);
+        let bot = g.add_player(ivec2(14, 14), Dir::Up, true);
+        for _ in 0..8 {
+            g.players[0].next_dir = Some(Dir::Right);
+            g.tick();
+        }
+        g.aggro = 0.0;
+        assert!(g.hunt_dir(bot).is_none());
+    }
+
+    #[test]
+    fn winning_saves_stars_unlocks_and_resumes_at_the_next_arena() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Paper::new();
+        start(&mut g, &v);
+        for c in 0..(GW * GH) as usize {
+            if c % 7 != 0 {
+                g.owner[c] = Some(0);
+            }
+        }
+        g.update(&Input::default(), &v, 0.2);
+        assert_eq!(g.state, State::Won);
+        assert!(g.stars >= 1);
+        assert_eq!(profile::stars(GAME, 1), g.stars);
+        assert_eq!(profile::unlocked(GAME), 2);
+        assert_eq!(profile::level(GAME), 2);
+        assert_eq!(g.rank, Some(0));
+        let next = Paper::new();
+        assert_eq!(next.arena.level, 2);
+        assert!(next.arena.target > g.arena.target);
+    }
+
+    #[test]
+    fn progress_is_kept_per_player() {
+        fresh_player();
+        profile::unlock(GAME, 5);
+        profile::set_level(GAME, 5);
+        assert_eq!(Paper::new().arena.level, 5);
+        crate::profile::create("Leo", 1);
+        assert_eq!(Paper::new().arena.level, 1);
+        assert_eq!(unlocked_arenas(), 1);
+    }
+
+    #[test]
+    fn losing_keeps_the_arena_and_eases_it_after_repeats() {
+        fresh_player();
+        profile::set_level(GAME, 4);
+        profile::unlock(GAME, 4);
+        let v = View::ipad_landscape();
+        let first = Paper::new();
+        let mut g = first;
+        start(&mut g, &v);
+        g.kill(0);
+        g.update(&Input::default(), &v, 0.1);
+        assert_eq!(g.state, State::Lost);
+        assert_eq!(profile::get(GAME, "fails"), 1);
+        let base = Arena::for_level(4, 0);
+        for _ in 0..3 {
+            g.since_end = 1.0;
+            g.update(&Input::press_at(vec2(5.0, 5.0)), &v, 0.01);
+            assert_eq!(g.arena.level, 4);
+            start(&mut g, &v);
+            g.kill(0);
+            g.update(&Input::default(), &v, 0.1);
+        }
+        assert!(g.fails >= 2);
+        assert!(g.arena.target < base.target);
+        assert!(g.arena.pace < base.pace);
+        let resumed = Paper::new();
+        assert!(resumed.arena.target < base.target);
+        assert_eq!(resumed.arena.level, 4);
+    }
+
+    #[test]
+    fn a_win_after_struggling_resets_the_help() {
+        fresh_player();
+        profile::set(GAME, "fails", 5);
+        let v = View::ipad_landscape();
+        let mut g = Paper::new();
+        start(&mut g, &v);
+        for c in 0..g.owner.len() {
+            g.owner[c] = Some(0);
+        }
+        g.update(&Input::default(), &v, 0.2);
+        assert_eq!(g.state, State::Won);
+        assert_eq!(profile::get(GAME, "fails"), 0);
+    }
+
+    #[test]
+    fn the_end_screen_waits_a_moment_before_taking_a_tap() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Paper::with_arena(2, 0);
+        start(&mut g, &v);
+        g.kill(0);
+        g.update(&Input::default(), &v, 0.1);
+        assert_eq!(g.state, State::Lost);
+        g.update(&Input::press_at(vec2(5.0, 5.0)), &v, 0.1);
+        assert_eq!(g.state, State::Lost);
+        g.since_end = 1.0;
+        g.update(&Input::press_at(vec2(5.0, 5.0)), &v, 0.1);
+        assert_eq!(g.state, State::Playing);
+    }
+
+    #[test]
+    fn the_arena_picker_only_opens_unlocked_arenas() {
+        fresh_player();
+        profile::unlock(GAME, 3);
+        let v = View::ipad_landscape();
+        let cells = select_cells(&v);
+        assert_eq!(cells.len(), MAX_LEVEL as usize);
+        for r in &cells {
+            assert!(r.x >= 0.0 && r.x + r.w <= v.w && r.y >= 0.0 && r.y + r.h <= v.h);
+        }
+        let mut g = Paper::new();
+        g.open_select();
+        g.update(&Input::press_at(cells[6].center()), &v, 0.01);
+        assert_eq!(g.state, State::Select);
+        g.update(&Input::press_at(cells[2].center()), &v, 0.01);
+        assert_eq!(g.state, State::Playing);
+        assert_eq!(g.arena.level, 3);
+        assert_eq!(profile::level(GAME), 3);
+    }
+
+    #[test]
+    fn the_picker_fits_phones_and_portrait_ipads() {
+        for v in [View::fit(1080.0, 2400.0), View::ipad_portrait()] {
+            let cells = select_cells(&v);
+            for r in &cells {
+                assert!(r.x >= 0.0 && r.x + r.w <= v.w && r.y >= 150.0 && r.y + r.h <= v.h - 100.0);
+            }
+        }
+    }
+
+    #[test]
+    fn scores_ride_the_leaderboard() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Paper::with_arena(2, 0);
+        start(&mut g, &v);
+        g.kill(0);
+        g.update(&Input::default(), &v, 0.1);
+        assert_eq!(g.rank, Some(0));
+        assert_eq!(profile::board(GAME).len(), 1);
     }
 
     #[test]
