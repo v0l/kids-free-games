@@ -18,6 +18,14 @@ pub const LEVEL_NAMES: [&str; 5] = [
     "Times tables",
 ];
 pub const BALLOONS: usize = 4;
+const BALLOON_COLORS: [(&str, Color); 6] = [
+    ("balloon_red", Color::new(0.95, 0.25, 0.3, 1.0)),
+    ("balloon_orange", Color::new(1.0, 0.6, 0.15, 1.0)),
+    ("balloon_yellow", Color::new(1.0, 0.85, 0.2, 1.0)),
+    ("balloon_green", Color::new(0.3, 0.8, 0.35, 1.0)),
+    ("balloon_blue", Color::new(0.25, 0.55, 0.95, 1.0)),
+    ("balloon_purple", Color::new(0.65, 0.4, 0.9, 1.0)),
+];
 const LEAVE_TIME: f32 = 1.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -174,7 +182,7 @@ pub fn balloon_rest(view: &View, slot: usize) -> Vec2 {
 #[derive(Clone, Debug)]
 struct Balloon {
     value: i32,
-    hue: f32,
+    color: usize,
     wobble: f32,
     tried: bool,
     popped: bool,
@@ -216,7 +224,7 @@ impl MathPop {
     }
 
     fn load_balloons(&mut self) {
-        let offset = rand::gen_range(0.0, 1.0);
+        let offset = rand::gen_range(0, BALLOON_COLORS.len());
         self.balloons = self
             .question
             .options
@@ -224,7 +232,7 @@ impl MathPop {
             .enumerate()
             .map(|(i, v)| Balloon {
                 value: *v,
-                hue: offset + i as f32 * 0.19,
+                color: (offset + i * 5) % BALLOON_COLORS.len(),
                 wobble: 0.0,
                 tried: false,
                 popped: false,
@@ -279,7 +287,7 @@ impl MathPop {
 
     fn react(&mut self, view: &View, slot: usize, tap: Tap) {
         let c = self.center(view, slot);
-        let color = hsv(self.balloons[slot].hue, 0.65, 1.0);
+        let color = BALLOON_COLORS[self.balloons[slot].color].1;
         let gold = Color::from_rgba(255, 220, 70, 255);
         match tap {
             Tap::Right(step) => {
@@ -502,7 +510,7 @@ impl MathPop {
             base.w * pop,
             base.h * pop,
         );
-        crate::ui::chip_box(r);
+        crate::ui::painted_panel(r, WHITE);
         let ink = if solved {
             Color::from_rgba(60, 170, 90, 255)
         } else {
@@ -513,112 +521,42 @@ impl MathPop {
 }
 
 fn draw_balloon(c: Vec2, r: f32, b: &Balloon, t: f32) {
-    let color = hsv(b.hue, 0.65, 1.0);
+    let (sprite, color) = BALLOON_COLORS[b.color];
     let fade = if b.tried { 0.5 } else { 1.0 };
     let squash = 1.0 + 0.06 * (b.wobble * 30.0).sin() * b.wobble;
-    let rx = r * 0.88 * squash;
     let ry = r / squash;
-    let sway = (t * 1.3).sin() * 10.0;
-    let string = with_alpha(Color::from_rgba(90, 80, 120, 255), fade);
-    let mut prev = vec2(c.x, c.y + ry + 12.0);
-    for k in 1..=8 {
-        let f = k as f32 / 8.0;
-        let p = vec2(
-            c.x + sway * (f * 3.0).sin() * f,
-            c.y + ry + 12.0 + f * r * 1.1,
-        );
-        draw_line(prev.x, prev.y, p.x, p.y, 3.0, string);
-        prev = p;
-    }
-    draw_triangle(
-        vec2(c.x, c.y + ry - 4.0),
-        vec2(c.x - 11.0, c.y + ry + 14.0),
-        vec2(c.x + 11.0, c.y + ry + 14.0),
-        with_alpha(darker(color, 0.8), fade),
-    );
-    let rect = Rect::new(c.x - rx * 1.04, c.y - ry * 1.04, rx * 2.08, ry * 2.08);
+    let height = ry * 3.1;
+    let width = height * art::size(sprite).x / art::size(sprite).y * squash;
+    let rect = Rect::new(c.x - width / 2.0, c.y - ry * 1.0, width, height);
     art::sprite_ex(
-        "ball",
-        Rect::new(rect.x, rect.y + 6.0, rect.w, rect.h),
-        crate::art::Draw {
-            tint: Color::new(0.0, 0.0, 0.0, 0.15 * fade),
-            ..Default::default()
-        },
-    );
-    art::sprite_ex(
-        "ball",
+        sprite,
         rect,
         crate::art::Draw {
-            tint: with_alpha(color, fade),
+            tint: with_alpha(
+                if b.tried {
+                    Color::new(0.8, 0.8, 0.85, 1.0)
+                } else {
+                    WHITE
+                },
+                fade,
+            ),
+            rotation: (t * 1.3).sin() * 0.05,
+            pivot: vec2(0.5, 0.0),
             ..Default::default()
         },
     );
     text_outline(
         &b.value.to_string(),
         c.x,
-        c.y,
+        c.y - ry * 0.08,
         r * 0.95,
         with_alpha(WHITE, fade),
-        with_alpha(darker(color, 0.5), fade),
+        with_alpha(darker(color, 0.55), fade),
     );
 }
 
 pub fn icon(r: Rect) {
-    art::sprite("bg", r);
-    crate::ui::cloud(
-        2,
-        vec2(r.x + r.w * 0.78, r.y + r.h * 0.16),
-        r.w * 0.34,
-        with_alpha(WHITE, 0.9),
-    );
-    art::sprite_at(
-        "bunny_up",
-        vec2(r.x + r.w * 0.8, r.y + r.h * 0.84),
-        r.h * 0.34,
-        crate::art::Draw {
-            flip_x: true,
-            ..Default::default()
-        },
-    );
-    for (c, rad, hue, label) in [
-        (
-            vec2(r.x + r.w * 0.34, r.y + r.h * 0.42),
-            r.w * 0.27,
-            0.97,
-            "5",
-        ),
-        (
-            vec2(r.x + r.w * 0.72, r.y + r.h * 0.5),
-            r.w * 0.2,
-            0.13,
-            "+",
-        ),
-    ] {
-        draw_line(
-            c.x,
-            c.y + rad,
-            c.x + rad * 0.2,
-            r.y + r.h * 0.95,
-            2.0,
-            WHITE,
-        );
-        art::sprite_ex(
-            "ball",
-            Rect::new(c.x - rad * 0.9, c.y - rad, rad * 1.8, rad * 2.0),
-            crate::art::Draw {
-                tint: hsv(hue, 0.65, 1.0),
-                ..Default::default()
-            },
-        );
-        text_outline(
-            label,
-            c.x,
-            c.y,
-            rad * 1.0,
-            WHITE,
-            darker(hsv(hue, 0.65, 1.0), 0.5),
-        );
-    }
+    crate::ui::icon("mathpop", r);
 }
 
 #[cfg(test)]
@@ -630,7 +568,12 @@ mod tests {
         let have = art::names();
         for n in [
             "bg",
-            "ball",
+            "balloon_red",
+            "balloon_orange",
+            "balloon_yellow",
+            "balloon_green",
+            "balloon_blue",
+            "balloon_purple",
             "bunny",
             "bunny_up",
             "bunny_sad",

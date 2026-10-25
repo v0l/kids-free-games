@@ -1,8 +1,8 @@
-bg      | physics-assets/PNG/Backgrounds/colored_grass.png | solo max=1024 keep
-apple   | repo:art/renders/apple.png | max=160
-star    | new-platformer-pack/Sprites/Tiles/Double/star.png | max=128
-fish    | fish-pack/PNG/Double/fish_orange.png | max=128
-duck    | animal-pack-remastered/PNG/Round/duck.png | max=160
-frog    | animal-pack-remastered/PNG/Round/frog.png | max=160
-pig     | animal-pack-remastered/PNG/Round/pig.png | max=160
-bee     | new-platformer-pack/Sprites/Enemies/Double/bee_a.png | max=128
+bg    | gen:count_bg.png | solo jpg max=1024 keep
+apple | gen:w_apple_cut.png | max=256
+star  | gen:w_star_cut.png | max=256
+fish  | gen:w_fish_cut.png | max=256
+duck  | gen:w_duck_cut.png | max=256
+frog  | gen:w_frog_cut.png | max=256
+pig   | gen:w_pig_cut.png | max=256
+bee   | gen:w_bee_cut.png | max=256

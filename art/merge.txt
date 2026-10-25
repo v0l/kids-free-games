@@ -1,3 +1,5 @@
-bg    | physics-assets/PNG/Backgrounds/colored_desert.png | solo max=1024 keep
-tile  | puzzle-pack-2/PNG/Tiles grey/tileGrey_01.png | max=128
-crown | ui-pack/PNG/Yellow/Default/star.png | max=96
+bg    | gen:merge_bg.png | solo jpg max=1024 keep
+tile  | gen:merge_tile_cut.png | max=192
+cell  | gen:merge_cell_cut.png | max=192
+board | gen:merge_board_cut.png | max=640
+crown | gen:merge_crown_cut.png | max=128
