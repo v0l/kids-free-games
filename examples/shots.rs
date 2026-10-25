@@ -282,7 +282,13 @@ async fn main() {
         set_accent(e.color);
         let mut g = (e.make)();
         for f in 0..frames {
-            let input = if idle && f > 1 {
+            let input = if idle && f > 1 && e.name == "Block Drop" {
+                if f % 3 == 0 {
+                    Input::key(Dir::Down)
+                } else {
+                    Input::default()
+                }
+            } else if idle && f > 1 {
                 Input::default()
             } else if idle {
                 Input::press_at(view.center())
