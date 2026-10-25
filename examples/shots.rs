@@ -1,4 +1,5 @@
 use kids_games::engine::*;
+use kids_games::games::memory::{self, Memory};
 use kids_games::games::{self, count, mathpop, merge};
 use kids_games::safe::Insets;
 use kids_games::{begin_frame_safe, menu::App, window_conf};
@@ -123,22 +124,6 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                 );
             }
         }
-        "Memory Match" if f.is_multiple_of(30) && f < 300 => {
-            let n = 16;
-            let k = (f / 30) % n;
-            let cols = if view.w >= view.h { 8 } else { 4 };
-            let rows = n / cols;
-            let size = ((view.w - 40.0) / cols as f32).min((view.h - 100.0) / rows as f32);
-            let ox = (view.w - size * cols as f32) / 2.0;
-            let oy = 80.0 + (view.h - 100.0 - size * rows as f32) / 2.0;
-            tap(
-                &mut i,
-                vec2(
-                    ox + (k % cols) as f32 * size + size / 2.0,
-                    oy + (k / cols) as f32 * size + size / 2.0,
-                ),
-            );
-        }
         "Math Pop" if f == 60 || f == 110 => {
             tap(&mut i, mathpop::balloon_rest(view, (f - 60) / 50));
         }
@@ -177,6 +162,82 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
         _ => {}
     }
     i
+}
+
+fn memory_clear(m: &mut Memory) {
+    for id in 0..10u8 {
+        let spots: Vec<usize> = (0..m.cards.len()).filter(|i| m.cards[*i].0 == id).collect();
+        if spots.len() == 2 {
+            m.pick(spots[0]);
+            m.pick(spots[1]);
+        }
+    }
+}
+
+fn memory_shot(raw: i32, view: &View) -> Option<Memory> {
+    let dt = 1.0 / 60.0;
+    let mut m = match raw {
+        10 | 110 | -5 | -6 | -7 | -8 => {
+            kids_games::profile::create("Mia", 2);
+            Memory::for_level(1)
+        }
+        _ => return None,
+    };
+    match raw {
+        10 => {
+            let rects = Memory::layout(view, m.pairs);
+            for f in 0..90 {
+                let mut i = Input::default();
+                if f == 20 {
+                    i = Input::press_at(rects[0].center());
+                }
+                m.update(&i, view, dt);
+            }
+        }
+        110 => {
+            kids_games::profile::submit(memory::KEY, 14, kids_games::profile::Better::Lower);
+            kids_games::profile::create("Leo", 5);
+            kids_games::profile::submit(memory::KEY, 18, kids_games::profile::Better::Lower);
+            if let Some(mia) = kids_games::profile::list().first() {
+                kids_games::profile::select(&mia.id);
+            }
+            m = Memory::for_level(memory::MAX_LEVEL);
+            memory_clear(&mut m);
+            for _ in 0..200 {
+                m.update(&Input::default(), view, dt);
+            }
+        }
+        -5 => {
+            m = Memory::for_level(3);
+            m.pick(0);
+            for _ in 0..30 {
+                m.update(&Input::default(), view, dt);
+            }
+        }
+        -8 => {
+            m = Memory::for_level(5);
+            m.pick(0);
+            for _ in 0..30 {
+                m.update(&Input::default(), view, dt);
+            }
+        }
+        -6 => {
+            m = Memory::for_level(2);
+            memory_clear(&mut m);
+            for _ in 0..200 {
+                m.update(&Input::default(), view, dt);
+            }
+        }
+        _ => {
+            for level in 1..=2 {
+                let mut done = Memory::for_level(level);
+                memory_clear(&mut done);
+            }
+            m = Memory::for_level(3);
+            m.open_select();
+        }
+    }
+    Some(m)
 }
 
 fn learn_tiles_x(view: &View, n: usize) -> Vec2 {
@@ -305,6 +366,7 @@ async fn main() {
     next_frame().await;
     let view = begin_frame_safe(fake_inset());
     let all = games::all();
+    let memory = memory_shot(which, &view);
     let idle = which > 100;
     let which = if idle { which - 100 } else { which };
     if which == 7 {
@@ -335,7 +397,9 @@ async fn main() {
     } else {
         None
     };
-    let mut game = special.or_else(|| {
+    let memory_game: Option<Box<dyn Game>> = memory.map(|m| Box::new(m) as Box<dyn Game>);
+    let has_memory = memory_game.is_some();
+    let mut game = special.or(memory_game).or_else(|| {
         (which > 0).then(|| {
             let e = &all[which as usize - 1];
             set_accent(e.color);
@@ -389,7 +453,7 @@ async fn main() {
             g
         })
     });
-    if which != -3 && which != -4 && which != -5 && which != -6 {
+    if which != -3 && which != -4 && which != -5 && which != -6 && !has_memory {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];

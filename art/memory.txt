@@ -10,3 +10,5 @@ parrot   | gen:memory_parrot_cut.png | max=200
 penguin  | gen:memory_penguin_cut.png | max=200
 pig      | gen:memory_pig_cut.png | max=200
 elephant | gen:memory_elephant_cut.png | max=200
+lion     | gen:memory_lion_cut.png | max=200
+koala    | gen:memory_koala_cut.png | max=200
