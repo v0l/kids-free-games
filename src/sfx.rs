@@ -350,7 +350,8 @@ impl Say {
 struct Bank {
     takes: Vec<(Sfx, Vec<Sound>)>,
     ladders: Vec<(Sfx, Vec<Sound>)>,
-    voices: Vec<(String, Sound)>,
+    voices: Vec<(String, Vec<Sound>)>,
+    last_voice: Vec<(String, usize)>,
     music: Vec<(Mood, Sound)>,
     limiter: Limiter,
     mix: Mix,
@@ -417,6 +418,7 @@ pub async fn load() {
             takes,
             ladders,
             voices: vec![],
+            last_voice: vec![],
             music: vec![],
             limiter: Limiter::default(),
             mix: Mix::default(),
@@ -454,10 +456,29 @@ pub async fn load_music() {
         if let Some(snd) = sound(d).await {
             BANK.with(|b| {
                 if let Some(bank) = b.borrow_mut().as_mut() {
-                    bank.voices.push((k.to_string(), snd));
+                    let line = voice_line(k).to_string();
+                    match bank.voices.iter_mut().find(|(l, _)| *l == line) {
+                        Some((_, takes)) => takes.push(snd),
+                        None => bank.voices.push((line, vec![snd])),
+                    }
                 }
             });
         }
+    }
+}
+
+pub fn voice_line(key: &str) -> &str {
+    match key.rsplit_once('.') {
+        Some((line, n)) if n.chars().all(|c| c.is_ascii_digit()) => line,
+        _ => key,
+    }
+}
+
+pub fn pick_take(count: usize, last: Option<usize>, roll: usize) -> usize {
+    match (count, last) {
+        (0 | 1, _) => 0,
+        (n, Some(l)) if l < n => (l + 1 + roll % (n - 1)) % n,
+        (n, _) => roll % n,
     }
 }
 
@@ -574,9 +595,31 @@ pub fn flush(now: f64, dt: f32) {
         }
         if let Some(v) = voice.filter(|_| sfx_on && now - bank.said_at > VOICE_GAP) {
             let key = v.key();
-            if let Some((_, snd)) = bank.voices.iter().find(|(k, _)| *k == key) {
+            let last = bank
+                .last_voice
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, i)| *i);
+            bank.last_take = bank
+                .last_take
+                .wrapping_mul(1_103_515_245)
+                .wrapping_add(12_345);
+            let roll = (bank.last_take >> 16) as usize;
+            let pick = bank
+                .voices
+                .iter()
+                .find(|(k, _)| *k == key)
+                .map(|(_, takes)| {
+                    let i = pick_take(takes.len(), last, roll);
+                    (i, takes[i].clone())
+                });
+            if let Some((i, snd)) = pick {
+                match bank.last_voice.iter_mut().find(|(k, _)| *k == key) {
+                    Some(slot) => slot.1 = i,
+                    None => bank.last_voice.push((key.clone(), i)),
+                }
                 macroquad::audio::play_sound(
-                    snd,
+                    &snd,
                     macroquad::audio::PlaySoundParams {
                         looped: false,
                         volume: sfx_gain(),
@@ -711,6 +754,39 @@ mod tests {
     }
 
     #[test]
+    fn praise_has_many_takes() {
+        let p = pack();
+        for v in [
+            Say::Correct,
+            Say::Great,
+            Say::Congrats,
+            Say::Win,
+            Say::LevelUp,
+            Say::Best,
+            Say::GameOver,
+        ] {
+            let n = p.iter().filter(|(k, _)| voice_line(k) == v.key()).count();
+            assert!(n >= 3, "{v:?} has {n} takes");
+        }
+    }
+
+    #[test]
+    fn a_voice_never_says_the_same_take_twice_in_a_row() {
+        let mut last = None;
+        let mut seen = std::collections::HashSet::new();
+        for roll in 0..200usize {
+            let i = pick_take(8, last, roll.wrapping_mul(2_654_435_761) >> 7);
+            assert_ne!(Some(i), last);
+            seen.insert(i);
+            last = Some(i);
+        }
+        assert_eq!(seen.len(), 8);
+        assert_eq!(pick_take(1, Some(0), 5), 0);
+        assert_eq!(voice_line("say_great.3"), "say_great");
+        assert_eq!(voice_line("say_10"), "say_10");
+    }
+
+    #[test]
     fn every_voice_line_is_packed() {
         let p = pack();
         let mut lines = vec![
@@ -726,8 +802,11 @@ mod tests {
         ];
         lines.extend((1..=10).map(Say::Number));
         for v in lines {
-            let d = find(&p, &v.key()).unwrap_or_else(|| panic!("{v:?} missing"));
-            assert!(decode(d).is_some());
+            let takes: Vec<_> = p.iter().filter(|(k, _)| voice_line(k) == v.key()).collect();
+            assert!(!takes.is_empty(), "{v:?} missing");
+            for (_, d) in takes {
+                assert!(decode(d).is_some());
+            }
         }
         assert_eq!(Say::Number(0).key(), "say_1");
         assert_eq!(Say::Number(42).key(), "say_10");
