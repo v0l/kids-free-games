@@ -92,6 +92,17 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             if f == 1 {
                 i.pressed = true;
             }
+            if f > 5 {
+                i.down = true;
+                i.pos = vec2(
+                    if (f / 40) % 2 == 0 {
+                        100.0
+                    } else {
+                        view.w - 100.0
+                    },
+                    c.y,
+                );
+            }
         }
         "Memory Match" if f.is_multiple_of(30) && f < 300 => {
             let n = 16;
@@ -280,9 +291,18 @@ async fn main() {
     let mut game = (which > 0).then(|| {
         let e = &all[which as usize - 1];
         set_accent(e.color);
+        if idle && e.name == "Sky Jumper" {
+            kids_games::profile::create("Mia", 2);
+            kids_games::profile::set(e.icon_key, "runs", 5);
+        }
         let mut g = (e.make)();
         for f in 0..frames {
-            let input = if idle && f > 1 {
+            let input = if idle && f > 1 && e.name == "Sky Jumper" {
+                Input {
+                    right: f > 30,
+                    ..Default::default()
+                }
+            } else if idle && f > 1 {
                 Input::default()
             } else if idle {
                 Input::press_at(view.center())
