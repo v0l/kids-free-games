@@ -6,7 +6,7 @@ use macroquad::prelude::*;
 
 pub const PAIRS: usize = 8;
 pub const PEEK: f32 = 0.8;
-const CARD_TALL: f32 = 1.3;
+const CARD_TALL: f32 = 1.45;
 const ANIMALS: [&str; PAIRS] = [
     "giraffe", "hippo", "monkey", "panda", "parrot", "penguin", "pig", "elephant",
 ];
@@ -267,17 +267,6 @@ impl Game for Memory {
             "bg",
             Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
         );
-        for k in 0..5 {
-            let kf = k as f32;
-            let x = (kf * 223.0 + self.t * (7.0 + kf * 2.0)) % (f.w + 300.0) - 150.0 + f.x;
-            let y = f.y + 70.0 + (kf * 97.0) % (f.h * 0.5);
-            crate::ui::cloud(
-                k,
-                vec2(x, y),
-                150.0 + kf * 20.0,
-                Color::new(1.0, 1.0, 1.0, 0.85),
-            );
-        }
         chip(
             view,
             Side::Left,
@@ -301,8 +290,14 @@ impl Game for Memory {
     }
 }
 
+fn fit_card(r: Rect, aspect: f32) -> Rect {
+    let w = r.w.min(r.h * aspect);
+    Rect::new(r.center().x - w / 2.0, r.y, w, r.h)
+}
+
 impl Memory {
     fn draw_card(&self, i: usize, r: Rect, shake: Vec2) {
+        let r = fit_card(r, art::size("back").x / art::size("back").y);
         let (w, lift) = flip_shape(self.flip[i]);
         let matched = self.cards[i].1 == Face::Matched;
         let pop = self.pop[i].scale(0.18);
@@ -317,7 +312,7 @@ impl Memory {
         );
         soft_shadow(
             vec2(r.center().x + shake.x, r.y + r.h - 2.0 + shake.y),
-            r.w * 0.45 * (0.4 + 0.6 * w),
+            r.w * 0.5 * (0.4 + 0.6 * w),
             r.h * 0.04,
             0.6 - lift * 0.3,
         );
@@ -344,7 +339,7 @@ impl Memory {
             } else {
                 0.0
             };
-            let d = r.w * 0.78;
+            let d = r.w * 0.82;
             art::sprite_w(
                 ANIMALS[self.cards[i].0 as usize % PAIRS],
                 vec2(rr.x + rr.w / 2.0, rr.y + rr.h / 2.0 + bounce),
@@ -359,22 +354,7 @@ impl Memory {
 }
 
 pub fn icon(r: Rect) {
-    let side = r.w.max(r.h);
-    art::sprite("bg", Rect::new(r.x, r.y + r.h - side, side, side));
-    let h = r.h * 0.66;
-    let w = h * art::size("back").x / art::size("back").y;
-    let tilt = |a: f32| crate::art::Draw {
-        rotation: a,
-        ..Default::default()
-    };
-    art::sprite_ex(
-        "back",
-        Rect::new(r.x + r.w * 0.1, r.y + r.h * 0.2, w, h),
-        tilt(-0.12),
-    );
-    let face = Rect::new(r.x + r.w * 0.9 - w, r.y + r.h * 0.14, w, h);
-    art::sprite_ex("face", face, tilt(0.1));
-    art::sprite_at("panda", face.center() + vec2(0.0, 0.0), w * 0.8, tilt(0.1));
+    crate::ui::icon("memory", r);
 }
 
 #[cfg(test)]

@@ -1,0 +1,130 @@
+[
+ {
+  "name": "fruit_apple",
+  "w": 768,
+  "h": 768,
+  "seed": 100,
+  "cut": true,
+  "prompt": "A single a shiny ripe red apple with a short brown stem and one green leaf, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_orange",
+  "w": 768,
+  "h": 768,
+  "seed": 101,
+  "cut": true,
+  "prompt": "A single a shiny ripe orange with a small green leaf on top, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_watermelon",
+  "w": 768,
+  "h": 768,
+  "seed": 102,
+  "cut": true,
+  "prompt": "A single a whole round watermelon with dark green stripes, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_pineapple",
+  "w": 768,
+  "h": 768,
+  "seed": 103,
+  "cut": true,
+  "prompt": "A single a whole pineapple with a spiky green crown, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_lemon",
+  "w": 768,
+  "h": 768,
+  "seed": 104,
+  "cut": true,
+  "prompt": "A single a shiny ripe yellow lemon with a small green leaf, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_strawberry",
+  "w": 768,
+  "h": 768,
+  "seed": 105,
+  "cut": true,
+  "prompt": "A single a shiny ripe red strawberry with a green leafy top and tiny yellow seeds, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_apple_half",
+  "w": 768,
+  "h": 768,
+  "seed": 120,
+  "cut": true,
+  "prompt": "A single half of a ripe red apple cut in half lengthwise, the cut face toward the viewer showing creamy white flesh, a star shaped core with brown seeds, red skin rim. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_orange_half",
+  "w": 768,
+  "h": 768,
+  "seed": 121,
+  "cut": true,
+  "prompt": "A single half of an orange cut in half, the cut face toward the viewer showing juicy orange segments radiating from the centre, orange peel rim. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_watermelon_half",
+  "w": 768,
+  "h": 768,
+  "seed": 122,
+  "cut": true,
+  "prompt": "A single half of a watermelon cut in half, the cut face toward the viewer showing bright red juicy flesh with black seeds, white and green rind rim. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_pineapple_half",
+  "w": 768,
+  "h": 768,
+  "seed": 123,
+  "cut": true,
+  "prompt": "A single half of a pineapple cut lengthwise, the cut face toward the viewer showing juicy yellow flesh, golden skin rim, green crown leaves. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_lemon_half",
+  "w": 768,
+  "h": 768,
+  "seed": 124,
+  "cut": true,
+  "prompt": "A single half of a lemon cut in half, the cut face toward the viewer showing pale yellow juicy segments, yellow peel rim. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_strawberry_half",
+  "w": 768,
+  "h": 768,
+  "seed": 125,
+  "cut": true,
+  "prompt": "A single half of a strawberry cut lengthwise, the cut face toward the viewer showing red and pink flesh, green leafy top. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_bomb",
+  "w": 768,
+  "h": 768,
+  "seed": 140,
+  "cut": true,
+  "prompt": "A single round black cartoon bomb with a glossy highlight, short twisted fuse with a bright orange spark on top, metal cap, no face. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_heart",
+  "w": 512,
+  "h": 512,
+  "seed": 141,
+  "cut": true,
+  "prompt": "A single glossy red heart shaped gem life icon with a white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_splat_a",
+  "w": 768,
+  "h": 768,
+  "seed": 150,
+  "cut": true,
+  "prompt": "A single bright white juice splat splash shape with droplets, flat paint splatter. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "fruit_wall",
+  "w": 1024,
+  "h": 1024,
+  "seed": 160,
+  "cut": false,
+  "prompt": "Front view of a wooden dojo wall made of warm brown vertical planks with subtle grain, soft warm light glow in the centre, darker vignette edges, empty, nothing on it, no objects, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]

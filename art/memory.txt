@@ -1,12 +1,12 @@
-# run art/render_memory.py before assets.py
-bg       | physics-assets/PNG/Backgrounds/colored_land.png | solo max=1024
-back     | boardgame-pack/PNG/Cards/cardBack_blue2.png | max=256
-face     | boardgame-pack/PNG/Cards/Derived/face.png | max=256
-giraffe  | animal-pack/PNG/Round/giraffe.png | max=160
-hippo    | animal-pack/PNG/Round/hippo.png | max=160
-monkey   | animal-pack/PNG/Round/monkey.png | max=160
-panda    | animal-pack/PNG/Round/panda.png | max=160
-parrot   | animal-pack/PNG/Round/parrot.png | max=160
-penguin  | animal-pack/PNG/Round/penguin.png | max=160
-pig      | animal-pack/PNG/Round/pig.png | max=160
-elephant | animal-pack/PNG/Round/elephant.png | max=160
+# Painted with FLUX.1-dev via art/gen/prompts/memory.json, cut with rembg birefnet
+bg       | gen:memory_bg.png | solo jpg max=1536 keep
+back     | gen:memory_back_cut.png | max=300
+face     | gen:memory_face_cut.png | max=300
+giraffe  | gen:memory_giraffe_cut.png | max=200
+hippo    | gen:memory_hippo_cut.png | max=200
+monkey   | gen:memory_monkey_cut.png | max=200
+panda    | gen:memory_panda_cut.png | max=200
+parrot   | gen:memory_parrot_cut.png | max=200
+penguin  | gen:memory_penguin_cut.png | max=200
+pig      | gen:memory_pig_cut.png | max=200
+elephant | gen:memory_elephant_cut.png | max=200

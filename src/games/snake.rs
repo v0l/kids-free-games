@@ -343,25 +343,14 @@ impl Game for Snake {
         for y in 0..self.size.y {
             for x in 0..self.size.x {
                 let c = if (x + y) % 2 == 0 {
-                    Color::from_rgba(170, 220, 80, 255)
+                    Color::new(1.0, 1.0, 0.7, 0.07)
                 } else {
-                    Color::from_rgba(155, 208, 66, 255)
+                    Color::new(0.0, 0.3, 0.0, 0.08)
                 };
                 draw_rectangle(o.x + x as f32 * cell, o.y + y as f32 * cell, cell, cell, c);
             }
         }
-        art::nine(
-            "frame",
-            Rect::new(
-                board.x - 12.0,
-                board.y - 12.0,
-                board.w + 24.0,
-                board.h + 24.0,
-            ),
-            14.0,
-            0.9,
-            WHITE,
-        );
+        draw_rim(board);
         self.draw_apple(o, cell);
         self.draw_snake(o, cell);
         self.particles.draw();
@@ -397,13 +386,10 @@ mod art {
 const FRUIT: [&str; 6] = [
     "apple",
     "orange",
-    "pear",
+    "pineapple",
     "strawberry",
     "lemon",
     "watermelon",
-];
-const SCENERY: [&str; 7] = [
-    "tuft1", "flower1", "tuft2", "flower2", "flower4", "tuft3", "flower3",
 ];
 
 fn draw_meadow(view: &View, board: Rect) {
@@ -411,33 +397,99 @@ fn draw_meadow(view: &View, board: Rect) {
     let side = f.w.max(f.h);
     art::sprite(
         "bg",
-        Rect::new(f.x + (f.w - side) / 2.0, f.y + f.h - side, side, side),
+        Rect::new(
+            f.x + (f.w - side) / 2.0,
+            f.y + (f.h - side) / 2.0,
+            side,
+            side,
+        ),
     );
-    let mut i = 0usize;
-    let mut x = f.x + 10.0;
-    while x < f.x + f.w {
-        for y in [f.y + 6.0, f.y + f.h - 26.0] {
-            let n = (i * 7 + 3) % SCENERY.len();
-            let at = vec2(x + (i * 13 % 17) as f32, y + (i * 5 % 11) as f32);
-            if !board.contains(at) {
-                art::sprite_at(SCENERY[n], at, 26.0, Default::default());
-            }
-            i += 1;
-        }
-        x += 46.0;
+    let pad = 14.0;
+    for (grow, alpha) in [(26.0, 0.06), (20.0, 0.08), (14.0, 0.1)] {
+        round_rect(
+            Rect::new(
+                board.x - grow,
+                board.y - grow + 6.0,
+                board.w + grow * 2.0,
+                board.h + grow * 2.0,
+            ),
+            22.0,
+            Color::new(0.0, 0.12, 0.0, alpha),
+        );
     }
-    let mut y = f.y + 40.0;
-    while y < f.y + f.h - 40.0 {
-        for x in [f.x + 4.0, f.x + f.w - 30.0] {
-            let n = (i * 5 + 1) % SCENERY.len();
-            let at = vec2(x + (i * 7 % 9) as f32, y + (i * 11 % 13) as f32);
-            if !board.contains(at) {
-                art::sprite_at(SCENERY[n], at, 26.0, Default::default());
-            }
-            i += 1;
-        }
-        y += 46.0;
-    }
+    round_rect(
+        Rect::new(
+            board.x - pad,
+            board.y - pad,
+            board.w + pad * 2.0,
+            board.h + pad * 2.0,
+        ),
+        pad + 6.0,
+        Color::from_rgba(52, 120, 34, 255),
+    );
+    round_rect(
+        Rect::new(
+            board.x - pad + 3.0,
+            board.y - pad + 3.0,
+            board.w + pad * 2.0 - 6.0,
+            board.h + pad * 2.0 - 8.0,
+        ),
+        pad + 3.0,
+        Color::from_rgba(120, 200, 70, 255),
+    );
+    round_rect(
+        Rect::new(board.x - 4.0, board.y - 4.0, board.w + 8.0, board.h + 8.0),
+        10.0,
+        Color::from_rgba(150, 214, 76, 255),
+    );
+}
+
+fn draw_rim(board: Rect) {
+    let edge = Color::new(0.0, 0.2, 0.0, 0.22);
+    let clear = Color::new(0.0, 0.2, 0.0, 0.0);
+    let d = 16.0;
+    let (x0, y0, x1, y1) = (board.x, board.y, board.x + board.w, board.y + board.h);
+    let quad = |a: Vec2, b: Vec2, c: Vec2, e: Vec2, ca: Color, cb: Color| {
+        let v = |p: Vec2, col: Color| macroquad::models::Vertex::new(p.x, p.y, 0.0, 0.0, 0.0, col);
+        let verts = [v(a, ca), v(b, ca), v(c, cb), v(e, cb)];
+        draw_mesh(&macroquad::models::Mesh {
+            vertices: verts.to_vec(),
+            indices: vec![0, 1, 2, 0, 2, 3],
+            texture: None,
+        });
+    };
+    quad(
+        vec2(x0, y0),
+        vec2(x1, y0),
+        vec2(x1, y0 + d),
+        vec2(x0, y0 + d),
+        edge,
+        clear,
+    );
+    quad(
+        vec2(x0, y1),
+        vec2(x1, y1),
+        vec2(x1, y1 - d),
+        vec2(x0, y1 - d),
+        edge,
+        clear,
+    );
+    quad(
+        vec2(x0, y0),
+        vec2(x0, y1),
+        vec2(x0 + d, y1),
+        vec2(x0 + d, y0),
+        edge,
+        clear,
+    );
+    quad(
+        vec2(x1, y0),
+        vec2(x1, y1),
+        vec2(x1 - d, y1),
+        vec2(x1 - d, y0),
+        edge,
+        clear,
+    );
 }
 
 impl Snake {
@@ -447,7 +499,7 @@ impl Snake {
         let bob = (self.clock * 4.0).sin() * cell * 0.03;
         let drop = (1.0 - ease_out_cubic(self.food_age / 0.35)) * cell * 0.8;
         let squash = 1.0 + (self.clock * 4.0).sin() * 0.03;
-        let h = cell * 1.3 * pop;
+        let h = cell * 1.7 * pop;
         soft_shadow(f + vec2(0.0, cell * 0.38), h * 0.4, h * 0.13, 0.6);
         let c = f + vec2(0.0, bob - drop);
         let name = FRUIT[self.score as usize % FRUIT.len()];
@@ -469,68 +521,53 @@ impl Snake {
         let n = chain.len();
         let size = self.size.as_vec2();
         let dead = self.state == State::Dead;
-        let base = if dead {
-            Color::from_rgba(150, 165, 215, 255)
-        } else {
-            WHITE
-        };
         let bulge_pos: Vec<f32> = self
             .bulges
             .iter()
             .map(|b| *b as f32 + self.frac())
             .collect();
         let radius = |i: usize| {
-            let k = 1.0 - i as f32 / n as f32 * 0.35;
+            let k = 1.0 - i as f32 / n as f32 * 0.3;
             let swell = bulge_pos
                 .iter()
                 .map(|p| bulge_scale(i, *p))
                 .fold(1.0, f32::max);
-            cell * 0.52 * k * swell
+            cell * 0.56 * k * swell
         };
         let visible =
             |p: Vec2| p.x > -1.0 && p.y > -1.0 && p.x < size.x + 1.0 && p.y < size.y + 1.0;
         let shifts = [-1.0f32, 0.0, 1.0];
-        let navy = Color::from_rgba(22, 30, 120, 255);
-        for pass in 0..2 {
-            for sx in shifts {
-                for sy in shifts {
-                    let shift = vec2(sx * size.x, sy * size.y);
-                    for i in (1..n).rev() {
-                        let p = chain[i] + shift;
-                        if !visible(p) {
-                            continue;
-                        }
-                        let from = o + (p + vec2(0.5, 0.5)) * cell;
-                        let to = o + (chain[i - 1] + shift + vec2(0.5, 0.5)) * cell;
-                        let (r0, r1) = (radius(i), radius(i - 1));
-                        let steps = 4;
-                        for k in 0..steps {
-                            let t = k as f32 / steps as f32;
-                            let c = from + (to - from) * t;
-                            let r = r0 + (r1 - r0) * t;
-                            let stripe = if i % 2 == 0 { 1.0 } else { 0.92 };
-                            if pass == 0 {
-                                art::sprite_at(
-                                    "body",
-                                    c,
-                                    r * 2.0 * 1.16,
-                                    crate::art::Draw {
-                                        tint: if dead { darker(base, 0.4) } else { navy },
-                                        ..Default::default()
-                                    },
-                                );
-                            } else {
-                                art::sprite_at(
-                                    "body",
-                                    c,
-                                    r * 2.0,
-                                    crate::art::Draw {
-                                        tint: darker(base, stripe),
-                                        ..Default::default()
-                                    },
-                                );
-                            }
-                        }
+        for sx in shifts {
+            for sy in shifts {
+                let shift = vec2(sx * size.x, sy * size.y);
+                for i in (1..n).rev() {
+                    let p = chain[i] + shift;
+                    if !visible(p) {
+                        continue;
+                    }
+                    let to = o + (p + vec2(0.5, 0.5)) * cell;
+                    let from = o + (chain[i - 1] + shift + vec2(0.5, 0.5)) * cell;
+                    let r = radius(i);
+                    soft_shadow(to + vec2(r * 0.18, r * 0.62), r * 0.9, r * 0.32, 0.5);
+                    let shade = if i % 2 == 0 { 1.0 } else { 0.93 };
+                    let tint = if dead {
+                        Color::from_rgba(170, 180, 205, 255)
+                    } else {
+                        darker(WHITE, shade)
+                    };
+                    let steps = 2;
+                    for k in 0..steps {
+                        let t = k as f32 / steps as f32;
+                        let c = to + (from - to) * t * 0.5;
+                        art::sprite_at(
+                            "ball",
+                            c,
+                            r * 2.0 * (1.0 - 0.04 * t),
+                            crate::art::Draw {
+                                tint,
+                                ..Default::default()
+                            },
+                        );
                     }
                 }
             }
@@ -552,18 +589,20 @@ impl Snake {
                 }
             }
         }
-        let turn = fwd.x.atan2(-fwd.y) + std::f32::consts::PI;
         let wob = if dead {
             (self.dead_age * 20.0).sin() * 0.12
         } else {
             0.0
         };
+        let lean = fwd.x * 0.16 + wob;
+        let at = head + vec2(fwd.x * r * 0.25, -r * 0.18 + fwd.y * r * 0.2);
+        soft_shadow(head + vec2(r * 0.15, r * 0.7), r * 1.2, r * 0.4, 0.55);
         art::sprite_at(
             "head",
-            head,
-            r * 3.0,
+            at,
+            r * 3.4,
             crate::art::Draw {
-                rotation: turn + wob,
+                rotation: lean,
                 tint: if dead {
                     Color::from_rgba(190, 200, 235, 255)
                 } else {
@@ -576,41 +615,7 @@ impl Snake {
 }
 
 pub fn icon(r: Rect) {
-    let side = r.w.max(r.h);
-    art::sprite("bg", Rect::new(r.x, r.y + r.h - side, side, side));
-    let navy = Color::from_rgba(22, 30, 120, 255);
-    let y = r.y + r.h * 0.66;
-    for i in 0..5 {
-        let c = vec2(
-            r.x + r.w * (0.14 + i as f32 * 0.115),
-            y + (i as f32 * 1.3).sin() * r.h * 0.05,
-        );
-        art::sprite_at(
-            "body",
-            c,
-            r.h * 0.27,
-            crate::art::Draw {
-                tint: navy,
-                ..Default::default()
-            },
-        );
-        art::sprite_at("body", c, r.h * 0.23, Default::default());
-    }
-    art::sprite_at(
-        "head",
-        vec2(r.x + r.w * 0.7, y - r.h * 0.02),
-        r.h * 0.4,
-        crate::art::Draw {
-            rotation: -std::f32::consts::FRAC_PI_2,
-            ..Default::default()
-        },
-    );
-    art::sprite_at(
-        "apple",
-        vec2(r.x + r.w * 0.8, r.y + r.h * 0.3),
-        r.h * 0.26,
-        Default::default(),
-    );
+    crate::ui::icon("snake", r);
 }
 
 #[cfg(test)]
@@ -620,9 +625,8 @@ mod tests {
     #[test]
     fn snake_sprites_all_exist() {
         let have = art::names();
-        let mut want = vec!["bg", "frame", "head", "body"];
+        let mut want = vec!["bg", "head", "ball"];
         want.extend(FRUIT);
-        want.extend(SCENERY);
         for n in want {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
