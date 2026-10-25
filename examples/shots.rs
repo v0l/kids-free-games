@@ -277,24 +277,56 @@ async fn main() {
     let all = games::all();
     let idle = which > 100;
     let which = if idle { which - 100 } else { which };
-    let mut game = (which > 0).then(|| {
-        let e = &all[which as usize - 1];
-        set_accent(e.color);
-        let mut g = (e.make)();
-        for f in 0..frames {
-            let input = if idle && f > 1 {
-                Input::default()
-            } else if idle {
-                Input::press_at(view.center())
-            } else {
-                scripted(e.name, f, &view)
-            };
-            g.update(&input, &view, 1.0 / 60.0);
+    if which == 7 || which == 107 {
+        kids_games::profile::unlock("stack", 4);
+        kids_games::profile::set_level("stack", 4);
+        kids_games::profile::set("stack", "taught", 1);
+    }
+    let mut game = if which == -5 || which == -6 {
+        kids_games::profile::create("Mia", 2);
+        kids_games::profile::unlock("stack", 6);
+        kids_games::profile::award_stars("stack", 1, 3);
+        kids_games::profile::award_stars("stack", 2, 2);
+        kids_games::profile::award_stars("stack", 3, 1);
+        let mut g = games::stack::Stack::for_level(2);
+        if which == -5 {
+            for _ in 0..g.goal {
+                g.moving.x = g.tower.last().unwrap().x;
+                g.drop_block();
+            }
+        } else {
+            g.picking = true;
+        }
+        for _ in 0..60 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
             tick_overlay(1.0 / 60.0);
         }
-        g
-    });
-    if which != -3 && which != -4 {
+        Some(Box::new(g) as Box<dyn Game>)
+    } else {
+        None
+    };
+    if game.is_none() {
+        game = (which > 0).then(|| {
+            let e = &all[which as usize - 1];
+            set_accent(e.color);
+            let mut g = (e.make)();
+            for f in 0..frames {
+                let input = if idle && e.name == "Stack Tower" && (f == 1 || f == 5) {
+                    Input::press_at(view.center())
+                } else if idle && f > 1 {
+                    Input::default()
+                } else if idle {
+                    Input::press_at(view.center())
+                } else {
+                    scripted(e.name, f, &view)
+                };
+                g.update(&input, &view, 1.0 / 60.0);
+                tick_overlay(1.0 / 60.0);
+            }
+            g
+        });
+    }
+    if which != -3 && which != -4 && which != -5 && which != -6 {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];
