@@ -282,6 +282,9 @@ async fn main() {
         set_accent(e.color);
         if idle && e.name == "Flappy Bird" {
             kids_games::profile::set("flappy", "passed", 1);
+            for score in [14, 6] {
+                kids_games::profile::submit("flappy", score, kids_games::profile::Better::Higher);
+            }
         }
         let mut g = (e.make)();
         for f in 0..frames {
