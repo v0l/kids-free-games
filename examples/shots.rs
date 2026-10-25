@@ -18,7 +18,7 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
         i.down = true;
     };
     match game {
-        "Flappy Bird" if f.is_multiple_of(24) => tap(&mut i, c),
+        "Flappy Bird" if f.is_multiple_of(32) => tap(&mut i, c),
         "Paper Land" => {
             if f == 1 {
                 i.pressed = true;
@@ -303,7 +303,7 @@ async fn main() {
         match &mut game {
             Some(g) => {
                 g.draw(&view);
-                tick_overlay(1.0 / 60.0);
+                tick_overlay(0.25);
             }
             None if which == -2 => word_grid(&view),
             None if which < 0 => app_icon(&view),

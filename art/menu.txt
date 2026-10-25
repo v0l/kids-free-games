@@ -1,15 +1,2 @@
-sky        | background-elements/PNG/Flat/sky.png | solo max=512 keep
-clouds     | background-elements/PNG/Flat/clouds1.png | solo max=1001 keep
-clouds2    | background-elements/PNG/Flat/clouds2.png | solo max=1001 keep
-mountains  | background-elements/PNG/Flat/pointy_mountains.png | solo max=1001 keep
-hills      | background-elements/PNG/Flat/hills1.png | solo max=1001 keep
-hills2     | background-elements/PNG/Flat/hills2.png | solo max=1001 keep
-tree1      | background-elements/PNG/Flat/tree05.png | max=144
-tree2      | background-elements/PNG/Flat/tree08.png | max=144
-tree3      | background-elements/PNG/Flat/tree11.png | max=144
-house      | background-elements/PNG/Flat/house_front_short.png | max=160
-castle     | background-elements/PNG/Flat/castle.png | max=200
-sun        | jumper-pack/PNG/Enemies/sun1.png | max=160
-bunny      | jumper-pack/PNG/Players/bunny1_ready.png | max=160
-bunny2     | jumper-pack/PNG/Players/bunny2_ready.png | max=160
-plane      | tappy-plane/PNG/Planes/planeRed1.png | max=88
+bg_wide  | gen:menu_bg.png | solo jpg max=1344 keep
+bg_tall  | gen:menu_bg_portrait.png | solo jpg max=1344 keep

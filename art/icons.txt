@@ -1,0 +1,16 @@
+icon_flappy | gen:iconr_flappy.png | max=256
+icon_paper | gen:iconr_paper.png | max=256
+icon_hotel | gen:iconr_hotel.png | max=256
+icon_snake | gen:iconr_snake.png | max=256
+icon_merge | gen:iconr_merge.png | max=256
+icon_fruit | gen:iconr_fruit.png | max=256
+icon_stack | gen:iconr_stack.png | max=256
+icon_breakout | gen:iconr_breakout.png | max=256
+icon_jumper | gen:iconr_jumper.png | max=256
+icon_memory | gen:iconr_memory.png | max=256
+icon_crossy | gen:iconr_crossy.png | max=256
+icon_helix | gen:iconr_helix.png | max=256
+icon_blocks | gen:iconr_blocks.png | max=256
+icon_mathpop | gen:iconr_mathpop.png | max=256
+icon_count | gen:iconr_count.png | max=256
+icon_spell | gen:iconr_spell.png | max=256

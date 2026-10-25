@@ -1,12 +1,10 @@
-bg             | tappy-plane/PNG/background.png | solo max=800 keep
-ground         | tappy-plane/PNG/groundGrass.png | max=808 keep
-rock           | tappy-plane/PNG/rockGrass.png | max=240
-rock_down      | tappy-plane/PNG/rockGrassDown.png | max=240
-plane1         | tappy-plane/PNG/Planes/planeYellow1.png | max=88
-plane2         | tappy-plane/PNG/Planes/planeYellow2.png | max=88
-plane3         | tappy-plane/PNG/Planes/planeYellow3.png | max=88
-tap            | tappy-plane/PNG/UI/tap.png | max=128
-tap_left       | tappy-plane/PNG/UI/tapLeft.png | max=128
-tap_right      | tappy-plane/PNG/UI/tapRight.png | max=128
-get_ready      | tappy-plane/PNG/UI/textGetReady.png | max=420
-game_over      | tappy-plane/PNG/UI/textGameOver.png | max=420
+# Painted with FLUX.1-dev via art/gen/flux.py (prompts in art/gen/prompts/flappy.json), cut with rembg birefnet
+sky        | gen:flappy_sky_tile.png | solo jpg max=2048 keep
+hills      | gen:flappy_hills_tile.png | solo max=2048 keep
+ground     | gen:ground_cut.png | solo max=1100 keep
+pipe_cap   | gen:pipe_cap.png | max=240
+pipe_body  | gen:pipe_body.png | max=240
+bird_up    | gen:bird_up_cut.png | max=200
+bird_down  | gen:bird_down_cut.png | max=200
+bird_mid   | gen:bird_cut.png | max=200
+bird_hurt  | gen:bird_hurt_cut.png | max=200

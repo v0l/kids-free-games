@@ -38,7 +38,15 @@ def pack_dir(pack):
     return d
 
 
+GEN = ROOT / "art/gen/out"
+
+
 def source(path):
+    if path.startswith("gen:"):
+        p = GEN / path[4:]
+        if not p.exists():
+            sys.exit(f"missing {p}; generate it with art/gen/flux.py")
+        return p
     if path.startswith("repo:"):
         p = ROOT / path[5:]
         if not p.exists():
@@ -130,6 +138,13 @@ def shelf_pack(items):
     return pages
 
 
+def pow2_near(n):
+    p = 64
+    while p * 1.5 < n:
+        p *= 2
+    return p
+
+
 def pow2(n):
     p = 64
     while p < n:
@@ -143,13 +158,26 @@ def png_bytes(im):
     return b.getvalue()
 
 
+def page_bytes(im, jpg=False, colors=0):
+    if jpg:
+        b = io.BytesIO()
+        im.convert("RGB").save(b, "JPEG", quality=86, optimize=True, progressive=False)
+        return b.getvalue()
+    if colors:
+        q = im.quantize(colors=colors, method=Image.Quantize.FASTOCTREE, dither=Image.Dither.NONE)
+        b = io.BytesIO()
+        q.save(b, "PNG", optimize=True)
+        return b.getvalue()
+    return png_bytes(im)
+
+
 def build_sheet(manifest):
     entries = parse(manifest)
     solo, packed = [], []
     for name, src, opts in entries:
         im = load_image(src, opts)
         if "solo" in opts:
-            solo.append((name, im))
+            solo.append((name, im, "jpg" in opts))
             continue
         im = Image.fromarray(np.pad(np.asarray(im), ((PAD, PAD), (PAD, PAD), (0, 0))))
         packed.append((name, bleed(im)))
@@ -162,10 +190,14 @@ def build_sheet(manifest):
             canvas.paste(im, (x, y))
             index.append(f"{name} {len(pages)} {x + PAD} {y + PAD} {im.width - 2 * PAD} {im.height - 2 * PAD}")
         pages.append(canvas)
-    for name, im in solo:
-        index.append(f"{name} {len(pages)} 0 0 {im.width} {im.height}")
-        pages.append(im)
-    blobs = [png_bytes(p) for p in pages]
+    colors = int(next((o.get("colors", 0) for _, _, o in entries if "colors" in o), 0))
+    atlas_jpg = any("atlasjpg" in o for _, _, o in entries)
+    blobs = [page_bytes(p, jpg=atlas_jpg, colors=colors) for p in pages]
+    for name, im, jpg in solo:
+        index.append(f"{name} {len(blobs)} 0 0 {im.width} {im.height}")
+        sq = im.resize((pow2_near(im.width), pow2_near(im.height)), Image.LANCZOS)
+        index[-1] = f"{name} {len(blobs)} 0 0 {sq.width} {sq.height} {im.width} {im.height}"
+        blobs.append(page_bytes(sq, jpg=jpg))
     out = bytearray(b"KGA1")
     out += struct.pack("<I", len(blobs))
     for b in blobs:

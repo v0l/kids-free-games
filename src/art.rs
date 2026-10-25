@@ -6,11 +6,12 @@ use std::collections::HashMap;
 pub struct Frame {
     pub page: usize,
     pub src: Rect,
+    pub shown: Vec2,
 }
 
 impl Frame {
     pub fn size(&self) -> Vec2 {
-        vec2(self.src.w, self.src.h)
+        self.shown
     }
 
     pub fn aspect(&self) -> f32 {
@@ -44,15 +45,22 @@ pub fn parse(bytes: &[u8]) -> Option<Index> {
     let mut frames = HashMap::new();
     for line in text.lines() {
         let f: Vec<&str> = line.split_whitespace().collect();
-        if f.len() != 6 {
+        if f.len() != 6 && f.len() != 8 {
             return None;
         }
         let num = |i: usize| f[i].parse::<f32>().ok();
+        let src = Rect::new(num(2)?, num(3)?, num(4)?, num(5)?);
+        let shown = if f.len() == 8 {
+            vec2(num(6)?, num(7)?)
+        } else {
+            vec2(src.w, src.h)
+        };
         frames.insert(
             f[0].to_string(),
             Frame {
                 page: f[1].parse().ok()?,
-                src: Rect::new(num(2)?, num(3)?, num(4)?, num(5)?),
+                src,
+                shown,
             },
         );
     }
@@ -84,15 +92,45 @@ impl Sheet {
         self.textures[page]
             .get_or_insert_with(|| {
                 let (at, len) = self.index.pages[page];
-                let t = Texture2D::from_file_with_format(
-                    &self.bytes[at..at + len],
-                    Some(ImageFormat::Png),
-                );
-                t.set_filter(FilterMode::Linear);
-                t
+                upload(&self.bytes[at..at + len])
             })
             .clone()
     }
+}
+
+pub fn decode_page(bytes: &[u8]) -> Option<(u32, u32, Vec<u8>)> {
+    let im = image::load_from_memory(bytes).ok()?.to_rgba8();
+    let (w, h) = im.dimensions();
+    Some((w, h, im.into_raw()))
+}
+
+fn upload(bytes: &[u8]) -> Texture2D {
+    let Some((w, h, px)) = decode_page(bytes) else {
+        return Texture2D::empty();
+    };
+    let mips = w.is_power_of_two() && h.is_power_of_two();
+    let ctx = unsafe { get_internal_gl() }.quad_context;
+    let id = ctx.new_texture_from_data_and_format(
+        &px,
+        miniquad::TextureParams {
+            width: w,
+            height: h,
+            format: miniquad::TextureFormat::RGBA8,
+            min_filter: miniquad::FilterMode::Linear,
+            mag_filter: miniquad::FilterMode::Linear,
+            mipmap_filter: if mips {
+                miniquad::MipmapFilterMode::Linear
+            } else {
+                miniquad::MipmapFilterMode::None
+            },
+            allocate_mipmaps: mips,
+            ..Default::default()
+        },
+    );
+    if mips {
+        ctx.texture_generate_mipmaps(id);
+    }
+    Texture2D::from_miniquad_texture(id)
 }
 
 thread_local! {
@@ -307,6 +345,32 @@ mod tests {
         let tiny = nine_spans(0.0, 64.0, 0.0, 20.0, 16.0, 2.0);
         assert_eq!(tiny[0].3 + tiny[1].3 + tiny[2].3, 20.0);
         assert!(tiny[1].3 >= 0.0);
+    }
+
+    #[test]
+    fn pages_decode_from_png_and_jpeg() {
+        let mut png = vec![];
+        let mut jpg = vec![];
+        let img = image::RgbaImage::from_pixel(8, 4, image::Rgba([200, 100, 50, 255]));
+        image::DynamicImage::ImageRgba8(img.clone())
+            .write_to(
+                &mut std::io::Cursor::new(&mut png),
+                image::ImageOutputFormat::Png,
+            )
+            .unwrap();
+        image::DynamicImage::ImageRgba8(img)
+            .to_rgb8()
+            .write_to(
+                &mut std::io::Cursor::new(&mut jpg),
+                image::ImageOutputFormat::Jpeg(90),
+            )
+            .unwrap();
+        for b in [png, jpg] {
+            let (w, h, px) = decode_page(&b).unwrap();
+            assert_eq!((w, h), (8, 4));
+            assert_eq!(px.len(), 8 * 4 * 4);
+            assert!((px[0] as i32 - 200).abs() < 8 && px[3] == 255);
+        }
     }
 
     #[test]

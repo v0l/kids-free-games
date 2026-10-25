@@ -30,56 +30,6 @@ pub fn layer_x(i: usize, spacing: f32, scroll: f32, factor: f32, span: f32, marg
     (i as f32 * spacing - scroll * factor).rem_euclid(span) - margin
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Spike {
-    pub cx: f32,
-    pub base_y: f32,
-    pub tip_y: f32,
-    pub half_w: f32,
-}
-
-impl Spike {
-    pub fn new(cx: f32, base_y: f32, tip_y: f32) -> Self {
-        let h = (tip_y - base_y).abs();
-        Self {
-            cx,
-            base_y,
-            tip_y,
-            half_w: (h * 0.24).clamp(PIPE_W * 0.5, PIPE_W * 0.95),
-        }
-    }
-
-    pub fn corners(&self) -> [Vec2; 3] {
-        [
-            vec2(self.cx, self.tip_y),
-            vec2(self.cx - self.half_w, self.base_y),
-            vec2(self.cx + self.half_w, self.base_y),
-        ]
-    }
-
-    pub fn hits(&self, c: Vec2, r: f32) -> bool {
-        let [a, b, d] = self.corners();
-        point_in_triangle(c, a, b, d)
-            || [(a, b), (b, d), (d, a)]
-                .iter()
-                .any(|(p, q)| segment_distance(c, *p, *q) < r)
-    }
-}
-
-fn segment_distance(c: Vec2, a: Vec2, b: Vec2) -> f32 {
-    let ab = b - a;
-    let t = ((c - a).dot(ab) / ab.length_squared().max(1e-6)).clamp(0.0, 1.0);
-    (a + ab * t).distance(c)
-}
-
-fn point_in_triangle(p: Vec2, a: Vec2, b: Vec2, c: Vec2) -> bool {
-    let s = |p: Vec2, q: Vec2, r: Vec2| (p.x - r.x) * (q.y - r.y) - (q.x - r.x) * (p.y - r.y);
-    let (d1, d2, d3) = (s(p, a, b), s(p, b, c), s(p, c, a));
-    let neg = d1 < 0.0 || d2 < 0.0 || d3 < 0.0;
-    let pos = d1 > 0.0 || d2 > 0.0 || d3 > 0.0;
-    !(neg && pos)
-}
-
 pub fn bird_scale(vy: f32, kick: f32) -> Vec2 {
     let len = 1.0 + (vy.abs() / 1400.0).min(0.2) + kick.clamp(0.0, 1.0) * 0.12;
     vec2(len, 1.0 / len)
@@ -135,13 +85,14 @@ impl Flappy {
         self.y = view.h * 0.42;
     }
 
-    pub fn spikes(p: &Pipe, view: &View) -> [Spike; 2] {
-        let cx = p.x + PIPE_W / 2.0;
+    pub fn pipe_rects(p: &Pipe, view: &View) -> [Rect; 2] {
         let top = p.gap_y - GAP / 2.0;
         let bottom = p.gap_y + GAP / 2.0;
-        let roof = -view.inset.top - 20.0;
-        let floor = view.h - GROUND + 30.0;
-        [Spike::new(cx, roof, top), Spike::new(cx, floor, bottom)]
+        let roof = -view.inset.top - 40.0;
+        [
+            Rect::new(p.x, roof, PIPE_W, top - roof),
+            Rect::new(p.x, bottom, PIPE_W, view.h - bottom),
+        ]
     }
 
     fn spawn_pipe(&mut self, x: f32, view: &View) {
@@ -259,9 +210,9 @@ impl Game for Flappy {
                 let mut hit = self.y + BIRD_R >= ground_y;
                 let mut scored_at = None;
                 for p in &mut self.pipes {
-                    if Self::spikes(p, view)
+                    if Self::pipe_rects(p, view)
                         .iter()
-                        .any(|sp| sp.hits(bird, BIRD_R - 6.0))
+                        .any(|r| circle_hits_rect(bird, BIRD_R - 5.0, *r))
                     {
                         hit = true;
                     }
@@ -314,62 +265,24 @@ impl Game for Flappy {
         chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
         match self.state {
             State::Ready => {
-                let bob = (self.t * 4.0).sin() * 5.0;
-                let w = (view.w * 0.5).min(420.0);
-                art::sprite_w(
-                    "get_ready",
+                let bob = (self.t * 4.0).sin() * 6.0;
+                crate::ui::ribbon(
+                    view,
+                    "Get Ready!",
                     vec2(view.w / 2.0, view.h * 0.2 + bob),
-                    w,
-                    Default::default(),
+                    self.t,
                 );
-                let bx = Self::bird_x(view);
-                let tap = vec2(bx, view.h * 0.42 + 110.0);
-                let press = ((self.t * 2.0).fract() < 0.15) as i32 as f32;
-                art::sprite_at(
-                    "tap",
-                    tap + vec2(0.0, press * 6.0),
-                    90.0,
-                    Default::default(),
-                );
-                art::sprite_at(
-                    "tap_left",
-                    vec2(bx + 110.0, view.h * 0.42),
-                    46.0,
-                    Default::default(),
-                );
-                art::sprite_at(
-                    "tap_right",
-                    vec2(bx - 110.0, view.h * 0.42),
-                    46.0,
-                    Default::default(),
+                let pulse = 1.0 + (self.t * 5.0).sin() * 0.05;
+                crate::ui::hint(
+                    view,
+                    "Tap to flap",
+                    vec2(view.w / 2.0, view.h * 0.74),
+                    pulse,
                 );
             }
             State::Dead if self.dead_t > 0.4 => {
-                let age = self.dead_t - 0.4;
-                let k = crate::fx::ease_out_back((age / 0.35).min(1.0));
-                let w = (view.w * 0.55).min(440.0) * k.max(0.01);
-                art::sprite_w(
-                    "game_over",
-                    vec2(view.w / 2.0, view.h * 0.18),
-                    w,
-                    Default::default(),
-                );
                 let s = format!("Score {}   Best {}", self.score, self.best.0);
                 overlay(view, "Bonk!", &[&s, "Tap to fly again"]);
-                if let Some(m) = crate::ui::medal_for(self.score, self.best.0) {
-                    let mk = crate::fx::ease_out_back(((age - 0.35) / 0.3).clamp(0.0, 1.0));
-                    if mk > 0.0 {
-                        crate::ui::sprite_at(
-                            m,
-                            view.center() + vec2(-220.0, -40.0),
-                            110.0 * mk,
-                            crate::art::Draw {
-                                rotation: (1.0 - mk) * 2.0 - 0.2,
-                                ..Default::default()
-                            },
-                        );
-                    }
-                }
             }
             _ => {}
         }
@@ -380,46 +293,100 @@ mod art {
     crate::sprites!("flappy");
 }
 
+pub fn tile_x(view_x: f32, view_w: f32, tile_w: f32, scroll: f32) -> Vec<f32> {
+    let off = scroll.rem_euclid(tile_w);
+    let mut out = vec![];
+    let mut x = view_x - off;
+    while x < view_x + view_w {
+        out.push(x);
+        x += tile_w;
+    }
+    out
+}
+
+fn band(name: &str, view: &View, bottom: f32, h: f32, scroll: f32) {
+    let f = view.full();
+    let s = art::size(name);
+    let w = h * s.x / s.y;
+    for x in tile_x(f.x, f.w, w, scroll) {
+        art::sprite(name, Rect::new(x, bottom - h, w + 1.0, h));
+    }
+}
+
 impl Flappy {
     fn draw_world(&self, view: &View) {
         let f = view.full();
         let gy = view.h - GROUND;
-        let bg = art::size("bg");
-        let bh = f.h;
-        let bw = bh * bg.x / bg.y;
-        let off = (self.scroll * 0.25).rem_euclid(bw);
-        let mut x = f.x - off;
-        while x < f.x + f.w {
-            art::sprite("bg", Rect::new(x, f.y, bw + 1.0, bh));
-            x += bw;
-        }
+        band("sky", view, f.y + f.h, f.h, self.scroll * 0.08);
+        band(
+            "hills",
+            view,
+            gy + 20.0,
+            (f.h * 0.42).max(260.0),
+            self.scroll * 0.35,
+        );
         for p in &self.pipes {
             Self::draw_pipe(p, view);
         }
-        let g = art::size("ground");
-        let gh = GROUND + 30.0 + view.inset.bottom;
-        let gw = g.x * (GROUND + 30.0) / g.y;
-        let off = self.scroll.rem_euclid(gw);
-        let mut x = f.x - off;
-        while x < f.x + f.w {
-            art::sprite("ground", Rect::new(x, gy - 30.0, gw + 1.0, gh));
-            x += gw;
+        let gs = art::size("ground");
+        let gh = GROUND + 34.0 + view.inset.bottom + 40.0;
+        let top_frac = 116.0 / gs.y;
+        let h = (GROUND + 34.0) / (1.0 - top_frac);
+        let w = h * gs.x / gs.y;
+        for x in tile_x(f.x, f.w, w, self.scroll) {
+            art::sprite(
+                "ground",
+                Rect::new(x, gy - 34.0 - h * top_frac, w + 1.0, h.max(gh)),
+            );
         }
         self.draw_bird(view);
     }
 
     fn draw_pipe(p: &Pipe, view: &View) {
-        for (sp, name) in Self::spikes(p, view).iter().zip(["rock_down", "rock"]) {
-            let top = sp.base_y.min(sp.tip_y);
-            let h = (sp.tip_y - sp.base_y).abs();
-            let w = sp.half_w * 2.0 / 0.94;
-            art::sprite(name, Rect::new(sp.cx - w * 0.6, top, w, h));
+        let [top, bottom] = Self::pipe_rects(p, view);
+        let cap = art::size("pipe_cap");
+        let body = art::size("pipe_body");
+        let cw = PIPE_W * 1.24;
+        let ch = cw * cap.y / cap.x;
+        let bw = PIPE_W * 1.02;
+        let _ = body;
+        let seg = bw * body.y / body.x;
+        let cx = p.x + PIPE_W / 2.0;
+        let _ = seg;
+        let column = |from: f32, to: f32| {
+            if to > from {
+                art::sprite("pipe_body", Rect::new(cx - bw / 2.0, from, bw, to - from));
+            }
+        };
+        column(top.y, top.y + top.h - ch * 0.6);
+        art::sprite_ex(
+            "pipe_cap",
+            Rect::new(cx - cw / 2.0, top.y + top.h - ch, cw, ch),
+            crate::art::Draw {
+                flip_y: true,
+                ..Default::default()
+            },
+        );
+        column(bottom.y + ch * 0.6, bottom.y + bottom.h);
+        art::sprite("pipe_cap", Rect::new(cx - cw / 2.0, bottom.y, cw, ch));
+    }
+
+    fn bird_frame(&self) -> &'static str {
+        if self.state == State::Dead {
+            return "bird_hurt";
+        }
+        if self.kick > 0.55 {
+            "bird_down"
+        } else if self.kick > 0.2 || self.state == State::Ready && (self.t * 6.0).sin() > 0.0 {
+            "bird_mid"
+        } else {
+            "bird_up"
         }
     }
 
     fn draw_bird(&self, view: &View) {
         let bx = Self::bird_x(view);
-        let angle = (self.vy / 900.0).clamp(-0.5, 1.2);
+        let angle = (self.vy / 900.0).clamp(-0.45, 1.1);
         let sc = bird_scale(self.vy, self.kick);
         let ground_y = view.h - GROUND;
         let height = (ground_y - self.y).max(0.0);
@@ -427,14 +394,10 @@ impl Flappy {
             vec2(bx, ground_y + 6.0),
             BIRD_R * (1.4 - (height / 600.0).min(0.7)),
             5.0,
-            0.6,
+            0.5,
         );
-        let frame = if self.state == State::Dead {
-            "plane1"
-        } else {
-            ["plane1", "plane2", "plane3", "plane2"][(self.t * 14.0) as usize % 4]
-        };
-        let h = BIRD_R * 2.6;
+        let frame = self.bird_frame();
+        let h = BIRD_R * 3.4;
         let w = h * art::size(frame).x / art::size(frame).y;
         art::sprite_ex(
             frame,
@@ -453,24 +416,7 @@ impl Flappy {
 }
 
 pub fn icon(r: Rect) {
-    art::sprite(
-        "bg",
-        Rect::new(r.x - r.w * 0.3, r.y, r.h * 800.0 / 480.0, r.h),
-    );
-    art::sprite(
-        "rock",
-        Rect::new(r.x + r.w * 0.62, r.y + r.h * 0.45, r.w * 0.3, r.h * 0.6),
-    );
-    art::sprite(
-        "rock_down",
-        Rect::new(r.x + r.w * 0.62, r.y - r.h * 0.05, r.w * 0.3, r.h * 0.35),
-    );
-    art::sprite_at(
-        "plane1",
-        vec2(r.x + r.w * 0.36, r.y + r.h * 0.5),
-        r.h * 0.34,
-        Default::default(),
-    );
+    crate::ui::icon("flappy", r);
 }
 
 #[cfg(test)]
@@ -481,16 +427,15 @@ mod tests {
     fn flappy_sprites_all_exist() {
         let have = art::names();
         for n in [
-            "bg",
+            "sky",
+            "hills",
             "ground",
-            "rock",
-            "rock_down",
-            "plane1",
-            "plane2",
-            "plane3",
-            "tap",
-            "get_ready",
-            "game_over",
+            "pipe_cap",
+            "pipe_body",
+            "bird_up",
+            "bird_mid",
+            "bird_down",
+            "bird_hurt",
         ] {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
@@ -548,7 +493,7 @@ mod tests {
         g.state = State::Playing;
         g.y = 100.0;
         g.pipes.push(Pipe {
-            x: Flappy::bird_x(&v) - PIPE_W / 2.0,
+            x: Flappy::bird_x(&v) - 10.0,
             gap_y: 450.0,
             scored: false,
         });
@@ -557,16 +502,51 @@ mod tests {
     }
 
     #[test]
-    fn spike_tips_are_forgiving_but_their_bodies_are_not() {
-        let s = Spike::new(500.0, 700.0, 400.0);
-        assert!(s.hits(vec2(500.0, 600.0), 10.0));
-        assert!(s.hits(vec2(500.0, 395.0), 10.0));
-        assert!(!s.hits(vec2(500.0, 380.0), 10.0));
-        assert!(!s.hits(vec2(500.0 + s.half_w * 0.5, 420.0), 10.0));
-        assert!(s.hits(vec2(500.0 + s.half_w * 0.5, 650.0), 10.0));
-        let down = Spike::new(500.0, 0.0, 300.0);
-        assert!(down.hits(vec2(500.0, 100.0), 10.0));
-        assert!(!down.hits(vec2(500.0, 320.0), 10.0));
+    fn ground_and_sky_tiles_cover_the_screen_at_any_scroll() {
+        for scroll in [0.0, 13.0, 777.7, 123456.0] {
+            let xs = tile_x(-40.0, 1100.0, 300.0, scroll);
+            assert!(xs[0] <= -40.0);
+            assert!(xs.last().unwrap() + 300.0 >= 1060.0);
+            assert!(xs.windows(2).all(|w| (w[1] - w[0] - 300.0).abs() < 1e-3));
+        }
+    }
+
+    #[test]
+    fn pipe_columns_reach_past_the_top_edge_and_down_to_the_ground() {
+        let v = View::fit_safe(
+            2400.0,
+            1080.0,
+            crate::safe::Insets {
+                top: 0.0,
+                left: 100.0,
+                ..Default::default()
+            },
+        );
+        let p = Pipe {
+            x: 300.0,
+            gap_y: 300.0,
+            scored: false,
+        };
+        let [top, bottom] = Flappy::pipe_rects(&p, &v);
+        assert!(top.y < -v.inset.top);
+        assert_eq!(top.y + top.h, 300.0 - GAP / 2.0);
+        assert_eq!(bottom.y, 300.0 + GAP / 2.0);
+        assert!(bottom.y + bottom.h >= v.h - GROUND);
+    }
+
+    #[test]
+    fn the_bird_flaps_its_wings_down_after_a_tap() {
+        let v = View::ipad_landscape();
+        let mut g = Flappy::new();
+        g.reset(&v);
+        g.state = State::Playing;
+        g.kick = 0.0;
+        g.vy = 200.0;
+        assert_eq!(g.bird_frame(), "bird_up");
+        g.flap(&v);
+        assert_eq!(g.bird_frame(), "bird_down");
+        g.state = State::Dead;
+        assert_eq!(g.bird_frame(), "bird_hurt");
     }
 
     #[test]
@@ -604,7 +584,7 @@ mod tests {
         g.state = State::Playing;
         g.y = 100.0;
         g.pipes.push(Pipe {
-            x: Flappy::bird_x(&v) - PIPE_W / 2.0,
+            x: Flappy::bird_x(&v) - 10.0,
             gap_y: 450.0,
             scored: false,
         });

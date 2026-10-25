@@ -80,6 +80,27 @@ pub fn round_button(r: Rect, icon: &str, tone: Tone, press: f32) {
     );
 }
 
+pub fn painted_round(r: Rect, icon: &str, press: f32) {
+    let s = 1.0 - press * 0.08;
+    let c = r.center() + vec2(0.0, press * 2.0);
+    let d = r.h.min(r.w) * s;
+    sprite("p_round", Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d));
+    let ic = d * 0.48;
+    sprite_ex(
+        icon,
+        Rect::new(c.x - ic / 2.0, c.y - ic / 2.0 - d * 0.03, ic, ic),
+        crate::art::Draw {
+            tint: Color::from_rgba(150, 70, 0, 255),
+            ..Default::default()
+        },
+    );
+    sprite_ex(
+        icon,
+        Rect::new(c.x - ic / 2.0, c.y - ic / 2.0 - d * 0.06, ic, ic),
+        crate::art::Draw::default(),
+    );
+}
+
 pub fn card(r: Rect, tint: Color) {
     nine(
         "panel",
@@ -91,6 +112,20 @@ pub fn card(r: Rect, tint: Color) {
 }
 
 pub fn chip_box(r: Rect) {
+    round_rect(
+        Rect::new(r.x, r.y + 4.0, r.w, r.h),
+        r.h / 2.0,
+        Color::new(0.05, 0.02, 0.15, 0.3),
+    );
+    round_rect(r, r.h / 2.0, Color::new(0.2, 0.08, 0.35, 0.72));
+    round_rect(
+        Rect::new(r.x + 3.0, r.y + 3.0, r.w - 6.0, r.h * 0.45),
+        r.h / 2.0,
+        Color::new(1.0, 1.0, 1.0, 0.1),
+    );
+}
+
+pub fn kenney_chip_box(r: Rect) {
     let k = r.h / 64.0;
     nine(
         "panel",
@@ -116,53 +151,119 @@ pub fn medal_for(score: u32, best: u32) -> Option<&'static str> {
     })
 }
 
-pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) {
-    let fade = ease_out_cubic(age / 0.2);
-    fill_screen(view, Color::new(0.08, 0.05, 0.15, 0.45 * fade));
-    let pw = 560.0f32.min(view.w - 40.0);
-    let ph = 96.0 + lines.len() as f32 * 60.0;
-    let s = ease_out_back(age / 0.3).max(0.01);
-    let c = view.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.3)) * 80.0);
-    let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
-    nine(
-        "panel",
-        Rect::new(r.x, r.y + 10.0 * s, r.w, r.h),
-        14.0,
-        2.0 * s,
-        Color::new(0.0, 0.0, 0.0, 0.25),
+mod icons {
+    crate::sprites!("icons");
+}
+
+pub fn icon(game: &str, r: Rect) {
+    icons::sprite(&format!("icon_{game}"), r);
+}
+
+pub fn has_icon(game: &str) -> bool {
+    icons::frame(&format!("icon_{game}")).is_some()
+}
+
+pub fn painted_panel(r: Rect, tint: Color) {
+    let k = (r.w.min(r.h) / 400.0).clamp(0.3, 2.0);
+    nine("p_panel", r, 70.0, k, tint);
+}
+
+pub fn painted_button(r: Rect, label: &str, color: &str, press: f32, alpha: f32) {
+    let s = 1.0 - press * 0.06;
+    let r = Rect::new(
+        r.center().x - r.w * s / 2.0,
+        r.center().y - r.h * s / 2.0 + press * 3.0,
+        r.w * s,
+        r.h * s,
     );
-    nine("panel", r, 14.0, 2.0 * s, WHITE);
-    let band_w = (crate::outline::measure(FONT_BYTES, title, 56.0) + 90.0).min(pw - 20.0) * s;
-    let band = Rect::new(c.x - band_w / 2.0, r.y - 34.0 * s, band_w, 76.0 * s);
-    nine("btn_grey", band, 18.0, band.h / 64.0, accent);
-    let wob = (age * 3.0).sin() * 0.03;
+    let name = match color {
+        "orange" => "p_btn_orange",
+        "blue" => "p_btn_blue",
+        _ => "p_btn_green",
+    };
+    let ink = match color {
+        "orange" => Color::from_rgba(170, 70, 0, 255),
+        "blue" => Color::from_rgba(10, 80, 150, 255),
+        _ => Color::from_rgba(40, 120, 20, 255),
+    };
+    nine(name, r, 60.0, r.h / 150.0, with_alpha(WHITE, alpha));
+    text_outline(
+        label,
+        r.center().x,
+        r.y + r.h * 0.45,
+        r.h * 0.46,
+        with_alpha(WHITE, alpha),
+        with_alpha(ink, alpha),
+    );
+}
+
+pub fn ribbon(view: &View, title: &str, c: Vec2, t: f32) {
+    let size = 54.0;
+    let tw = crate::outline::measure(FONT_BYTES, title, size);
+    let w = (tw + 260.0).min(view.w - 20.0);
+    let rs = size_of("p_ribbon");
+    let h = w * rs.y / rs.x;
+    let wob = (t * 2.5).sin() * 0.015;
+    sprite_ex(
+        "p_ribbon",
+        Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h),
+        crate::art::Draw {
+            rotation: wob,
+            ..Default::default()
+        },
+    );
     text_outline(
         title,
         c.x,
-        band.y + band.h * 0.44,
-        52.0 * s * (1.0 + wob),
+        c.y - h * 0.08,
+        size.min(w * 0.7 / tw * size),
         WHITE,
-        darker(accent, 0.5),
+        Color::from_rgba(140, 20, 30, 255),
     );
+}
+
+fn size_of(name: &str) -> Vec2 {
+    size(name)
+}
+
+pub fn hint(view: &View, label: &str, c: Vec2, pulse: f32) {
+    let size = 32.0 * pulse;
+    let w = crate::outline::measure(FONT_BYTES, label, size) + 70.0;
+    let r = Rect::new(c.x - w / 2.0, c.y - 32.0 * pulse, w, 64.0 * pulse);
+    let _ = view;
+    round_rect(
+        Rect::new(r.x, r.y + 4.0, r.w, r.h),
+        r.h / 2.0,
+        Color::new(0.0, 0.0, 0.0, 0.18),
+    );
+    round_rect(r, r.h / 2.0, Color::new(1.0, 1.0, 1.0, 0.92));
+    text_center(label, c.x, c.y, size, BODY);
+}
+
+pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) {
+    let _ = accent;
+    let fade = ease_out_cubic(age / 0.2);
+    fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
+    let pw = 560.0f32.min(view.w - 40.0);
+    let ph = 150.0 + lines.len() as f32 * 64.0;
+    let s = ease_out_back(age / 0.32).max(0.01);
+    let c = view.center() + vec2(0.0, 20.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
+    let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
+    painted_panel(r, WHITE);
+    ribbon(view, title, vec2(c.x, r.y + 8.0 * s), age);
+    let stars = ((age - 0.25) / 0.12).clamp(0.0, 3.0);
+    let _ = stars;
     for (i, l) in lines.iter().enumerate() {
-        let la = ((age - 0.1 - i as f32 * 0.05) / 0.18).clamp(0.0, 1.0);
+        let la = ((age - 0.12 - i as f32 * 0.06) / 0.2).clamp(0.0, 1.0);
         let last = i + 1 == lines.len();
-        let y = band.y + band.h + 40.0 * s + i as f32 * 60.0 * s + (1.0 - la) * 16.0;
+        let y = r.y + 96.0 * s + i as f32 * 64.0 * s + (1.0 - la) * 16.0;
         if last && lines.len() > 1 {
-            let pulse = 1.0 + (age * 5.0).sin() * 0.03;
-            let bw = (crate::outline::measure(FONT_BYTES, l, 30.0) + 80.0) * s * pulse;
-            let br = Rect::new(c.x - bw / 2.0, y - 28.0 * s, bw, 60.0 * s);
-            nine("btn_green", br, 18.0, br.h / 64.0, with_alpha(WHITE, la));
-            text_outline(
-                l,
-                c.x,
-                br.y + br.h * 0.44,
-                30.0 * s * pulse,
-                with_alpha(WHITE, la),
-                with_alpha(Tone::Green.ink(), la),
-            );
+            let pulse = 1.0 + (age * 4.5).sin() * 0.03;
+            let bw = (crate::outline::measure(FONT_BYTES, l, 30.0) + 110.0) * s * pulse;
+            let br = Rect::new(c.x - bw / 2.0, y - 8.0 * s, bw, 78.0 * s * pulse);
+            painted_button(br, l, "green", 0.0, la);
         } else {
-            text_center(l, c.x, y, 34.0 * s, with_alpha(BODY, la));
+            text_center(l, c.x, y + 14.0 * s, 34.0 * s, with_alpha(BODY, la));
         }
     }
 }
@@ -252,6 +353,29 @@ mod tests {
             "star_empty",
         ] {
             assert!(have.iter().any(|h| h == n), "ui sheet lacks {n}");
+        }
+    }
+
+    #[test]
+    fn every_game_has_a_painted_icon() {
+        for g in [
+            "flappy", "paper", "hotel", "snake", "merge", "fruit", "stack", "breakout", "jumper",
+            "memory", "crossy", "helix", "blocks", "mathpop", "count", "spell",
+        ] {
+            assert!(has_icon(g), "no icon for {g}");
+        }
+        for n in [
+            "p_panel",
+            "p_btn_green",
+            "p_btn_orange",
+            "p_btn_blue",
+            "p_ribbon",
+            "p_round",
+            "p_coin",
+            "p_star",
+            "p_medal",
+        ] {
+            assert!(names().iter().any(|h| h == n), "ui sheet lacks {n}");
         }
     }
 

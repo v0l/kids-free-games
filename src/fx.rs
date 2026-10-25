@@ -416,7 +416,7 @@ pub fn chip(view: &View, side: Side, label: &str, value: &str, bump: f32) -> Rec
             x + lw / 2.0,
             r.y + r.h / 2.0 + 1.0,
             CHIP_LABEL,
-            crate::ui::BODY,
+            Color::new(1.0, 1.0, 1.0, 0.75),
         );
         x += lw + 10.0;
     }
@@ -438,9 +438,9 @@ pub fn big_score(view: &View, value: &str, y: f32, bump: f32) {
         value,
         view.w / 2.0,
         y,
-        76.0 * k,
+        88.0 * k,
         WHITE,
-        Color::from_rgba(120, 70, 30, 255),
+        Color::from_rgba(50, 20, 70, 255),
     );
 }
 

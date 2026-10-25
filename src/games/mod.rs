@@ -34,6 +34,7 @@ impl Kind {
 }
 
 pub struct Entry {
+    pub icon_key: &'static str,
     pub name: &'static str,
     pub kind: Kind,
     pub like: &'static str,
@@ -45,6 +46,7 @@ pub struct Entry {
 pub fn all() -> Vec<Entry> {
     vec![
         Entry {
+            icon_key: "flappy",
             name: "Flappy Bird",
             kind: Kind::Arcade,
             like: "Flappy Bird",
@@ -53,6 +55,7 @@ pub fn all() -> Vec<Entry> {
             icon: flappy::icon,
         },
         Entry {
+            icon_key: "paper",
             name: "Paper Land",
             kind: Kind::Arcade,
             like: "Paper.io 2",
@@ -61,6 +64,7 @@ pub fn all() -> Vec<Entry> {
             icon: paper::icon,
         },
         Entry {
+            icon_key: "hotel",
             name: "Hotel Hop",
             kind: Kind::Arcade,
             like: "Hotel Empire, Doorman Story",
@@ -69,6 +73,7 @@ pub fn all() -> Vec<Entry> {
             icon: hotel::icon,
         },
         Entry {
+            icon_key: "snake",
             name: "Snake",
             kind: Kind::Arcade,
             like: "Snake.io, Slither.io",
@@ -77,6 +82,7 @@ pub fn all() -> Vec<Entry> {
             icon: snake::icon,
         },
         Entry {
+            icon_key: "merge",
             name: "2048",
             kind: Kind::Arcade,
             like: "2048",
@@ -85,6 +91,7 @@ pub fn all() -> Vec<Entry> {
             icon: merge::icon,
         },
         Entry {
+            icon_key: "fruit",
             name: "Fruit Slice",
             kind: Kind::Arcade,
             like: "Fruit Ninja",
@@ -93,6 +100,7 @@ pub fn all() -> Vec<Entry> {
             icon: fruit::icon,
         },
         Entry {
+            icon_key: "stack",
             name: "Stack Tower",
             kind: Kind::Arcade,
             like: "Stack",
@@ -101,6 +109,7 @@ pub fn all() -> Vec<Entry> {
             icon: stack::icon,
         },
         Entry {
+            icon_key: "breakout",
             name: "Brick Breaker",
             kind: Kind::Arcade,
             like: "Bricks Breaker Quest",
@@ -109,6 +118,7 @@ pub fn all() -> Vec<Entry> {
             icon: breakout::icon,
         },
         Entry {
+            icon_key: "jumper",
             name: "Sky Jumper",
             kind: Kind::Arcade,
             like: "Doodle Jump",
@@ -117,6 +127,7 @@ pub fn all() -> Vec<Entry> {
             icon: jumper::icon,
         },
         Entry {
+            icon_key: "memory",
             name: "Memory Match",
             kind: Kind::Arcade,
             like: "Memory card games",
@@ -125,6 +136,7 @@ pub fn all() -> Vec<Entry> {
             icon: memory::icon,
         },
         Entry {
+            icon_key: "crossy",
             name: "Road Hopper",
             kind: Kind::Arcade,
             like: "Crossy Road",
@@ -133,6 +145,7 @@ pub fn all() -> Vec<Entry> {
             icon: crossy::icon,
         },
         Entry {
+            icon_key: "helix",
             name: "Helix Drop",
             kind: Kind::Arcade,
             like: "Helix Jump",
@@ -141,6 +154,7 @@ pub fn all() -> Vec<Entry> {
             icon: helix::icon,
         },
         Entry {
+            icon_key: "blocks",
             name: "Block Drop",
             kind: Kind::Arcade,
             like: "Tetris",
@@ -149,6 +163,7 @@ pub fn all() -> Vec<Entry> {
             icon: blocks::icon,
         },
         Entry {
+            icon_key: "mathpop",
             name: "Math Pop",
             kind: Kind::Learn,
             like: "Math games for kids",
@@ -157,6 +172,7 @@ pub fn all() -> Vec<Entry> {
             icon: mathpop::icon,
         },
         Entry {
+            icon_key: "count",
             name: "Count It",
             kind: Kind::Learn,
             like: "Counting games for kids",
@@ -165,6 +181,7 @@ pub fn all() -> Vec<Entry> {
             icon: count::icon,
         },
         Entry {
+            icon_key: "spell",
             name: "Spell It",
             kind: Kind::Learn,
             like: "Spelling games",

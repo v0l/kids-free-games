@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 fontdue = "0.9"
+image = { version = "0.24", default-features = false, features = ["jpeg", "png"] }
 lewton = "0.10"
 macroquad = { version = "0.4", features = ["audio"] }
 [target.'cfg(target_os = "ios")'.dependencies]
