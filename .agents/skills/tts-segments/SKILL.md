@@ -8,12 +8,20 @@ description: >
 
 # TTS segments
 
-Every voice line in the games is one voice: **Harper** (agentbench, female American).
-Don't mix voices or bring in stock voice packs.
+Every voice line in the games is one voice: Maya1 with this exact description. Don't mix voices
+or bring in stock voice packs.
 
-## Generate
+```
+Female voice in her 20s with an American accent, a children's TV presenter, warm and friendly,
+bright and enthusiastic, smiling as she speaks, clear diction, lively pacing.
+```
 
-The shared `agentbench-tts` skill (`~/.agents/skills/agentbench-tts`) covers the API, voices,
+Render with `maya.py` from the shared `agentbench-tts` skill on spark (see that skill). No
+emotion tags: the user found them over the top.
+
+## Generate (fallback)
+
+Use Harper through Kokoro only for quick drafts. The shared `agentbench-tts` skill (`~/.agents/skills/agentbench-tts`) covers the API, voices,
 checking and expression. This repo's copy of its script defaults to writing into `sound/`.
 `scripts/tts.py` calls `POST $AGENTBENCH_URL/v1/audio/speech` (Kokoro on the agentbench host,
 needs `AGENTBENCH_TOKEN`) and writes mono Ogg files into `sound/`:
