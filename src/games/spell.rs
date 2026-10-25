@@ -2,6 +2,7 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::learn::{tall, ui_scale, PRAISE};
+use crate::profile;
 use crate::sfx::{self, Sfx};
 use macroquad::prelude::*;
 
@@ -9,43 +10,85 @@ mod art {
     crate::sprites!("spell");
 }
 
-pub const ROUND: usize = 8;
+pub const KEY: &str = "spell";
+pub const QUESTIONS: usize = 5;
+pub const DOWN_SLIPS: u32 = 3;
 const WIN_TIME: f32 = 1.6;
 const SLIDE_TIME: f32 = 0.22;
 const MIN_TILE: f32 = 96.0;
+const GOLD: Color = Color::new(1.0, 0.82, 0.24, 1.0);
 
 pub type Picture = fn(&Pen);
 
 macro_rules! words {
     ($($w:ident),* $(,)?) => {
-        pub const WORDS: [(&str, Picture); 30] = [
+        pub const WORDS: [(&str, Picture); 63] = [
             $((stringify!($w), |p: &Pen| draw_picture(stringify!($w), p)),)*
         ];
     };
 }
 
 words!(
-    cat, dog, sun, bus, car, hat, cup, egg, bee, pig, fish, tree, cake, star, ball, duck, frog,
-    moon, boat, kite, house, apple, heart, train, cloud, snail, flower, rocket, banana, rainbow,
+    cat, dog, sun, bus, car, hat, cup, egg, bee, pig, cow, fox, owl, hen, key, bed, fish, tree,
+    cake, star, ball, duck, frog, moon, boat, kite, bear, bird, lion, shoe, drum, bell, house,
+    apple, heart, train, cloud, snail, horse, mouse, zebra, tiger, clock, chair, lemon, robot,
+    whale, plane, flower, rocket, banana, rainbow, monkey, rabbit, orange, turtle, spider, guitar,
+    castle, pencil, penguin, giraffe, dolphin,
 );
 
-pub fn band(word: &str) -> usize {
-    match word.len() {
-        0..=3 => 0,
-        4 => 1,
-        _ => 2,
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Guide {
+    Always,
+    Idle(f32),
+    Off,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Level {
+    pub name: &'static str,
+    pub min_len: usize,
+    pub max_len: usize,
+    pub decoys: usize,
+    pub hints: u32,
+    pub guide: Guide,
+}
+
+const fn lv(
+    name: &'static str,
+    min_len: usize,
+    max_len: usize,
+    decoys: usize,
+    hints: u32,
+    guide: Guide,
+) -> Level {
+    Level {
+        name,
+        min_len,
+        max_len,
+        decoys,
+        hints,
+        guide,
     }
 }
 
-pub fn decoys_for(band: usize) -> usize {
-    band.min(2)
-}
+pub const LEVELS: [Level; 9] = [
+    lv("3 letters", 3, 3, 0, 0, Guide::Always),
+    lv("Tricky 3s", 3, 3, 2, 3, Guide::Idle(5.0)),
+    lv("4 letters", 4, 4, 1, 3, Guide::Off),
+    lv("Tricky 4s", 4, 4, 3, 3, Guide::Off),
+    lv("5 letters", 5, 5, 2, 2, Guide::Off),
+    lv("Tricky 5s", 5, 5, 4, 2, Guide::Off),
+    lv("6 letters", 6, 6, 3, 2, Guide::Off),
+    lv("Tricky 6s", 6, 6, 4, 1, Guide::Off),
+    lv("Big words", 5, 7, 4, 1, Guide::Off),
+];
 
-pub fn words_in(band_index: usize) -> Vec<&'static str> {
+pub fn words_in(level: usize) -> Vec<&'static str> {
+    let l = LEVELS[level.min(LEVELS.len() - 1)];
     WORDS
         .iter()
         .map(|(w, _)| *w)
-        .filter(|w| band(w) == band_index)
+        .filter(|w| (l.min_len..=l.max_len).contains(&w.len()))
         .collect()
 }
 
@@ -70,14 +113,27 @@ pub fn make_tiles(word: &str, decoys: usize) -> Vec<char> {
     tiles
 }
 
-pub fn round_words() -> Vec<&'static str> {
-    let mut out = vec![];
-    for (band_index, take) in [(0, 3), (1, 3), (2, 2)] {
-        let mut pool = words_in(band_index);
-        shuffle(&mut pool);
-        out.extend(pool.into_iter().take(take));
+pub fn level_words(level: usize, avoid: &[&str]) -> Vec<&'static str> {
+    let mut pool = words_in(level);
+    let fresh: Vec<&'static str> = pool
+        .iter()
+        .copied()
+        .filter(|w| !avoid.contains(w))
+        .collect();
+    if fresh.len() >= QUESTIONS {
+        pool = fresh;
     }
-    out
+    shuffle(&mut pool);
+    pool.truncate(QUESTIONS);
+    pool
+}
+
+pub fn stars_for(imperfect: u32) -> u8 {
+    match imperfect {
+        0..=1 => 3,
+        2..=3 => 2,
+        _ => 1,
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -99,8 +155,8 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new(word: &str) -> Self {
-        Self::with_tiles(word, make_tiles(word, decoys_for(band(word))))
+    pub fn new(word: &str, decoys: usize) -> Self {
+        Self::with_tiles(word, make_tiles(word, decoys))
     }
 
     pub fn with_tiles(word: &str, tiles: Vec<char>) -> Self {
@@ -157,20 +213,38 @@ impl Board {
 pub enum Phase {
     Playing,
     Won(f32),
-    Finished(f32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Screen {
+    Play,
+    Levels,
+    Done(f32),
+    Final(f32),
 }
 
 pub struct Spell {
+    pub level: usize,
     pub deck: Vec<&'static str>,
     pub index: usize,
     pub board: Board,
     pub results: Vec<bool>,
     pub phase: Phase,
+    pub screen: Screen,
     pub hint_on: Option<usize>,
+    pub hints_left: u32,
+    pub slips: u32,
+    pub slip_run: u32,
+    pub finished: Option<u8>,
+    pub rank: Option<usize>,
+    pub teach: bool,
+    pub idle: f32,
+    recent: Vec<&'static str>,
     wobble: Vec<f32>,
     pop: Vec<f32>,
     slide: Vec<f32>,
     held: Option<(usize, Vec2)>,
+    press: f32,
     t: f32,
     fx: Particles,
     pops: Popups,
@@ -186,23 +260,54 @@ impl Default for Spell {
 
 impl Spell {
     pub fn new() -> Self {
-        Self::with_deck(round_words())
+        let teach = profile::get(KEY, "played") == 0;
+        let level = (profile::level(KEY) as usize)
+            .min(profile::unlocked(KEY) as usize)
+            .min(LEVELS.len() - 1);
+        let mut deck = level_words(level, &[]);
+        if teach && level == 0 {
+            deck.retain(|w| *w != "cat");
+            deck.insert(0, "cat");
+            deck.truncate(QUESTIONS);
+        }
+        let mut g = Self::build(level, deck);
+        g.teach = teach;
+        g
     }
 
     pub fn with_deck(deck: Vec<&'static str>) -> Self {
-        let board = Board::new(deck[0]);
+        Self::build(1, deck)
+    }
+
+    pub fn with_level_deck(level: usize, deck: Vec<&'static str>) -> Self {
+        Self::build(level, deck)
+    }
+
+    fn build(level: usize, deck: Vec<&'static str>) -> Self {
+        let board = Board::new(deck[0], LEVELS[level].decoys);
         let n = board.tiles.len();
         Self {
+            level,
+            recent: deck.clone(),
             deck,
             index: 0,
             board,
             results: vec![],
             phase: Phase::Playing,
+            screen: Screen::Play,
             hint_on: None,
+            hints_left: LEVELS[level].hints,
+            slips: 0,
+            slip_run: 0,
+            finished: None,
+            rank: None,
+            teach: false,
+            idle: 0.0,
             wobble: vec![0.0; n],
             pop: vec![0.0; 8],
             slide: vec![1.0; n],
             held: None,
+            press: 0.0,
             t: 0.0,
             fx: Particles::default(),
             pops: Popups::default(),
@@ -219,21 +324,98 @@ impl Spell {
         self.results.iter().filter(|p| **p).count()
     }
 
+    pub fn is_final_level(&self) -> bool {
+        self.level + 1 == LEVELS.len()
+    }
+
+    pub fn start_level(&mut self, level: usize) {
+        self.level = level.min(LEVELS.len() - 1);
+        profile::set_level(KEY, self.level as u32);
+        self.deck = level_words(self.level, &self.recent);
+        self.recent = self.deck.clone();
+        self.index = 0;
+        self.results.clear();
+        self.slips = 0;
+        self.slip_run = 0;
+        self.hints_left = LEVELS[self.level].hints;
+        self.finished = None;
+        self.rank = None;
+        self.screen = Screen::Play;
+        self.load();
+    }
+
     fn load(&mut self) {
-        self.board = Board::new(self.word());
+        self.board = Board::new(self.word(), LEVELS[self.level].decoys);
         let n = self.board.tiles.len();
         self.wobble = vec![0.0; n];
         self.slide = vec![1.0; n];
         self.pop = vec![0.0; self.board.word.len()];
         self.hint_on = None;
         self.held = None;
+        self.idle = 0.0;
         self.phase = Phase::Playing;
         self.picture_bump.kick();
     }
 
-    pub fn advance(&mut self) {
-        if self.index + 1 >= self.deck.len() {
-            self.phase = Phase::Finished(0.0);
+    pub fn glow(&self) -> Option<usize> {
+        if self.phase != Phase::Playing || self.screen != Screen::Play {
+            return None;
+        }
+        if self.hint_on.is_some() {
+            return self.hint_on;
+        }
+        let guided = match LEVELS[self.level].guide {
+            Guide::Always => true,
+            Guide::Idle(after) => self.idle >= after,
+            Guide::Off => false,
+        };
+        if guided || self.board.mistakes >= 2 {
+            self.board.hint()
+        } else {
+            None
+        }
+    }
+
+    pub fn hint_available(&self) -> bool {
+        LEVELS[self.level].guide != Guide::Always && self.hints_left > 0
+    }
+
+    fn complete_level(&mut self) {
+        let stars = stars_for(self.slips);
+        profile::award_stars(KEY, self.level as u32, stars);
+        if !self.is_final_level() {
+            profile::unlock(KEY, self.level as u32 + 1);
+            profile::set_level(KEY, self.level as u32 + 1);
+        } else {
+            let total = profile::total_stars(KEY) as i64;
+            if profile::personal_best(KEY).is_none_or(|b| total > b) {
+                self.rank = profile::submit(KEY, total, profile::Better::Higher);
+            }
+        }
+        self.finished = Some(stars);
+    }
+
+    pub fn advance(&mut self, view: &View) {
+        if self.finished.take().is_some() {
+            self.screen = if self.is_final_level() {
+                Screen::Final(0.0)
+            } else {
+                Screen::Done(0.0)
+            };
+            sfx::play(Sfx::Win);
+            sfx::say(sfx::Say::Congrats);
+            feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
+            self.fx.confetti(view);
+            return;
+        }
+        if self.slip_run >= DOWN_SLIPS && self.level > 0 {
+            self.start_level(self.level - 1);
+            self.pops.add(
+                vec2(view.w / 2.0, view.h * 0.4),
+                format!("Let's practise {}", LEVELS[self.level].name),
+                WHITE,
+                44.0,
+            );
             return;
         }
         self.index += 1;
@@ -241,13 +423,14 @@ impl Spell {
     }
 
     pub fn use_hint(&mut self) {
-        if self.phase != Phase::Playing {
+        if self.phase != Phase::Playing || !self.hint_available() {
             return;
         }
         if let Some(i) = self.board.hint() {
             sfx::play(Sfx::Tick);
             if self.hint_on != Some(i) {
                 self.board.hints += 1;
+                self.hints_left -= 1;
             }
             self.hint_on = Some(i);
         }
@@ -268,6 +451,7 @@ impl Spell {
             Place::Right | Place::Done => {
                 sfx::play_step(Sfx::Pop, slot);
                 self.slide[i] = 0.0;
+                self.idle = 0.0;
                 if slot < self.pop.len() {
                     self.pop[slot] = 1.0;
                 }
@@ -282,6 +466,19 @@ impl Spell {
         if r == Place::Done {
             let perfect = self.board.perfect();
             self.results.push(perfect);
+            if perfect {
+                self.slip_run = 0;
+            } else {
+                self.slips += 1;
+                self.slip_run += 1;
+            }
+            if self.teach {
+                self.teach = false;
+                profile::set(KEY, "played", 1);
+            }
+            if self.index + 1 >= self.deck.len() {
+                self.complete_level();
+            }
             self.phase = Phase::Won(0.0);
             sfx::play(Sfx::Right);
             sfx::say(if perfect {
@@ -307,6 +504,142 @@ impl Spell {
         }
         r
     }
+
+    fn levels_input(&mut self, input: &Input, view: &View) {
+        if !input.pressed {
+            return;
+        }
+        let l = levels_layout(view);
+        if input.tapped_in(l.back) {
+            sfx::play(Sfx::Click);
+            if self.results.len() >= self.deck.len() {
+                self.start_level((self.level + 1).min(LEVELS.len() - 1));
+            }
+            self.screen = Screen::Play;
+            return;
+        }
+        let open = profile::unlocked(KEY) as usize;
+        for (i, tile) in l.tiles.iter().enumerate() {
+            if tile.contains(input.pos) && i <= open {
+                sfx::play(Sfx::Click);
+                self.start_level(i);
+                return;
+            }
+        }
+    }
+
+    fn done_input(&mut self, input: &Input, view: &View, age: f32) {
+        if !input.pressed || age < 0.45 {
+            return;
+        }
+        let l = done_layout(view);
+        if input.tapped_in(l.next) {
+            sfx::play(Sfx::Click);
+            self.start_level(self.level + 1);
+        } else if input.tapped_in(l.again) {
+            sfx::play(Sfx::Click);
+            self.start_level(self.level);
+        } else if input.tapped_in(l.levels) {
+            sfx::play(Sfx::Click);
+            self.screen = Screen::Levels;
+        }
+    }
+}
+
+pub struct LevelsLayout {
+    pub panel: Rect,
+    pub tiles: Vec<Rect>,
+    pub back: Rect,
+}
+
+pub fn levels_layout(view: &View) -> LevelsLayout {
+    let gap = 14.0;
+    let pw = (view.w - 40.0).min(780.0);
+    let tw = (pw - 80.0 - gap * 2.0) / 3.0;
+    let th = ((view.h - 60.0 - 270.0 - gap * 3.0) / 3.0).clamp(80.0, tw * 0.95);
+    let ph = 120.0 + 3.0 * (th + gap) + 150.0;
+    let c = view.center() + vec2(0.0, 20.0);
+    let panel = Rect::new(c.x - pw / 2.0, c.y - ph / 2.0, pw, ph);
+    let tiles = (0..LEVELS.len())
+        .map(|i| {
+            Rect::new(
+                panel.x + 40.0 + (i % 3) as f32 * (tw + gap),
+                panel.y + 120.0 + (i / 3) as f32 * (th + gap),
+                tw,
+                th,
+            )
+        })
+        .collect();
+    let back = Rect::new(c.x - 150.0, panel.bottom() - 100.0, 300.0, 78.0);
+    LevelsLayout { panel, tiles, back }
+}
+
+pub struct DoneLayout {
+    pub panel: Rect,
+    pub next: Rect,
+    pub again: Rect,
+    pub levels: Rect,
+}
+
+pub fn done_layout(view: &View) -> DoneLayout {
+    let pw = 580.0f32.min(view.w - 40.0);
+    let ph = 470.0;
+    let c = view.center() + vec2(0.0, 20.0);
+    let panel = Rect::new(c.x - pw / 2.0, c.y - ph / 2.0, pw, ph);
+    DoneLayout {
+        panel,
+        next: Rect::new(c.x - 170.0, panel.y + 285.0, 340.0, 80.0),
+        again: Rect::new(c.x - 215.0, panel.y + 380.0, 200.0, 60.0),
+        levels: Rect::new(c.x + 15.0, panel.y + 380.0, 200.0, 60.0),
+    }
+}
+
+pub fn levels_button(view: &View) -> Rect {
+    let k = ui_scale(view);
+    let w = 150.0 * k;
+    Rect::new(view.w - 30.0 - w, 18.0, w, 46.0 * k)
+}
+
+fn plural_stars(n: i64) -> String {
+    if n == 1 {
+        "1 star".to_string()
+    } else {
+        format!("{n} stars")
+    }
+}
+
+fn star_row(c: Vec2, r: f32, gap: f32, have: u8, total: u8, pop: f32) {
+    for i in 0..total {
+        let x = c.x + (i as f32 - (total as f32 - 1.0) / 2.0) * gap;
+        let lit = i < have;
+        let k = if lit { pop } else { 1.0 };
+        star(
+            vec2(x, c.y + 2.0),
+            r * 1.08 * k,
+            0.0,
+            Color::new(0.1, 0.05, 0.25, 0.3),
+        );
+        star(
+            vec2(x, c.y),
+            r * k,
+            0.0,
+            if lit {
+                GOLD
+            } else {
+                Color::new(0.75, 0.72, 0.82, 0.8)
+            },
+        );
+    }
+}
+
+fn padlock(c: Vec2, r: f32) {
+    let ink = Color::from_rgba(120, 112, 150, 255);
+    draw_circle_lines(c.x, c.y - r * 0.55, r * 0.5, r * 0.18, ink);
+    round_rect(
+        Rect::new(c.x - r * 0.7, c.y - r * 0.3, r * 1.4, r * 1.0),
+        r * 0.2,
+        ink,
+    );
 }
 
 pub struct Layout {
@@ -319,13 +652,17 @@ pub struct Layout {
 
 pub fn layout(view: &View, letters: usize, tiles: usize) -> Layout {
     let k = ui_scale(view);
-    let top = 84.0 * k;
+    let top = 90.0 * k;
     let tall = tall(view);
     let max_tile = if tall { 200.0 * k } else { 130.0 * k };
     let gap = 14.0 * k;
     let slot_size = ((view.w - 60.0 - gap * (letters as f32 - 1.0)) / letters as f32).min(max_tile);
     let fits = |n: usize| (view.w - 60.0 - gap * (n as f32 - 1.0)) / n as f32 >= MIN_TILE;
-    let mut per_row = if tall { tiles.min(4) } else { tiles };
+    let mut per_row = if tall {
+        tiles.min(if tiles > 6 { 5 } else { 4 })
+    } else {
+        tiles
+    };
     while per_row > 1 && !fits(per_row) {
         per_row -= 1;
     }
@@ -443,35 +780,53 @@ impl Game for Spell {
         for s in &mut self.slide {
             *s = (*s + dt / SLIDE_TIME).min(1.0);
         }
-        let l = layout(view, self.board.word.len(), self.board.tiles.len());
-        match self.phase {
-            Phase::Won(t) => {
-                let t = t + dt;
-                self.phase = Phase::Won(t);
-                if t > WIN_TIME || (t > 0.6 && input.pressed) {
-                    self.advance();
-                    if let Phase::Finished(_) = self.phase {
-                        sfx::play(Sfx::Win);
-                        sfx::say(sfx::Say::Congrats);
-                        feel::impact_tinted(Impact::Large, Color::from_rgba(255, 230, 120, 255));
-                        self.fx.confetti(view);
-                    }
-                }
+        self.press = approach(
+            self.press,
+            if input.down && levels_button(view).contains(input.pos) {
+                1.0
+            } else {
+                0.0
+            },
+            20.0,
+            dt,
+        );
+        match self.screen {
+            Screen::Levels => {
+                self.levels_input(input, view);
                 return;
             }
-            Phase::Finished(t) => {
-                let t = t + dt;
-                self.phase = Phase::Finished(t);
-                if t > 1.0 && input.pressed {
-                    *self = Self::new();
+            Screen::Done(age) => {
+                self.screen = Screen::Done(age + dt);
+                self.done_input(input, view, age);
+                return;
+            }
+            Screen::Final(age) => {
+                self.screen = Screen::Final(age + dt);
+                if input.pressed && age > 0.8 {
+                    self.start_level(self.level);
                     sfx::say(sfx::Say::Go);
                 }
                 return;
             }
-            Phase::Playing => {}
+            Screen::Play => {}
+        }
+        let l = layout(view, self.board.word.len(), self.board.tiles.len());
+        if let Phase::Won(t) = self.phase {
+            let t = t + dt;
+            self.phase = Phase::Won(t);
+            if t > WIN_TIME || (t > 0.6 && input.pressed) {
+                self.advance(view);
+            }
+            return;
+        }
+        self.idle += dt;
+        if input.tapped_in(levels_button(view)) {
+            sfx::play(Sfx::Click);
+            self.screen = Screen::Levels;
+            return;
         }
         if input.pressed {
-            if l.hint.contains(input.pos) {
+            if self.hint_available() && l.hint.contains(input.pos) {
                 self.use_hint();
                 return;
             }
@@ -491,7 +846,7 @@ impl Game for Spell {
                     Rect::new(s.x - s.w * 0.4, s.y - s.h * 0.4, s.w * 1.8, s.h * 1.8)
                         .contains(input.pos)
                 });
-                if moved < 30.0 || near_slot {
+                if moved < TAP_SLOP_MM * input.mm() || near_slot {
                     self.tap_tile(i, &l);
                 } else {
                     self.wobble[i] = 0.5;
@@ -505,9 +860,9 @@ impl Game for Spell {
         let l = layout(view, self.board.word.len(), self.board.tiles.len());
         let k = ui_scale(view);
         set_view_camera(view, self.shake.offset());
-        for i in 0..ROUND.min(self.deck.len()) {
+        for i in 0..self.deck.len() {
             let c = vec2(
-                view.w / 2.0 + (i as f32 - (ROUND as f32 - 1.0) / 2.0) * 44.0 * k,
+                view.w / 2.0 + (i as f32 - (self.deck.len() as f32 - 1.0) / 2.0) * 44.0 * k,
                 l.stars_y,
             );
             let s = if i == self.index && self.results.len() == i {
@@ -544,6 +899,7 @@ impl Game for Spell {
                 t: self.t,
             },
         );
+        let glow = self.glow();
         let won = match self.phase {
             Phase::Won(t) => Some(t),
             _ => None,
@@ -625,7 +981,7 @@ impl Game for Spell {
             }
             let w = self.wobble[i];
             rr.x += (w * 30.0).sin() * w * 14.0;
-            let hinted = self.hint_on == Some(i);
+            let hinted = glow == Some(i);
             if hinted {
                 let g = 8.0 + (self.t * 6.0).sin().abs() * 8.0;
                 round_rect(
@@ -641,27 +997,212 @@ impl Game for Spell {
             };
             tile(rr, self.board.tiles[i].to_ascii_uppercase(), col, 1.0);
         }
-        let h = l.hint;
-        let hp = 1.0
-            + if self.hint_on.is_some() {
-                0.0
-            } else {
-                (self.t * 2.0).sin() * 0.03
-            };
-        let hr = Rect::new(
-            h.center().x - h.w * hp / 2.0,
-            h.center().y - h.h * hp / 2.0,
-            h.w * hp,
-            h.h * hp,
-        );
-        crate::ui::painted_round(hr, "icon_question", 0.0);
+        if self.hint_available() {
+            let h = l.hint;
+            let hp = 1.0
+                + if self.hint_on.is_some() {
+                    0.0
+                } else {
+                    (self.t * 2.0).sin() * 0.03
+                };
+            let hr = Rect::new(
+                h.center().x - h.w * hp / 2.0,
+                h.center().y - h.h * hp / 2.0,
+                h.w * hp,
+                h.h * hp,
+            );
+            crate::ui::painted_round(hr, "icon_question", 0.0);
+            text_outline(
+                &self.hints_left.to_string(),
+                h.x + h.w * 0.9,
+                h.y + h.h * 0.12,
+                h.h * 0.34,
+                WHITE,
+                Color::from_rgba(150, 60, 20, 255),
+            );
+        }
         self.fx.draw();
         self.pops.draw();
+        self.draw_hud(view, &l);
         set_view_camera(view, Vec2::ZERO);
-        if let Phase::Finished(_) = self.phase {
-            let s = format!("{} of {} perfect words", self.stars(), self.deck.len());
-            overlay(view, "You did it!", &[&s, "Tap to spell more"]);
+        match self.screen {
+            Screen::Levels => self.draw_levels(view),
+            Screen::Done(age) => self.draw_done(view, age),
+            Screen::Final(_) => {
+                let total = profile::total_stars(KEY);
+                let line = format!("{total} of {} stars", LEVELS.len() * 3);
+                results(
+                    view,
+                    &crate::ui::Results {
+                        game: KEY,
+                        title: "You did it!",
+                        line: &line,
+                        rank: self.rank,
+                        action: "Play again",
+                        format: plural_stars,
+                    },
+                );
+            }
+            Screen::Play => {}
         }
+    }
+}
+
+impl Spell {
+    fn draw_hud(&self, view: &View, l: &Layout) {
+        let k = ui_scale(view);
+        let label = format!("Level {}", self.level + 1);
+        let tw = text_size(&label, 28.0 * k).width + 44.0 * k;
+        let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0 * k);
+        round_rect(
+            Rect::new(chip.x, chip.y + 4.0, chip.w, chip.h),
+            chip.h / 2.0,
+            Color::new(0.0, 0.0, 0.0, 0.18),
+        );
+        round_rect(chip, chip.h / 2.0, with_alpha(WHITE, 0.94));
+        text_center(
+            &label,
+            chip.center().x,
+            chip.center().y,
+            28.0 * k,
+            Color::from_rgba(150, 60, 30, 255),
+        );
+        crate::ui::painted_button(levels_button(view), "Levels", "blue", self.press, 1.0);
+        if self.teach && self.screen == Screen::Play && self.phase == Phase::Playing {
+            let pulse = 1.0 + (self.t * 4.0).sin() * 0.03;
+            crate::ui::hint(
+                view,
+                "Tap the letters to spell the word!",
+                vec2(view.w / 2.0, l.stars_y + 44.0 * k),
+                pulse,
+            );
+        } else {
+            let goal = format!(
+                "{}: spell {} words",
+                LEVELS[self.level].name,
+                self.deck.len()
+            );
+            text_outline(
+                &goal,
+                view.w / 2.0,
+                l.stars_y + 40.0 * k,
+                26.0 * k,
+                WHITE,
+                Color::from_rgba(120, 60, 40, 255),
+            );
+        }
+    }
+
+    fn draw_levels(&self, view: &View) {
+        let l = levels_layout(view);
+        fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55));
+        crate::ui::painted_panel(l.panel, WHITE);
+        crate::ui::ribbon(
+            view,
+            "Pick a level",
+            vec2(view.w / 2.0, l.panel.y + 8.0),
+            self.t,
+        );
+        let open = profile::unlocked(KEY) as usize;
+        for (i, r) in l.tiles.iter().enumerate() {
+            let locked = i > open;
+            let current = i == self.level;
+            let base = if locked {
+                Color::from_rgba(200, 196, 214, 255)
+            } else if current {
+                Color::from_rgba(255, 214, 90, 255)
+            } else {
+                Color::from_rgba(255, 150, 120, 255)
+            };
+            round_rect(
+                Rect::new(r.x, r.y + 5.0, r.w, r.h),
+                16.0,
+                darker(base, 0.65),
+            );
+            round_rect(*r, 16.0, base);
+            text_outline(
+                &(i + 1).to_string(),
+                r.center().x,
+                r.y + r.h * 0.33,
+                r.h * 0.36,
+                WHITE,
+                with_alpha(darker(base, 0.45), if locked { 0.6 } else { 1.0 }),
+            );
+            if locked {
+                padlock(vec2(r.center().x, r.y + r.h * 0.74), r.h * 0.2);
+            } else {
+                star_row(
+                    vec2(r.center().x, r.y + r.h * 0.76),
+                    r.h * 0.12,
+                    r.h * 0.3,
+                    profile::stars(KEY, i as u32),
+                    3,
+                    1.0,
+                );
+            }
+        }
+        text_center(
+            LEVELS[self.level].name,
+            view.w / 2.0,
+            l.back.y - 26.0,
+            30.0,
+            crate::ui::BODY,
+        );
+        crate::ui::painted_button(l.back, "Back", "green", 0.0, 1.0);
+    }
+
+    fn draw_done(&self, view: &View, age: f32) {
+        let l = done_layout(view);
+        let fade = ease_out_cubic(age / 0.2);
+        fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
+        let s = ease_out_back(age / 0.32).max(0.01);
+        let c = l.panel.center();
+        let p = Rect::new(
+            c.x - l.panel.w * s / 2.0,
+            c.y - l.panel.h * s / 2.0,
+            l.panel.w * s,
+            l.panel.h * s,
+        );
+        crate::ui::painted_panel(p, WHITE);
+        crate::ui::ribbon(view, "Level done!", vec2(c.x, p.y + 8.0 * s), age);
+        let name = format!("{}: {}", self.level + 1, LEVELS[self.level].name);
+        text_center(&name, c.x, p.y + 100.0 * s, 32.0 * s, crate::ui::BODY);
+        let have = stars_for(self.slips);
+        let pop = |i: u8| ease_out_back(((age - 0.25 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
+        for i in 0..3u8 {
+            let x = c.x + (i as f32 - 1.0) * 100.0 * s;
+            let lit = i < have;
+            let k = if lit { pop(i) } else { 1.0 };
+            let r = 46.0 * s * k;
+            star(
+                vec2(x, p.y + 190.0 * s + 3.0),
+                r * 1.05,
+                0.0,
+                Color::new(0.1, 0.05, 0.25, 0.3),
+            );
+            star(
+                vec2(x, p.y + 190.0 * s),
+                r,
+                0.0,
+                if lit {
+                    GOLD
+                } else {
+                    Color::new(0.75, 0.72, 0.82, 0.8)
+                },
+            );
+        }
+        let a = ((age - 0.3) / 0.2).clamp(0.0, 1.0);
+        let pulse = 1.0 + (age * 4.5).sin() * 0.03;
+        let nb = l.next;
+        let nb = Rect::new(
+            nb.center().x - nb.w * pulse / 2.0,
+            nb.center().y - nb.h * pulse / 2.0,
+            nb.w * pulse,
+            nb.h * pulse,
+        );
+        crate::ui::painted_button(nb, "Next level", "green", 0.0, a);
+        crate::ui::painted_button(l.again, "Again", "orange", 0.0, a);
+        crate::ui::painted_button(l.levels, "Levels", "blue", 0.0, a);
     }
 }
 
@@ -703,11 +1244,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn there_are_enough_words_in_every_band() {
-        assert!(WORDS.len() >= 24);
-        assert!(words_in(0).len() >= 6);
-        assert!(words_in(1).len() >= 6);
-        assert!(words_in(2).len() >= 6);
+    fn there_are_enough_words_in_every_level() {
+        for level in 0..LEVELS.len() {
+            assert!(words_in(level).len() >= QUESTIONS * 2, "level {level}");
+        }
         let mut seen: Vec<&str> = WORDS.iter().map(|(w, _)| *w).collect();
         seen.sort();
         seen.dedup();
@@ -734,7 +1274,7 @@ mod tests {
 
     #[test]
     fn finishing_a_word_cheers_aloud() {
-        let mut g = Spell::with_deck(vec!["cat", "dog"]);
+        let mut g = Spell::with_level_deck(0, vec!["cat", "dog"]);
         let l = layout(&View::ipad_landscape(), 3, g.board.tiles.len());
         crate::sfx::take_voice();
         for ch in "cat".chars() {
@@ -749,7 +1289,7 @@ mod tests {
     #[test]
     fn tiles_hold_every_letter_including_repeats() {
         for (w, _) in WORDS {
-            for decoys in 0..3 {
+            for decoys in 0..5 {
                 let tiles = make_tiles(w, decoys);
                 assert_eq!(tiles.len(), w.len() + decoys);
                 for c in w.chars() {
@@ -764,9 +1304,9 @@ mod tests {
     #[test]
     fn decoys_never_share_a_letter_with_the_word() {
         for (w, _) in WORDS {
-            let tiles = make_tiles(w, 2);
+            let tiles = make_tiles(w, 4);
             let extra: Vec<char> = tiles.iter().copied().filter(|c| !w.contains(*c)).collect();
-            assert_eq!(extra.len(), 2, "{w}");
+            assert_eq!(extra.len(), 4, "{w}");
         }
     }
 
@@ -802,29 +1342,52 @@ mod tests {
         assert_eq!(b.hint(), Some(1));
     }
 
-    #[test]
-    fn finishing_a_word_moves_to_the_next() {
-        let deck = vec!["cat", "dog"];
-        let mut g = Spell::with_deck(deck);
-        let l = layout(&View::ipad_landscape(), 3, g.board.tiles.len());
-        for ch in "cat".chars() {
+    fn spell(g: &mut Spell, word: &str, l: &Layout) {
+        for ch in word.chars() {
             let i = (0..g.board.tiles.len())
                 .find(|i| g.board.used[*i].is_none() && g.board.tiles[*i] == ch)
                 .unwrap();
-            g.tap_tile(i, &l);
+            g.tap_tile(i, l);
         }
+    }
+
+    fn slip(g: &mut Spell, l: &Layout) {
+        let first = g.word().chars().next().unwrap();
+        let wrong = (0..g.board.tiles.len())
+            .find(|i| g.board.tiles[*i] != first)
+            .unwrap();
+        g.tap_tile(wrong, l);
+    }
+
+    fn solve_deck(g: &mut Spell, view: &View, perfect: bool) {
+        while g.screen == Screen::Play {
+            let word = g.word();
+            let l = layout(view, word.len(), g.board.tiles.len());
+            if !perfect {
+                slip(g, &l);
+            }
+            spell(g, word, &l);
+            g.advance(view);
+        }
+    }
+
+    #[test]
+    fn finishing_a_word_moves_to_the_next() {
+        crate::save::reset_for_test();
+        let view = View::ipad_landscape();
+        let mut g = Spell::with_level_deck(0, vec!["cat", "dog"]);
+        let l = layout(&view, 3, g.board.tiles.len());
+        spell(&mut g, "cat", &l);
         assert!(matches!(g.phase, Phase::Won(_)));
         assert_eq!(g.stars(), 1);
-        g.advance();
+        g.advance(&view);
         assert_eq!(g.word(), "dog");
         assert_eq!(g.phase, Phase::Playing);
-        g.advance();
-        assert!(matches!(g.phase, Phase::Finished(_)));
     }
 
     #[test]
     fn right_and_wrong_letters_sound_different() {
-        let mut g = Spell::with_deck(vec!["cat"]);
+        let mut g = Spell::with_level_deck(2, vec!["cat"]);
         g.board = Board::with_tiles("cat", vec!['z', 'c', 'a', 't']);
         let l = layout(&View::ipad_landscape(), 3, 4);
         crate::sfx::take_pending();
@@ -836,30 +1399,275 @@ mod tests {
 
     #[test]
     fn hint_costs_the_star() {
-        let mut g = Spell::with_deck(vec!["sun"]);
-        let l = layout(&View::ipad_landscape(), 3, g.board.tiles.len());
+        let mut g = Spell::with_level_deck(2, vec!["duck", "dog"]);
+        let l = layout(&View::ipad_landscape(), 4, g.board.tiles.len());
         g.use_hint();
         g.use_hint();
         assert_eq!(g.board.hints, 1);
-        for ch in "sun".chars() {
-            let i = (0..g.board.tiles.len())
-                .find(|i| g.board.used[*i].is_none() && g.board.tiles[*i] == ch)
-                .unwrap();
-            g.tap_tile(i, &l);
-        }
+        assert_eq!(g.hints_left, LEVELS[2].hints - 1);
+        spell(&mut g, "duck", &l);
         assert_eq!(g.stars(), 0);
     }
 
+    fn fresh(level: usize) -> Spell {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        profile::unlock(KEY, level as u32);
+        profile::set_level(KEY, level as u32);
+        profile::set(KEY, "played", 1);
+        let mut g = Spell::new();
+        g.start_level(level);
+        g
+    }
+
     #[test]
-    fn round_goes_from_short_to_long_words() {
-        for _ in 0..20 {
-            let r = round_words();
-            assert_eq!(r.len(), ROUND);
-            assert!(r.windows(2).all(|w| band(w[0]) <= band(w[1])));
-            let mut u = r.clone();
-            u.sort();
-            u.dedup();
-            assert_eq!(u.len(), ROUND);
+    fn levels_step_through_word_lengths() {
+        let lens: Vec<(usize, usize)> = LEVELS.iter().map(|l| (l.min_len, l.max_len)).collect();
+        assert_eq!(lens[0], (3, 3));
+        assert_eq!(lens[2], (4, 4));
+        assert_eq!(lens[4], (5, 5));
+        assert_eq!(lens[6], (6, 6));
+        assert!(lens[..8].windows(2).all(|w| w[0].0 <= w[1].0));
+        for (level, spec) in LEVELS.iter().enumerate() {
+            for w in words_in(level) {
+                assert!(
+                    (spec.min_len..=LEVELS[level].max_len).contains(&w.len()),
+                    "{w} in level {level}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn decoys_rise_and_hints_shrink_with_level() {
+        assert_eq!(LEVELS[0].decoys, 0);
+        assert!(LEVELS[8].decoys > LEVELS[1].decoys);
+        assert!(LEVELS.windows(2).skip(1).all(|w| w[0].hints >= w[1].hints));
+        assert!(LEVELS[7].hints < LEVELS[2].hints);
+        for (level, spec) in LEVELS.iter().enumerate() {
+            let g = fresh(level);
+            let need = g.word().len() + spec.decoys;
+            assert_eq!(g.board.tiles.len(), need);
+            assert_eq!(g.hints_left, spec.hints);
+        }
+    }
+
+    #[test]
+    fn first_level_shows_the_next_letter_and_has_no_traps() {
+        let g = fresh(0);
+        assert_eq!(g.board.tiles.len(), 3);
+        let i = g.glow().expect("next letter glows");
+        assert_eq!(g.board.tiles[i], g.board.word[0]);
+        assert!(!g.hint_available());
+    }
+
+    #[test]
+    fn later_levels_do_not_glow_until_a_child_is_stuck() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(4);
+        assert_eq!(g.glow(), None);
+        let l = layout(&view, g.board.word.len(), g.board.tiles.len());
+        slip(&mut g, &l);
+        slip(&mut g, &l);
+        assert!(g.glow().is_some());
+    }
+
+    #[test]
+    fn level_two_hints_after_five_idle_seconds() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(1);
+        assert_eq!(g.glow(), None);
+        for _ in 0..320 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+        }
+        assert!(g.glow().is_some());
+    }
+
+    #[test]
+    fn a_new_player_starts_on_cat_with_a_hint_line() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        let g = Spell::new();
+        assert_eq!(g.level, 0);
+        assert_eq!(g.word(), "cat");
+        assert!(g.teach);
+        assert_eq!(g.deck.len(), QUESTIONS);
+    }
+
+    #[test]
+    fn first_success_ends_the_teaching() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        let mut g = Spell::new();
+        let l = layout(&View::ipad_landscape(), 3, g.board.tiles.len());
+        spell(&mut g, "cat", &l);
+        assert!(!g.teach);
+        assert_eq!(profile::get(KEY, "played"), 1);
+        assert!(!Spell::new().teach);
+    }
+
+    #[test]
+    fn a_level_is_five_words_then_stars_and_unlock() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(0);
+        assert_eq!(g.deck.len(), QUESTIONS);
+        solve_deck(&mut g, &view, true);
+        assert!(matches!(g.screen, Screen::Done(_)));
+        assert_eq!(profile::stars(KEY, 0), 3);
+        assert_eq!(profile::unlocked(KEY), 1);
+        assert_eq!(profile::level(KEY), 1);
+    }
+
+    #[test]
+    fn messy_levels_earn_fewer_stars() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(2);
+        for round in 0..QUESTIONS {
+            let word = g.word();
+            let l = layout(&view, word.len(), g.board.tiles.len());
+            if round != 2 {
+                slip(&mut g, &l);
+            }
+            spell(&mut g, word, &l);
+            g.advance(&view);
+        }
+        assert_eq!(profile::stars(KEY, 2), 1);
+        assert_eq!(stars_for(0), 3);
+        assert_eq!(stars_for(1), 3);
+        assert_eq!(stars_for(2), 2);
+        assert_eq!(stars_for(5), 1);
+    }
+
+    #[test]
+    fn a_worse_run_keeps_the_best_stars() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(0);
+        solve_deck(&mut g, &view, true);
+        g.start_level(0);
+        solve_deck(&mut g, &view, false);
+        assert_eq!(profile::stars(KEY, 0), 3);
+    }
+
+    #[test]
+    fn restarting_resumes_at_the_saved_level_for_that_player() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(0);
+        solve_deck(&mut g, &view, true);
+        let again = Spell::new();
+        assert_eq!(again.level, 1);
+        assert_eq!(again.deck.len(), QUESTIONS);
+        crate::profile::create("Leo", 3);
+        let other = Spell::new();
+        assert_eq!(other.level, 0);
+        assert_eq!(profile::unlocked(KEY), 0);
+    }
+
+    #[test]
+    fn resume_never_jumps_past_the_unlocked_level() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        profile::set_level(KEY, 6);
+        assert_eq!(Spell::new().level, 0);
+        profile::unlock(KEY, 3);
+        assert_eq!(Spell::new().level, 3);
+    }
+
+    #[test]
+    fn three_slips_in_a_row_drop_back_a_level() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(3);
+        for _ in 0..DOWN_SLIPS {
+            let word = g.word();
+            let l = layout(&view, word.len(), g.board.tiles.len());
+            slip(&mut g, &l);
+            spell(&mut g, word, &l);
+            g.advance(&view);
+        }
+        assert_eq!(g.level, 2);
+        assert_eq!(g.index, 0);
+        assert_eq!(profile::level(KEY), 2);
+        assert_eq!(profile::unlocked(KEY), 3);
+    }
+
+    #[test]
+    fn a_perfect_word_resets_the_slip_run() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(3);
+        for round in 0..DOWN_SLIPS {
+            let word = g.word();
+            let l = layout(&view, word.len(), g.board.tiles.len());
+            if round != 1 {
+                slip(&mut g, &l);
+            }
+            spell(&mut g, word, &l);
+            g.advance(&view);
+        }
+        assert_eq!(g.level, 3);
+    }
+
+    #[test]
+    fn level_one_never_drops_below_itself() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(0);
+        for _ in 0..4 {
+            let word = g.word();
+            let l = layout(&view, word.len(), g.board.tiles.len());
+            slip(&mut g, &l);
+            spell(&mut g, word, &l);
+            g.advance(&view);
+        }
+        assert_eq!(g.level, 0);
+    }
+
+    #[test]
+    fn a_level_does_not_repeat_the_previous_words() {
+        let mut g = fresh(2);
+        let first = g.deck.clone();
+        g.start_level(2);
+        assert!(g.deck.iter().all(|w| !first.contains(w)));
+    }
+
+    #[test]
+    fn locked_levels_cannot_be_opened() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(0);
+        g.screen = Screen::Levels;
+        let l = levels_layout(&view);
+        g.update(&Input::press_at(l.tiles[5].center()), &view, 0.016);
+        assert_eq!(g.level, 0);
+        assert_eq!(g.screen, Screen::Levels);
+        profile::unlock(KEY, 5);
+        g.update(&Input::press_at(l.tiles[5].center()), &view, 0.016);
+        assert_eq!(g.level, 5);
+        assert_eq!(g.screen, Screen::Play);
+    }
+
+    #[test]
+    fn finishing_the_last_level_submits_total_stars() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(LEVELS.len() - 1);
+        solve_deck(&mut g, &view, true);
+        assert!(matches!(g.screen, Screen::Final(_)));
+        assert_eq!(g.rank, Some(0));
+        assert_eq!(profile::board(KEY)[0].score, 3);
+    }
+
+    #[test]
+    fn level_screens_fit_both_orientations() {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(1080.0, 2400.0),
+        ] {
+            let l = levels_layout(&v);
+            for r in l.tiles.iter().chain([&l.back]) {
+                assert!(r.x >= 0.0 && r.right() <= v.w && r.y >= 0.0 && r.bottom() <= v.h);
+            }
+            assert!(l.back.y > l.tiles.last().unwrap().bottom());
+            let d = done_layout(&v);
+            for r in [d.next, d.again, d.levels] {
+                assert!(r.x >= 0.0 && r.right() <= v.w && r.bottom() <= v.h);
+            }
         }
     }
 

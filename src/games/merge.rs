@@ -1483,10 +1483,14 @@ mod tests {
     fn a_hard_level_ends_when_stuck() {
         let mut g = fresh();
         g.begin(3);
-        g.board = [[0, 4, 8, 16], [16, 4, 8, 4], [4, 8, 16, 8], [8, 16, 4, 16]];
-        assert!(g.play(Dir::Left));
-        assert!(g.over);
-        assert!(!g.rescued);
+        for seed in 0..64 {
+            rand::srand(seed);
+            g.begin(3);
+            g.board = [[0, 4, 8, 16], [16, 4, 8, 32], [4, 8, 16, 8], [8, 16, 4, 16]];
+            assert!(g.play(Dir::Left));
+            assert!(g.over, "seed {seed}");
+            assert!(!g.rescued);
+        }
     }
 
     #[test]
@@ -1568,7 +1572,7 @@ mod tests {
         let v = View::ipad_landscape();
         let mut g = fresh();
         g.begin(3);
-        g.board = [[0, 4, 8, 16], [16, 4, 8, 4], [4, 8, 16, 8], [8, 16, 4, 16]];
+        g.board = [[0, 4, 8, 16], [16, 4, 8, 32], [4, 8, 16, 8], [8, 16, 4, 16]];
         g.score = 100;
         crate::sfx::take_pending();
         assert!(g.play(Dir::Left));

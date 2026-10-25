@@ -164,6 +164,51 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
     i
 }
 
+fn spell_shot(raw: i32, view: &View) -> Option<Box<dyn Game>> {
+    use games::spell::{Screen, Spell};
+    if !(-23..=-20).contains(&raw) {
+        return None;
+    }
+    kids_games::profile::create("Mia", 2);
+    let key = games::spell::KEY;
+    kids_games::profile::set(key, "played", 1);
+    kids_games::profile::unlock(key, 5);
+    for (level, stars) in [(0, 3), (1, 3), (2, 2), (3, 1), (4, 3)] {
+        kids_games::profile::award_stars(key, level, stars);
+    }
+    kids_games::profile::set_level(key, 5);
+    let mut g = Spell::new();
+    match raw {
+        -20 => g.screen = Screen::Levels,
+        -21 => {
+            g.start_level(4);
+            g.screen = Screen::Done(1.0);
+            g.finished = None;
+        }
+        -22 => {
+            g.start_level(5);
+        }
+        _ => {
+            kids_games::profile::unlock(key, 8);
+            kids_games::profile::award_stars(key, 8, 3);
+            kids_games::profile::submit(key, 3, kids_games::profile::Better::Higher);
+            kids_games::profile::create("Leo", 5);
+            kids_games::profile::submit(key, 1, kids_games::profile::Better::Higher);
+            if let Some(mia) = kids_games::profile::list().first() {
+                kids_games::profile::select(&mia.id);
+            }
+            g.start_level(8);
+            g.rank = Some(0);
+            g.screen = Screen::Final(1.0);
+        }
+    }
+    for _ in 0..30 {
+        g.update(&Input::default(), view, 1.0 / 60.0);
+        tick_overlay(1.0 / 60.0);
+    }
+    Some(Box::new(g))
+}
+
 fn memory_clear(m: &mut Memory) {
     for id in 0..10u8 {
         let spots: Vec<usize> = (0..m.cards.len()).filter(|i| m.cards[*i].0 == id).collect();
@@ -399,6 +444,8 @@ async fn main() {
     let view = begin_frame_safe(fake_inset());
     let all = games::all();
     let memory = memory_shot(which, &view);
+    let spell = spell_shot(which, &view);
+    let has_spell = spell.is_some();
     let helix_mode = match which {
         212 => Some("dead"),
         312 => Some("won"),
@@ -447,7 +494,7 @@ async fn main() {
     };
     let memory_game: Option<Box<dyn Game>> = memory.map(|m| Box::new(m) as Box<dyn Game>);
     let has_memory = memory_game.is_some();
-    let mut game = special.or(memory_game).or_else(|| {
+    let mut game = special.or(spell).or(memory_game).or_else(|| {
         (which > 0).then(|| {
             let e = &all[which as usize - 1];
             set_accent(e.color);
@@ -504,7 +551,7 @@ async fn main() {
             g
         })
     });
-    if which != -3 && which != -4 && which != -5 && which != -6 && !has_memory {
+    if which != -3 && which != -4 && which != -5 && which != -6 && !has_memory && !has_spell {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];
