@@ -350,6 +350,38 @@ fn fake_inset() -> Insets {
     Insets::default()
 }
 
+fn helix_scene(mode: &str, view: &View) -> Box<dyn Game> {
+    use kids_games::games::helix::*;
+    let mut g = Helix::new();
+    let k = segment_at(ball_angle(), g.angle);
+    match mode {
+        "dead" => {
+            g.floors[0].segs[k] = Seg::Danger;
+            g.state = State::Playing;
+            g.y = Helix::floor_y(0) - BALL_R - 5.0;
+            g.vy = 400.0;
+            g.score = 24;
+        }
+        "won" => {
+            let n = g.floors.len();
+            g.floors[n - 1].segs[k] = Seg::Gap;
+            g.passed = n - 1;
+            g.score = 60;
+            g.bounces = 6;
+            g.state = State::Playing;
+            g.y = Helix::floor_y(n - 1) - BALL_R - 5.0;
+            g.vy = 400.0;
+        }
+        "select" => g.open_select(),
+        _ => {}
+    }
+    for _ in 0..150 {
+        g.update(&Input::default(), view, 1.0 / 60.0);
+        tick_overlay(1.0 / 60.0);
+    }
+    Box::new(g)
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn pick() -> i32 {
     std::env::var("SHOT")
@@ -367,8 +399,24 @@ async fn main() {
     let view = begin_frame_safe(fake_inset());
     let all = games::all();
     let memory = memory_shot(which, &view);
+    let helix_mode = match which {
+        212 => Some("dead"),
+        312 => Some("won"),
+        412 => Some("select"),
+        512 => Some("start"),
+        _ => None,
+    };
+    let which = if helix_mode.is_some() { 12 } else { which };
     let idle = which > 100;
     let which = if idle { which - 100 } else { which };
+    if helix_mode.is_some() {
+        kids_games::profile::create("Mia", 2);
+        for l in 1..=7 {
+            kids_games::profile::unlock("helix", l);
+            kids_games::profile::award_stars("helix", l, (l % 3 + 1) as u8);
+        }
+        kids_games::profile::set_level("helix", 7);
+    }
     if which == 7 {
         kids_games::profile::unlock("stack", 4);
         kids_games::profile::set_level("stack", 4);
@@ -418,6 +466,9 @@ async fn main() {
                 kids_games::profile::set(e.icon_key, "runs", 5);
             }
             let mut g = (e.make)();
+            if let Some(mode) = helix_mode {
+                return helix_scene(mode, &view);
+            }
             let frames = if idle && e.name == "Fruit Slice" {
                 kids_games::profile::create("Mia", 2);
                 kids_games::profile::set_level("fruit", 12);
