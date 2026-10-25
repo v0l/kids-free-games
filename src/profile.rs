@@ -144,6 +144,51 @@ pub fn adopt(id: &str, name: &str, avatar: usize) -> Option<Profile> {
     load(id)
 }
 
+pub fn reassign(old: &str) -> Option<String> {
+    load(old)?;
+    let new = uuid_v4(entropy());
+    for (from, to) in [
+        (format!("p.{old}."), format!("p.{new}.")),
+        (format!("net.{old}."), format!("net.{new}.")),
+    ] {
+        for k in save::keys_with_prefix(&from) {
+            if let Some(v) = save::get_str(&k) {
+                save::set_str(&format!("{to}{}", &k[from.len()..]), &v);
+            }
+        }
+        save::remove_prefix(&from);
+    }
+    let ids: Vec<String> = list_ids()
+        .into_iter()
+        .map(|id| if id == old { new.clone() } else { id })
+        .collect();
+    save::set_str("profiles", &ids.join(","));
+    for k in save::keys_with_prefix("board.") {
+        let mut b = parse_board(&save::get_str(&k).unwrap_or_default());
+        let mut hit = false;
+        for e in b.iter_mut().filter(|e| e.player == old) {
+            e.player = new.clone();
+            hit = true;
+        }
+        if hit {
+            save::set_str(&k, &format_board(&b));
+        }
+    }
+    if save::get_str("current").as_deref() == Some(old) {
+        select(&new);
+    }
+    Some(new)
+}
+
+fn list_ids() -> Vec<String> {
+    save::get_str("profiles")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|id| is_uuid(id))
+        .map(String::from)
+        .collect()
+}
+
 pub fn rename(id: &str, name: &str, avatar: usize) {
     let name = clean_name(name);
     if !name.is_empty() {

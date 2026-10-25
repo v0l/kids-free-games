@@ -513,7 +513,7 @@ fn renaming_a_player_updates_the_server() {
 }
 
 #[test]
-fn a_revoked_token_is_dropped_and_the_player_re_registers_or_blocks() {
+fn a_revoked_token_moves_the_player_to_a_new_id_and_keeps_their_progress() {
     let server = FakeServer::default();
     let mut a = Device::new(&server);
     let id = mia(&mut a);
@@ -521,8 +521,42 @@ fn a_revoked_token_is_dropped_and_the_player_re_registers_or_blocks() {
     server.0.borrow_mut().tokens.clear();
     a.play(|| crate::profile::unlock("snake", 2));
     a.step(60, true);
-    assert!(!a.run(|n| n.is_online()));
-    assert!(server.0.borrow().players.contains_key(&id));
+    assert!(a.run(|n| n.is_online()));
+    let now = a.play(|| crate::profile::current().unwrap());
+    assert_ne!(now.id, id);
+    assert_eq!(now.name, "Mia");
+    assert_eq!(a.play(crate::profile::list).len(), 1);
+    assert_eq!(a.play(|| crate::profile::unlocked("snake")), 2);
+    let saved = server.0.borrow().saves[&now.id].1.clone();
+    assert!(saved.contains("snake.unlocked=2"), "{saved}");
+}
+
+#[test]
+fn a_player_id_the_server_already_has_registers_under_a_new_id() {
+    let server = FakeServer::default();
+    let mut a = Device::new(&server);
+    let id = mia(&mut a);
+    a.play(|| {
+        crate::profile::unlock("snake", 3);
+        crate::profile::submit("snake", 40, crate::profile::Better::Higher);
+    });
+    server
+        .0
+        .borrow_mut()
+        .players
+        .insert(id.clone(), ("Someone".into(), 1));
+    a.step(30, true);
+    assert!(a.run(|n| n.is_online()));
+    let now = a.play(|| crate::profile::current().unwrap());
+    assert_ne!(now.id, id);
+    assert_eq!((now.name.as_str(), now.avatar), ("Mia", 2));
+    assert_eq!(a.play(|| crate::profile::unlocked("snake")), 3);
+    assert_eq!(a.play(|| crate::profile::board("snake"))[0].player, now.id);
+    assert_eq!(server.0.borrow().players[&id].0, "Someone");
+    assert_eq!(
+        server.0.borrow().scores[&("snake".to_string(), now.id.clone())],
+        40
+    );
 }
 
 #[test]

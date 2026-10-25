@@ -72,6 +72,13 @@ impl Tracker {
             .join(";")
     }
 
+    pub fn reassign(&mut self, old: &str, new: &str) {
+        for s in self.sessions.iter_mut().filter(|s| s.player == old) {
+            s.player = new.to_string();
+            self.dirty = true;
+        }
+    }
+
     pub fn take_dirty(&mut self) -> bool {
         std::mem::take(&mut self.dirty)
     }

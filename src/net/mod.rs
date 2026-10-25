@@ -547,6 +547,23 @@ impl Net {
         self.dirty_since.remove(player);
     }
 
+    fn move_to_new_id(&mut self, old: &str) {
+        save::remove_prefix(&format!("net.{old}."));
+        let Some(new) = crate::profile::reassign(old) else {
+            self.blocked.insert(old.to_string());
+            return;
+        };
+        let moved: Vec<_> = outbox()
+            .into_iter()
+            .map(|(p, g, sc)| (if p == old { new.clone() } else { p }, g, sc))
+            .collect();
+        set_outbox(&moved);
+        self.tracker.reassign(old, &new);
+        self.persist_playtime();
+        self.pulled.remove(old);
+        self.dirty_since.remove(old);
+    }
+
     fn finish(&mut self, job: Job, resp: HttpResponse) {
         let body = parse(&resp);
         let status = resp.status;
@@ -559,6 +576,7 @@ impl Net {
                     }
                     self.succeeded();
                 }
+                409 if body["error"] == "id_taken" => self.move_to_new_id(&p),
                 s if Self::retryable(s) => self.back_off(),
                 _ => {
                     self.blocked.insert(p);
