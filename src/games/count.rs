@@ -9,7 +9,8 @@ mod art {
     crate::sprites!("count");
 }
 
-pub const RANGES: [(i32, i32); 5] = [(1, 5), (3, 8), (5, 10), (8, 15), (11, 20)];
+pub const GAME: &str = "count";
+pub const RANGES: [(i32, i32); 6] = [(1, 3), (1, 5), (3, 8), (5, 10), (8, 15), (11, 20)];
 pub const MAX_COUNT: i32 = 20;
 const TICK_BOUNCE: f32 = 0.45;
 
@@ -65,11 +66,23 @@ pub fn level_name(level: usize) -> String {
 }
 
 pub fn choice_count(level: usize) -> usize {
-    if level < 2 {
+    if level < 3 {
         3
     } else {
         4
     }
+}
+
+pub fn star_rating(misses: u32) -> u8 {
+    match misses {
+        0 => 3,
+        1 => 2,
+        _ => 1,
+    }
+}
+
+fn stars_score(s: i64) -> String {
+    format!("{s} stars")
 }
 
 #[derive(Clone, Debug)]
@@ -89,7 +102,7 @@ impl Question {
     pub fn with_count(level: usize, count: i32) -> Self {
         let pool: Vec<i32> = (1..=4)
             .flat_map(|d| [count - d, count + d])
-            .filter(|v| (1..=MAX_COUNT).contains(v))
+            .filter(|v| (1..=MAX_COUNT.min(RANGES[level].1 + 2)).contains(v))
             .collect();
         Self {
             thing: Thing::ALL[rand::gen_range(0, Thing::ALL.len())],
@@ -162,8 +175,46 @@ pub fn prompt_size(view: &View) -> f32 {
     62.0 * ui_scale(view)
 }
 
+pub fn goal_row_y(view: &View) -> f32 {
+    hud_bottom(view) + 34.0
+}
+
 pub fn prompt_y(view: &View) -> f32 {
-    hud_bottom(view) + prompt_size(view) * 0.7
+    hud_bottom(view) + 64.0 + prompt_size(view) * 0.7
+}
+
+pub fn levels_button(view: &View) -> Rect {
+    let k = ui_scale(view);
+    let w = 170.0 * k;
+    let h = 46.0 * k;
+    Rect::new(view.w - 30.0 - w, goal_row_y(view) - h / 2.0, w, h)
+}
+
+pub fn level_tiles(view: &View) -> Vec<Rect> {
+    let n = RANGES.len();
+    let cols = if tall(view) { 2 } else { 3 };
+    let rows = n.div_ceil(cols);
+    let gap = 24.0;
+    let top = 150.0;
+    let bottom = view.h - 190.0;
+    let w = ((view.w - 80.0 - gap * (cols as f32 - 1.0)) / cols as f32).min(300.0);
+    let h = ((bottom - top - gap * (rows as f32 - 1.0)) / rows as f32).min(230.0);
+    let left = (view.w - w * cols as f32 - gap * (cols as f32 - 1.0)) / 2.0;
+    let up = top + (bottom - top - h * rows as f32 - gap * (rows as f32 - 1.0)) / 2.0;
+    (0..n)
+        .map(|i| {
+            Rect::new(
+                left + (i % cols) as f32 * (w + gap),
+                up + (i / cols) as f32 * (h + gap),
+                w,
+                h,
+            )
+        })
+        .collect()
+}
+
+pub fn play_button(view: &View) -> Rect {
+    Rect::new(view.w / 2.0 - 170.0, view.h - 150.0, 340.0, 100.0)
 }
 
 pub fn button_height(view: &View) -> f32 {
@@ -186,7 +237,24 @@ pub fn button_rects(view: &View, n: usize) -> Vec<Rect> {
         .collect()
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Mode {
+    Play,
+    Levels,
+    Report(f32),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Report {
+    Level { level: usize, stars: u8 },
+    Cleared { rank: Option<usize> },
+}
+
 pub struct Count {
+    pub mode: Mode,
+    pub misses: u32,
+    pub first_time: bool,
+    pub report: Option<Report>,
     pub ladder: Ladder,
     pub question: Question,
     pub attempt: Attempt,
@@ -205,9 +273,20 @@ pub struct Count {
 
 impl Count {
     pub fn new() -> Self {
-        let question = Question::fresh(0, None);
+        let top = RANGES.len() - 1;
+        let unlocked = (crate::profile::unlocked(GAME) as usize).min(top);
+        let level = (crate::profile::level(GAME) as usize).min(unlocked);
+        let cleared = crate::profile::get(GAME, "cleared") > 0;
+        let mut ladder = Ladder::new(RANGES.len());
+        ladder.level = level;
+        ladder.stars = if cleared { RANGES.len() } else { unlocked };
+        let question = Question::fresh(level, None);
         let mut g = Self {
-            ladder: Ladder::new(RANGES.len()),
+            mode: Mode::Play,
+            misses: 0,
+            first_time: crate::profile::get(GAME, "played") == 0,
+            report: None,
+            ladder,
             attempt: Attempt::new(0),
             ticks: vec![],
             bounce: vec![],
@@ -224,6 +303,61 @@ impl Count {
         };
         g.load();
         g
+    }
+
+    pub fn start_level(&mut self, level: usize) {
+        self.ladder.level = level.min(RANGES.len() - 1);
+        self.ladder.streak = 0;
+        self.ladder.slips = 0;
+        self.misses = 0;
+        crate::profile::set_level(GAME, self.ladder.level as u32);
+        self.mode = Mode::Play;
+        self.next_question();
+    }
+
+    pub fn unlocked_level(&self) -> usize {
+        (crate::profile::unlocked(GAME) as usize).min(RANGES.len() - 1)
+    }
+
+    fn finish_level(&mut self, level: usize) -> u8 {
+        let stars = star_rating(self.misses);
+        crate::profile::award_stars(GAME, level as u32, stars);
+        self.misses = 0;
+        stars
+    }
+
+    fn record(&mut self, step: Step) {
+        if self.attempt.wrong > 0 {
+            self.misses += 1;
+        }
+        self.first_time = false;
+        crate::profile::set(GAME, "played", 1);
+        match step {
+            Step::Up => {
+                let level = self.ladder.level - 1;
+                let stars = self.finish_level(level);
+                crate::profile::unlock(GAME, self.ladder.level as u32);
+                crate::profile::set_level(GAME, self.ladder.level as u32);
+                self.report = Some(Report::Level { level, stars });
+            }
+            Step::Cleared => {
+                let level = self.ladder.level;
+                let stars = self.finish_level(level);
+                if crate::profile::get(GAME, "cleared") == 0 {
+                    crate::profile::set(GAME, "cleared", 1);
+                    let total = crate::profile::total_stars(GAME) as i64;
+                    let rank = crate::profile::submit(GAME, total, crate::profile::Better::Higher);
+                    self.report = Some(Report::Cleared { rank });
+                } else {
+                    self.report = Some(Report::Level { level, stars });
+                }
+            }
+            Step::Down => {
+                self.misses = 0;
+                crate::profile::set_level(GAME, self.ladder.level as u32);
+            }
+            Step::Same => {}
+        }
     }
 
     fn load(&mut self) {
@@ -263,6 +397,9 @@ impl Count {
         }
         let correct = self.question.options[slot] == self.question.count;
         let result = self.attempt.choose(slot, correct, &mut self.ladder);
+        if let Tap::Right(step) = result {
+            self.record(step);
+        }
         match result {
             Tap::Right(_) => self.celebrate = Some(0.0),
             Tap::Wrong | Tap::Reveal | Tap::Again => self.wobble[slot] = 1.0,
@@ -360,6 +497,67 @@ impl Count {
         }
     }
 
+    fn update_play(&mut self, input: &Input, view: &View, dt: f32) {
+        let end = self.celebration_length();
+        if let Some(t) = &mut self.celebrate {
+            *t += dt;
+            if *t >= end {
+                self.next_question();
+                if self.report.is_some() {
+                    self.mode = Mode::Report(0.0);
+                }
+            }
+        } else if input.pressed && levels_button(view).contains(input.pos) && !self.first_time {
+            self.mode = Mode::Levels;
+        } else if input.pressed {
+            let buttons = button_rects(view, self.question.options.len());
+            if let Some(slot) = buttons.iter().position(|r| r.contains(input.pos)) {
+                let tap = self.pick(slot);
+                self.react(view, slot, tap);
+            } else {
+                let q = &self.question;
+                let (points, r) = scatter(q.count as usize, q.seed, play_area(view));
+                let hit = points
+                    .iter()
+                    .position(|p| p.distance(input.pos) <= r * 1.15);
+                if let Some(i) = hit {
+                    if self.tick_object(i) {
+                        sfx::play(Sfx::Tick);
+                        if let Some(n) = self.ticks[i].filter(|n| *n <= 10) {
+                            sfx::say(sfx::Say::Number(n as u8));
+                        }
+                        let col = hsv(i as f32 * 0.13, 0.5, 1.0);
+                        self.particles.sparkle(points[i], col);
+                    }
+                }
+            }
+        }
+    }
+
+    fn update_levels(&mut self, input: &Input, view: &View) {
+        if !input.pressed {
+            return;
+        }
+        if play_button(view).contains(input.pos) {
+            self.mode = Mode::Play;
+            return;
+        }
+        let unlocked = self.unlocked_level();
+        let hit = level_tiles(view).iter().position(|r| r.contains(input.pos));
+        if let Some(i) = hit.filter(|i| *i <= unlocked) {
+            sfx::play(Sfx::Tick);
+            self.start_level(i);
+        }
+    }
+
+    fn update_report(&mut self, input: &Input, age: f32, dt: f32) {
+        self.mode = Mode::Report(age + dt);
+        if input.pressed && age > 0.8 {
+            self.report = None;
+            self.mode = Mode::Play;
+        }
+    }
+
     fn number_shown(&self, i: usize) -> Option<u32> {
         match self.celebrate {
             Some(t) if t > i as f32 * 0.05 => Some(i as u32 + 1),
@@ -388,34 +586,10 @@ impl Game for Count {
         for w in &mut self.wobble {
             *w = (*w - dt * 1.8).max(0.0);
         }
-        let end = self.celebration_length();
-        if let Some(t) = &mut self.celebrate {
-            *t += dt;
-            if *t >= end {
-                self.next_question();
-            }
-        } else if input.pressed {
-            let buttons = button_rects(view, self.question.options.len());
-            if let Some(slot) = buttons.iter().position(|r| r.contains(input.pos)) {
-                let tap = self.pick(slot);
-                self.react(view, slot, tap);
-            } else {
-                let q = &self.question;
-                let (points, r) = scatter(q.count as usize, q.seed, play_area(view));
-                let hit = points
-                    .iter()
-                    .position(|p| p.distance(input.pos) <= r * 1.15);
-                if let Some(i) = hit {
-                    if self.tick_object(i) {
-                        sfx::play(Sfx::Tick);
-                        if let Some(n) = self.ticks[i].filter(|n| *n <= 10) {
-                            sfx::say(sfx::Say::Number(n as u8));
-                        }
-                        let col = hsv(i as f32 * 0.13, 0.5, 1.0);
-                        self.particles.sparkle(points[i], col);
-                    }
-                }
-            }
+        match self.mode {
+            Mode::Levels => self.update_levels(input, view),
+            Mode::Report(age) => self.update_report(input, age, dt),
+            Mode::Play => self.update_play(input, view, dt),
         }
         self.shake.update(dt);
         self.particles.update(dt);
@@ -424,6 +598,10 @@ impl Game for Count {
 
     fn draw(&self, view: &View) {
         draw_backdrop(view, self.t);
+        if self.mode == Mode::Levels {
+            self.draw_levels(view);
+            return;
+        }
         hud(
             view,
             &self.ladder,
@@ -432,16 +610,174 @@ impl Game for Count {
             &self.streak_bump,
         );
         set_view_camera(view, self.shake.offset());
+        self.draw_goal(view);
         self.draw_prompt(view);
         self.draw_things(view);
         self.draw_buttons(view);
+        if self.first_time && self.mode == Mode::Play {
+            let pulse = 1.0 + (self.t * 4.0).sin() * 0.03;
+            let y = button_rects(view, self.question.options.len())[0].y - 36.0;
+            crate::ui::hint(
+                view,
+                "Tap each one to count, then pick the number",
+                vec2(view.w / 2.0, y),
+                pulse,
+            );
+        }
         set_view_camera(view, Vec2::ZERO);
         self.particles.draw();
         self.popups.draw();
+        if let Mode::Report(age) = self.mode {
+            self.draw_report(view, age);
+        }
     }
 }
 
 impl Count {
+    pub fn goal_text(&self) -> String {
+        if self.ladder.level + 1 < RANGES.len() {
+            format!(
+                "Get {UP_STREAK} right in a row to reach {}",
+                level_name(self.ladder.level + 1)
+            )
+        } else {
+            format!("Get {UP_STREAK} right in a row to finish")
+        }
+    }
+
+    fn draw_goal(&self, view: &View) {
+        let k = ui_scale(view);
+        let y = goal_row_y(view);
+        let button = levels_button(view);
+        let room = if self.first_time {
+            view.w - 2.0 * HUD_LEFT
+        } else {
+            button.x - 20.0 - HUD_LEFT
+        };
+        let text = self.goal_text();
+        let size = (26.0 * k).min(room / text.len() as f32 * 2.0);
+        let ink = Color::from_rgba(40, 30, 60, 255);
+        let left = if self.first_time {
+            view.w / 2.0
+        } else {
+            HUD_LEFT + room / 2.0
+        };
+        text_outline(&text, left, y, size, WHITE, ink);
+        if !self.first_time {
+            crate::ui::painted_button(button, "Levels", "blue", 0.0, 1.0);
+        }
+    }
+
+    fn draw_levels(&self, view: &View) {
+        let unlocked = self.unlocked_level();
+        crate::ui::ribbon(view, "Pick a level", vec2(view.w / 2.0, 90.0), self.t);
+        for (i, r) in level_tiles(view).iter().enumerate() {
+            let open = i <= unlocked;
+            let now = i == self.ladder.level;
+            if now {
+                let g = 8.0 + 3.0 * (self.t * 5.0).sin();
+                round_rect(
+                    Rect::new(r.x - g, r.y - g, r.w + g * 2.0, r.h + g * 2.0),
+                    34.0,
+                    Color::new(1.0, 0.95, 0.4, 0.8),
+                );
+            }
+            let tint = if open { WHITE } else { with_alpha(WHITE, 0.55) };
+            crate::ui::painted_panel(*r, tint);
+            let (low, high) = RANGES[i];
+            let label = if low == 1 {
+                format!("1 to {high}")
+            } else {
+                format!("{low} to {high}")
+            };
+            let ink = Color::from_rgba(40, 30, 60, 255);
+            if open {
+                text_outline(
+                    &label,
+                    r.center().x,
+                    r.y + r.h * 0.38,
+                    r.h * 0.26,
+                    WHITE,
+                    Color::from_rgba(10, 70, 140, 255),
+                );
+                let earned = crate::profile::stars(GAME, i as u32);
+                for j in 0..3u8 {
+                    let c = vec2(
+                        r.center().x + (j as f32 - 1.0) * r.h * 0.26,
+                        r.y + r.h * 0.72,
+                    );
+                    let fill = if j < earned {
+                        Color::from_rgba(255, 210, 60, 255)
+                    } else {
+                        Color::from_rgba(110, 90, 140, 150)
+                    };
+                    star(c, r.h * 0.11, 0.0, fill);
+                }
+            } else {
+                crate::ui::sprite_at(
+                    "icon_lock",
+                    r.center() - vec2(0.0, r.h * 0.05),
+                    r.h * 0.34,
+                    crate::art::Draw {
+                        tint: ink,
+                        ..Default::default()
+                    },
+                );
+                text_center(
+                    &label,
+                    r.center().x,
+                    r.y + r.h * 0.8,
+                    r.h * 0.14,
+                    with_alpha(ink, 0.6),
+                );
+            }
+        }
+        let pb = play_button(view);
+        crate::ui::painted_button(pb, "Play", "green", 0.0, 1.0);
+    }
+
+    fn draw_report(&self, view: &View, age: f32) {
+        match self.report {
+            Some(Report::Level { level, stars }) => {
+                let title = format!("{} done!", level_name(level));
+                let next = if level + 1 < RANGES.len() {
+                    format!("Next: {}", level_name(level + 1))
+                } else {
+                    "Counting champion!".to_string()
+                };
+                overlay(view, &title, &["", &next, "Keep going"]);
+                let c = view.center() + vec2(0.0, 20.0);
+                let ph = 150.0 + 3.0 * 64.0;
+                let y = c.y - ph / 2.0 + 118.0;
+                for j in 0..3u8 {
+                    let k = ease_out_back(((age - 0.3 - j as f32 * 0.15) / 0.3).clamp(0.0, 1.0));
+                    let fill = if j < stars {
+                        Color::from_rgba(255, 210, 60, 255)
+                    } else {
+                        Color::from_rgba(150, 140, 170, 140)
+                    };
+                    star(vec2(c.x + (j as f32 - 1.0) * 90.0, y), 38.0 * k, 0.0, fill);
+                }
+            }
+            Some(Report::Cleared { rank }) => {
+                let total = crate::profile::total_stars(GAME);
+                let line = format!("{total} stars earned");
+                results(
+                    view,
+                    &crate::ui::Results {
+                        game: GAME,
+                        title: "You can count to 20!",
+                        line: &line,
+                        rank,
+                        action: "Keep counting",
+                        format: stars_score,
+                    },
+                );
+            }
+            None => {}
+        }
+    }
+
     fn draw_prompt(&self, view: &View) {
         let s = format!("How many {}?", self.question.thing.plural());
         let pop = ease_out_back(self.prompt_bump.t).max(0.2);
@@ -658,6 +994,7 @@ mod tests {
                     sorted.dedup();
                     assert_eq!(sorted.len(), q.options.len(), "{q:?}");
                     assert!(q.options.iter().all(|v| (1..=MAX_COUNT).contains(v)));
+                    assert!(q.options.iter().all(|v| *v <= high + 2), "{q:?}");
                     assert_eq!(q.options[q.slot_of_answer()], count);
                 }
             }
@@ -840,5 +1177,206 @@ mod tests {
         }
         assert_eq!(g.ladder.level, 1);
         assert!((RANGES[1].0..=RANGES[1].1).contains(&g.question.count));
+    }
+
+    fn fresh_player() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+    }
+
+    fn answer_right(g: &mut Count, v: &View) {
+        let slot = g.question.slot_of_answer();
+        let tap = g.pick(slot);
+        g.react(v, slot, tap);
+        for _ in 0..240 {
+            g.update(&Input::default(), v, 1.0 / 60.0);
+        }
+        if matches!(g.mode, Mode::Report(_)) {
+            g.update(&Input::press_at(vec2(1.0, 1.0)), v, 1.0 / 60.0);
+            for _ in 0..60 {
+                g.update(&Input::default(), v, 1.0 / 60.0);
+            }
+            g.update(&Input::press_at(vec2(1.0, 1.0)), v, 1.0 / 60.0);
+        }
+    }
+
+    fn answer_wrong_once(g: &mut Count) {
+        let wrong = (0..g.question.options.len())
+            .find(|i| *i != g.question.slot_of_answer())
+            .unwrap();
+        g.pick(wrong);
+    }
+
+    #[test]
+    fn the_first_level_counts_to_three_with_a_hint_until_the_first_success() {
+        fresh_player();
+        rand::srand(3);
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        assert_eq!(g.ladder.level, 0);
+        assert_eq!(RANGES[0], (1, 3));
+        assert!(g.first_time);
+        assert!(g.question.count <= 3);
+        answer_right(&mut g, &v);
+        assert!(!g.first_time);
+    }
+
+    #[test]
+    fn ranges_climb_through_five_ten_and_twenty() {
+        let highs: Vec<i32> = RANGES.iter().map(|r| r.1).collect();
+        assert_eq!(highs, vec![3, 5, 8, 10, 15, 20]);
+        assert!(RANGES
+            .windows(2)
+            .all(|w| w[0].1 < w[1].1 && w[0].0 <= w[1].0));
+        assert!(choice_count(0) <= choice_count(RANGES.len() - 1));
+    }
+
+    #[test]
+    fn finishing_a_level_unlocks_the_next_and_saves_stars() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        for _ in 0..UP_STREAK {
+            answer_right(&mut g, &v);
+        }
+        assert_eq!(g.ladder.level, 1);
+        assert_eq!(crate::profile::unlocked(GAME), 1);
+        assert_eq!(crate::profile::level(GAME), 1);
+        assert_eq!(crate::profile::stars(GAME, 0), 3);
+    }
+
+    #[test]
+    fn a_level_with_a_slip_earns_fewer_stars() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        answer_wrong_once(&mut g);
+        for _ in 0..UP_STREAK + 1 {
+            answer_right(&mut g, &v);
+        }
+        assert_eq!(g.ladder.level, 1);
+        assert_eq!(crate::profile::stars(GAME, 0), 2);
+        assert_eq!(star_rating(0), 3);
+        assert_eq!(star_rating(5), 1);
+    }
+
+    #[test]
+    fn a_new_run_resumes_at_the_saved_level_for_that_player() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        for _ in 0..UP_STREAK * 2 {
+            answer_right(&mut g, &v);
+        }
+        assert_eq!(g.ladder.level, 2);
+        let again = Count::new();
+        assert_eq!(again.ladder.level, 2);
+        assert!((RANGES[2].0..=RANGES[2].1).contains(&again.question.count));
+        assert!(!again.first_time);
+        crate::profile::create("Leo", 3);
+        let other = Count::new();
+        assert_eq!(other.ladder.level, 0);
+        assert!(other.first_time);
+    }
+
+    #[test]
+    fn three_slips_ease_back_a_level_and_the_save_follows() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        for _ in 0..UP_STREAK {
+            answer_right(&mut g, &v);
+        }
+        assert_eq!(g.ladder.level, 1);
+        for _ in 0..DOWN_SLIPS {
+            answer_wrong_once(&mut g);
+            let slot = g.question.slot_of_answer();
+            g.pick(slot);
+            g.celebrate = None;
+            g.next_question();
+        }
+        assert_eq!(g.ladder.level, 0);
+        assert_eq!(crate::profile::level(GAME), 0);
+        assert_eq!(crate::profile::unlocked(GAME), 1);
+        assert_eq!(Count::new().ladder.level, 0);
+    }
+
+    #[test]
+    fn the_level_picker_only_opens_unlocked_levels() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        for _ in 0..UP_STREAK {
+            answer_right(&mut g, &v);
+        }
+        g.mode = Mode::Levels;
+        let tiles = level_tiles(&v);
+        g.update(&Input::press_at(tiles[4].center()), &v, 1.0 / 60.0);
+        assert_eq!(g.mode, Mode::Levels);
+        g.update(&Input::press_at(tiles[0].center()), &v, 1.0 / 60.0);
+        assert_eq!(g.mode, Mode::Play);
+        assert_eq!(g.ladder.level, 0);
+        assert_eq!(crate::profile::level(GAME), 0);
+        assert!((RANGES[0].0..=RANGES[0].1).contains(&g.question.count));
+        assert_eq!(crate::profile::unlocked(GAME), 1);
+    }
+
+    #[test]
+    fn the_levels_button_appears_after_the_first_success() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        let at = levels_button(&v).center();
+        g.update(&Input::press_at(at), &v, 1.0 / 60.0);
+        assert_eq!(g.mode, Mode::Play);
+        answer_right(&mut g, &v);
+        g.update(&Input::press_at(at), &v, 1.0 / 60.0);
+        assert_eq!(g.mode, Mode::Levels);
+    }
+
+    #[test]
+    fn clearing_the_top_level_posts_the_star_total_once() {
+        fresh_player();
+        let v = View::ipad_landscape();
+        let mut g = Count::new();
+        let last = RANGES.len() - 1;
+        crate::profile::unlock(GAME, last as u32);
+        g.start_level(last);
+        for _ in 0..UP_STREAK {
+            let slot = g.question.slot_of_answer();
+            let tap = g.pick(slot);
+            g.react(&v, slot, tap);
+            g.celebrate = None;
+            g.next_question();
+        }
+        assert_eq!(crate::profile::get(GAME, "cleared"), 1);
+        assert!(matches!(g.report, Some(Report::Cleared { rank: Some(0) })));
+        assert_eq!(crate::profile::board(GAME).len(), 1);
+        assert_eq!(Count::new().ladder.stars, RANGES.len());
+    }
+
+    #[test]
+    fn level_tiles_fit_on_every_screen_and_clear_the_buttons() {
+        for v in views() {
+            let tiles = level_tiles(&v);
+            assert_eq!(tiles.len(), RANGES.len());
+            for r in &tiles {
+                assert!(r.x >= 0.0 && r.x + r.w <= v.w && r.y >= 100.0 && r.y + r.h <= v.h);
+                assert!(r.w >= 150.0 && r.h >= 100.0, "{r:?} in {v:?}");
+                assert!(r.y + r.h <= play_button(&v).y);
+            }
+            assert!(levels_button(&v).x + levels_button(&v).w <= v.w);
+        }
+    }
+
+    #[test]
+    fn the_goal_row_sits_between_the_hud_and_the_question() {
+        for v in views() {
+            assert!(goal_row_y(&v) > hud_bottom(&v));
+            assert!(prompt_y(&v) - prompt_size(&v) * 0.5 > goal_row_y(&v) + 20.0);
+            let area = play_area(&v);
+            assert!(area.y > prompt_y(&v));
+            assert!(area.h >= v.h * 0.3, "{area:?} in {v:?}");
+        }
     }
 }
