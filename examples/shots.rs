@@ -135,7 +135,7 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
             let gx = 16.0 + lobby_w + 16.0;
             let cw = (view.w - gx - 16.0) / 4.0;
             let ch = (view.h - top - 16.0) / 3.0;
-            let room = (f / 45) % 3;
+            let room = (f / 45) % 2;
             tap(
                 &mut i,
                 vec2(
