@@ -835,7 +835,12 @@ impl Game for Spell {
             }
             if let Some(i) = l.tiles.iter().position(|r| r.contains(input.pos)) {
                 if self.board.used[i].is_none() {
-                    self.held = Some((i, input.pos));
+                    if let Some((h, _)) = self.held.take() {
+                        self.tap_tile(h, &l);
+                        self.tap_tile(i, &l);
+                    } else {
+                        self.held = Some((i, input.pos));
+                    }
                 }
             }
         }
@@ -1369,6 +1374,79 @@ mod tests {
             spell(g, word, &l);
             g.advance(view);
         }
+    }
+
+    fn quick_word(g: &mut Spell) -> (Layout, View, Vec<usize>) {
+        crate::save::reset_for_test();
+        *g = Spell::with_level_deck(2, vec!["cat"]);
+        g.board = Board::with_tiles("cat", vec!['z', 'c', 'a', 't']);
+        g.phase = Phase::Playing;
+        let view = View::ipad_landscape();
+        let l = layout(&view, 3, 4);
+        (l, view, vec![1, 2, 3])
+    }
+
+    #[test]
+    fn the_next_letter_tapped_before_the_last_one_lifts_is_still_right() {
+        let mut g = Spell::with_level_deck(2, vec!["cat"]);
+        let (l, view, order) = quick_word(&mut g);
+        let (a, b) = (l.tiles[order[0]].center(), l.tiles[order[1]].center());
+        g.update(
+            &Input {
+                mm: 5.0,
+                ..Input::press_at(a)
+            },
+            &view,
+            0.016,
+        );
+        g.update(
+            &Input {
+                mm: 5.0,
+                ..Input::press_at(b)
+            },
+            &view,
+            0.016,
+        );
+        g.update(
+            &Input {
+                pos: a,
+                prev_pos: b,
+                released: true,
+                mm: 5.0,
+                ..Default::default()
+            },
+            &view,
+            0.016,
+        );
+        assert_eq!(g.board.filled, 2);
+        assert_eq!(g.board.mistakes, 0);
+        assert!(g.wobble.iter().all(|w| *w == 0.0));
+    }
+
+    #[test]
+    fn a_lift_and_a_new_tap_in_one_frame_keep_their_order() {
+        let mut g = Spell::with_level_deck(2, vec!["cat"]);
+        let (l, view, order) = quick_word(&mut g);
+        let (a, b) = (l.tiles[order[0]].center(), l.tiles[order[1]].center());
+        g.update(
+            &Input {
+                mm: 5.0,
+                ..Input::press_at(a)
+            },
+            &view,
+            0.016,
+        );
+        g.update(
+            &Input {
+                released: true,
+                mm: 5.0,
+                ..Input::press_at(b)
+            },
+            &view,
+            0.016,
+        );
+        assert_eq!(g.board.filled, 2);
+        assert_eq!(g.board.mistakes, 0);
     }
 
     #[test]
