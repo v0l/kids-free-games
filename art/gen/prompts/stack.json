@@ -1,0 +1,114 @@
+[
+ {
+  "name": "stack_block",
+  "w": 1344,
+  "h": 384,
+  "seed": 71,
+  "cut": true,
+  "prompt": "A single wide flat glossy toy building block slab, light pale grey candy plastic with soft rounded bevelled edges and a bright white highlight along the top, front view, plain colour with no pattern and no studs. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_peaks",
+  "w": 1344,
+  "h": 512,
+  "seed": 72,
+  "cut": true,
+  "prompt": "Side-scrolling mobile game far parallax layer: a row of distant snowy blue mountain peaks with soft haze, flat front view, top half of the image is plain flat pure white. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "stack_hills",
+  "w": 1344,
+  "h": 512,
+  "seed": 73,
+  "cut": true,
+  "prompt": "Side-scrolling mobile game middle parallax layer: a row of rolling bright green cartoon hills with round trees, flat front view, top half of the image is plain flat pure white. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "stack_ground",
+  "w": 1344,
+  "h": 384,
+  "seed": 74,
+  "cut": false,
+  "prompt": "Side view cross-section strip of cartoon ground for a side-scrolling mobile game: lush bright green grass top edge with small flowers, layered brown soil and rounded pebbles below, horizontally seamless, flat front view, fills the whole frame. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "stack_moon",
+  "w": 768,
+  "h": 768,
+  "seed": 75,
+  "cut": true,
+  "prompt": "A glossy cartoon full moon with soft craters, pale yellow, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_cloud1",
+  "w": 1024,
+  "h": 640,
+  "seed": 76,
+  "cut": true,
+  "prompt": "A single fluffy puffy cartoon cloud, pure white with soft blue-grey shading, wide, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_cloud2",
+  "w": 1024,
+  "h": 640,
+  "seed": 77,
+  "cut": true,
+  "prompt": "A single fluffy puffy cartoon cloud, pure white with soft blue-grey shading, round and tall, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_cloud3",
+  "w": 1024,
+  "h": 640,
+  "seed": 78,
+  "cut": true,
+  "prompt": "A single small fluffy puffy cartoon cloud, pure white with soft blue-grey shading, flat bottom, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_pine",
+  "w": 640,
+  "h": 896,
+  "seed": 79,
+  "cut": true,
+  "prompt": "A single cute cartoon pine fir tree, layered dark green boughs, brown trunk, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_round",
+  "w": 768,
+  "h": 896,
+  "seed": 80,
+  "cut": true,
+  "prompt": "A single cute cartoon round leafy tree with a fat bright green crown and brown trunk, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_tall",
+  "w": 512,
+  "h": 1024,
+  "seed": 81,
+  "cut": true,
+  "prompt": "A single tall slim cartoon poplar tree, bright green, brown trunk, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_bush",
+  "w": 768,
+  "h": 512,
+  "seed": 82,
+  "cut": true,
+  "prompt": "A single cartoon round green bush with a few small pink flowers, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_castle",
+  "w": 1024,
+  "h": 1024,
+  "seed": 83,
+  "cut": true,
+  "prompt": "A single small cartoon fairytale stone castle with two round towers and red pointed roofs, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "stack_house",
+  "w": 896,
+  "h": 896,
+  "seed": 84,
+  "cut": true,
+  "prompt": "A single cute small cartoon cottage with a red roof, cream walls and a chimney, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]

@@ -1,0 +1,74 @@
+[
+ {
+  "name": "breakout_bg",
+  "w": 1344,
+  "h": 1024,
+  "seed": 91,
+  "cut": false,
+  "prompt": "Mobile game arena background: magical deep purple and indigo night sky with glowing nebula clouds, soft sparkles and bokeh lights, faint glowing floating crystals at the edges, empty dark centre, no characters, no objects in the middle. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "breakout_paddle",
+  "w": 1344,
+  "h": 320,
+  "seed": 92,
+  "cut": true,
+  "prompt": "A single sleek glossy game paddle: a wide rounded capsule bar, blue glass with a white metallic centre and glowing cyan end caps, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_ball",
+  "w": 768,
+  "h": 768,
+  "seed": 93,
+  "cut": true,
+  "prompt": "A single glowing glossy sphere ball, bright white and pale yellow with a soft highlight, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_brick0",
+  "w": 1024,
+  "h": 384,
+  "seed": 94,
+  "cut": true,
+  "prompt": "A single wide flat glossy candy jelly brick slab, bright red colour, soft rounded bevelled edges, white highlight along the top, darker bottom edge, front view, plain with no pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_brick1",
+  "w": 1024,
+  "h": 384,
+  "seed": 94,
+  "cut": true,
+  "prompt": "A single wide flat glossy candy jelly brick slab, bright orange colour, soft rounded bevelled edges, white highlight along the top, darker bottom edge, front view, plain with no pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_brick2",
+  "w": 1024,
+  "h": 384,
+  "seed": 94,
+  "cut": true,
+  "prompt": "A single wide flat glossy candy jelly brick slab, bright yellow colour, soft rounded bevelled edges, white highlight along the top, darker bottom edge, front view, plain with no pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_brick3",
+  "w": 1024,
+  "h": 384,
+  "seed": 94,
+  "cut": true,
+  "prompt": "A single wide flat glossy candy jelly brick slab, bright lime green colour, soft rounded bevelled edges, white highlight along the top, darker bottom edge, front view, plain with no pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_brick4",
+  "w": 1024,
+  "h": 384,
+  "seed": 94,
+  "cut": true,
+  "prompt": "A single wide flat glossy candy jelly brick slab, bright sky blue colour, soft rounded bevelled edges, white highlight along the top, darker bottom edge, front view, plain with no pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "breakout_brick5",
+  "w": 1024,
+  "h": 384,
+  "seed": 94,
+  "cut": true,
+  "prompt": "A single wide flat glossy candy jelly brick slab, bright pink colour, soft rounded bevelled edges, white highlight along the top, darker bottom edge, front view, plain with no pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]

@@ -1,10 +1,10 @@
-brick0   | puzzle-pack-2/PNG/Tiles red/tileRed_02.png | max=188
-brick1   | puzzle-pack-2/PNG/Tiles orange/tileOrange_01.png | max=188
-brick2   | puzzle-pack-2/PNG/Tiles yellow/tileYellow_02.png | max=188
-brick3   | puzzle-pack-2/PNG/Tiles green/tileGreen_02.png | max=188
-brick4   | puzzle-pack-2/PNG/Tiles blue/tileBlue_02.png | max=188
-brick5   | puzzle-pack-2/PNG/Tiles pink/tilePink_02.png | max=188
-paddle   | puzzle-pack-2/PNG/Paddles/paddle_08.png | max=620
-ball     | puzzle-pack-2/PNG/Balls/Grey/ballGrey_10.png | max=96
-ball_glow | puzzle-pack-2/PNG/Balls/Blue/ballBlue_01.png | max=96
-backtile | puzzle-pack-2/PNG/Back tiles/BackTile_05.png | max=128
+# Painted with FLUX.1-dev (art/gen/prompts/breakout.json); bricks are brick0 hue-shifted
+bg        | gen:breakout_bg.png | solo jpg max=1600 keep
+brick0    | gen:breakout_brickc0.png | max=200
+brick1    | gen:breakout_brickc1.png | max=200
+brick2    | gen:breakout_brickc2.png | max=200
+brick3    | gen:breakout_brickc3.png | max=200
+brick4    | gen:breakout_brickc4.png | max=200
+brick5    | gen:breakout_brickc5.png | max=200
+paddle    | gen:breakout_paddle_cut.png | max=640
+ball      | gen:breakout_ball_cut.png | max=128

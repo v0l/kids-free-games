@@ -11,7 +11,6 @@ pub const GRAVITY: f32 = 1700.0;
 pub const BOUNCE: f32 = -640.0;
 pub const BALL_R: f32 = 18.0;
 pub const SMASH_FLOORS: u32 = 3;
-const BALL_TINT: Color = Color::new(1.0, 0.55, 0.22, 1.0);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
@@ -344,8 +343,7 @@ impl Game for Helix {
     }
 
     fn draw(&self, view: &View) {
-        let hue = 0.55 + self.level as f32 * 0.09;
-        sky(view, hsv(hue, 0.3, 1.0), hsv(hue + 0.06, 0.4, 0.92));
+        draw_backdrop(view, self.level);
         let sh = self.shake.offset();
         let cx = view.w / 2.0 + sh.x;
         let to_screen = |y: f32| y - self.cam + view.h * 0.15 + sh.y;
@@ -403,7 +401,7 @@ impl Game for Helix {
                         vec2(cx + a.cos() * r, y + a.sin() * r * 0.32),
                         24.0,
                         crate::art::Draw {
-                            tint: Color::from_rgba(255, 196, 40, 230),
+                            tint: Color::from_rgba(255, 255, 255, 235),
                             ..Default::default()
                         },
                     );
@@ -429,13 +427,12 @@ impl Game for Helix {
                     );
                 }
             }
-            let w = BALL_R * 2.0 * (1.0 + sq - stretch * 0.5);
-            let h = BALL_R * 2.0 * (1.0 - sq + stretch);
+            let w = BALL_R * 2.2 * (1.0 + sq - stretch * 0.5);
+            let h = BALL_R * 2.2 * (1.0 - sq + stretch);
             art::sprite_ex(
                 "ball",
                 Rect::new(bx - w / 2.0, bz - h / 2.0, w, h),
                 crate::art::Draw {
-                    tint: BALL_TINT,
                     ..Default::default()
                 },
             );
@@ -447,9 +444,9 @@ impl Game for Helix {
                 "splat",
                 Rect::new(
                     bx - BALL_R * 1.8,
-                    bz + 4.0 - BALL_R * 0.6,
+                    bz + 4.0 - BALL_R * 0.9,
                     BALL_R * 3.6,
-                    BALL_R * 1.2,
+                    BALL_R * 1.8,
                 ),
             );
         }
@@ -582,6 +579,7 @@ pub fn draw_ring_segment(r: &Ring) {
         };
         let (tw, th) = (tex.width(), tex.height());
         let uv = |u: f32, v: f32| {
+            let (u, v) = (0.14 + u * 0.72, 0.14 + v * 0.72);
             vec2(
                 (f.src.x + 0.5 + (f.src.w - 1.0) * u) / tw,
                 (f.src.y + 0.5 + (f.src.h - 1.0) * v) / th,
@@ -630,66 +628,42 @@ fn draw_pole(cx: f32, view: &View, width: f32) {
     art::sprite("pole", Rect::new(cx - width / 2.0, f.y, width, f.h));
 }
 
+fn draw_backdrop(view: &View, level: u32) {
+    let f = view.full();
+    let s = art::size("bg");
+    let k = (f.w / s.x).max(f.h / s.y);
+    let (w, h) = (s.x * k, s.y * k);
+    let hue = (level as f32 * 0.07).rem_euclid(1.0);
+    art::sprite_ex(
+        "bg",
+        Rect::new(f.x + (f.w - w) / 2.0, f.y + (f.h - h) / 2.0, w, h),
+        crate::art::Draw {
+            tint: hsv(hue, 0.12, 1.0),
+            ..Default::default()
+        },
+    );
+}
+
 fn draw_clouds(view: &View, cam: f32, t: f32) {
     for i in 0..6 {
         let depth = 0.08 + (i % 3) as f32 * 0.05;
         let span = view.w + 400.0;
         let x = (i as f32 * 233.0 + t * (5.0 + depth * 40.0)).rem_euclid(span) - 200.0;
         let y = ((i * 131 % 700) as f32 - cam * depth).rem_euclid(view.h + 200.0) - 100.0;
-        crate::ui::cloud(
-            i,
+        art::sprite_w(
+            if i % 2 == 0 { "cloud1" } else { "cloud2" },
             vec2(x, y),
-            120.0 + depth * 700.0,
-            Color::new(1.0, 1.0, 1.0, 0.8),
+            150.0 + depth * 900.0,
+            crate::art::Draw {
+                tint: Color::new(1.0, 1.0, 1.0, 0.85),
+                ..Default::default()
+            },
         );
     }
 }
 
 pub fn icon(r: Rect) {
-    gradient_rect(r, hsv(0.56, 0.3, 1.0), hsv(0.62, 0.4, 0.92));
-    let cx = r.x + r.w / 2.0;
-    let pw = r.w * 0.17;
-    art::sprite("pole", Rect::new(cx - pw / 2.0, r.y, pw, r.h));
-    let floors = [
-        (0.25, 0.0f32, "tile_green"),
-        (0.55, 2.2, "tile_pink"),
-        (0.84, 4.4, "tile_blue"),
-    ];
-    for (k, rot, name) in floors {
-        for seg in 0..SEGMENTS {
-            if (seg + (rot * 2.0) as usize) % SEGMENTS / 3 == 0 {
-                continue;
-            }
-            let a0 = rot + seg as f32 / SEGMENTS as f32 * TAU;
-            let a1 = a0 + TAU / SEGMENTS as f32;
-            let tile = if seg == 7 && k > 0.5 {
-                "tile_red"
-            } else {
-                name
-            };
-            draw_ring_segment(&Ring {
-                centre: vec2(cx, r.y + r.h * k),
-                a0,
-                a1,
-                outer: r.w * 0.45,
-                inner: r.w * 0.12,
-                thick: r.h * 0.07,
-                flat: 0.32,
-                tile,
-                light: 0.8 + 0.2 * (a0 + a1).sin() / 2.0,
-                alpha: 1.0,
-            });
-        }
-    }
-    art::sprite_at(
-        "ball",
-        vec2(cx + r.w * 0.18, r.y + r.h * 0.4),
-        r.h * 0.17,
-        crate::art::Draw {
-            tint: BALL_TINT,
-            ..Default::default()
-        },
-    );
+    crate::ui::icon("helix", r);
 }
 
 #[cfg(test)]
@@ -717,7 +691,9 @@ mod tests {
             "ball",
             "pole",
             "splat",
-            "cloud",
+            "cloud1",
+            "cloud2",
+            "bg",
         ] {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }

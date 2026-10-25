@@ -1,9 +1,12 @@
-tile_green  | puzzle-pack-2/PNG/Tiles green/tileGreen_01.png | max=128
-tile_pink   | puzzle-pack-2/PNG/Tiles pink/tilePink_01.png | max=128
-tile_blue   | puzzle-pack-2/PNG/Tiles blue/tileBlue_01.png | max=128
-tile_grey   | puzzle-pack-2/PNG/Tiles grey/tileGrey_01.png | max=128
-tile_red    | puzzle-pack-2/PNG/Tiles red/tileRed_01.png | max=128
-ball        | puzzle-pack-2/PNG/Balls/Yellow/ballYellow_10.png | max=96
-pole        | puzzle-pack-2/PNG/Pipes/Grey/pipeGrey_03.png | max=219 crop=0,50,102,120
-splat       | splat-pack/PNG/Default (256px)/splat10.png | max=128
-cloud       | background-elements/PNG/cloud2.png | max=256
+# Painted with FLUX.1-dev (art/gen/prompts/helix.json)
+bg         | gen:helix_bg.png | solo jpg max=1344 keep
+tile_green | gen:helix_tile_green.png | max=128
+tile_pink  | gen:helix_tile_pink.png | max=128
+tile_blue  | gen:helix_tile_blue.png | max=128
+tile_grey  | gen:helix_tile_greyc.png | max=128
+tile_red   | gen:helix_tile_red.png | max=128
+ball       | gen:helix_ball_cut.png | max=128
+pole       | gen:helix_pole_cut.png | max=160 crop=0,300,151,600
+splat      | gen:helix_splat_cut.png | max=160
+cloud1     | gen:helix_cloud1_cut.png | max=256
+cloud2     | gen:helix_cloud2_cut.png | max=256
