@@ -55,7 +55,7 @@ card.1      | casino-audio/Audio/card-place-2.ogg | db=-20
 card.2      | casino-audio/Audio/card-slide-1.ogg | db=-20
 
 say_correct  | voiceover-pack/Female/correct.ogg | db=-15
-say_great    | voiceover-pack/Female/objective_achieved.ogg | db=-15
+say_great    | repo:sound/great_job.ogg | db=-15
 say_congrats | voiceover-pack/Female/congratulations.ogg | db=-15
 say_win      | voiceover-pack/Female/you_win.ogg | db=-15
 say_levelup  | voiceover-pack/Female/level_up.ogg | db=-15
