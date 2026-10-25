@@ -8,6 +8,12 @@ pub const URL: &str = "https://yalr.v0l.io/v1/systemone";
 pub const MAX_LEAD: f32 = 0.32;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StateMode {
+    Described,
+    Raw,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GameKind {
     Flappy,
     Crossy,
@@ -277,6 +283,91 @@ pub fn crossy_moment_after(g: &Crossy, lead: f32) -> Moment {
     }
 }
 
+fn r1(v: f32) -> f64 {
+    (v as f64 * 10.0).round() / 10.0
+}
+
+pub fn flappy_raw(g: &Flappy, view: &View, lead: f32) -> Moment {
+    let ground = view.h - flappy::GROUND;
+    let bx = view.w * 0.3;
+    let pipes: Vec<Value> = g
+        .pipes
+        .iter()
+        .filter(|p| p.x + flappy::PIPE_W > bx - flappy::BIRD_R - 10.0)
+        .take(2)
+        .map(|p| {
+            json!({
+                "distance_ahead": (p.x - bx).round(),
+                "gap_top_y": (p.gap_y - p.gap / 2.0).round(),
+                "gap_bottom_y": (p.gap_y + p.gap / 2.0).round(),
+                "width": flappy::PIPE_W,
+            })
+        })
+        .collect();
+    Moment {
+        state: json!({
+            "units": "pixels, y grows downward, time in seconds",
+            "bird": {"y": g.y.round(), "velocity_y": g.vy.round(), "radius": flappy::BIRD_R},
+            "ground_y": ground.round(),
+            "ceiling_y": 0,
+            "physics": {"gravity": flappy::GRAVITY, "flap_sets_velocity_y_to": flappy::FLAP, "scroll_speed": g.speed.round()},
+            "pipes_ahead": pipes,
+            "answer_arrives_in": r1(lead),
+        }),
+        instructions: "Flappy bird. Keep the bird alive: it must pass between gap_top_y and gap_bottom_y of each pipe and never touch the ground. Flapping sets the vertical velocity to the flap value; otherwise gravity pulls it down. Your answer takes effect after answer_arrives_in seconds.",
+        options: vec![("flap", "flap now"), ("wait", "do not flap")],
+    }
+}
+
+pub fn crossy_raw(g: &Crossy, lead: f32) -> Moment {
+    let col = g.x.round() as i32;
+    let rows: Vec<Value> = (0..4)
+        .filter_map(|ahead| {
+            let r = g.rows.get((g.row + ahead) as usize)?;
+            let (kind, speed) = match r.lane {
+                Lane::Grass => ("grass", 0.0),
+                Lane::Road { speed, .. } => ("road", speed),
+                Lane::River { speed, .. } => ("river", speed),
+                Lane::Rail { .. } => ("rail", 34.0),
+            };
+            let things: Vec<Value> = r
+                .things
+                .iter()
+                .filter(|x| **x > -4.0 && **x < crossy::COLS as f32 + 4.0)
+                .map(|x| json!({"from": r1(*x), "to": r1(*x + r.len)}))
+                .collect();
+            let mut row = json!({"rows_ahead": ahead, "kind": kind});
+            if kind != "grass" {
+                row["speed_columns_per_second"] = json!(r1(speed));
+                row[if kind == "river" { "logs" } else { "vehicles" }] = json!(things);
+            }
+            if kind == "rail" {
+                row["train_warning_light"] = json!(r.warning());
+            }
+            if !r.trees.is_empty() {
+                row["trees_at_columns"] = json!(r.trees);
+            }
+            Some(row)
+        })
+        .collect();
+    Moment {
+        state: json!({
+            "units": "columns 0 to 8 left to right, rows counted forward from the chicken",
+            "chicken": {"column": col, "x": r1(g.x)},
+            "hop_takes_seconds": r1(crossy::HOP_TIME),
+            "answer_arrives_in": r1(lead),
+            "rows": rows,
+        }),
+        instructions: "Road crossing. Cross as many rows as possible. A vehicle or train covering the chicken's column when it lands kills it; landing in the river off a log drowns it; trees block hops. Positive speed moves right. Your answer takes effect after answer_arrives_in seconds.",
+        options: vec![
+            ("up", "hop forward one row"),
+            ("left", "hop left"),
+            ("right", "hop right"),
+            ("wait", "stay still"),
+        ],
+    }
+}
+
 pub fn input_for(choice: &str) -> Input {
     match choice {
         "flap" => Input {
@@ -335,6 +426,7 @@ pub fn yalr_key() -> Option<String> {
 
 pub struct Player {
     pub kind: GameKind,
+    pub mode: StateMode,
     key: String,
     transport: Box<dyn crate::net::transport::Transport>,
     pending: Option<(u32, Moment, f64)>,
@@ -352,6 +444,7 @@ impl Player {
     pub fn new(kind: GameKind, key: String) -> Self {
         Self {
             kind,
+            mode: StateMode::Described,
             key,
             transport: crate::net::transport::default_transport(),
             pending: None,
@@ -439,7 +532,11 @@ impl Player {
                 }
                 if self.pending.is_none() && decided.is_none() {
                     let lead = self.lead();
-                    self.launch(flappy_moment_after(g, view, lead));
+                    let m = match self.mode {
+                        StateMode::Described => flappy_moment_after(g, view, lead),
+                        StateMode::Raw => flappy_raw(g, view, lead),
+                    };
+                    self.launch(m);
                 }
                 decided.map_or_else(Input::default, |d| input_for(&d.choice))
             }
@@ -458,7 +555,11 @@ impl Player {
                 }
                 if self.pending.is_none() && decided.is_none() && g.hop >= 1.0 {
                     let lead = self.lead();
-                    self.launch(crossy_moment_after(g, lead));
+                    let m = match self.mode {
+                        StateMode::Described => crossy_moment_after(g, lead),
+                        StateMode::Raw => crossy_raw(g, lead),
+                    };
+                    self.launch(m);
                 }
                 decided.map_or_else(Input::default, |d| input_for(&d.choice))
             }
@@ -513,7 +614,13 @@ impl Player {
             );
             y += 26.0;
         };
-        line("JEV 1.13 playing", gold);
+        line(
+            match self.mode {
+                StateMode::Described => "JEV 1.13 playing (described)",
+                StateMode::Raw => "JEV 1.13 playing (raw state)",
+            },
+            gold,
+        );
         let avg = if self.calls > 0 {
             self.ms_total / self.calls as f32
         } else {
@@ -539,9 +646,12 @@ impl Player {
         );
         if let Some(d) = &self.last {
             if let Some(o) = d.state.as_object() {
-                for (k, v) in o.iter().take(2) {
+                let keys: Vec<&String> = o.keys().filter(|k| k.starts_with("if_") || *k == "bird" || *k == "chicken").take(2).collect();
+                for k in keys {
+                    let v = &o[k];
+                    let shown = v.as_str().map(String::from).unwrap_or_else(|| v.to_string());
                     let k = k.trim_start_matches("if_").replace('_', " ");
-                    line(&format!("{k}: {}", v.as_str().unwrap_or("")), white);
+                    line(&format!("{k}: {shown}"), white);
                 }
             }
         } else {
@@ -610,6 +720,19 @@ pub fn arg() -> Option<(GameKind, Option<String>)> {
     native_arg().map(|k| (k, None))
 }
 
+pub fn mode_arg() -> StateMode {
+    let raw = if cfg!(target_arch = "wasm32") {
+        false
+    } else {
+        std::env::args().any(|a| a == "--raw")
+    };
+    if raw {
+        StateMode::Raw
+    } else {
+        StateMode::Described
+    }
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 fn native_arg() -> Option<GameKind> {
     let mut args = std::env::args().skip(1);
@@ -654,6 +777,7 @@ pub async fn run(kind: GameKind, key: Option<String>) {
         next_frame().await;
     }
     let mut player = Player::new(kind, key);
+    player.mode = mode_arg();
     let mut game = game_for(kind);
     loop {
         let view = crate::begin_frame();
@@ -704,6 +828,26 @@ mod tests {
         assert!(flappy_outcome(&g, &v, true).contains("far above"));
         g.y = 400.0;
         assert!(flappy_outcome(&g, &v, false).starts_with("safe"));
+    }
+
+    #[test]
+    fn raw_states_carry_the_real_numbers() {
+        fresh();
+        let v = View::ipad_landscape();
+        let mut g = Flappy::new();
+        g.state = flappy::State::Playing;
+        g.y = 321.0;
+        g.vy = -150.0;
+        g.pipes.push(flappy::Pipe::new(v.w * 0.3 + 200.0, 400.0));
+        let m = flappy_raw(&g, &v, 0.3);
+        assert_eq!(m.state["bird"]["y"], 321.0);
+        assert_eq!(m.state["bird"]["velocity_y"], -150.0);
+        assert_eq!(m.state["pipes_ahead"][0]["distance_ahead"], 200.0);
+        assert_eq!(m.state["pipes_ahead"][0]["gap_top_y"], 400.0 - 115.0);
+        let c = crossy_raw(&Crossy::new(), 0.3);
+        assert_eq!(c.state["chicken"]["column"], crossy::COLS / 2);
+        assert_eq!(c.state["rows"].as_array().unwrap().len(), 4);
+        assert_eq!(c.state["rows"][0]["kind"], "grass");
     }
 
     #[test]
