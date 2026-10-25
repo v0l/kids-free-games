@@ -41,7 +41,6 @@ struct Stain {
     color: Color,
     age: f32,
     drops: [Vec2; 3],
-    splat: usize,
     turn: f32,
 }
 
@@ -54,7 +53,7 @@ struct Species {
     seed: Option<Rgb>,
 }
 
-const FRUITS: [Species; 8] = [
+const FRUITS: [Species; 6] = [
     Species {
         name: "apple",
         skin: (220, 50, 50),
@@ -91,23 +90,10 @@ const FRUITS: [Species; 8] = [
         flesh: (240, 92, 104),
         seed: Some((250, 230, 120)),
     },
-    Species {
-        name: "coconut",
-        skin: (120, 70, 50),
-        flesh: (246, 246, 240),
-        seed: None,
-    },
-    Species {
-        name: "pear",
-        skin: (80, 170, 110),
-        flesh: (238, 238, 176),
-        seed: Some((60, 40, 30)),
-    },
 ];
 
 const FRUIT_SPAN: f32 = 2.3;
 const BOMB_SPAN: f32 = 2.5;
-const SPLATS: usize = 4;
 
 pub fn combo_bonus(n: u32) -> u32 {
     if n >= 3 {
@@ -253,7 +239,6 @@ impl Fruit {
             r: rand::gen_range(34.0, 52.0),
             color: mix(flesh, skin, 0.45),
             age: 0.0,
-            splat: rand::gen_range(0, SPLATS),
             turn: rand::gen_range(0.0, std::f32::consts::TAU),
             drops: [0, 1, 2].map(|_| {
                 vec2(rand::gen_range(-1.0, 1.0), rand::gen_range(-1.0, 1.0))
@@ -510,11 +495,11 @@ fn draw_stain(st: &Stain) {
         rotation: st.turn,
         ..Default::default()
     };
-    art::sprite_at(&splat_name(st.splat), st.pos, st.r * 2.2 * grow, tint);
+    art::sprite_at(splat_name(), st.pos, st.r * 2.2 * grow, tint);
     for (i, d) in st.drops.iter().enumerate() {
         let size = st.r * (0.4 + 0.12 * i as f32) * grow;
         art::sprite_at(
-            &splat_name((st.splat + i + 1) % SPLATS),
+            splat_name(),
             st.pos + *d * grow,
             size,
             crate::art::Draw {
@@ -526,25 +511,38 @@ fn draw_stain(st: &Stain) {
     }
 }
 
-fn splat_name(i: usize) -> String {
-    format!("splat{}", i % SPLATS)
+fn splat_name() -> &'static str {
+    "splat0"
 }
 
-fn fruit_sprite(f: usize, suffix: &str, c: Vec2, r: f32, rotation: f32) {
+fn fit_in(s: Vec2, side: f32) -> (f32, f32) {
+    let k = side / s.x.max(s.y).max(1.0);
+    (s.x * k, s.y * k)
+}
+
+fn fruit_sprite(f: usize, suffix: &str, c: Vec2, r: f32, rotation: f32, flip_x: bool) {
     let side = r * FRUIT_SPAN;
+    let name = format!("{}{}", FRUITS[f].name, suffix);
+    let (w, h) = fit_in(art::size(&name), side);
     art::sprite_ex(
-        &format!("{}{}", FRUITS[f].name, suffix),
-        Rect::new(c.x - side / 2.0, c.y - side / 2.0, side, side),
+        &name,
+        Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h),
         crate::art::Draw {
             rotation,
+            flip_x,
             ..Default::default()
         },
     );
 }
 
 fn draw_half(h: &Half) {
-    let suffix = if h.spin > 0.0 { "_l" } else { "_r" };
-    fruit_sprite(h.fruit, suffix, h.pos, h.r, h.angle);
+    soft_shadow(
+        h.pos + vec2(h.r * 0.12, h.r * 0.8),
+        h.r * 0.6,
+        h.r * 0.14,
+        0.3,
+    );
+    fruit_sprite(h.fruit, "_half", h.pos, h.r, h.angle, h.spin > 0.0);
 }
 
 mod art {
@@ -554,23 +552,16 @@ mod art {
 impl Fruit {
     fn draw_wall(&self, view: &View) {
         let f = view.full();
-        fill_screen(view, Color::from_rgba(84, 52, 30, 255));
-        let plank = 104.0;
-        let tall = plank * 220.0 / 70.0;
-        let n = (f.w / plank).ceil() as i32 + 1;
-        let left = f.x + (f.w - n as f32 * plank) / 2.0;
-        for i in 0..n {
-            let name = if i % 2 == 0 { "plank_a" } else { "plank_b" };
-            let shift = (i * 131 % 300) as f32;
-            let mut y = f.y - shift;
-            while y < f.y + f.h {
-                art::sprite(
-                    name,
-                    Rect::new(left + i as f32 * plank, y, plank + 1.0, tall + 1.0),
-                );
-                y += tall - 2.0;
-            }
-        }
+        let side = f.w.max(f.h);
+        art::sprite(
+            "wall",
+            Rect::new(
+                f.x + (f.w - side) / 2.0,
+                f.y + (f.h - side) / 2.0,
+                side,
+                side,
+            ),
+        );
     }
 
     fn draw_thing(&self, t: &Thing) {
@@ -583,21 +574,14 @@ impl Fruit {
                     t.r * 1.3,
                     Color::new(1.0, 0.3, 0.2, 0.08 + 0.1 * pulse),
                 );
-                let size = t.r * BOMB_SPAN;
-                let at = Rect::new(t.pos.x - size / 2.0, t.pos.y - size / 2.0, size, size);
+                let (bw, bh) = fit_in(art::size("bomb"), t.r * BOMB_SPAN);
+                let at = Rect::new(t.pos.x - bw / 2.0, t.pos.y - bh / 2.0, bw, bh);
                 let turn = crate::art::Draw {
                     rotation: (t.spin * self.time).sin() * 0.4,
+                    tint: Color::new(1.0, 1.0 - 0.25 * pulse, 1.0 - 0.3 * pulse, 1.0),
                     ..Default::default()
                 };
                 art::sprite_ex("bomb", at, turn);
-                art::sprite_ex(
-                    "bomb_lit",
-                    at,
-                    crate::art::Draw {
-                        tint: Color::new(1.0, 0.5, 0.4, 0.55 * pulse),
-                        ..turn
-                    },
-                );
             }
             Kind::Fruit(f) => {
                 soft_shadow(
@@ -606,7 +590,7 @@ impl Fruit {
                     t.r * 0.18,
                     0.4,
                 );
-                fruit_sprite(f, "", t.pos, t.r, t.spin * self.time);
+                fruit_sprite(f, "", t.pos, t.r, t.spin * self.time, false);
             }
         }
     }
@@ -651,51 +635,24 @@ impl Fruit {
             let alive = i < self.lives;
             let k = if i == self.lives { pulse } else { 1.0 };
             art::sprite_at(
-                if alive { "heart" } else { "heart_empty" },
+                "heart",
                 vec2(x, 48.0),
-                48.0 * k,
-                Default::default(),
+                54.0 * k,
+                crate::art::Draw {
+                    tint: if alive {
+                        WHITE
+                    } else {
+                        Color::new(0.25, 0.25, 0.3, 0.45)
+                    },
+                    ..Default::default()
+                },
             );
         }
     }
 }
 
 pub fn icon(r: Rect) {
-    let plank = r.w / 3.0;
-    for i in 0..3 {
-        let name = if i % 2 == 0 { "plank_a" } else { "plank_b" };
-        art::sprite(name, Rect::new(r.x + i as f32 * plank, r.y, plank, r.h));
-    }
-    let c = vec2(r.x + r.w * 0.5, r.y + r.h * 0.55);
-    let side = r.h * 0.5;
-    art::sprite(
-        "watermelon_l",
-        Rect::new(c.x - side * 0.62, c.y - side * 0.45, side, side),
-    );
-    art::sprite(
-        "watermelon_r",
-        Rect::new(c.x - side * 0.38, c.y - side * 0.55, side, side),
-    );
-    art::sprite_at(
-        "lemon",
-        vec2(r.x + r.w * 0.2, r.y + r.h * 0.3),
-        r.h * 0.26,
-        Default::default(),
-    );
-    art::sprite_at(
-        "apple",
-        vec2(r.x + r.w * 0.82, r.y + r.h * 0.74),
-        r.h * 0.26,
-        Default::default(),
-    );
-    draw_line(
-        r.x + r.w * 0.08,
-        r.y + r.h * 0.9,
-        r.x + r.w * 0.92,
-        r.y + r.h * 0.12,
-        5.0,
-        WHITE,
-    );
+    crate::ui::icon("fruit", r);
 }
 
 #[cfg(test)]
@@ -718,25 +675,16 @@ mod tests {
     #[test]
     fn fruit_sprites_all_exist() {
         let have = art::names();
-        let mut want: Vec<String> = [
-            "plank_a",
-            "plank_b",
-            "bomb",
-            "bomb_lit",
-            "heart",
-            "heart_empty",
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+        let mut want: Vec<String> = ["wall", "bomb", "heart"]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
         for f in FRUITS.iter() {
-            for suffix in ["", "_l", "_r"] {
+            for suffix in ["", "_half"] {
                 want.push(format!("{}{}", f.name, suffix));
             }
         }
-        for i in 0..SPLATS {
-            want.push(splat_name(i));
-        }
+        want.push(splat_name().to_string());
         for n in want {
             assert!(have.contains(&n), "missing {n}");
         }

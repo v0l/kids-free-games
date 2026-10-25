@@ -1,18 +1,10 @@
-# run art/render_snake.py and art/render_food.py before assets.py
-bg       | physics-assets/PNG/Backgrounds/colored_grass.png | solo max=1024
-frame    | physics-assets/PNG/Wood elements/elementWood033.png | max=140
-head     | animal-pack/PNG/Derived/head.png | max=160
-body     | animal-pack/PNG/Derived/body.png | max=128
-apple      | food-kit/Render/apple.png | max=96
-orange     | food-kit/Render/orange.png | max=96
-pear       | food-kit/Render/pear.png | max=96
-strawberry | food-kit/Render/strawberry.png | max=96
-lemon      | food-kit/Render/lemon.png | max=96
-watermelon | food-kit/Render/watermelon.png | max=96
-tuft1    | foliage-pack/PNG/Default size/foliagePack_018.png | max=64
-tuft2    | foliage-pack/PNG/Default size/foliagePack_019.png | max=64
-tuft3    | foliage-pack/PNG/Default size/foliagePack_020.png | max=64
-flower1  | foliage-pack/PNG/Default size/foliagePack_001.png | max=64
-flower2  | foliage-pack/PNG/Default size/foliagePack_002.png | max=64
-flower3  | foliage-pack/PNG/Default size/foliagePack_003.png | max=64
-flower4  | foliage-pack/PNG/Default size/foliagePack_062.png | max=64
+# Painted with FLUX.1-dev via art/gen/prompts/snake*.json, cut with rembg birefnet
+bg         | gen:snake_bg.png | solo jpg max=1536 keep
+head       | gen:snake_head_cut.png | max=256
+ball       | gen:snake_ball_round.png | max=128
+apple      | gen:fruit_apple_cut.png | max=128
+orange     | gen:fruit_orange_cut.png | max=128
+pineapple  | gen:fruit_pineapple_cut.png | max=128
+strawberry | gen:fruit_strawberry_cut.png | max=128
+lemon      | gen:fruit_lemon_cut.png | max=128
+watermelon | gen:fruit_watermelon_cut.png | max=128

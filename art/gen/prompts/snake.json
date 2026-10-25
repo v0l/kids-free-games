@@ -1,0 +1,42 @@
+[
+ {
+  "name": "snake_head",
+  "w": 768,
+  "h": 768,
+  "seed": 200,
+  "cut": true,
+  "prompt": "A cute friendly green cartoon snake head seen from directly above, top-down view, pointing straight up, big round glossy eyes with white highlights, rosy cheeks, small smile, lighter green scale pattern, tiny red tongue. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "snake_body",
+  "w": 512,
+  "h": 512,
+  "seed": 201,
+  "cut": true,
+  "prompt": "A single glossy round green cartoon snake body segment seen from directly above, perfect circle, shiny green scales, lighter yellow green belly band, top-down view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "snake_flowers",
+  "w": 512,
+  "h": 512,
+  "seed": 202,
+  "cut": true,
+  "prompt": "A small cluster of cute cartoon flowers, red pink and yellow with green leaves, top-down view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "snake_bush",
+  "w": 512,
+  "h": 512,
+  "seed": 203,
+  "cut": true,
+  "prompt": "A single round leafy green cartoon bush seen from above with a few tiny red berries. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "snake_bg",
+  "w": 1024,
+  "h": 1024,
+  "seed": 204,
+  "cut": false,
+  "prompt": "Top-down view of a lush green lawn meadow with soft mowed stripes, scattered small white and yellow flowers and clover, a few bushes and little rocks along the edges, empty clear centre, no characters, no animals. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]
