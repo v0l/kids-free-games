@@ -1,4 +1,3 @@
-use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -15,47 +14,20 @@ const WIN_TIME: f32 = 1.6;
 const SLIDE_TIME: f32 = 0.22;
 const MIN_TILE: f32 = 96.0;
 
-type Draw = Picture;
+pub type Picture = fn(&Pen);
 
-#[cfg(test)]
-const SPRITES: [&str; 26] = [
-    "cat", "dog", "bus", "car", "hat", "cup", "egg", "pig", "tree", "cake", "ball", "duck", "frog",
-    "moon", "boat", "house", "apple", "heart", "train", "cloud", "snail", "rocket", "banana",
-    "sun", "bee", "fish",
-];
+macro_rules! words {
+    ($($w:ident),* $(,)?) => {
+        pub const WORDS: [(&str, Picture); 30] = [
+            $((stringify!($w), |p: &Pen| draw_picture(stringify!($w), p)),)*
+        ];
+    };
+}
 
-pub const WORDS: [(&str, Draw); 30] = [
-    ("cat", cat),
-    ("dog", dog),
-    ("sun", sun),
-    ("bus", bus),
-    ("car", car),
-    ("hat", hat),
-    ("cup", cup),
-    ("egg", egg),
-    ("bee", bee),
-    ("pig", pig),
-    ("fish", fish),
-    ("tree", tree),
-    ("cake", cake),
-    ("star", star_pic),
-    ("ball", ball),
-    ("duck", duck),
-    ("frog", frog),
-    ("moon", moon),
-    ("boat", boat),
-    ("kite", kite),
-    ("house", house),
-    ("apple", apple),
-    ("heart", heart),
-    ("train", train),
-    ("cloud", cloud_pic),
-    ("snail", snail),
-    ("flower", flower),
-    ("rocket", rocket),
-    ("banana", banana),
-    ("rainbow", rainbow),
-];
+words!(
+    cat, dog, sun, bus, car, hat, cup, egg, bee, pig, fish, tree, cake, star, ball, duck, frog,
+    moon, boat, kite, house, apple, heart, train, cloud, snail, flower, rocket, banana, rainbow,
+);
 
 pub fn band(word: &str) -> usize {
     match word.len() {
@@ -75,10 +47,6 @@ pub fn words_in(band_index: usize) -> Vec<&'static str> {
         .map(|(w, _)| *w)
         .filter(|w| band(w) == band_index)
         .collect()
-}
-
-pub fn picture(word: &str) -> Option<Draw> {
-    WORDS.iter().find(|(w, _)| *w == word).map(|(_, d)| *d)
 }
 
 fn shuffle<T>(v: &mut [T]) {
@@ -547,14 +515,12 @@ impl Game for Spell {
             } else {
                 1.0
             };
-            let name = match self.results.get(i) {
-                Some(true) => "star",
-                _ => "star_empty",
-            };
+            let name = "p_star";
             let tint = match self.results.get(i) {
-                Some(_) => WHITE,
-                None if i == self.index => with_alpha(WHITE, 0.95),
-                None => with_alpha(WHITE, 0.45),
+                Some(true) => WHITE,
+                Some(false) => Color::new(0.45, 0.45, 0.5, 0.6),
+                None if i == self.index => Color::new(0.7, 0.7, 0.75, 0.9),
+                None => Color::new(0.5, 0.5, 0.55, 0.45),
             };
             crate::ui::sprite_at(
                 name,
@@ -567,16 +533,17 @@ impl Game for Spell {
             );
         }
         let p = l.picture;
-        crate::ui::card(p, WHITE);
+        crate::ui::painted_panel(p, WHITE);
         let bob = (self.t * 2.0).sin() * p.h * 0.015;
         let sc = self.picture_bump.scale(0.12);
-        if let Some(draw) = picture(self.word()) {
-            draw(&Pen {
+        draw_picture(
+            self.word(),
+            &Pen {
                 c: p.center() + vec2(0.0, bob),
                 s: p.w.min(p.h) * 0.42 * sc,
                 t: self.t,
-            });
-        }
+            },
+        );
         let won = match self.phase {
             Phase::Won(t) => Some(t),
             _ => None,
@@ -687,7 +654,7 @@ impl Game for Spell {
             h.w * hp,
             h.h * hp,
         );
-        crate::ui::round_button(hr, "icon_question", crate::ui::Tone::Yellow, 0.0);
+        crate::ui::painted_round(hr, "icon_question", 0.0);
         self.fx.draw();
         self.pops.draw();
         set_view_camera(view, Vec2::ZERO);
@@ -704,208 +671,31 @@ pub struct Pen {
     pub t: f32,
 }
 
-pub type Picture = fn(&Pen);
-
-impl Pen {
-    fn p(&self, x: f32, y: f32) -> Vec2 {
-        self.c + vec2(x, y) * self.s
-    }
-    fn circle(&self, x: f32, y: f32, r: f32, col: Color) {
-        let p = self.p(x, y);
-        draw_circle(p.x, p.y, r * self.s, col);
-    }
-    fn tri(&self, a: (f32, f32), b: (f32, f32), c: (f32, f32), col: Color) {
-        draw_triangle(self.p(a.0, a.1), self.p(b.0, b.1), self.p(c.0, c.1), col);
-    }
-    fn line(&self, a: (f32, f32), b: (f32, f32), w: f32, col: Color) {
-        let (p, q) = (self.p(a.0, a.1), self.p(b.0, b.1));
-        draw_line(p.x, p.y, q.x, q.y, w * self.s, col);
-    }
-}
-
-fn rgb(r: u8, g: u8, b: u8) -> Color {
-    Color::from_rgba(r, g, b, 255)
-}
-
-fn draw_sprite(p: &Pen, name: &str, rotation: f32) {
-    draw_tinted(p, name, rotation, WHITE);
-}
-
-fn draw_tinted(p: &Pen, name: &str, rotation: f32, tint: Color) {
-    let size = art::size(name);
-    let k = 1.55 * p.s / size.x.max(size.y);
+fn draw_picture(word: &str, p: &Pen) {
+    let rotation = match word {
+        "sun" => p.t * 0.4,
+        "bee" => (p.t * 6.0).sin() * 0.08,
+        "fish" => (p.t * 4.0).sin() * 0.08,
+        "star" => (p.t * 2.0).sin() * 0.15,
+        "flower" | "kite" => (p.t * 1.5).sin() * 0.05,
+        _ => 0.0,
+    };
+    let size = art::size(word);
+    let k = 1.85 * p.s / size.x.max(size.y);
     let (w, h) = (size.x * k, size.y * k);
-    soft_shadow(p.c + vec2(0.0, p.s * 0.92), w * 0.4, p.s * 0.07, 0.5);
+    soft_shadow(p.c + vec2(0.0, h * 0.5), w * 0.38, p.s * 0.07, 0.5);
     art::sprite_ex(
-        name,
+        word,
         Rect::new(p.c.x - w / 2.0, p.c.y - h / 2.0, w, h),
         crate::art::Draw {
             rotation,
-            tint,
             ..Default::default()
         },
     );
 }
 
-macro_rules! sprite_pic {
-    ($($pic:ident => $name:literal),* $(,)?) => {
-        $(fn $pic(p: &Pen) {
-            draw_sprite(p, $name, 0.0);
-        })*
-    };
-}
-
-sprite_pic! {
-    cat => "cat",
-    dog => "dog",
-    bus => "bus",
-    car => "car",
-    hat => "hat",
-    cup => "cup",
-    egg => "egg",
-    pig => "pig",
-    tree => "tree",
-    cake => "cake",
-    ball => "ball",
-    duck => "duck",
-    frog => "frog",
-    boat => "boat",
-    house => "house",
-    apple => "apple",
-    heart => "heart",
-    train => "train",
-    snail => "snail",
-    rocket => "rocket",
-    banana => "banana",
-}
-
-fn sun(p: &Pen) {
-    draw_tinted(p, "sun", p.t * 0.4, rgb(255, 205, 40));
-}
-
-fn moon(p: &Pen) {
-    draw_tinted(p, "moon", 0.0, rgb(255, 215, 90));
-}
-
-fn cloud_pic(p: &Pen) {
-    draw_tinted(p, "cloud", 0.0, rgb(175, 205, 245));
-}
-
-fn bee(p: &Pen) {
-    draw_sprite(p, "bee", (p.t * 6.0).sin() * 0.08);
-}
-
-fn fish(p: &Pen) {
-    draw_sprite(p, "fish", (p.t * 4.0).sin() * 0.08);
-}
-
-fn star_pic(p: &Pen) {
-    draw_sprite(p, "star", (p.t * 2.0).sin() * 0.15);
-}
-
-fn flower(p: &Pen) {
-    draw_sprite(p, "flower", (p.t * 1.5).sin() * 0.05);
-}
-
-fn kite(p: &Pen) {
-    let sway = (p.t * 1.5).sin() * 0.05;
-    let top = (0.0 + sway, -0.85);
-    p.tri(
-        top,
-        (-0.5 + sway, -0.25),
-        (0.0 + sway, 0.25),
-        rgb(240, 80, 100),
-    );
-    p.tri(
-        top,
-        (0.5 + sway, -0.25),
-        (0.0 + sway, 0.25),
-        rgb(80, 160, 240),
-    );
-    p.line(top, (sway, 0.25), 0.02, rgb(255, 255, 255));
-    p.line(
-        (-0.5 + sway, -0.25),
-        (0.5 + sway, -0.25),
-        0.02,
-        rgb(255, 255, 255),
-    );
-    let mut prev = (sway, 0.25);
-    for k in 1..7 {
-        let f = k as f32 / 6.0;
-        let pt = (sway + (p.t * 3.0 + f * 5.0).sin() * 0.12, 0.25 + f * 0.6);
-        p.line(prev, pt, 0.02, rgb(120, 90, 80));
-        if k % 2 == 0 {
-            p.tri(
-                (pt.0 - 0.06, pt.1),
-                (pt.0 + 0.06, pt.1 - 0.04),
-                (pt.0 + 0.06, pt.1 + 0.04),
-                rgb(255, 200, 50),
-            );
-        }
-        prev = pt;
-    }
-}
-
-fn rainbow(p: &Pen) {
-    let cols = [
-        rgb(240, 70, 70),
-        rgb(255, 160, 50),
-        rgb(255, 220, 60),
-        rgb(100, 200, 90),
-        rgb(80, 150, 240),
-        rgb(160, 100, 220),
-    ];
-    for (i, c) in cols.iter().enumerate() {
-        let r = 0.85 - i as f32 * 0.1;
-        let n = 24;
-        for k in 0..n {
-            let a0 = std::f32::consts::PI * (1.0 + k as f32 / n as f32);
-            let a1 = std::f32::consts::PI * (1.0 + (k + 1) as f32 / n as f32);
-            let ri = r - 0.1;
-            p.tri(
-                (a0.cos() * r, 0.3 + a0.sin() * r),
-                (a1.cos() * r, 0.3 + a1.sin() * r),
-                (a0.cos() * ri, 0.3 + a0.sin() * ri),
-                *c,
-            );
-            p.tri(
-                (a1.cos() * r, 0.3 + a1.sin() * r),
-                (a1.cos() * ri, 0.3 + a1.sin() * ri),
-                (a0.cos() * ri, 0.3 + a0.sin() * ri),
-                *c,
-            );
-        }
-    }
-    for x in [-0.7, 0.7] {
-        for (dx, r) in [(-0.15, 0.15), (0.0, 0.2), (0.15, 0.15)] {
-            p.circle(x + dx, 0.35, r, WHITE);
-        }
-    }
-}
-
 pub fn icon(r: Rect) {
-    art::sprite("bg", r);
-    crate::ui::cloud(
-        4,
-        vec2(r.x + r.w * 0.8, r.y + r.h * 0.14),
-        r.w * 0.3,
-        with_alpha(WHITE, 0.9),
-    );
-    cat(&Pen {
-        c: vec2(r.x + r.w / 2.0, r.y + r.h * 0.3),
-        s: r.w * 0.2,
-        t: 0.0,
-    });
-    let s = r.w * 0.28;
-    for (i, ch) in ['C', 'A', 'T'].iter().enumerate() {
-        let x = r.x + r.w * 0.06 + i as f32 * (s + r.w * 0.04);
-        tile(
-            Rect::new(x, r.y + r.h * 0.62, s, s),
-            *ch,
-            letter_color(i),
-            1.0,
-        );
-    }
+    crate::ui::icon("spell", r);
 }
 
 #[cfg(test)]
@@ -930,23 +720,16 @@ mod tests {
     #[test]
     fn spell_sprites_all_exist() {
         let have = art::names();
-        for n in SPRITES.iter().chain(["bg", "tile"].iter()) {
+        for n in WORDS.iter().map(|(w, _)| w).chain(["bg", "tile"].iter()) {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
     }
 
     #[test]
-    fn only_kite_and_rainbow_are_still_hand_drawn() {
-        let drawn: Vec<&str> = WORDS
-            .iter()
-            .filter(|(w, _)| {
-                let pen = |draw: Picture| draw as usize;
-                let hand = [pen(kite), pen(rainbow)];
-                hand.contains(&pen(picture(w).unwrap()))
-            })
-            .map(|(w, _)| *w)
-            .collect();
-        assert_eq!(drawn, vec!["kite", "rainbow"]);
+    fn every_word_has_a_picture() {
+        for (w, _) in WORDS {
+            assert!(art::frame(w).is_some(), "{w}");
+        }
     }
 
     #[test]
@@ -961,13 +744,6 @@ mod tests {
             g.tap_tile(i, &l);
         }
         assert_eq!(crate::sfx::take_voice(), Some(sfx::Say::Great));
-    }
-
-    #[test]
-    fn every_word_has_a_picture() {
-        for (w, _) in WORDS {
-            assert!(picture(w).is_some(), "{w}");
-        }
     }
 
     #[test]

@@ -218,10 +218,10 @@ struct Grid {
 
 impl Grid {
     fn new(view: &View) -> Self {
-        let size = (view.h - 150.0).min(view.w - 40.0);
+        let size = (view.h - 250.0).min(view.w - 180.0);
         let origin = vec2(
             (view.w - size) / 2.0,
-            120.0 + ((view.h - 150.0 - size) / 2.0).max(0.0),
+            170.0 + ((view.h - 250.0 - size) / 2.0).max(0.0),
         );
         let gap = size * 0.03;
         Self {
@@ -388,7 +388,7 @@ impl Game for Merge {
         text_outline(
             "2048",
             view.w / 2.0,
-            o.y - 64.0,
+            o.y - 86.0,
             64.0 * (1.0 + 0.02 * (self.t * 2.0).sin()),
             Color::from_rgba(255, 215, 90, 255),
             Color::from_rgba(119, 90, 60, 255),
@@ -403,7 +403,7 @@ impl Game for Merge {
                 } else {
                     o.x + size - 160.0
                 },
-                o.y - 100.0,
+                o.y - 126.0,
                 160.0,
                 80.0,
             );
@@ -429,29 +429,24 @@ impl Game for Merge {
             }
         }
         let frame = Rect::new(o.x + sh.x, o.y + sh.y, size, size);
-        art::sprite_ex(
-            "tile",
-            Rect::new(frame.x, frame.y + 8.0, frame.w, frame.h),
-            crate::art::Draw {
-                tint: Color::new(0.0, 0.0, 0.0, 0.25),
-                ..Default::default()
-            },
-        );
-        art::nine(
-            "tile",
-            frame,
-            14.0,
-            (frame.w / 128.0).max(0.5),
-            Color::from_rgba(120, 92, 80, 255),
+        let pad = size * 0.075;
+        art::sprite(
+            "board",
+            Rect::new(
+                frame.x - pad,
+                frame.y - pad,
+                frame.w + pad * 2.0,
+                frame.h + pad * 2.0,
+            ),
         );
         for r in 0..N {
             for c in 0..N {
                 let p = g.pos(r as f32, c as f32) + sh;
                 art::sprite_ex(
-                    "tile",
+                    "cell",
                     Rect::new(p.x, p.y, g.cell, g.cell),
                     crate::art::Draw {
-                        tint: Color::from_rgba(80, 60, 55, 120),
+                        tint: Color::new(1.0, 1.0, 1.0, 0.55),
                         ..Default::default()
                     },
                 );
@@ -544,23 +539,7 @@ impl Merge {
 }
 
 pub fn icon(r: Rect) {
-    art::sprite("bg", r);
-    let g = r.w * 0.05;
-    let frame = Rect::new(r.x + g, r.y + g * 1.5, r.w - 2.0 * g, r.w - 2.0 * g);
-    art::nine(
-        "tile",
-        frame,
-        14.0,
-        frame.w / 300.0,
-        Color::from_rgba(120, 92, 80, 255),
-    );
-    let pad = g * 0.7;
-    let cs = (frame.w - pad * 3.0) / 2.0;
-    for (i, v) in [2u32, 4, 8, 2048].iter().enumerate() {
-        let x = frame.x + pad + (i % 2) as f32 * (cs + pad);
-        let y = frame.y + pad + (i / 2) as f32 * (cs + pad);
-        draw_tile(vec2(x + cs / 2.0, y + cs / 2.0), cs, 1.0, *v, 0.0);
-    }
+    crate::ui::icon("merge", r);
 }
 
 #[cfg(test)]
@@ -570,7 +549,7 @@ mod tests {
     #[test]
     fn merge_sprites_all_exist() {
         let have = art::names();
-        for n in ["bg", "tile", "crown"] {
+        for n in ["bg", "tile", "cell", "board", "crown"] {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
     }

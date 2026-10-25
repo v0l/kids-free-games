@@ -3,7 +3,6 @@ use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::learn::*;
 use crate::sfx::{self, Sfx};
-use crate::ui::Tone;
 use macroquad::prelude::*;
 
 mod art {
@@ -458,9 +457,9 @@ impl Count {
 
     fn draw_things(&self, view: &View) {
         let area = play_area(view);
-        crate::ui::card(
-            Rect::new(area.x - 20.0, area.y - 14.0, area.w + 40.0, area.h + 28.0),
-            with_alpha(WHITE, 0.3),
+        crate::ui::painted_panel(
+            Rect::new(area.x - 24.0, area.y - 18.0, area.w + 48.0, area.h + 36.0),
+            with_alpha(WHITE, 0.4),
         );
         let q = &self.question;
         let (points, r) = scatter(q.count as usize, q.seed, area);
@@ -478,7 +477,7 @@ impl Count {
             if let Some(n) = self.number_shown(i) {
                 let b = r * 0.55;
                 crate::ui::sprite_at(
-                    "round_blue",
+                    "p_round",
                     c + vec2(0.0, r * 0.1),
                     b * 2.2,
                     Default::default(),
@@ -519,14 +518,13 @@ impl Count {
                 );
             }
             let correct_now = self.attempt.solved && *v == self.question.count;
-            let tone = if correct_now {
-                Tone::Green
-            } else if tried {
-                Tone::Grey
+            let color = if correct_now {
+                "green"
             } else {
-                [Tone::Red, Tone::Yellow, Tone::Blue, Tone::Green][i % 4]
+                ["orange", "blue", "green", "orange"][i % 4]
             };
-            crate::ui::button(rr, &v.to_string(), tone, 0.0);
+            let alpha = if tried { 0.45 } else { 1.0 };
+            crate::ui::painted_button(rr, &v.to_string(), color, 0.0, alpha);
         }
     }
 }
@@ -575,34 +573,7 @@ fn draw_backdrop(view: &View, t: f32) {
 }
 
 pub fn icon(r: Rect) {
-    art::sprite("bg", r);
-    let h = r.h * 0.34;
-    for (name, x, y) in [
-        ("apple", 0.26, 0.3),
-        ("apple", 0.7, 0.27),
-        ("apple", 0.48, 0.62),
-    ] {
-        art::sprite_at(
-            name,
-            vec2(r.x + r.w * x, r.y + r.h * y),
-            h,
-            Default::default(),
-        );
-    }
-    crate::ui::sprite_at(
-        "round_blue",
-        vec2(r.x + r.w * 0.82, r.y + r.h * 0.78),
-        r.h * 0.34,
-        Default::default(),
-    );
-    text_outline(
-        "3",
-        r.x + r.w * 0.82,
-        r.y + r.h * 0.77,
-        r.h * 0.24,
-        WHITE,
-        Color::from_rgba(10, 70, 140, 255),
-    );
+    crate::ui::icon("count", r);
 }
 
 #[cfg(test)]

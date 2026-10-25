@@ -1,0 +1,106 @@
+[
+ {
+  "name": "mathpop_bg",
+  "w": 1024,
+  "h": 1024,
+  "seed": 21,
+  "cut": false,
+  "prompt": "Mobile game background: bright cheerful blue sky with big fluffy white clouds and a far away green meadow with flowers at the bottom, wide open sky in the middle. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, no characters, no people, no animals, fills the whole frame"
+ },
+ {
+  "name": "balloon_red",
+  "w": 768,
+  "h": 896,
+  "seed": 31,
+  "cut": true,
+  "prompt": "A single plump glossy red party balloon, smooth oval shape, with a small knot at the bottom, no string, big soft white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "balloon_orange",
+  "w": 768,
+  "h": 896,
+  "seed": 31,
+  "cut": true,
+  "prompt": "A single plump glossy orange party balloon, smooth oval shape, with a small knot at the bottom, no string, big soft white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "balloon_yellow",
+  "w": 768,
+  "h": 896,
+  "seed": 31,
+  "cut": true,
+  "prompt": "A single plump glossy yellow party balloon, smooth oval shape, with a small knot at the bottom, no string, big soft white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "balloon_green",
+  "w": 768,
+  "h": 896,
+  "seed": 31,
+  "cut": true,
+  "prompt": "A single plump glossy green party balloon, smooth oval shape, with a small knot at the bottom, no string, big soft white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "balloon_blue",
+  "w": 768,
+  "h": 896,
+  "seed": 31,
+  "cut": true,
+  "prompt": "A single plump glossy blue party balloon, smooth oval shape, with a small knot at the bottom, no string, big soft white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "balloon_purple",
+  "w": 768,
+  "h": 896,
+  "seed": 31,
+  "cut": true,
+  "prompt": "A single plump glossy purple party balloon, smooth oval shape, with a small knot at the bottom, no string, big soft white highlight. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "bunny_white",
+  "w": 768,
+  "h": 768,
+  "seed": 41,
+  "cut": true,
+  "prompt": "A cute chubby cartoon bunny character, cream white fur, big glossy eyes, long ears, standing upright facing forward, happy smile, arms down, full body front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "bunny_white_up",
+  "w": 768,
+  "h": 768,
+  "seed": 41,
+  "cut": true,
+  "prompt": "A cute chubby cartoon bunny character, cream white fur, big glossy eyes, long ears, jumping in the air with both arms raised cheering, big open happy smile, eyes closed with joy, full body front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "bunny_white_sad",
+  "w": 768,
+  "h": 768,
+  "seed": 41,
+  "cut": true,
+  "prompt": "A cute chubby cartoon bunny character, cream white fur, big glossy eyes, long ears, standing with drooping ears, sad worried face with a tear, arms down, full body front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "bunny_pink",
+  "w": 768,
+  "h": 768,
+  "seed": 41,
+  "cut": true,
+  "prompt": "A cute chubby cartoon bunny character, pink fur, big glossy eyes, long ears, standing upright facing forward, happy smile, arms down, full body front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "bunny_pink_up",
+  "w": 768,
+  "h": 768,
+  "seed": 41,
+  "cut": true,
+  "prompt": "A cute chubby cartoon bunny character, pink fur, big glossy eyes, long ears, jumping in the air with both arms raised cheering, big open happy smile, eyes closed with joy, full body front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ },
+ {
+  "name": "bunny_pink_sad",
+  "w": 768,
+  "h": 768,
+  "seed": 41,
+  "cut": true,
+  "prompt": "A cute chubby cartoon bunny character, pink fur, big glossy eyes, long ears, standing with drooping ears, sad worried face with a tear, arms down, full body front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground"
+ }
+]
