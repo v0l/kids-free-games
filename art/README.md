@@ -5,7 +5,7 @@ Each `art/<sheet>.txt` lists sprites as `name | kenney-pack/path.png | options`.
 trims, scales and packs each manifest into `assets/art/<sheet>.kga`.
 `sound.txt` in the repo root does the same for `assets/sound.kgs`.
 
-Options: `max=N` longest side in px, `solo` own texture (for tiling backgrounds),
+Pages are lossy WebP unless an entry says `png`. Options: `max=N` longest side in px, `solo` own texture (for tiling backgrounds),
 `keep` keep transparent margins, `flip` mirror, `crop=x,y,w,h`.
 
 In code: `crate::sprites!("<sheet>");` inside a module gives `sprite`, `sprite_ex`,

@@ -374,6 +374,31 @@ mod tests {
     }
 
     #[test]
+    fn lossy_webp_pages_keep_their_alpha() {
+        let b = include_bytes!("../tests/data/test-alpha.webp");
+        let (w, h, px) = decode_page(b).unwrap();
+        assert_eq!((w, h), (64, 32));
+        assert!(px[3] < 10, "left half should be clear");
+        let right = ((10 * w + 50) * 4) as usize;
+        assert!(px[right + 3] > 245 && (px[right] as i32 - 200).abs() < 12);
+    }
+
+    #[test]
+    fn decoding_every_page_is_quick() {
+        let dir = concat!(env!("CARGO_MANIFEST_DIR"), "/assets/art");
+        let t = std::time::Instant::now();
+        for e in std::fs::read_dir(dir).unwrap() {
+            let p = e.unwrap().path();
+            let b = std::fs::read(&p).unwrap();
+            let idx = parse(&b).unwrap();
+            for (at, len) in idx.pages {
+                decode_page(&b[at..at + len]).unwrap();
+            }
+        }
+        eprintln!("decoded all pages in {:?}", t.elapsed());
+    }
+
+    #[test]
     fn rejects_garbage() {
         assert!(parse(b"nope").is_none());
         assert!(parse(b"KGA1\x05\x00\x00\x00").is_none());

@@ -158,7 +158,13 @@ def png_bytes(im):
     return b.getvalue()
 
 
-def page_bytes(im, jpg=False, colors=0):
+def page_bytes(im, jpg=False, colors=0, webp=False):
+    if webp:
+        b = io.BytesIO()
+        if im.mode == "RGBA" and im.getchannel("A").getextrema()[0] == 255:
+            im = im.convert("RGB")
+        im.save(b, "WEBP", quality=88, method=6, alpha_quality=95)
+        return b.getvalue()
     if jpg:
         b = io.BytesIO()
         im.convert("RGB").save(b, "JPEG", quality=86, optimize=True, progressive=False)
@@ -192,12 +198,13 @@ def build_sheet(manifest):
         pages.append(canvas)
     colors = int(next((o.get("colors", 0) for _, _, o in entries if "colors" in o), 0))
     atlas_jpg = any("atlasjpg" in o for _, _, o in entries)
-    blobs = [page_bytes(p, jpg=atlas_jpg, colors=colors) for p in pages]
+    webp = not any("png" in o for _, _, o in entries)
+    blobs = [page_bytes(p, jpg=atlas_jpg, colors=colors, webp=webp) for p in pages]
     for name, im, jpg in solo:
         index.append(f"{name} {len(blobs)} 0 0 {im.width} {im.height}")
         sq = im.resize((pow2_near(im.width), pow2_near(im.height)), Image.LANCZOS)
         index[-1] = f"{name} {len(blobs)} 0 0 {sq.width} {sq.height} {im.width} {im.height}"
-        blobs.append(page_bytes(sq, jpg=jpg))
+        blobs.append(page_bytes(sq, jpg=jpg and not webp, webp=webp))
     out = bytearray(b"KGA1")
     out += struct.pack("<I", len(blobs))
     for b in blobs:
