@@ -1,0 +1,15 @@
+avatar_fox | gen:avatar_fox_cut.png | max=256
+avatar_panda | gen:avatar_panda_cut.png | max=256
+avatar_bunny | gen:avatar_bunny_cut.png | max=256
+avatar_lion | gen:avatar_lion_cut.png | max=256
+avatar_frog | gen:avatar_frog_cut.png | max=256
+avatar_penguin | gen:avatar_penguin_cut.png | max=256
+avatar_kitten | gen:avatar_kitten_cut.png | max=256
+avatar_owl | gen:avatar_owl_cut.png | max=256
+avatar_puppy | gen:avatar_puppy_cut.png | max=256
+avatar_unicorn | gen:avatar_unicorn_cut.png | max=256
+avatar_koala | gen:avatar_koala_cut.png | max=256
+avatar_tiger | gen:avatar_tiger_cut.png | max=256
+avatar_frame | gen:avatar_frame_cut.png | max=256
+trophy | gen:trophy_cut.png | max=200
+crown | gen:crown_cut.png | max=128

@@ -367,6 +367,20 @@ pub fn overlay(view: &View, title: &str, lines: &[&str]) {
     crate::fx::panel(view, title, lines, age, accent);
 }
 
+pub fn results(view: &View, r: &crate::ui::Results) {
+    let key = format!("results:{}", r.title);
+    let age = OVERLAY.with(|o| {
+        let mut o = o.borrow_mut();
+        o.seen = true;
+        if o.title != key {
+            o.title = key;
+            o.age = 0.0;
+        }
+        o.age
+    });
+    crate::ui::results(view, r, age);
+}
+
 #[derive(Default)]
 struct OverlayClock {
     title: String,
@@ -604,11 +618,31 @@ impl Best {
     pub fn offer(&mut self, score: u32) {
         self.0 = self.0.max(score);
     }
+
+    pub fn load(game: &str) -> Self {
+        Self(crate::profile::personal_best(game).unwrap_or(0).max(0) as u32)
+    }
+
+    pub fn submit(&mut self, game: &str, score: u32) -> Option<usize> {
+        self.offer(score);
+        crate::profile::submit(game, score as i64, crate::profile::Better::Higher)
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn saved_best_survives_a_restart() {
+        crate::save::reset_for_test();
+        crate::profile::create("mia", 0);
+        let mut b = Best::load("t_engine");
+        assert_eq!(b.0, 0);
+        assert_eq!(b.submit("t_engine", 12), Some(0));
+        assert_eq!(b.submit("t_engine", 5), Some(1));
+        assert_eq!(Best::load("t_engine").0, 12);
+    }
 
     #[test]
     fn clip_rects_land_on_screen_pixels_past_the_cutout() {

@@ -294,7 +294,24 @@ async fn main() {
         }
         g
     });
+    if which != -3 && which != -4 {
+        kids_games::profile::create("Mia", 2);
+        if which > 100 {
+            let g = &all[(which - 101) as usize];
+            kids_games::profile::submit(g.icon_key, 3, kids_games::profile::Better::Higher);
+            kids_games::profile::create("Leo", 5);
+            kids_games::profile::submit(g.icon_key, 1, kids_games::profile::Better::Higher);
+        }
+    }
+    if which == -4 {
+        kids_games::profile::create("Mia", 2);
+        kids_games::profile::create("Leo", 5);
+        kids_games::profile::create("Ava", 9);
+    }
     let mut app = App::new();
+    if which == -4 {
+        app.profiles = Some(kids_games::profiles::Profiles::new());
+    }
     for _ in 0..90 {
         app.update(&Input::default(), &view, 1.0 / 60.0);
     }
@@ -306,6 +323,7 @@ async fn main() {
                 tick_overlay(0.25);
             }
             None if which == -2 => word_grid(&view),
+            None if which == -3 || which == -4 => app.draw(&view),
             None if which < 0 => app_icon(&view),
             None => app.draw(&view),
         }

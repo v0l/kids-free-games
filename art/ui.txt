@@ -54,3 +54,4 @@ p_round      | gen:round_btn_trim.png | max=160
 p_coin       | gen:coin_trim.png | max=160
 p_star       | gen:star_trim.png | max=160
 p_medal      | gen:medal_trim.png | max=200
+icon_gear    | game-icons/PNG/White/2x/gear.png | max=100

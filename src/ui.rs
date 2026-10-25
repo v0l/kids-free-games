@@ -268,6 +268,133 @@ pub fn panel(view: &View, title: &str, lines: &[&str], age: f32, accent: Color) 
     }
 }
 
+pub struct Results<'a> {
+    pub game: &'a str,
+    pub title: &'a str,
+    pub line: &'a str,
+    pub rank: Option<usize>,
+    pub action: &'a str,
+    pub format: fn(i64) -> String,
+}
+
+pub fn plain_score(s: i64) -> String {
+    s.to_string()
+}
+
+pub const RESULT_ROWS: usize = 5;
+
+pub fn results_rows(board_len: usize, rank: Option<usize>) -> Vec<usize> {
+    let mut rows: Vec<usize> = (0..board_len.min(RESULT_ROWS)).collect();
+    if let Some(r) = rank.filter(|r| *r >= RESULT_ROWS) {
+        rows.pop();
+        rows.push(r);
+    }
+    rows
+}
+
+pub fn results(view: &View, r: &Results, age: f32) {
+    let board = crate::profile::board(r.game);
+    let rows = results_rows(board.len(), r.rank);
+    let fade = ease_out_cubic(age / 0.2);
+    fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55 * fade));
+    let row_h = 46.0;
+    let pw = 580.0f32.min(view.w - 30.0);
+    let ph = 230.0 + rows.len() as f32 * row_h + if rows.is_empty() { 0.0 } else { 20.0 };
+    let s = ease_out_back(age / 0.32).max(0.01);
+    let c = view.center() + vec2(0.0, 24.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
+    let p = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
+    painted_panel(p, WHITE);
+    ribbon(view, r.title, vec2(c.x, p.y + 8.0 * s), age);
+    let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
+    text_center(
+        r.line,
+        c.x,
+        p.y + 92.0 * s,
+        34.0 * s,
+        with_alpha(BODY, a(0.12)),
+    );
+    if r.rank == Some(0) {
+        let k = ease_out_back(((age - 0.35) / 0.3).clamp(0.0, 1.0));
+        if k > 0.0 {
+            let wob = (age * 6.0).sin() * 0.06;
+            crate::profiles::trophy(vec2(p.x + 46.0 * s, p.y + 70.0 * s), 92.0 * k);
+            sprite_ex(
+                "p_star",
+                Rect::new(p.x + p.w - 90.0 * s, p.y + 30.0 * s, 70.0 * k, 70.0 * k),
+                crate::art::Draw {
+                    rotation: wob,
+                    ..Default::default()
+                },
+            );
+            text_outline(
+                "New best!",
+                c.x,
+                p.y + 132.0 * s,
+                30.0 * s * (1.0 + wob * 0.5),
+                Color::from_rgba(255, 200, 40, 255),
+                Color::from_rgba(130, 50, 0, 255),
+            );
+        }
+    }
+    let top = p.y + 160.0 * s;
+    for (i, idx) in rows.iter().enumerate() {
+        let e = &board[*idx];
+        let y = top + i as f32 * row_h * s;
+        let la = a(0.2 + i as f32 * 0.05);
+        let mine = Some(*idx) == r.rank;
+        let row = Rect::new(p.x + 40.0 * s, y, p.w - 80.0 * s, (row_h - 6.0) * s);
+        if mine {
+            round_rect(
+                row,
+                row.h / 2.0,
+                with_alpha(Color::from_rgba(255, 214, 90, 255), 0.85 * la),
+            );
+        } else if i % 2 == 0 {
+            round_rect(row, row.h / 2.0, Color::new(0.4, 0.3, 0.6, 0.08 * la));
+        }
+        let cy = row.center().y;
+        let place = format!("{}", idx + 1);
+        text_center(&place, row.x + 26.0 * s, cy, 26.0 * s, with_alpha(BODY, la));
+        if *idx == 0 {
+            crate::profiles::crown(vec2(row.x + 26.0 * s, cy - 24.0 * s), 26.0 * s);
+        }
+        crate::profiles::avatar(
+            crate::profile::player_avatar(&e.player),
+            vec2(row.x + 72.0 * s, cy),
+            row.h * 0.95,
+        );
+        let name = crate::profile::player_name(&e.player);
+        let nw = crate::outline::measure(FONT_BYTES, &name, 26.0) * s;
+        text_center(
+            &name,
+            row.x + 104.0 * s + nw / 2.0,
+            cy,
+            26.0 * s,
+            with_alpha(BODY, la),
+        );
+        let sc = (r.format)(e.score);
+        let sw = crate::outline::measure(FONT_BYTES, &sc, 30.0) * s;
+        text_outline(
+            &sc,
+            row.x + row.w - 18.0 * s - sw / 2.0,
+            cy,
+            30.0 * s,
+            with_alpha(WHITE, la),
+            with_alpha(Color::from_rgba(70, 30, 100, 255), la),
+        );
+    }
+    let by = p.y + p.h - 46.0 * s;
+    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
+    let bw = (crate::outline::measure(FONT_BYTES, r.action, 30.0) + 110.0) * s * pulse;
+    painted_button(
+        Rect::new(c.x - bw / 2.0, by - 10.0 * s, bw, 78.0 * s * pulse),
+        r.action,
+        "green",
+        0.0,
+        a(0.3),
+    );
+}
+
 pub fn spark(c: Vec2, size: f32, angle: f32, color: Color) {
     let name = if color.r > 0.85 && color.g > 0.85 && color.b > 0.85 {
         "star_white"
@@ -377,6 +504,15 @@ mod tests {
         ] {
             assert!(names().iter().any(|h| h == n), "ui sheet lacks {n}");
         }
+    }
+
+    #[test]
+    fn results_show_the_top_five_and_your_row_if_lower() {
+        assert_eq!(results_rows(3, Some(1)), vec![0, 1, 2]);
+        assert_eq!(results_rows(10, Some(2)), vec![0, 1, 2, 3, 4]);
+        assert_eq!(results_rows(10, Some(8)), vec![0, 1, 2, 3, 8]);
+        assert_eq!(results_rows(10, None), vec![0, 1, 2, 3, 4]);
+        assert!(results_rows(0, None).is_empty());
     }
 
     #[test]

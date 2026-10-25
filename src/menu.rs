@@ -28,6 +28,7 @@ pub struct App {
     fx: Particles,
     feel: crate::feel::Feel,
     focus: Option<usize>,
+    pub profiles: Option<crate::profiles::Profiles>,
 }
 
 const LAUNCH_TIME: f32 = 0.22;
@@ -54,6 +55,7 @@ pub struct Header {
     pub title_y: f32,
     pub title_band: (f32, f32),
     pub tag: Rect,
+    pub player: Rect,
     pub bottom: f32,
 }
 
@@ -71,13 +73,22 @@ pub fn header(view: &View) -> Header {
     let title_band = (title_y - reach, title_y + reach);
     let tag_h = TAG_SIZE + 14.0;
     let tag_w = measure_width("No ads. No tracking. Just play.", TAG_SIZE) + 40.0;
-    let tag = Rect::new(view.w / 2.0 - tag_w / 2.0, title_band.1 + 8.0, tag_w, tag_h);
+    let mut tag = Rect::new(view.w / 2.0 - tag_w / 2.0, title_band.1 + 8.0, tag_w, tag_h);
+    let mut player = crate::profiles::player_chip_at(view, tag.y + tag.h + 12.0);
+    let gap = 20.0;
+    if tag.w + player.w + gap <= view.w - 40.0 {
+        let left = view.w / 2.0 - (tag.w + player.w + gap) / 2.0;
+        tag.x = left;
+        player.x = left + tag.w + gap;
+        player.y = tag.y + tag.h / 2.0 - player.h / 2.0;
+    }
     Header {
         title_size,
         title_y,
         title_band,
         tag,
-        bottom: tag.y + tag.h,
+        player,
+        bottom: (player.y + player.h).max(tag.y + tag.h),
     }
 }
 
@@ -176,6 +187,9 @@ impl App {
             fx: Particles::default(),
             feel: crate::feel::Feel::default(),
             focus: None,
+            profiles: crate::profile::current_id()
+                .is_none()
+                .then(crate::profiles::Profiles::new),
         }
     }
 
@@ -239,6 +253,15 @@ impl App {
             game.update(input, view, game_dt);
             return;
         }
+        if let Some(p) = &mut self.profiles {
+            p.update(input, view, dt);
+            if p.done {
+                self.profiles = None;
+                self.since_menu = 0.0;
+                self.curtain = 1.0;
+            }
+            return;
+        }
         if let Some((i, t)) = &mut self.launch {
             *t += dt;
             if *t >= LAUNCH_TIME {
@@ -257,6 +280,14 @@ impl App {
         if input.tapped_in(MUSIC) {
             sfx::toggle_music();
             sfx::play(Sfx::Tap);
+            return;
+        }
+        let chip = header(view).player;
+        if input.tapped_in(Rect::new(chip.x, chip.y - self.scroll, chip.w, chip.h)) {
+            sfx::play(Sfx::Tap);
+            let mut p = crate::profiles::Profiles::new();
+            p.mode = crate::profiles::Mode::Pick;
+            self.profiles = Some(p);
             return;
         }
         let rects = self.layout(view).tiles;
@@ -414,7 +445,7 @@ impl App {
         round_rect(r, r.h / 2.0, Color::new(0.15, 0.05, 0.3, 0.45 * a));
         text_center(
             tag,
-            view.w / 2.0,
+            r.center().x,
             r.y + r.h / 2.0,
             TAG_SIZE,
             with_alpha(WHITE, a),
@@ -431,9 +462,16 @@ impl App {
             return;
         }
         self.draw_backdrop(view);
+        if let Some(p) = &self.profiles {
+            fill_screen(view, Color::new(0.1, 0.04, 0.25, 0.45));
+            p.draw(view);
+            self.draw_curtain(view);
+            return;
+        }
         self.draw_title(view);
         draw_mute(view, self.scroll);
         draw_music(self.scroll);
+        crate::profiles::draw_player_chip(header(view).player, self.scroll);
         let lay = self.layout(view);
         for (r, kind) in &lay.labels {
             let r = Rect::new(r.x, r.y - self.scroll, r.w, r.h);
@@ -605,6 +643,10 @@ mod tests {
             let h = header(&v);
             assert!(h.title_band.0 >= 0.0, "title clipped at top in {v:?}");
             assert!(
+                h.tag.y + h.tag.h <= h.player.y || h.tag.x + h.tag.w <= h.player.x,
+                "tagline hits the player chip in {v:?}"
+            );
+            assert!(
                 h.title_band.1 <= h.tag.y,
                 "title {:?} runs into tagline {:?} in {v:?}",
                 h.title_band,
@@ -699,6 +741,8 @@ mod tests {
 
     #[test]
     fn keyboard_alone_can_launch_a_game() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
         let v = View::ipad_landscape();
         let mut app = App::new();
         app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);

@@ -13,7 +13,7 @@ cat > "$OUT/index.html" <<'EOF'
 <!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body,canvas{margin:0;padding:0;width:100%;height:100%;overflow:hidden;position:fixed}</style></head>
 <body><canvas id="glcanvas" tabindex="1"></canvas><script>var register_plugin;</script><script src="mq_js_bundle.js"></script>
 <script>
-miniquad_add_plugin({register_plugin: function(o){ o.env.shot_index = function(){ return parseInt(location.hash.slice(1)||"0"); }; o.env.shot_inset = function(){ return parseInt(new URLSearchParams(location.search).get("inset")||"0"); }; }, name: "shots", version: 1});
+miniquad_add_plugin({register_plugin: function(o){ o.env.kg_save_len = function(){ return 0; }; o.env.kg_save_read = function(){}; o.env.kg_save_write = function(){}; o.env.shot_index = function(){ return parseInt(location.hash.slice(1)||"0"); }; o.env.shot_inset = function(){ return parseInt(new URLSearchParams(location.search).get("inset")||"0"); }; }, name: "shots", version: 1});
 load("shots.wasm");
 </script></body></html>
 EOF

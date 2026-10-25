@@ -18,6 +18,14 @@ html, body, canvas { margin: 0; padding: 0; width: 100%; height: 100%; overflow:
 <canvas id="glcanvas" tabindex="1"></canvas>
 <script>var register_plugin;</script>
 <script src="mq_js_bundle.js"></script>
+<script>
+miniquad_add_plugin({name: "kg_save", version: 1, register_plugin: function (o) {
+  var key = "kids-free-games-save";
+  o.env.kg_save_len = function () { try { return new TextEncoder().encode(localStorage.getItem(key) || "").length; } catch (e) { return 0; } };
+  o.env.kg_save_read = function (ptr, len) { var b = new TextEncoder().encode(localStorage.getItem(key) || ""); new Uint8Array(wasm_memory.buffer, ptr, len).set(b.subarray(0, len)); };
+  o.env.kg_save_write = function (ptr, len) { try { localStorage.setItem(key, new TextDecoder().decode(new Uint8Array(wasm_memory.buffer, ptr, len))); } catch (e) {} };
+}});
+</script>
 <script>load("kids_games.wasm");</script>
 </body>
 </html>

@@ -6,7 +6,10 @@ pub mod games;
 pub mod learn;
 pub mod menu;
 pub mod outline;
+pub mod profile;
+pub mod profiles;
 pub mod safe;
+pub mod save;
 pub mod sfx;
 pub mod ui;
 
