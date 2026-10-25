@@ -215,6 +215,10 @@ impl App {
         layout(view, &self.kinds())
     }
 
+    pub fn scroll_to_end(&mut self, view: &View) {
+        self.scroll = self.max_scroll(view);
+    }
+
     fn max_scroll(&self, view: &View) -> f32 {
         let rects = self.layout(view).tiles;
         let bottom = rects.last().map(|r| r.y + r.h + 30.0).unwrap_or(0.0);
@@ -585,6 +589,16 @@ fn draw_music(scroll: f32) {
     crate::ui::painted_round(r, icon, 0.0);
 }
 
+fn progress_bar(ir: Rect, progress: f32) {
+    let h = ir.h * 0.1;
+    let bar = Rect::new(ir.x + ir.w * 0.12, ir.y + ir.h - h * 1.7, ir.w * 0.76, h);
+    round_rect(bar, h / 2.0, Color::new(0.1, 0.03, 0.22, 0.6));
+    if progress > 0.0 {
+        let fill = Rect::new(bar.x, bar.y, (bar.w * progress).max(h), bar.h);
+        round_rect(fill, h / 2.0, Color::from_rgba(255, 210, 60, 255));
+    }
+}
+
 fn draw_tile(view: &View, r: Rect, e: &Entry, shine: Option<f32>) {
     let k = r.w / 160.0;
     let ir = Rect::new(r.x, r.y, r.w, r.w);
@@ -604,6 +618,9 @@ fn draw_tile(view: &View, r: Rect, e: &Entry, shine: Option<f32>) {
     }
     if let Some(t) = shine {
         shine_sweep(ir, t);
+    }
+    if let Some(bands) = crate::mastery::bands_of(e.icon_key) {
+        progress_bar(ir, crate::mastery::game_progress(e.icon_key, bands));
     }
     let label_y = ir.y + ir.h + (r.h - ir.h) * 0.5;
     let size = (r.w * 0.9 / measure_width(e.name, 10.0) * 10.0).min(r.w * 0.16);

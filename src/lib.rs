@@ -4,6 +4,7 @@ pub mod feel;
 pub mod fx;
 pub mod games;
 pub mod learn;
+pub mod mastery;
 pub mod menu;
 pub mod outline;
 pub mod profile;

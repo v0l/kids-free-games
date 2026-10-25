@@ -73,12 +73,8 @@ pub fn choice_count(level: usize) -> usize {
     }
 }
 
-pub fn star_rating(misses: u32) -> u8 {
-    match misses {
-        0 => 3,
-        1 => 2,
-        _ => 1,
-    }
+pub fn target_secs(level: usize) -> f32 {
+    2.5 + RANGES[level.min(RANGES.len() - 1)].1 as f32 * 0.35
 }
 
 fn stars_score(s: i64) -> String {
@@ -269,6 +265,8 @@ pub struct Count {
     particles: Particles,
     popups: Popups,
     t: f32,
+    pub session: crate::mastery::Session,
+    pub summary: String,
 }
 
 impl Count {
@@ -300,6 +298,8 @@ impl Count {
             particles: Particles::default(),
             popups: Popups::default(),
             t: 0.0,
+            session: crate::mastery::Session::default(),
+            summary: String::new(),
         };
         g.load();
         g
@@ -310,6 +310,7 @@ impl Count {
         self.ladder.streak = 0;
         self.ladder.slips = 0;
         self.misses = 0;
+        self.session.reset();
         crate::profile::set_level(GAME, self.ladder.level as u32);
         self.mode = Mode::Play;
         self.next_question();
@@ -320,8 +321,10 @@ impl Count {
     }
 
     fn finish_level(&mut self, level: usize) -> u8 {
-        let stars = star_rating(self.misses);
+        let stars = self.session.stars(target_secs(level));
         crate::profile::award_stars(GAME, level as u32, stars);
+        self.summary = self.session.summary();
+        self.session.reset();
         self.misses = 0;
         stars
     }
@@ -354,6 +357,7 @@ impl Count {
             }
             Step::Down => {
                 self.misses = 0;
+                self.session.reset();
                 crate::profile::set_level(GAME, self.ladder.level as u32);
             }
             Step::Same => {}
@@ -371,6 +375,7 @@ impl Count {
         self.celebrate = None;
         self.prompt_bump.kick();
         self.t = 0.0;
+        self.session.start_question();
     }
 
     fn next_question(&mut self) {
@@ -396,8 +401,11 @@ impl Count {
             return Tap::Ignored;
         }
         let correct = self.question.options[slot] == self.question.count;
+        let level = self.ladder.level;
         let result = self.attempt.choose(slot, correct, &mut self.ladder);
         if let Tap::Right(step) = result {
+            let answer = self.session.answer(self.attempt.wrong == 0, false);
+            crate::mastery::record(GAME, level, answer, target_secs(level));
             self.record(step);
         }
         match result {
@@ -499,6 +507,9 @@ impl Count {
 
     fn update_play(&mut self, input: &Input, view: &View, dt: f32) {
         let end = self.celebration_length();
+        if self.celebrate.is_none() {
+            self.session.tick(dt);
+        }
         if let Some(t) = &mut self.celebrate {
             *t += dt;
             if *t >= end {
@@ -555,6 +566,7 @@ impl Count {
         if input.pressed && age > 0.8 {
             self.report = None;
             self.mode = Mode::Play;
+            self.session.start_question();
         }
     }
 
@@ -745,7 +757,7 @@ impl Count {
                 } else {
                     "Counting champion!".to_string()
                 };
-                overlay(view, &title, &["", &next, "Keep going"]);
+                overlay(view, &title, &["", &next, &self.summary]);
                 let c = view.center() + vec2(0.0, 20.0);
                 let ph = 150.0 + 3.0 * 64.0;
                 let y = c.y - ph / 2.0 + 118.0;
@@ -1207,6 +1219,39 @@ mod tests {
         g.pick(wrong);
     }
 
+    fn think(g: &mut Count, v: &View, secs: f32) {
+        for _ in 0..(secs * 60.0) as usize {
+            g.update(&Input::default(), v, 1.0 / 60.0);
+        }
+    }
+
+    #[test]
+    fn slow_counting_clears_the_level_with_two_stars_and_quick_with_three() {
+        let v = View::ipad_landscape();
+        for (secs, want) in [(1.0, 3), (12.0, 2)] {
+            fresh_player();
+            let mut g = Count::new();
+            for _ in 0..UP_STREAK {
+                think(&mut g, &v, secs);
+                let slot = g.question.slot_of_answer();
+                let tap = g.pick(slot);
+                g.react(&v, slot, tap);
+                while g.celebrate.is_some() {
+                    g.update(&Input::default(), &v, 1.0 / 60.0);
+                }
+            }
+            assert_eq!(
+                crate::profile::stars(GAME, 0),
+                want,
+                "{secs} s {}",
+                g.summary
+            );
+            let b = crate::mastery::band(GAME, 0);
+            assert_eq!(b.answers, UP_STREAK as i64);
+            assert!((b.secs - secs).abs() < 0.2, "{}", b.secs);
+        }
+    }
+
     #[test]
     fn the_first_level_counts_to_three_with_a_hint_until_the_first_success() {
         fresh_player();
@@ -1256,8 +1301,6 @@ mod tests {
         }
         assert_eq!(g.ladder.level, 1);
         assert_eq!(crate::profile::stars(GAME, 0), 2);
-        assert_eq!(star_rating(0), 3);
-        assert_eq!(star_rating(5), 1);
     }
 
     #[test]

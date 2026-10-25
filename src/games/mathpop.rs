@@ -25,6 +25,7 @@ pub const LEVEL_NAMES: [&str; 9] = [
     "Maths whizz",
 ];
 pub const QUESTIONS: u32 = 5;
+pub const TARGET_SECS: [f32; 9] = [4.0, 5.0, 6.0, 5.0, 6.0, 6.0, 5.0, 6.0, 6.0];
 pub const DOWN_SLIPS: u32 = 3;
 pub const BALLOONS: usize = 4;
 const BALLOON_COLORS: [(&str, Color); 6] = [
@@ -237,14 +238,6 @@ enum Screen {
     Final(f32),
 }
 
-pub fn stars_for(slips: u32) -> u8 {
-    match slips {
-        0 => 3,
-        1 | 2 => 2,
-        _ => 1,
-    }
-}
-
 pub struct MathPop {
     pub level: usize,
     pub answered: u32,
@@ -266,6 +259,7 @@ pub struct MathPop {
     popups: Popups,
     press: f32,
     t: f32,
+    pub session: crate::mastery::Session,
 }
 
 impl MathPop {
@@ -296,6 +290,7 @@ impl MathPop {
             popups: Popups::default(),
             press: 0.0,
             t: 0.0,
+            session: crate::mastery::Session::default(),
         };
         if teach && level == 0 {
             g.question = Question::starter();
@@ -314,6 +309,7 @@ impl MathPop {
         self.answered = 0;
         self.slips = 0;
         self.slip_run = 0;
+        self.session.reset();
         self.finished = None;
         self.rank = None;
         self.screen = Screen::Play;
@@ -339,6 +335,7 @@ impl MathPop {
         self.solved = false;
         self.leave = None;
         self.asked = 0.0;
+        self.session.start_question();
         self.question_bump.kick();
     }
 
@@ -351,8 +348,12 @@ impl MathPop {
         self.wrong >= 2
     }
 
+    fn finished_stars(&self) -> u8 {
+        profile::stars(KEY, self.level as u32).max(self.session.stars(TARGET_SECS[self.level]))
+    }
+
     fn complete_level(&mut self) {
-        let stars = stars_for(self.slips);
+        let stars = self.session.stars(TARGET_SECS[self.level]);
         profile::award_stars(KEY, self.level as u32, stars);
         if !self.is_final_level() {
             profile::unlock(KEY, self.level as u32 + 1);
@@ -402,6 +403,10 @@ impl MathPop {
             self.balloons[slot].popped = true;
             self.leave = Some(0.0);
             self.answered += 1;
+            if !self.teach {
+                let answer = self.session.answer(self.wrong == 0, false);
+                crate::mastery::record(KEY, self.level, answer, TARGET_SECS[self.level]);
+            }
             if self.wrong > 0 {
                 self.slips += 1;
                 self.slip_run += 1;
@@ -664,6 +669,7 @@ impl Game for MathPop {
         match self.screen {
             Screen::Play => {
                 self.asked += dt;
+                self.session.tick(dt);
                 for b in &mut self.balloons {
                     b.wobble = (b.wobble - dt * 1.6).max(0.0);
                 }
@@ -908,7 +914,7 @@ impl MathPop {
         crate::ui::ribbon(view, "Level done!", vec2(c.x, p.y + 8.0 * s), age);
         let name = format!("{}: {}", self.level + 1, LEVEL_NAMES[self.level]);
         text_center(&name, c.x, p.y + 100.0 * s, 32.0 * s, BODY);
-        let have = stars_for(self.slips);
+        let have = self.finished_stars();
         let pop = |i: u8| ease_out_back(((age - 0.25 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
         for i in 0..3u8 {
             let x = c.x + (i as f32 - 1.0) * 100.0 * s;
@@ -933,6 +939,13 @@ impl MathPop {
             );
         }
         let a = ((age - 0.3) / 0.2).clamp(0.0, 1.0);
+        text_center(
+            &self.session.summary(),
+            c.x,
+            p.y + 262.0 * s,
+            24.0 * s,
+            Color::new(BODY.r, BODY.g, BODY.b, BODY.a * a),
+        );
         let pulse = 1.0 + (age * 4.5).sin() * 0.03;
         let scaled = |r: Rect, k: f32| {
             let cc = r.center();
@@ -1370,17 +1383,52 @@ mod tests {
         assert_eq!(profile::level(KEY), 1);
     }
 
-    #[test]
-    fn stars_fall_with_the_slips_and_never_below_one() {
-        assert_eq!(stars_for(0), 3);
-        assert_eq!(stars_for(1), 2);
-        assert_eq!(stars_for(2), 2);
-        assert_eq!(stars_for(5), 1);
+    fn played_level(g: &mut MathPop, v: &View, think: f32, miss: &[u32]) {
+        for n in 0..QUESTIONS {
+            settle(g, v, think);
+            if miss.contains(&n) {
+                pop_wrong(g, v);
+            }
+            pop_right(g, v);
+            settle(g, v, 1.2);
+            if g.screen != Screen::Play {
+                return;
+            }
+        }
+    }
+
+    fn practised() -> MathPop {
         fresh_player();
+        profile::set(KEY, "played", 1);
+        MathPop::new()
+    }
+
+    #[test]
+    fn three_stars_need_right_answers_and_quick_ones() {
         let v = View::ipad_landscape();
-        let mut g = MathPop::new();
-        clear_level(&mut g, &v, true);
+        let mut g = practised();
+        played_level(&mut g, &v, 1.0, &[]);
+        assert_eq!(profile::stars(KEY, 0), 3);
+        let mut g = practised();
+        played_level(&mut g, &v, 9.0, &[]);
         assert_eq!(profile::stars(KEY, 0), 2);
+        let mut g = practised();
+        played_level(&mut g, &v, 1.0, &[0]);
+        assert_eq!(profile::stars(KEY, 0), 2);
+        let mut g = practised();
+        played_level(&mut g, &v, 1.0, &[0, 1, 2]);
+        assert_eq!(profile::stars(KEY, 0), 1);
+    }
+
+    #[test]
+    fn every_answer_feeds_the_mastery_record() {
+        let v = View::ipad_landscape();
+        let mut g = practised();
+        played_level(&mut g, &v, 1.0, &[1]);
+        let b = crate::mastery::band(KEY, 0);
+        assert_eq!(b.answers, QUESTIONS as i64);
+        assert!(b.accuracy > 0.5 && b.accuracy < 1.0);
+        assert!(b.secs > 0.5 && b.secs < 3.0, "{}", b.secs);
     }
 
     #[test]

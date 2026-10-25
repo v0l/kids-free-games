@@ -565,12 +565,29 @@ async fn main() {
         kids_games::profile::create("Leo", 5);
         kids_games::profile::create("Ava", 9);
     }
+    if which == 0 || which == -9 {
+        let quick = kids_games::mastery::Answer {
+            first_try: true,
+            secs: 1.5,
+            helped: false,
+        };
+        for (game, bands) in [("mathpop", 4), ("count", 2)] {
+            for band in 0..bands {
+                for _ in 0..12 {
+                    kids_games::mastery::record(game, band, quick, 3.0);
+                }
+            }
+        }
+    }
     let mut app = App::new();
     if which == -4 {
         app.profiles = Some(kids_games::profiles::Profiles::new());
     }
     for _ in 0..90 {
         app.update(&Input::default(), &view, 1.0 / 60.0);
+    }
+    if which == -9 {
+        app.scroll_to_end(&view);
     }
     loop {
         let view = begin_frame_safe(fake_inset());
@@ -580,7 +597,7 @@ async fn main() {
                 tick_overlay(0.25);
             }
             None if which == -2 => word_grid(&view),
-            None if which == -3 || which == -4 => app.draw(&view),
+            None if which == -3 || which == -4 || which == -9 => app.draw(&view),
             None if which < 0 => app_icon(&view),
             None => app.draw(&view),
         }
