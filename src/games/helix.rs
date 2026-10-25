@@ -11,6 +11,12 @@ pub const GRAVITY: f32 = 1700.0;
 pub const BOUNCE: f32 = -640.0;
 pub const BALL_R: f32 = 18.0;
 pub const SMASH_FLOORS: u32 = 3;
+pub const GAME: &str = "helix";
+pub const MAX_LEVEL: u32 = 30;
+pub const GRID_COLS: usize = 6;
+const WIN_DELAY: f32 = 0.8;
+const STAR_START: f32 = 0.3;
+const STAR_GAP: f32 = 0.25;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
@@ -28,6 +34,7 @@ pub struct Floor {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum State {
+    Select,
     Ready,
     Playing,
     Dead,
@@ -45,6 +52,11 @@ pub struct Helix {
     pub best: Best,
     pub level: u32,
     pub state: State,
+    pub bounces: u32,
+    pub stars: u8,
+    pub rank: Option<usize>,
+    pub fails: u32,
+    taught: bool,
     cam: f32,
     t: f32,
     squash: f32,
@@ -66,16 +78,72 @@ pub fn segment_at(angle: f32, rotation: f32) -> usize {
     ((local / TAU * SEGMENTS as f32) as usize).min(SEGMENTS - 1)
 }
 
-fn make_floor(index: usize, level: u32) -> Floor {
+pub fn floor_count(level: u32) -> usize {
+    (6 + level as usize * 2).min(36)
+}
+
+pub fn gap_len_range(level: u32, fails: u32) -> (usize, usize) {
+    let (lo, hi) = match level {
+        0..=2 => (4, 4),
+        3..=5 => (3, 4),
+        _ => (2, 3),
+    };
+    let ease = fails.min(2) as usize;
+    (lo + ease, (hi + ease).min(5))
+}
+
+pub fn danger_rate(level: u32, fails: u32) -> f32 {
+    (level.saturating_sub(2) as f32 * 0.3 - fails as f32 * 0.8).clamp(0.0, 4.0)
+}
+
+pub fn reached() -> u32 {
+    crate::profile::unlocked(GAME).clamp(1, MAX_LEVEL)
+}
+
+pub fn start_level() -> u32 {
+    match crate::profile::level(GAME) {
+        0 => 1,
+        n => n.clamp(1, reached()),
+    }
+}
+
+pub fn max_shift(level: u32) -> i32 {
+    (2 + level as i32 / 2).min(6)
+}
+
+pub fn stars_for(bounces: u32, floors: usize) -> u8 {
+    let floors = floors as u32;
+    if bounces <= floors {
+        3
+    } else if bounces <= floors * 2 {
+        2
+    } else {
+        1
+    }
+}
+
+fn gap_start(segs: &[Seg; SEGMENTS]) -> Option<usize> {
+    (0..SEGMENTS).find(|k| segs[*k] == Seg::Gap && segs[(k + SEGMENTS - 1) % SEGMENTS] != Seg::Gap)
+}
+
+fn make_floor(index: usize, level: u32, fails: u32, prev_gap: Option<usize>) -> Floor {
     let mut segs = [Seg::Solid; SEGMENTS];
-    let gap_at = rand::gen_range(0, SEGMENTS);
-    let gap_len = rand::gen_range(2, 4);
+    let gap_at = match prev_gap {
+        Some(p) => {
+            let shift = max_shift(level);
+            (p as i32 + rand::gen_range(-shift, shift + 1)).rem_euclid(SEGMENTS as i32) as usize
+        }
+        None => rand::gen_range(0, SEGMENTS),
+    };
+    let (lo, hi) = gap_len_range(level, fails);
+    let gap_len = rand::gen_range(lo, hi + 1);
     for k in 0..gap_len {
         segs[(gap_at + k) % SEGMENTS] = Seg::Gap;
     }
-    if index > 0 {
-        let dangers = (rand::gen_range(0, 2) + (level as usize + index) / 6).min(4);
-        for _ in 0..dangers {
+    if index >= 2 {
+        let rate = danger_rate(level, fails);
+        let dangers = rate.floor() as usize + usize::from(rand::gen_range(0.0, 1.0) < rate.fract());
+        for _ in 0..dangers.min(5) {
             let k = rand::gen_range(0, SEGMENTS);
             if segs[k] == Seg::Solid {
                 segs[k] = Seg::Danger;
@@ -97,14 +165,27 @@ impl Default for Helix {
 
 impl Helix {
     pub fn new() -> Self {
-        Self::with_level(1)
+        let mut g = Self::with_level(start_level());
+        g.best = Best::load(GAME);
+        g
     }
 
     pub fn with_level(level: u32) -> Self {
-        let count = 10 + level as usize * 2;
-        let mut floors: Vec<Floor> = (0..count).map(|i| make_floor(i, level)).collect();
-        let first_gap = floors[0].segs.iter().position(|s| *s == Seg::Gap).unwrap();
-        let rotation = ball_angle() - (first_gap as f32 + 0.5) / SEGMENTS as f32 * TAU + TAU * 0.5;
+        Self::build(level, 0)
+    }
+
+    fn build(level: u32, fails: u32) -> Self {
+        let level = level.clamp(1, MAX_LEVEL);
+        let mut floors: Vec<Floor> = Vec::new();
+        let mut prev = None;
+        for i in 0..floor_count(level) {
+            let f = make_floor(i, level, fails, prev);
+            prev = gap_start(&f.segs);
+            floors.push(f);
+        }
+        let first_gap = gap_start(&floors[0].segs).unwrap();
+        let turn = if level <= 2 { 0.25 } else { 0.5 };
+        let rotation = ball_angle() - (first_gap as f32 + 0.5) / SEGMENTS as f32 * TAU + TAU * turn;
         floors[0].segs[segment_at(ball_angle(), rotation)] = Seg::Solid;
         Self {
             floors,
@@ -117,6 +198,11 @@ impl Helix {
             best: Best::default(),
             level,
             state: State::Ready,
+            bounces: 0,
+            stars: 0,
+            rank: None,
+            fails,
+            taught: crate::profile::get(GAME, "taught") == 1,
             cam: 0.0,
             t: 0.0,
             squash: 0.0,
@@ -128,6 +214,20 @@ impl Helix {
             end_t: 0.0,
             last_x: None,
         }
+    }
+
+    pub fn enter(&mut self, level: u32) {
+        let level = level.clamp(1, MAX_LEVEL);
+        crate::profile::set_level(GAME, level);
+        let fails = if level == self.level { self.fails } else { 0 };
+        let best = self.best;
+        *self = Self::build(level, fails);
+        self.best = best;
+    }
+
+    pub fn open_select(&mut self) {
+        self.state = State::Select;
+        self.end_t = 0.0;
     }
 
     pub fn floor_y(i: usize) -> f32 {
@@ -173,6 +273,7 @@ impl Helix {
                 }
                 Seg::Solid => {
                     sfx::play(Sfx::Bounce);
+                    self.bounces += 1;
                     self.y = fy;
                     self.vy = BOUNCE;
                     self.streak = 0;
@@ -181,6 +282,25 @@ impl Helix {
             return Some(seg);
         }
         None
+    }
+
+    fn finish_level(&mut self, view: &View) {
+        self.state = State::Won;
+        self.end_t = 0.0;
+        self.stars = stars_for(self.bounces, self.floors.len());
+        crate::profile::award_stars(GAME, self.level, self.stars);
+        crate::profile::unlock(GAME, (self.level + 1).min(MAX_LEVEL));
+        crate::profile::set_level(GAME, (self.level + 1).min(MAX_LEVEL));
+        self.rank = self.best.submit(GAME, self.score);
+        sfx::play(Sfx::Win);
+        sfx::play(Sfx::LevelUp);
+        sfx::say(if self.stars == 3 {
+            sfx::Say::Congrats
+        } else {
+            sfx::Say::Win
+        });
+        feel::impact_tinted(Impact::Large, Color::from_rgba(255, 220, 60, 255));
+        self.fx.confetti(view);
     }
 
     fn pass_floor(&mut self) {
@@ -232,7 +352,30 @@ impl Game for Helix {
             self.cam = approach(self.cam, target, 10.0, dt);
         }
         match self.state {
+            State::Select => {
+                self.end_t += dt;
+                if input.pressed {
+                    let l = select_layout(view);
+                    if l.play.contains(input.pos) {
+                        sfx::play(Sfx::Tap);
+                        self.enter(start_level());
+                    } else if let Some(n) = l.cells.iter().position(|c| c.contains(input.pos)) {
+                        let n = n as u32 + 1;
+                        if n <= reached() {
+                            sfx::play(Sfx::Tap);
+                            self.enter(n);
+                        } else {
+                            sfx::play(Sfx::Wrong);
+                        }
+                    }
+                }
+            }
             State::Ready => {
+                if input.tapped_in(levels_button(view)) {
+                    sfx::play(Sfx::Tap);
+                    self.open_select();
+                    return;
+                }
                 self.y = -60.0 + (self.t * 4.0).sin().abs() * -40.0;
                 if input.pressed || input.action {
                     self.state = State::Playing;
@@ -273,7 +416,8 @@ impl Game for Helix {
                         feel::impact(Impact::Large);
                         self.state = State::Dead;
                         self.end_t = 0.0;
-                        self.best.offer(self.score);
+                        self.fails += 1;
+                        self.rank = self.best.submit(GAME, self.score);
                         self.shake.add(0.7);
                         self.fx.emit(
                             ball_screen,
@@ -287,6 +431,10 @@ impl Game for Helix {
                     _ => {}
                 }
                 if self.passed > before {
+                    if !self.taught {
+                        self.taught = true;
+                        crate::profile::set(GAME, "taught", 1);
+                    }
                     sfx::play(Sfx::Swish);
                     let col = hsv(self.floors[before].hue, 0.6, 1.0);
                     self.fx.emit(
@@ -300,6 +448,11 @@ impl Game for Helix {
                             ..Default::default()
                         },
                     );
+                    if self.passed * 2 == self.floors.len() {
+                        self.pops
+                            .add(ball_screen + vec2(0.0, -70.0), "Halfway!", WHITE, 52.0);
+                        sfx::play(Sfx::Score);
+                    }
                     if self.streak >= 2 {
                         self.pops.add(
                             ball_screen + vec2(70.0, -30.0),
@@ -310,33 +463,39 @@ impl Game for Helix {
                     }
                 }
                 if self.passed >= self.floors.len() {
-                    sfx::play(Sfx::Win);
-                    sfx::say(sfx::Say::Win);
-                    self.state = State::Won;
-                    self.end_t = 0.0;
-                    self.best.offer(self.score);
-                    self.fx.confetti(view);
+                    self.finish_level(view);
                 }
             }
             State::Dead | State::Won => {
+                let before = self.end_t;
                 self.end_t += dt;
                 if self.state == State::Won {
                     self.physics(dt);
                     self.y = self.y.min(Self::floor_y(self.floors.len()) + 60.0);
+                    for k in 0..self.stars as usize {
+                        let at = WIN_DELAY + STAR_START + STAR_GAP * k as f32;
+                        if before < at && self.end_t >= at {
+                            sfx::play_step(Sfx::Coin, k * 2);
+                        }
+                    }
                 }
                 if self.end_t > 0.7 && input.pressed {
-                    let best = self.best;
-                    let score = self.score;
-                    let level = if self.state == State::Won {
-                        self.level + 1
+                    if levels_button(view).contains(input.pos) {
+                        sfx::play(Sfx::Tap);
+                        self.open_select();
+                    } else if self.state == State::Won {
+                        let next = (self.level + 1).min(MAX_LEVEL);
+                        self.enter(next);
                     } else {
-                        1
-                    };
-                    *self = Self::with_level(level);
-                    self.best = best;
-                    if level > 1 {
-                        self.score = score;
+                        self.enter(self.level);
                     }
+                } else if self.end_t > 0.7 && input.action {
+                    let next = if self.state == State::Won {
+                        (self.level + 1).min(MAX_LEVEL)
+                    } else {
+                        self.level
+                    };
+                    self.enter(next);
                 }
             }
         }
@@ -344,6 +503,11 @@ impl Game for Helix {
 
     fn draw(&self, view: &View) {
         draw_backdrop(view, self.level);
+        if self.state == State::Select {
+            draw_clouds(view, self.cam, self.t);
+            draw_select(self, view);
+            return;
+        }
         let sh = self.shake.offset();
         let cx = view.w / 2.0 + sh.x;
         let to_screen = |y: f32| y - self.cam + view.h * 0.15 + sh.y;
@@ -486,31 +650,240 @@ impl Game for Helix {
                 },
             );
         }
-        big_score(view, &self.score.to_string(), 100.0, self.bump.t);
+        let left = self.floors.len() - self.passed;
+        let goal = match left {
+            0 => "You made it!".to_string(),
+            1 => "1 floor to go".to_string(),
+            n => format!("{n} floors to go"),
+        };
+        text_shadow(&goal, view.w / 2.0, 72.0, 24.0, WHITE);
+        big_score(view, &self.score.to_string(), 128.0, self.bump.t);
+        chip(view, Side::Left, "LEVEL", &self.level.to_string(), 1.0);
         chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
+        let pulse = 1.0 + (self.t * 3.0).sin() * 0.03;
         match self.state {
-            State::Ready => text_shadow(
-                "Drag sideways to spin the tower",
-                view.w / 2.0,
-                view.h * 0.85,
-                36.0,
-                WHITE,
+            State::Ready => {
+                crate::ui::hint(
+                    view,
+                    "Tap, then drag sideways to spin the tower",
+                    vec2(view.w / 2.0, view.h * 0.8),
+                    pulse,
+                );
+                draw_levels_button(view);
+            }
+            State::Playing if !self.taught => crate::ui::hint(
+                view,
+                "Line up the hole to drop through!",
+                vec2(view.w / 2.0, view.h * 0.8),
+                pulse,
             ),
             State::Dead if self.end_t > 0.5 => {
-                let s = format!("Score {}   Best {}", self.score, self.best.0);
-                overlay(
+                let line = format!("Level {}, score {}", self.level, self.score);
+                results(
                     view,
-                    "Splat!",
-                    &["Red parts are sticky!", &s, "Tap to try again"],
+                    &crate::ui::Results {
+                        game: GAME,
+                        title: "Splat!",
+                        line: &line,
+                        rank: self.rank,
+                        action: "Try again",
+                        format: crate::ui::plain_score,
+                    },
                 );
+                draw_levels_button(view);
             }
-            State::Won if self.end_t > 0.8 => {
-                let s = format!("Level {} done!", self.level);
-                overlay(view, "Hooray!", &[&s, "Tap for the next level"]);
+            State::Won if self.end_t > WIN_DELAY => {
+                draw_win(self, view);
+                draw_levels_button(view);
             }
             _ => {}
         }
     }
+}
+
+pub struct SelectLayout {
+    pub cells: Vec<Rect>,
+    pub play: Rect,
+}
+
+pub fn select_layout(view: &View) -> SelectLayout {
+    let rows = (MAX_LEVEL as usize).div_ceil(GRID_COLS);
+    let gap = 10.0;
+    let cell = (((view.w - 120.0) / GRID_COLS as f32) - gap)
+        .min(((view.h - 330.0) / rows as f32) - gap)
+        .clamp(50.0, 110.0);
+    let gw = GRID_COLS as f32 * (cell + gap) - gap;
+    let gh = rows as f32 * (cell + gap) - gap;
+    let total = gh + 24.0 + 76.0;
+    let top = ((view.h - total) / 2.0 + 50.0).max(170.0);
+    let left = (view.w - gw) / 2.0;
+    let cells = (0..MAX_LEVEL as usize)
+        .map(|i| {
+            Rect::new(
+                left + (i % GRID_COLS) as f32 * (cell + gap),
+                top + (i / GRID_COLS) as f32 * (cell + gap),
+                cell,
+                cell,
+            )
+        })
+        .collect();
+    let pw = 320.0;
+    SelectLayout {
+        cells,
+        play: Rect::new((view.w - pw) / 2.0, top + gh + 24.0, pw, 76.0),
+    }
+}
+
+pub fn levels_button(view: &View) -> Rect {
+    Rect::new(view.w / 2.0 - 95.0, view.h - 70.0, 190.0, 54.0)
+}
+
+fn draw_levels_button(view: &View) {
+    crate::ui::painted_button(levels_button(view), "Levels", "blue", 0.0, 1.0);
+}
+
+fn draw_select(g: &Helix, view: &View) {
+    crate::ui::ribbon(view, "Pick a level", vec2(view.w / 2.0, 84.0), g.t);
+    chip(
+        view,
+        Side::Right,
+        "STARS",
+        &crate::profile::total_stars(GAME).to_string(),
+        1.0,
+    );
+    let l = select_layout(view);
+    let open = reached();
+    let now = start_level();
+    for (i, r) in l.cells.iter().enumerate() {
+        let n = i as u32 + 1;
+        let locked = n > open;
+        let tint = if locked {
+            Color::new(0.55, 0.55, 0.62, 0.8)
+        } else if n == now {
+            Color::from_rgba(255, 224, 120, 255)
+        } else {
+            WHITE
+        };
+        let pulse = if n == now {
+            1.0 + (g.t * 4.0).sin() * 0.03
+        } else {
+            1.0
+        };
+        let rr = Rect::new(
+            r.center().x - r.w * pulse / 2.0,
+            r.center().y - r.h * pulse / 2.0,
+            r.w * pulse,
+            r.h * pulse,
+        );
+        crate::ui::card(rr, tint);
+        let ink = if locked {
+            Color::new(0.4, 0.38, 0.5, 0.7)
+        } else {
+            crate::ui::INK
+        };
+        text_center(
+            &n.to_string(),
+            r.center().x,
+            r.y + r.h * 0.38,
+            r.h * 0.4,
+            ink,
+        );
+        if !locked {
+            let earned = crate::profile::stars(GAME, n);
+            for k in 0..3u8 {
+                crate::ui::sprite_at(
+                    if k < earned {
+                        "star_yellow"
+                    } else {
+                        "star_white"
+                    },
+                    vec2(
+                        r.center().x + (k as f32 - 1.0) * r.w * 0.26,
+                        r.y + r.h * 0.74,
+                    ),
+                    r.h * 0.24,
+                    crate::art::Draw {
+                        tint: if k < earned {
+                            WHITE
+                        } else {
+                            Color::new(0.6, 0.6, 0.7, 0.6)
+                        },
+                        ..Default::default()
+                    },
+                );
+            }
+        }
+    }
+    let label = format!("Play level {now}");
+    crate::ui::painted_button(l.play, &label, "green", 0.0, 1.0);
+}
+
+fn draw_win(g: &Helix, view: &View) {
+    let age = (g.end_t - WIN_DELAY).max(0.0);
+    let fade = ease_out_cubic(age / 0.2);
+    fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
+    let pw = 560.0f32.min(view.w - 40.0);
+    let ph = 420.0;
+    let s = ease_out_back(age / 0.32).max(0.01);
+    let c = view.center() + vec2(0.0, 10.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
+    let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
+    crate::ui::painted_panel(r, WHITE);
+    crate::ui::ribbon(view, "Hooray!", vec2(c.x, r.y + 8.0 * s), age);
+    let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
+    let line = format!("Level {} done!", g.level);
+    text_center(
+        &line,
+        c.x,
+        r.y + 100.0 * s,
+        36.0 * s,
+        with_alpha(crate::ui::BODY, a(0.12)),
+    );
+    for k in 0..3usize {
+        let earned = k < g.stars as usize;
+        let pop = if earned {
+            ease_out_back(((age - STAR_START - STAR_GAP * k as f32) / 0.3).clamp(0.0, 1.0))
+        } else {
+            a(STAR_START)
+        };
+        let tint = if earned {
+            WHITE
+        } else {
+            Color::new(0.4, 0.4, 0.46, 0.85)
+        };
+        let lift = if k == 1 { -14.0 } else { 0.0 };
+        crate::ui::sprite_at(
+            "p_star",
+            vec2(c.x + (k as f32 - 1.0) * 120.0 * s, r.y + (205.0 + lift) * s),
+            100.0 * s * pop,
+            crate::art::Draw {
+                tint,
+                ..Default::default()
+            },
+        );
+    }
+    let score = format!("Score {}   Best {}", g.score, g.best.0);
+    text_center(
+        &score,
+        c.x,
+        r.y + 292.0 * s,
+        30.0 * s,
+        with_alpha(crate::ui::BODY, a(0.5)),
+    );
+    let label = if g.level >= MAX_LEVEL {
+        "Play again"
+    } else {
+        "Next level"
+    };
+    let by = r.y + r.h - 56.0 * s;
+    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
+    let bw = (crate::outline::measure(FONT_BYTES, label, 30.0) + 110.0) * s * pulse;
+    crate::ui::painted_button(
+        Rect::new(c.x - bw / 2.0, by - 10.0 * s, bw, 78.0 * s * pulse),
+        label,
+        "green",
+        0.0,
+        a(0.6),
+    );
 }
 
 mod art {
@@ -784,5 +1157,240 @@ mod tests {
                 assert!(f.segs.contains(&Seg::Gap));
             }
         }
+    }
+
+    fn setup() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+    }
+
+    fn bot_plays(g: &mut Helix, view: &View, max_secs: f32) {
+        let dt = 1.0 / 60.0;
+        let mut t = 0.0;
+        let tap = Input::press_at(view.center());
+        g.update(&tap, view, dt);
+        while g.state == State::Playing && t < max_secs {
+            let i = g.passed.min(g.floors.len() - 1);
+            let segs = g.floors[i].segs;
+            let start = gap_start(&segs).unwrap();
+            let len = segs.iter().filter(|s| **s == Seg::Gap).count();
+            let mid = (start as f32 + len as f32 / 2.0) / SEGMENTS as f32 * TAU;
+            let want = (ball_angle() - mid).rem_euclid(TAU);
+            let have = g.angle.rem_euclid(TAU);
+            let mut d = want - have;
+            if d > std::f32::consts::PI {
+                d -= TAU;
+            }
+            if d < -std::f32::consts::PI {
+                d += TAU;
+            }
+            let input = Input {
+                left: d < -0.05,
+                right: d > 0.05,
+                ..Default::default()
+            };
+            g.update(&input, view, dt);
+            t += dt;
+        }
+    }
+
+    #[test]
+    fn the_first_levels_have_no_red_and_wide_holes() {
+        setup();
+        for level in 1..=2 {
+            for _ in 0..20 {
+                let g = Helix::with_level(level);
+                for f in &g.floors {
+                    assert!(!f.segs.contains(&Seg::Danger));
+                    let gaps = f.segs.iter().filter(|s| **s == Seg::Gap).count();
+                    assert!(gaps >= 4, "level {level} hole of {gaps}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn level_one_is_short() {
+        assert!(floor_count(1) <= 8);
+        assert!(floor_count(10) > floor_count(1));
+    }
+
+    #[test]
+    fn red_arrives_after_the_first_levels_and_grows() {
+        assert_eq!(danger_rate(1, 0), 0.0);
+        assert_eq!(danger_rate(2, 0), 0.0);
+        assert!(danger_rate(5, 0) > 0.0);
+        assert!(danger_rate(12, 0) > danger_rate(5, 0));
+        assert!(gap_len_range(8, 0).1 < gap_len_range(1, 0).0 + 1);
+        assert!(gap_len_range(8, 0).0 < gap_len_range(1, 0).0);
+    }
+
+    #[test]
+    fn red_actually_shows_up_on_later_levels() {
+        setup();
+        let reds: usize = (0..10)
+            .map(|_| {
+                Helix::with_level(8)
+                    .floors
+                    .iter()
+                    .flat_map(|f| f.segs)
+                    .filter(|s| *s == Seg::Danger)
+                    .count()
+            })
+            .sum();
+        assert!(reds > 20);
+    }
+
+    #[test]
+    fn dying_makes_the_same_level_gentler() {
+        assert!(danger_rate(9, 1) < danger_rate(9, 0));
+        assert!(gap_len_range(9, 2).0 > gap_len_range(9, 0).0);
+        setup();
+        let mut g = Helix::with_level(9);
+        above(&mut g, 3, Seg::Danger);
+        g.update(&Input::default(), &View::ipad_landscape(), 0.05);
+        assert_eq!(g.fails, 1);
+        g.enter(9);
+        assert_eq!(g.fails, 1);
+        g.enter(10);
+        assert_eq!(g.fails, 0);
+    }
+
+    #[test]
+    fn holes_on_neighbouring_floors_stay_within_reach() {
+        setup();
+        for level in [1, 2, 6, 20] {
+            let g = Helix::with_level(level);
+            let limit = max_shift(level);
+            for pair in g.floors.windows(2) {
+                let a = gap_start(&pair[0].segs).unwrap() as i32;
+                let b = gap_start(&pair[1].segs).unwrap() as i32;
+                let d = (b - a).rem_euclid(SEGMENTS as i32);
+                let d = d.min(SEGMENTS as i32 - d);
+                assert!(d <= limit);
+            }
+        }
+    }
+
+    #[test]
+    fn stars_reward_fewer_bounces() {
+        assert_eq!(stars_for(4, 8), 3);
+        assert_eq!(stars_for(8, 8), 3);
+        assert_eq!(stars_for(12, 8), 2);
+        assert_eq!(stars_for(40, 8), 1);
+    }
+
+    #[test]
+    fn a_child_who_lines_up_the_hole_wins_level_one_and_it_is_saved() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Helix::new();
+        assert_eq!(g.level, 1);
+        bot_plays(&mut g, &view, 60.0);
+        assert_eq!(g.state, State::Won);
+        assert!(g.stars >= 1);
+        assert_eq!(crate::profile::unlocked(GAME), 2);
+        assert_eq!(crate::profile::level(GAME), 2);
+        assert_eq!(crate::profile::stars(GAME, 1), g.stars);
+        assert!(g.rank.is_some());
+        assert_eq!(crate::profile::board(GAME).len(), 1);
+    }
+
+    #[test]
+    fn a_new_game_resumes_at_the_level_reached() {
+        setup();
+        crate::profile::unlock(GAME, 5);
+        crate::profile::set_level(GAME, 5);
+        let g = Helix::new();
+        assert_eq!(g.level, 5);
+        assert_eq!(g.floors.len(), floor_count(5));
+    }
+
+    #[test]
+    fn progress_is_kept_per_player() {
+        setup();
+        crate::profile::unlock(GAME, 4);
+        crate::profile::set_level(GAME, 4);
+        crate::profile::create("Leo", 3);
+        assert_eq!(Helix::new().level, 1);
+        let mia = crate::profile::list()
+            .into_iter()
+            .find(|p| p.name == "Mia")
+            .unwrap();
+        crate::profile::select(&mia.id);
+        assert_eq!(Helix::new().level, 4);
+    }
+
+    #[test]
+    fn level_select_only_opens_unlocked_levels() {
+        setup();
+        crate::profile::unlock(GAME, 3);
+        let view = View::ipad_landscape();
+        let l = select_layout(&view);
+        assert_eq!(l.cells.len(), MAX_LEVEL as usize);
+        let mut g = Helix::new();
+        g.open_select();
+        g.update(&Input::press_at(l.cells[7].center()), &view, 0.016);
+        assert_eq!(g.state, State::Select);
+        g.update(&Input::press_at(l.cells[1].center()), &view, 0.016);
+        assert_eq!(g.state, State::Ready);
+        assert_eq!(g.level, 2);
+        g.open_select();
+        g.update(&Input::press_at(l.play.center()), &view, 0.016);
+        assert_eq!(g.state, State::Ready);
+        assert_eq!(g.level, 2);
+    }
+
+    #[test]
+    fn level_select_fits_on_portrait_and_landscape() {
+        for view in [View::ipad_landscape(), View::ipad_portrait()] {
+            let l = select_layout(&view);
+            for c in &l.cells {
+                assert!(c.x >= 0.0 && c.right() <= view.w);
+                assert!(c.y >= 0.0 && c.bottom() <= view.h);
+            }
+            assert!(l.play.bottom() <= view.h);
+            assert!(l.play.y > l.cells.last().unwrap().bottom());
+        }
+    }
+
+    #[test]
+    fn the_hint_stays_until_the_first_floor_is_passed() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Helix::new();
+        assert!(!g.taught);
+        above(&mut g, 2, Seg::Gap);
+        g.update(&Input::default(), &view, 0.05);
+        assert!(g.taught);
+        assert_eq!(crate::profile::get(GAME, "taught"), 1);
+        assert!(Helix::new().taught);
+    }
+
+    #[test]
+    fn dying_posts_the_score_once_and_gives_a_rank() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Helix::with_level(5);
+        g.score = 12;
+        above(&mut g, 3, Seg::Danger);
+        g.update(&Input::default(), &view, 0.05);
+        assert_eq!(g.state, State::Dead);
+        assert_eq!(g.rank, Some(0));
+        for _ in 0..30 {
+            g.update(&Input::default(), &view, 0.05);
+        }
+        assert_eq!(crate::profile::board(GAME).len(), 1);
+    }
+
+    #[test]
+    fn picking_an_earlier_level_is_what_a_restart_resumes() {
+        setup();
+        crate::profile::unlock(GAME, 6);
+        crate::profile::set_level(GAME, 6);
+        let mut g = Helix::new();
+        g.enter(2);
+        assert_eq!(Helix::new().level, 2);
+        assert_eq!(crate::profile::unlocked(GAME), 6);
     }
 }

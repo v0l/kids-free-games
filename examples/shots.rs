@@ -149,6 +149,38 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
     i
 }
 
+fn helix_scene(mode: &str, view: &View) -> Box<dyn Game> {
+    use kids_games::games::helix::*;
+    let mut g = Helix::new();
+    let k = segment_at(ball_angle(), g.angle);
+    match mode {
+        "dead" => {
+            g.floors[0].segs[k] = Seg::Danger;
+            g.state = State::Playing;
+            g.y = Helix::floor_y(0) - BALL_R - 5.0;
+            g.vy = 400.0;
+            g.score = 24;
+        }
+        "won" => {
+            let n = g.floors.len();
+            g.floors[n - 1].segs[k] = Seg::Gap;
+            g.passed = n - 1;
+            g.score = 60;
+            g.bounces = 6;
+            g.state = State::Playing;
+            g.y = Helix::floor_y(n - 1) - BALL_R - 5.0;
+            g.vy = 400.0;
+        }
+        "select" => g.open_select(),
+        _ => {}
+    }
+    for _ in 0..150 {
+        g.update(&Input::default(), view, 1.0 / 60.0);
+        tick_overlay(1.0 / 60.0);
+    }
+    Box::new(g)
+}
+
 fn learn_tiles_x(view: &View, n: usize) -> Vec2 {
     let l = kids_games::games::spell::layout(view, n, n);
     l.tiles[0].center()
@@ -275,12 +307,31 @@ async fn main() {
     next_frame().await;
     let view = begin_frame_safe(fake_inset());
     let all = games::all();
+    let helix_mode = match which {
+        212 => Some("dead"),
+        312 => Some("won"),
+        412 => Some("select"),
+        512 => Some("start"),
+        _ => None,
+    };
+    let which = if helix_mode.is_some() { 12 } else { which };
     let idle = which > 100;
     let which = if idle { which - 100 } else { which };
+    if helix_mode.is_some() {
+        kids_games::profile::create("Mia", 2);
+        for l in 1..=7 {
+            kids_games::profile::unlock("helix", l);
+            kids_games::profile::award_stars("helix", l, (l % 3 + 1) as u8);
+        }
+        kids_games::profile::set_level("helix", 7);
+    }
     let mut game = (which > 0).then(|| {
         let e = &all[which as usize - 1];
         set_accent(e.color);
         let mut g = (e.make)();
+        if let Some(mode) = helix_mode {
+            return helix_scene(mode, &view);
+        }
         for f in 0..frames {
             let input = if idle && f > 1 {
                 Input::default()
@@ -294,7 +345,7 @@ async fn main() {
         }
         g
     });
-    if which != -3 && which != -4 {
+    if which != -3 && which != -4 && helix_mode.is_none() {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];
