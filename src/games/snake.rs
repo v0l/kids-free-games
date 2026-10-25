@@ -1,3 +1,4 @@
+use crate::engine::draw_circle;
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
@@ -7,7 +8,18 @@ use std::collections::VecDeque;
 
 pub const LONG: i32 = 24;
 pub const SHORT: i32 = 18;
-pub const STEP: f32 = 0.12;
+pub const START_STEP: f32 = 0.30;
+pub const FASTEST_STEP: f32 = 0.09;
+pub const STAGE_DROP: f32 = 0.025;
+pub const STAGE_APPLES: u32 = 5;
+pub const GRACE_MOVES: u32 = 16;
+pub const GENTLE_GRACE_MOVES: u32 = 28;
+pub const GENTLE_SLOWDOWN: f32 = 1.25;
+pub const GENTLE_LIMIT: u32 = 4;
+pub const GENTLE_AFTER: i64 = 2;
+pub const FIRST_RUN_SAFE_APPLES: u32 = 3;
+pub const GAME: &str = "snake";
+pub const FIRST_FOOD_AHEAD: i32 = 6;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum State {
@@ -20,6 +32,8 @@ pub enum State {
 enum Event {
     Ate(IVec2),
     Crashed(IVec2),
+    Stage(u32),
+    Bonk(IVec2),
 }
 
 pub struct Snake {
@@ -32,6 +46,10 @@ pub struct Snake {
     pub best: Best,
     pub wrap: bool,
     pub size: IVec2,
+    pub moves: u32,
+    pub gentle: bool,
+    pub best_stage: u32,
+    pub rank: Option<usize>,
     timer: f32,
     prev: Vec<IVec2>,
     bulges: Vec<u32>,
@@ -83,9 +101,13 @@ impl Snake {
             food: IVec2::ZERO,
             state: State::Ready,
             score: 0,
-            best: Best::default(),
+            best: Best::load(GAME),
             wrap: true,
             size,
+            moves: 0,
+            gentle: crate::profile::get(GAME, "weak") >= GENTLE_AFTER,
+            best_stage: crate::profile::get(GAME, "stage").max(1) as u32,
+            rank: None,
             timer: 0.0,
             prev: vec![],
             bulges: vec![],
@@ -98,8 +120,21 @@ impl Snake {
             food_age: 0.0,
             dead_age: 0.0,
         };
-        s.place_food();
+        s.food = s.body[0] + ivec2(FIRST_FOOD_AHEAD, 0);
         s
+    }
+
+    pub fn stage(&self) -> u32 {
+        self.score / STAGE_APPLES + 1
+    }
+
+    pub fn forgiving(&self) -> bool {
+        let grace = if self.gentle {
+            GENTLE_GRACE_MOVES
+        } else {
+            GRACE_MOVES
+        };
+        self.moves < grace || (self.best.0 == 0 && self.score < FIRST_RUN_SAFE_APPLES)
     }
 
     pub fn place_food(&mut self) {
@@ -127,6 +162,7 @@ impl Snake {
         }
         let len = self.body.len() as u32 + 2;
         self.bulges.retain(|b| *b < len);
+        let before = self.dir;
         if let Some(d) = self.queued.pop_front() {
             self.dir = d;
         }
@@ -142,13 +178,21 @@ impl Snake {
             return;
         }
         let eating = head == self.food;
-        if !eating {
-            self.body.pop_back();
-        }
-        if self.body.contains(&head) {
+        let solid = self.body.len() - usize::from(!eating);
+        if self.body.iter().take(solid).any(|p| *p == head) {
+            if self.forgiving() {
+                self.events.push(Event::Bonk(head));
+                self.dir = before;
+                self.moves += 1;
+                return;
+            }
             self.events.push(Event::Crashed(head));
             self.die();
             return;
+        }
+        self.moves += 1;
+        if !eating {
+            self.body.pop_back();
         }
         self.body.push_front(head);
         if eating {
@@ -157,6 +201,14 @@ impl Snake {
             self.bulges.push(0);
             self.place_food();
             self.food_age = 0.0;
+            if self.score.is_multiple_of(STAGE_APPLES) {
+                let stage = self.stage();
+                self.events.push(Event::Stage(stage));
+                if stage > self.best_stage {
+                    self.best_stage = stage;
+                    crate::profile::set(GAME, "stage", stage as i64);
+                }
+            }
         }
     }
 
@@ -166,7 +218,14 @@ impl Snake {
         if self.score > self.best.0 && self.best.0 > 0 {
             sfx::say(sfx::Say::Best);
         }
-        self.best.offer(self.score);
+        self.rank = self.best.submit(GAME, self.score);
+        let weak = crate::profile::get(GAME, "weak");
+        let weak = if self.score < GENTLE_LIMIT {
+            weak + 1
+        } else {
+            0
+        };
+        crate::profile::set(GAME, "weak", weak);
     }
 
     pub fn size_for(view: &View) -> IVec2 {
@@ -177,8 +236,17 @@ impl Snake {
         }
     }
 
-    fn step_time(&self) -> f32 {
-        STEP * (1.0 - (self.score as f32 * 0.01).min(0.4))
+    pub fn step_time(&self) -> f32 {
+        let base = (START_STEP - (self.stage() - 1) as f32 * STAGE_DROP).max(FASTEST_STEP);
+        if self.gentle {
+            base * GENTLE_SLOWDOWN
+        } else {
+            base
+        }
+    }
+
+    pub fn fruit(&self) -> &'static str {
+        FRUIT[(self.stage() as usize - 1) % FRUIT.len()]
     }
 
     fn frac(&self) -> f32 {
@@ -234,6 +302,27 @@ impl Snake {
                         cell * 1.1,
                     );
                     self.bump.kick();
+                }
+                Event::Stage(n) => {
+                    sfx::play(Sfx::LevelUp);
+                    sfx::say(if n.is_multiple_of(2) {
+                        sfx::Say::Great
+                    } else {
+                        sfx::Say::LevelUp
+                    });
+                    feel::impact_tinted(Impact::Large, Color::from_rgba(255, 210, 80, 255));
+                    self.particles.confetti(view);
+                    self.popups.add(
+                        view.center() - vec2(0.0, view.h * 0.12),
+                        format!("Stage {n}!"),
+                        Color::from_rgba(255, 230, 90, 255),
+                        cell * 2.4,
+                    );
+                }
+                Event::Bonk(p) => {
+                    sfx::play(Sfx::Wrong);
+                    self.shake.add(0.25);
+                    self.particles.puff(center(p), WHITE);
                 }
                 Event::Crashed(p) => {
                     sfx::play(Sfx::Hit);
@@ -319,7 +408,7 @@ impl Game for Snake {
                 }
             }
             State::Dead => {
-                if input.tap() {
+                if input.tap() && self.dead_age > 0.6 {
                     let best = self.best;
                     *self = Self::sized(Self::size_for(view));
                     self.best = best;
@@ -363,18 +452,43 @@ impl Game for Snake {
             &self.score.to_string(),
             self.bump.t,
         );
-        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
+        let right = chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
+        let left = chip_rect(view, Side::Left, "APPLES", &self.score.to_string());
+        self.draw_progress(left.x + left.w + 12.0, right.x - 12.0);
         match self.state {
-            State::Ready => overlay(
-                view,
-                "Snake",
-                &["Swipe to steer", "Eat fruit, don't bite yourself"],
-            ),
-            State::Dead => {
-                let s = format!("Apples {}   Best {}", self.score, self.best.0);
-                overlay(view, "Ouch!", &[&s, "Tap to play again"]);
+            State::Ready => {
+                let best = format!("Best stage {}", self.best_stage);
+                let mut lines = vec!["Eat fruit to grow!"];
+                if self.best_stage > 1 {
+                    lines.push(&best);
+                }
+                lines.push("Swipe to start");
+                overlay(view, "Snake", &lines);
             }
-            State::Playing => {}
+            State::Playing if self.score == 0 => {
+                let pulse = 1.0 + (self.clock * 5.0).sin() * 0.05;
+                crate::ui::hint(
+                    view,
+                    "Swipe to steer",
+                    vec2(view.w / 2.0, view.h - 56.0),
+                    pulse,
+                );
+            }
+            State::Dead if self.dead_age > 0.6 => {
+                let line = format!("Apples {}   Stage {}", self.score, self.stage());
+                results(
+                    view,
+                    &crate::ui::Results {
+                        game: GAME,
+                        title: "Ouch!",
+                        line: &line,
+                        rank: self.rank,
+                        action: "Play again",
+                        format: crate::ui::plain_score,
+                    },
+                );
+            }
+            _ => {}
         }
     }
 }
@@ -493,6 +607,38 @@ fn draw_rim(board: Rect) {
 }
 
 impl Snake {
+    fn draw_progress(&self, x0: f32, x1: f32) {
+        let slot = 34.0;
+        let w = slot * STAGE_APPLES as f32 + 22.0;
+        let w = w.min(x1 - x0);
+        if w < slot * 3.0 {
+            return;
+        }
+        let r = Rect::new((x0 + x1) / 2.0 - w / 2.0, 12.0, w, 48.0);
+        crate::ui::chip_box(r);
+        let have = self.score % STAGE_APPLES;
+        let fit = ((w - 22.0) / STAGE_APPLES as f32).min(slot);
+        let name = self.fruit();
+        let s = art::size(name);
+        for i in 0..STAGE_APPLES {
+            let c = vec2(r.x + 11.0 + fit * (i as f32 + 0.5), r.y + r.h / 2.0);
+            if i < have {
+                let h = fit * 1.1;
+                art::sprite(
+                    name,
+                    Rect::new(
+                        c.x - h * s.x / s.y.max(1.0) / 2.0,
+                        c.y - h / 2.0,
+                        h * s.x / s.y.max(1.0),
+                        h,
+                    ),
+                );
+            } else {
+                draw_circle(c.x, c.y, fit * 0.28, Color::new(1.0, 1.0, 1.0, 0.28));
+            }
+        }
+    }
+
     fn draw_apple(&self, o: Vec2, cell: f32) {
         let f = o + self.food.as_vec2() * cell + vec2(cell, cell) / 2.0;
         let pop = ease_out_elastic(self.food_age / 0.7).max(0.01);
@@ -502,7 +648,7 @@ impl Snake {
         let h = cell * 1.7 * pop;
         soft_shadow(f + vec2(0.0, cell * 0.38), h * 0.4, h * 0.13, 0.6);
         let c = f + vec2(0.0, bob - drop);
-        let name = FRUIT[self.score as usize % FRUIT.len()];
+        let name = self.fruit();
         let s = art::size(name);
         let w = h * s.x / s.y.max(1.0);
         art::sprite(
@@ -677,6 +823,8 @@ mod tests {
     #[test]
     fn biting_yourself_ends_the_game() {
         let mut s = Snake::new();
+        s.moves = GRACE_MOVES;
+        s.best = Best(9);
         s.body = (0..6).map(|i| ivec2(10 - i, 5)).collect();
         s.food = ivec2(0, 0);
         for d in [Dir::Down, Dir::Left, Dir::Up] {
@@ -789,6 +937,164 @@ mod tests {
         s.tick();
         assert_eq!(s.state, State::Dead);
         assert_eq!(s.events, vec![Event::Crashed(ivec2(LONG - 1, 3))]);
+    }
+
+    fn bitten(s: &mut Snake) {
+        s.body = (0..6).map(|i| ivec2(10 - i, 5)).collect();
+        s.dir = Dir::Right;
+        s.food = ivec2(0, 0);
+        for d in [Dir::Down, Dir::Left, Dir::Up] {
+            s.turn(d);
+            s.tick();
+        }
+    }
+
+    fn fresh_player() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+    }
+
+    #[test]
+    fn the_first_apple_is_straight_ahead() {
+        fresh_player();
+        let s = Snake::new();
+        assert_eq!(s.food.y, s.body[0].y);
+        assert_eq!(s.food.x - s.body[0].x, FIRST_FOOD_AHEAD);
+    }
+
+    #[test]
+    fn a_first_timer_who_only_goes_straight_eats_the_first_apple() {
+        fresh_player();
+        let mut s = Snake::new();
+        for _ in 0..FIRST_FOOD_AHEAD {
+            s.tick();
+        }
+        assert_eq!(s.score, 1);
+        assert_ne!(s.state, State::Dead);
+    }
+
+    #[test]
+    fn a_first_timer_is_not_killed_by_an_early_self_bite() {
+        fresh_player();
+        let mut s = Snake::new();
+        bitten(&mut s);
+        assert_ne!(s.state, State::Dead);
+        assert!(s.events.iter().any(|e| matches!(e, Event::Bonk(_))));
+    }
+
+    #[test]
+    fn an_early_bite_bonks_instead_of_moving() {
+        fresh_player();
+        let mut s = Snake::new();
+        s.body = (0..6).map(|i| ivec2(10 - i, 5)).collect();
+        s.food = ivec2(0, 0);
+        s.turn(Dir::Down);
+        s.tick();
+        s.turn(Dir::Left);
+        s.tick();
+        s.turn(Dir::Up);
+        let before = s.body.clone();
+        s.tick();
+        assert_eq!(s.body, before);
+        assert_eq!(s.dir, Dir::Left);
+        assert!(s.events.iter().any(|e| matches!(e, Event::Bonk(_))));
+        assert_eq!(s.state, State::Ready);
+    }
+
+    #[test]
+    fn a_veteran_still_dies_from_a_bite_after_the_grace_period() {
+        fresh_player();
+        crate::profile::submit(GAME, 20, crate::profile::Better::Higher);
+        let mut s = Snake::new();
+        s.moves = GRACE_MOVES;
+        bitten(&mut s);
+        assert_eq!(s.state, State::Dead);
+    }
+
+    #[test]
+    fn the_first_stretch_is_slow_and_speed_rises_by_stage() {
+        fresh_player();
+        let mut s = Snake::new();
+        assert!(s.step_time() >= 0.28);
+        let mut last = s.step_time();
+        for score in (0..60).step_by(STAGE_APPLES as usize) {
+            s.score = score;
+            let t = s.step_time();
+            assert!(t <= last + 1e-6, "score {score}: {t} > {last}");
+            last = t;
+        }
+        assert!(last < s.step_time() + 1e-6);
+        s.score = 0;
+        let start = s.step_time();
+        s.score = 40;
+        assert!(s.step_time() < start * 0.5);
+        s.score = 500;
+        assert!((s.step_time() - FASTEST_STEP).abs() < 1e-6);
+    }
+
+    #[test]
+    fn every_stage_is_a_few_apples_and_cheers() {
+        fresh_player();
+        let mut s = Snake::new();
+        s.score = STAGE_APPLES - 1;
+        s.food = s.body[0] + ivec2(1, 0);
+        s.tick();
+        assert_eq!(s.stage(), 2);
+        assert!(s.events.contains(&Event::Stage(2)));
+        assert_eq!(s.fruit(), FRUIT[1]);
+        assert_eq!(crate::profile::get(GAME, "stage"), 2);
+    }
+
+    #[test]
+    fn the_furthest_stage_is_saved_per_player_and_resumes() {
+        fresh_player();
+        let mut s = Snake::new();
+        s.score = STAGE_APPLES * 2 - 1;
+        s.food = s.body[0] + ivec2(1, 0);
+        s.tick();
+        assert_eq!(Snake::new().best_stage, 3);
+        crate::profile::create("Leo", 1);
+        assert_eq!(Snake::new().best_stage, 1);
+    }
+
+    #[test]
+    fn dying_submits_the_score_and_remembers_the_rank() {
+        fresh_player();
+        let mut s = Snake::new();
+        s.wrap = false;
+        s.score = 7;
+        s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)]
+            .into_iter()
+            .collect();
+        s.tick();
+        assert_eq!(s.rank, Some(0));
+        assert_eq!(crate::profile::personal_best(GAME), Some(7));
+        assert_eq!(Snake::new().best.0, 7);
+    }
+
+    #[test]
+    fn two_weak_runs_in_a_row_ease_the_next_start_and_a_good_run_restores_it() {
+        fresh_player();
+        let normal = Snake::new().step_time();
+        for _ in 0..GENTLE_AFTER {
+            let mut s = Snake::new();
+            s.wrap = false;
+            s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)]
+                .into_iter()
+                .collect();
+            s.tick();
+        }
+        let easy = Snake::new();
+        assert!(easy.gentle);
+        assert!(easy.step_time() > normal);
+        let mut s = Snake::new();
+        s.wrap = false;
+        s.score = GENTLE_LIMIT + 3;
+        s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)]
+            .into_iter()
+            .collect();
+        s.tick();
+        assert!(!Snake::new().gentle);
     }
 
     #[test]
