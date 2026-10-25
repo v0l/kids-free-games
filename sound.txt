@@ -81,21 +81,21 @@ say_levelup.2| repo:sound/say_levelup.2.ogg | db=-15
 say_gameover.0| repo:sound/say_gameover.0.ogg | db=-15
 say_gameover.1| repo:sound/say_gameover.1.ogg | db=-15
 say_gameover.2| repo:sound/say_gameover.2.ogg | db=-15
-say_ready    | voiceover-pack/Female/ready.ogg | db=-15
-say_go       | voiceover-pack/Female/go.ogg | db=-15
+say_ready | repo:sound/say_ready.ogg | db=-15
+say_go | repo:sound/say_go.ogg | db=-15
 say_best.0   | repo:sound/say_best.0.ogg | db=-15
 say_best.1   | repo:sound/say_best.1.ogg | db=-15
 say_best.2   | repo:sound/say_best.2.ogg | db=-15
-say_1        | voiceover-pack/Female/1.ogg | db=-15
-say_2        | voiceover-pack/Female/2.ogg | db=-15
-say_3        | voiceover-pack/Female/3.ogg | db=-15
-say_4        | voiceover-pack/Female/4.ogg | db=-15
-say_5        | voiceover-pack/Female/5.ogg | db=-15
-say_6        | voiceover-pack/Female/6.ogg | db=-15
-say_7        | voiceover-pack/Female/7.ogg | db=-15
-say_8        | voiceover-pack/Female/8.ogg | db=-15
-say_9        | voiceover-pack/Female/9.ogg | db=-15
-say_10       | voiceover-pack/Female/10.ogg | db=-15
+say_1 | repo:sound/say_1.ogg | db=-15
+say_2 | repo:sound/say_2.ogg | db=-15
+say_3 | repo:sound/say_3.ogg | db=-15
+say_4 | repo:sound/say_4.ogg | db=-15
+say_5 | repo:sound/say_5.ogg | db=-15
+say_6 | repo:sound/say_6.ogg | db=-15
+say_7 | repo:sound/say_7.ogg | db=-15
+say_8 | repo:sound/say_8.ogg | db=-15
+say_9 | repo:sound/say_9.ogg | db=-15
+say_10 | repo:sound/say_10.ogg | db=-15
 
 # CC0 loops from opengameart.org, cached in ~/.cache/kids-games/music
 # carnival.ogg    https://opengameart.org/content/carnival-rides
