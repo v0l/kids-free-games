@@ -74,6 +74,11 @@ pub fn dusk_tint(score: u32) -> Color {
     )
 }
 
+pub fn dusk_cloud(score: u32) -> Color {
+    let d = dusk_tint(score);
+    Color::new(d.r, d.g, d.b, 1.0)
+}
+
 pub fn tile_spans(from: f32, to: f32, width: f32) -> Vec<(f32, bool)> {
     let first = (from / width).floor() as i32;
     let last = (to / width).ceil() as i32;
@@ -84,17 +89,17 @@ pub fn tile_spans(from: f32, to: f32, width: f32) -> Vec<(f32, bool)> {
 
 const SCENERY: [(f32, &str, f32); 14] = [
     (-980.0, "tree_pine", 190.0),
-    (-820.0, "tree_small", 120.0),
-    (-700.0, "castle", 150.0),
-    (-560.0, "tree_round", 150.0),
-    (-440.0, "tree_cone", 170.0),
-    (-300.0, "tree_small", 100.0),
+    (-830.0, "bush", 60.0),
+    (-700.0, "castle", 170.0),
+    (-540.0, "tree_round", 150.0),
+    (-410.0, "bush", 70.0),
+    (-300.0, "tree_pine", 130.0),
     (-190.0, "tree_tall", 190.0),
     (230.0, "tree_pine", 170.0),
-    (360.0, "tree_small", 110.0),
-    (480.0, "house", 110.0),
-    (600.0, "tree_round", 170.0),
-    (730.0, "tree_cone", 150.0),
+    (360.0, "bush", 64.0),
+    (480.0, "house", 120.0),
+    (610.0, "tree_round", 170.0),
+    (730.0, "bush", 74.0),
     (850.0, "tree_tall", 200.0),
     (990.0, "tree_pine", 190.0),
 ];
@@ -455,19 +460,22 @@ impl Stack {
             let x = (i as f32 * 270.0 + self.time * (6.0 + depth * 40.0)).rem_euclid(span) - 250.0;
             let y =
                 (60.0 + (i * 97 % 520) as f32 + self.cam * depth).rem_euclid(view.h + 160.0) - 80.0;
-            crate::ui::cloud(
-                i,
+            art::sprite_w(
+                ["cloud1", "cloud2", "cloud3"][i % 3],
                 vec2(x, y),
-                (0.8 + depth * 2.5) * 130.0,
-                with_alpha(WHITE, cloud_alpha),
+                (0.8 + depth * 2.5) * 150.0,
+                crate::art::Draw {
+                    tint: with_alpha(dusk_cloud(self.score), cloud_alpha),
+                    ..Default::default()
+                },
             );
         }
         let ground = view.h - 80.0;
         let f = view.full();
         let peak_h = 190.0;
-        let peak_w = 1001.0 * peak_h / 168.0;
+        let peak_w = peak_h * art::size("peaks").x / art::size("peaks").y;
         let peak_bottom = ground + 24.0 + self.cam * 0.55;
-        let haze = Color::new(0.808 * dusk.r, 0.914 * dusk.g, 0.957 * dusk.b, 1.0);
+        let haze = Color::new(0.76 * dusk.r, 0.89 * dusk.g, 0.97 * dusk.b, 1.0);
         draw_rectangle(f.x, peak_bottom - 2.0, f.w, f.h + 400.0, haze);
         let shift = -self.center * 0.12;
         for (x, flip) in tile_spans(f.x - shift, f.x + f.w - shift, peak_w) {
@@ -475,7 +483,7 @@ impl Stack {
                 "peaks",
                 Rect::new(x + shift, peak_bottom - peak_h, peak_w + 1.0, peak_h),
                 crate::art::Draw {
-                    tint: Color::new(0.82 * dusk.r, 0.9 * dusk.g, 1.0 * dusk.b, 1.0),
+                    tint: Color::new(dusk.r, dusk.g, dusk.b, 1.0),
                     flip_x: flip,
                     ..Default::default()
                 },
@@ -485,30 +493,15 @@ impl Stack {
 
     fn draw_scenery(&self, view: &View) {
         let dusk = dusk_tint(self.score);
-        let hill_h = 120.0;
-        let hill_w = 1001.0 * hill_h / 128.0;
-        let sage = Color::new(0.72 * dusk.r, 0.9 * dusk.g, 0.7 * dusk.b, 1.0);
         let reach = 1500.0;
+        let hill_h = 230.0;
+        let hill_w = hill_h * art::size("hills").x / art::size("hills").y;
         for (x, flip) in tile_spans(-reach, reach, hill_w) {
             art::sprite_ex(
-                "hills_far",
-                Rect::new(x - 120.0, -hill_h + 6.0, hill_w + 1.0, hill_h),
+                "hills",
+                Rect::new(x - 120.0, -hill_h + 30.0, hill_w + 1.0, hill_h),
                 crate::art::Draw {
-                    tint: sage,
-                    flip_x: flip,
-                    ..Default::default()
-                },
-            );
-        }
-        let green = Color::new(0.5 * dusk.r, 0.82 * dusk.g, 0.45 * dusk.b, 1.0);
-        let near_h = 70.0;
-        let near_w = 1001.0 * near_h / 128.0;
-        for (x, flip) in tile_spans(-reach, reach, near_w) {
-            art::sprite_ex(
-                "hills_near",
-                Rect::new(x + 60.0, -near_h + 8.0, near_w + 1.0, near_h),
-                crate::art::Draw {
-                    tint: green,
+                    tint: Color::new(dusk.r, dusk.g, dusk.b, 1.0),
                     flip_x: flip,
                     ..Default::default()
                 },
@@ -536,7 +529,8 @@ impl Stack {
     }
 
     fn draw_block_sprite(r: Rect, tint: Color) {
-        art::nine("blk", r, 16.0, BLOCK_H / 88.0, tint);
+        let src_h = art::size("blk").y;
+        art::nine("blk", r, src_h * 0.3, BLOCK_H / src_h, tint);
     }
 
     fn draw_tower(&self, view: &View, ground: f32) {
@@ -547,16 +541,23 @@ impl Stack {
             -3000.0,
             0.0,
             6000.0,
-            600.0,
-            Color::new(0.38 * dusk.r, 0.67 * dusk.g, 0.35 * dusk.b, 1.0),
+            700.0,
+            Color::new(0.45 * dusk.r, 0.3 * dusk.g, 0.26 * dusk.b, 1.0),
         );
-        draw_rectangle(
-            -3000.0,
-            0.0,
-            6000.0,
-            10.0,
-            Color::new(0.55 * dusk.r, 0.85 * dusk.g, 0.43 * dusk.b, 1.0),
-        );
+        let gs = art::size("ground");
+        let gh = 150.0;
+        let gw = gh * gs.x / gs.y;
+        for (x, flip) in tile_spans(-1800.0, 1800.0, gw) {
+            art::sprite_ex(
+                "ground",
+                Rect::new(x, -gh * 0.12, gw + 1.0, gh),
+                crate::art::Draw {
+                    tint: Color::new(dusk.r, dusk.g, dusk.b, 1.0),
+                    flip_x: flip,
+                    ..Default::default()
+                },
+            );
+        }
         let base = self.tower[0];
         soft_shadow(vec2(base.x + base.w / 2.0, 10.0), base.w * 0.6, 10.0, 0.8);
         for (i, b) in self.tower.iter().enumerate() {
@@ -588,50 +589,7 @@ impl Stack {
 }
 
 pub fn icon(r: Rect) {
-    gradient_rect(r, hsv(0.55, 0.3, 1.0), hsv(0.5, 0.2, 0.95));
-    art::sprite(
-        "peaks",
-        Rect::new(r.x, r.y + r.h * 0.42, r.w, r.w * 168.0 / 1001.0),
-    );
-    draw_rectangle(
-        r.x,
-        r.y + r.h * 0.42 + r.w * 168.0 / 1001.0 - 1.0,
-        r.w,
-        r.h * 0.58 - r.w * 168.0 / 1001.0 + 1.0,
-        Color::from_rgba(206, 233, 244, 255),
-    );
-    let ground = r.y + r.h * 0.84;
-    draw_rectangle(
-        r.x,
-        ground,
-        r.w,
-        r.y + r.h - ground,
-        Color::from_rgba(96, 170, 90, 255),
-    );
-    art::sprite_at(
-        "tree_pine",
-        vec2(r.x + r.w * 0.14, ground),
-        r.h * 0.34,
-        Default::default(),
-    );
-    art::sprite_at(
-        "tree_round",
-        vec2(r.x + r.w * 0.88, ground),
-        r.h * 0.26,
-        Default::default(),
-    );
-    let bh = r.h * 0.1;
-    for i in 0..6 {
-        let w = r.w * (0.52 - i as f32 * 0.035);
-        let x = r.x + (r.w - w) / 2.0 + [0.0, 5.0, -4.0, 3.0, -2.0, 4.0][i] * r.w / 150.0;
-        art::nine(
-            "blk",
-            Rect::new(x, ground + 2.0 - (i + 1) as f32 * bh, w, bh),
-            16.0,
-            bh / 88.0,
-            block_tint(0.55 + i as f32 * 0.07),
-        );
-    }
+    crate::ui::icon("stack", r);
 }
 
 mod art {
@@ -646,18 +604,7 @@ mod tests {
     fn stack_sprites_all_exist() {
         let have = art::names();
         for n in [
-            "blk",
-            "hills_near",
-            "hills_far",
-            "peaks",
-            "tree_pine",
-            "tree_round",
-            "tree_small",
-            "tree_tall",
-            "tree_cone",
-            "castle",
-            "house",
-            "moon",
+            "blk", "hills", "peaks", "ground", "cloud1", "cloud2", "cloud3", "moon", "bush",
         ] {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }

@@ -8,7 +8,7 @@ pub const ROWS: usize = 6;
 pub const COLS: usize = 10;
 pub const BALL_R: f32 = 11.0;
 pub const PADDLE_W: f32 = 170.0;
-pub const PADDLE_H: f32 = 32.0;
+pub const PADDLE_H: f32 = 27.0;
 pub const LIVES: u32 = 3;
 const TRAIL_LEN: usize = 14;
 const COMBO_WINDOW: f32 = 1.2;
@@ -402,16 +402,12 @@ impl Game for Breakout {
                     r.h * k,
                 );
                 draw_brick(i / COLS, r);
-                shine_sweep(
-                    r,
-                    self.clock * 0.7 - (i % COLS) as f32 * 0.15 - (i / COLS) as f32 * 0.1,
-                );
             }
         }
         for (i, p) in self.trail.iter().enumerate() {
             let k = (i + 1) as f32 / self.trail.len() as f32;
             art::sprite_at(
-                "ball_glow",
+                "ball",
                 *p,
                 BALL_R * 2.0 * (0.3 + 0.6 * k),
                 crate::art::Draw {
@@ -433,7 +429,7 @@ impl Game for Breakout {
         art::sprite("paddle", p);
         let glow = 0.22 + 0.08 * (self.clock * 6.0).sin();
         art::sprite_at(
-            "ball_glow",
+            "ball",
             self.ball,
             BALL_R * 4.0,
             crate::art::Draw {
@@ -507,41 +503,7 @@ impl Game for Breakout {
 }
 
 pub fn icon(r: Rect) {
-    gradient_rect(
-        r,
-        Color::from_rgba(52, 42, 110, 255),
-        Color::from_rgba(92, 52, 130, 255),
-    );
-    let bw = r.w / 4.4;
-    let bh = bw * 0.46;
-    for row in 0..3 {
-        for col in 0..4 {
-            art::nine(
-                &format!("brick{}", (row * 2 + col / 2) % ROWS),
-                Rect::new(
-                    r.x + bw * 0.2 + col as f32 * bw,
-                    r.y + r.h * 0.1 + row as f32 * bh,
-                    bw - 2.0,
-                    bh - 2.0,
-                ),
-                16.0,
-                bh / 88.0,
-                WHITE,
-            );
-        }
-    }
-    art::sprite_at(
-        "ball",
-        vec2(r.x + r.w * 0.6, r.y + r.h * 0.62),
-        r.h * 0.13,
-        Default::default(),
-    );
-    art::sprite_w(
-        "paddle",
-        vec2(r.x + r.w * 0.5, r.y + r.h * 0.86),
-        r.w * 0.5,
-        Default::default(),
-    );
+    crate::ui::icon("breakout", r);
 }
 
 mod art {
@@ -549,34 +511,22 @@ mod art {
 }
 
 fn draw_brick(row: usize, r: Rect) {
-    art::nine(&format!("brick{}", row % ROWS), r, 16.0, r.h / 88.0, WHITE);
+    let grow = r.h * 0.09;
+    art::sprite(
+        &format!("brick{}", row % ROWS),
+        Rect::new(r.x - grow, r.y - grow, r.w + grow * 2.0, r.h + grow * 2.0),
+    );
 }
 
 fn draw_arena(view: &View, clock: f32) {
-    sky(
-        view,
-        Color::from_rgba(44, 36, 100, 255),
-        Color::from_rgba(96, 50, 128, 255),
-    );
     let f = view.full();
-    let tile = 128.0;
-    let tint = Color::new(0.32, 0.26, 0.55, 0.35);
-    let mut y = f.y;
-    while y < f.y + f.h {
-        let mut x = f.x;
-        while x < f.x + f.w {
-            art::sprite_ex(
-                "backtile",
-                Rect::new(x, y, tile + 1.0, tile + 1.0),
-                crate::art::Draw {
-                    tint,
-                    ..Default::default()
-                },
-            );
-            x += tile;
-        }
-        y += tile;
-    }
+    let s = art::size("bg");
+    let k = (f.w / s.x).max(f.h / s.y);
+    let (w, h) = (s.x * k, s.y * k);
+    art::sprite(
+        "bg",
+        Rect::new(f.x + (f.w - w) / 2.0, f.y + (f.h - h) / 2.0, w, h),
+    );
     for k in 0..14 {
         let x = (k as f32 * 197.0 + 40.0) % view.w;
         let y = (k as f32 * 131.0 + 20.0) % view.h;
@@ -604,7 +554,7 @@ mod tests {
     fn breakout_sprites_all_exist() {
         let have = art::names();
         let mut wanted: Vec<String> = (0..ROWS).map(|r| format!("brick{r}")).collect();
-        wanted.extend(["paddle", "ball", "ball_glow", "backtile"].map(String::from));
+        wanted.extend(["paddle", "ball", "bg"].map(String::from));
         for n in wanted {
             assert!(have.contains(&n), "missing {n}");
         }
