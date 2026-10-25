@@ -1,0 +1,82 @@
+[
+ {
+  "name": "hotel_bellhop",
+  "w": 768,
+  "h": 1024,
+  "seed": 300,
+  "cut": true,
+  "prompt": "Full body cute chubby cartoon character, a young hotel bellhop with a red uniform, gold buttons and a little round red pillbox hat, brown hair, big head, big glossy eyes, standing relaxed facing the camera, arms at sides, gentle smile, front view, whole body visible from head to feet. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_maid",
+  "w": 768,
+  "h": 1024,
+  "seed": 301,
+  "cut": true,
+  "prompt": "Full body cute chubby cartoon character, a friendly hotel maid in a light blue dress with a white apron and white cap, holding a feather duster, big head, big glossy eyes, standing relaxed facing the camera, arms at sides, gentle smile, front view, whole body visible from head to feet. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_clerk",
+  "w": 768,
+  "h": 1024,
+  "seed": 302,
+  "cut": true,
+  "prompt": "Full body cute chubby cartoon character, a smiling hotel receptionist in a navy blazer with a gold name badge and a red neck scarf, short dark hair, big head, big glossy eyes, standing relaxed facing the camera, arms at sides, gentle smile, front view, whole body visible from head to feet. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_desk",
+  "w": 1024,
+  "h": 768,
+  "seed": 303,
+  "cut": true,
+  "prompt": "A long hotel reception desk counter in glossy dark wood with gold trim, front view, with a brass service bell and a small computer monitor on top. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_door",
+  "w": 768,
+  "h": 1024,
+  "seed": 304,
+  "cut": true,
+  "prompt": "A grand hotel entrance with double glass doors, a gold frame and a red striped awning above, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_cash",
+  "w": 768,
+  "h": 768,
+  "seed": 305,
+  "cut": true,
+  "prompt": "A neat pile of shiny gold coins with two stacks of green banknote bundles tied with paper bands. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_carpet",
+  "w": 1024,
+  "h": 1024,
+  "seed": 306,
+  "cut": true,
+  "prompt": "Top down flat view of an ornate rectangular red hotel carpet rug with a gold patterned border and a floral pattern. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_sofa",
+  "w": 1024,
+  "h": 768,
+  "seed": 307,
+  "cut": true,
+  "prompt": "A plush purple velvet two seat sofa with golden legs and two cushions, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_palm",
+  "w": 768,
+  "h": 1024,
+  "seed": 308,
+  "cut": true,
+  "prompt": "A tall tropical palm tree in a terracotta pot, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel_suitcase",
+  "w": 768,
+  "h": 768,
+  "seed": 309,
+  "cut": true,
+  "prompt": "A cute stack of two colourful vintage suitcases with a luggage trolley, front view. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ }
+]

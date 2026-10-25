@@ -144,20 +144,20 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                 );
             }
         }
-        "Hotel Hop" if f.is_multiple_of(45) => {
-            let top = 80.0;
-            let lobby_w = (view.w * 0.26).clamp(220.0, 320.0);
-            let gx = 16.0 + lobby_w + 16.0;
-            let cw = (view.w - gx - 16.0) / 4.0;
-            let ch = (view.h - top - 16.0) / 3.0;
-            let room = (f / 45) % 2;
-            tap(
-                &mut i,
-                vec2(
-                    gx + (room % 4) as f32 * cw + cw / 2.0,
-                    top + 2.0 * ch + ch / 2.0,
-                ),
-            );
+        "Hotel Hop" => {
+            if f == 2 {
+                i.pressed = true;
+                i.down = true;
+                i.pos = c;
+            }
+            if f > 2 && f < 200 {
+                i.down = true;
+                i.pos = c + vec2(-60.0, -40.0);
+            }
+            if f == 200 {
+                i.released = true;
+                i.pos = c;
+            }
         }
         _ => {}
     }
@@ -492,6 +492,18 @@ async fn main() {
     } else {
         None
     };
+    let special = special.or_else(|| {
+        (which == -7).then(|| {
+            kids_games::profile::create("Mia", 2);
+            let mut h = games::hotel::Hotel::new();
+            h.begin(10);
+            for _ in 0..3600 {
+                h.sim.autopilot();
+                h.update(&Input::default(), &view, 1.0 / 60.0);
+            }
+            Box::new(h) as Box<dyn Game>
+        })
+    });
     let memory_game: Option<Box<dyn Game>> = memory.map(|m| Box::new(m) as Box<dyn Game>);
     let has_memory = memory_game.is_some();
     let mut game = special.or(spell).or(memory_game).or_else(|| {
@@ -551,7 +563,14 @@ async fn main() {
             g
         })
     });
-    if which != -3 && which != -4 && which != -5 && which != -6 && !has_memory && !has_spell {
+    if which != -3
+        && which != -4
+        && which != -5
+        && which != -6
+        && which != -7
+        && !has_memory
+        && !has_spell
+    {
         kids_games::profile::create("Mia", 2);
         if which > 100 {
             let g = &all[(which - 101) as usize];
