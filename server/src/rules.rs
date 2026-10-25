@@ -48,7 +48,6 @@ pub fn hash_token(token: &str) -> String {
     hex(&Sha256::digest(token.as_bytes()))
 }
 
-#[cfg(test)]
 pub fn is_uuid(s: &str) -> bool {
     let parts: Vec<&str> = s.split('-').collect();
     parts.iter().map(|p| p.len()).collect::<Vec<_>>() == [8, 4, 4, 4, 12]

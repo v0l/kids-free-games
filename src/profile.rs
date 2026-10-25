@@ -49,7 +49,7 @@ fn now_secs() -> i64 {
     }
 }
 
-fn entropy() -> [u8; 16] {
+pub(crate) fn entropy() -> [u8; 16] {
     thread_local! {
         static SEED: RefCell<u64> = const { RefCell::new(0) };
     }
@@ -121,6 +121,29 @@ pub fn create(name: &str, avatar: usize) -> Option<Profile> {
     load(&id)
 }
 
+pub fn adopt(id: &str, name: &str, avatar: usize) -> Option<Profile> {
+    let name = clean_name(name);
+    if !is_uuid(id) || name.is_empty() {
+        return None;
+    }
+    if load(id).is_none() {
+        if list().len() >= MAX_PROFILES {
+            return None;
+        }
+        save::set_str(&format!("p.{id}.name"), &name);
+        save::set(&format!("p.{id}.created"), now_secs());
+        let mut ids: Vec<String> = list().into_iter().map(|p| p.id).collect();
+        ids.push(id.to_string());
+        save::set_str("profiles", &ids.join(","));
+    }
+    save::set(
+        &format!("p.{id}.avatar"),
+        avatar.min(AVATARS.len() - 1) as i64,
+    );
+    select(id);
+    load(id)
+}
+
 pub fn rename(id: &str, name: &str, avatar: usize) {
     let name = clean_name(name);
     if !name.is_empty() {
@@ -140,6 +163,7 @@ pub fn delete(id: &str) {
         .collect();
     save::set_str("profiles", &ids.join(","));
     save::remove_prefix(&format!("p.{id}."));
+    crate::net::forget_profile(id);
     if current_id().as_deref() == Some(id) {
         save::set_str("current", "");
     }
@@ -222,6 +246,7 @@ pub fn submit(game: &str, score: i64, better: Better) -> Option<usize> {
     if better == Better::Higher && score <= 0 {
         return None;
     }
+    crate::net::on_score(game, score);
     let player = current_id().unwrap_or_else(|| "guest".into());
     let mut b = board(game);
     let rank = insert_ranked(

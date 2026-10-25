@@ -158,6 +158,11 @@ pub fn reset_for_test() {
     with(|m| m.clear());
 }
 
+#[cfg(test)]
+pub fn swap_for_test(other: Map) -> Map {
+    with(|m| std::mem::replace(m, other))
+}
+
 #[cfg(target_arch = "wasm32")]
 mod backend {
     extern "C" {

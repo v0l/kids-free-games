@@ -26,6 +26,26 @@ miniquad_add_plugin({name: "kg_save", version: 1, register_plugin: function (o) 
   o.env.kg_save_write = function (ptr, len) { try { localStorage.setItem(key, new TextDecoder().decode(new Uint8Array(wasm_memory.buffer, ptr, len))); } catch (e) {} };
 }});
 </script>
+<script>
+miniquad_add_plugin({name: "kg_http", version: 1, register_plugin: function (o) {
+  var jobs = {}, next = 0, dec = new TextDecoder(), enc = new TextEncoder();
+  function str(ptr, len) { return len ? dec.decode(new Uint8Array(wasm_memory.buffer, ptr, len)) : ""; }
+  o.env.kg_http_start = function (mp, ml, up, ul, tp, tl, bp, bl) {
+    var id = ++next, method = str(mp, ml), headers = {}, token = str(tp, tl), body = str(bp, bl);
+    if (token) headers["Authorization"] = "Bearer " + token;
+    if (body) headers["Content-Type"] = "application/json";
+    var job = jobs[id] = { status: 0, bytes: new Uint8Array(0) };
+    fetch(str(up, ul), { method: method, headers: headers, body: body || undefined })
+      .then(function (r) { return r.text().then(function (t) { job.bytes = enc.encode(t); job.status = r.status || -1; }); })
+      .catch(function () { job.status = -1; });
+    return id;
+  };
+  o.env.kg_http_status = function (id) { return jobs[id] ? jobs[id].status : -1; };
+  o.env.kg_http_len = function (id) { return jobs[id] ? jobs[id].bytes.length : 0; };
+  o.env.kg_http_read = function (id, ptr, len) { if (jobs[id]) new Uint8Array(wasm_memory.buffer, ptr, len).set(jobs[id].bytes.subarray(0, len)); };
+  o.env.kg_http_free = function (id) { delete jobs[id]; };
+}});
+</script>
 <script>load("kids_games.wasm");</script>
 </body>
 </html>

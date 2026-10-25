@@ -55,6 +55,8 @@ pub async fn authenticate(db: &Db, token: Option<&str>, now: i64) -> ApiResult<A
 
 #[derive(Deserialize)]
 pub struct RegisterBody {
+    #[serde(default)]
+    pub id: Option<String>,
     pub name: String,
     #[serde(default)]
     pub avatar: i64,
@@ -85,12 +87,23 @@ async fn insert_token(db: &Db, player_id: &str, label: &str, now: i64) -> ApiRes
 pub async fn register(db: &Db, body: RegisterBody, now: i64) -> ApiResult<Value> {
     let name = valid_name(&body.name)?;
     let avatar = valid_avatar(body.avatar)?;
-    let id = new_player_id()?;
-    db.run(
-        "INSERT INTO players (id, name, avatar, created_at, last_seen) VALUES (?1, ?2, ?3, ?4, ?4)",
-        &[s(&id), s(&name), n(avatar), n(now)],
-    )
-    .await?;
+    let id = match body.id {
+        Some(id) if is_uuid(&id) => id,
+        Some(_) => return Err(ApiError::bad_request("id must be a lowercase uuid")),
+        None => new_player_id()?,
+    };
+    let inserted = db
+        .run(
+            "INSERT INTO players (id, name, avatar, created_at, last_seen) VALUES (?1, ?2, ?3, ?4, ?4) ON CONFLICT (id) DO NOTHING",
+            &[s(&id), s(&name), n(avatar), n(now)],
+        )
+        .await?;
+    if inserted == 0 {
+        return Err(ApiError::conflict(
+            "id_taken",
+            "that player id is already registered",
+        ));
+    }
     let token = insert_token(db, &id, &body.device, now).await?;
     Ok(json!({
         "player": { "id": id, "name": name, "avatar": avatar, "created_at": now },

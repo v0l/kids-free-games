@@ -42,10 +42,13 @@ req POST /v1/players "" '{"name":"  mia  ","avatar":2,"device":"Pixel"}'
 expect "register mia" 200 .player.name Mia
 A=$(echo "$BODY" | jq -r .token)
 A_ID=$(echo "$BODY" | jq -r .player.id)
-req POST /v1/players "" '{"name":"leo","avatar":5}'
-expect "register leo" 200 .player.avatar 5
+req POST /v1/players "" '{"id":"NOT-A-UUID","name":"zed"}'; expect "register bad id" 400 .error bad_request
+CHOSEN=$(cat /proc/sys/kernel/random/uuid)
+req POST /v1/players "" "{\"id\":\"$CHOSEN\",\"name\":\"leo\",\"avatar\":5}"
+expect "register leo with a chosen id" 200 .player.id "$CHOSEN"
 B=$(echo "$BODY" | jq -r .token)
 B_ID=$(echo "$BODY" | jq -r .player.id)
+req POST /v1/players "" "{\"id\":\"$CHOSEN\",\"name\":\"copy\"}"; expect "chosen id cannot be taken twice" 409 .error id_taken
 
 req GET /v1/me "$A"; expect "me" 200 .player.id "$A_ID"
 expect "me playtime starts at zero" 200 .playtime.total_seconds 0

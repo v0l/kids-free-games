@@ -50,6 +50,7 @@ pub struct Profiles {
     pub mode: Mode,
     pub t: f32,
     pub done: bool,
+    pub link: Option<crate::link::Link>,
     press: Option<Rect>,
 }
 
@@ -71,8 +72,13 @@ impl Profiles {
             mode,
             t: 0.0,
             done: false,
+            link: None,
             press: None,
         }
+    }
+
+    pub fn link_rect(view: &View) -> Rect {
+        Rect::new(view.w - 196.0, 10.0, 186.0, 52.0)
     }
 
     pub fn card_rects(view: &View, n: usize) -> Vec<Rect> {
@@ -170,6 +176,20 @@ impl Profiles {
 
     pub fn update(&mut self, input: &Input, view: &View, dt: f32) {
         self.t += dt;
+        if let Some(l) = &mut self.link {
+            l.update(input, view, dt);
+            if l.done {
+                self.link = None;
+                self.mode = Mode::Pick;
+                if profile::current_id().is_some()
+                    && crate::net::redeem_state() == crate::net::Redeem::Done
+                {
+                    crate::net::clear_redeem();
+                    self.done = true;
+                }
+            }
+            return;
+        }
         self.press = input
             .down
             .then_some(input.pos)
@@ -187,7 +207,11 @@ impl Profiles {
 
     fn hit_rect(&self, view: &View, p: Vec2) -> Option<Rect> {
         let mut all: Vec<Rect> = match &self.mode {
-            Mode::Pick => Self::card_rects(view, profile::list().len()),
+            Mode::Pick => {
+                let mut v = Self::card_rects(view, profile::list().len());
+                v.push(Self::link_rect(view));
+                v
+            }
             Mode::Edit { .. } => {
                 let mut v: Vec<Rect> = Self::key_rects(view).into_iter().map(|k| k.1).collect();
                 let (a, b, c) = Self::action_rects(view);
@@ -208,6 +232,11 @@ impl Profiles {
             return;
         }
         if !input.pressed {
+            return;
+        }
+        if input.tapped_in(Self::link_rect(view)) {
+            sfx::play(Sfx::Tap);
+            self.link = Some(crate::link::Link::new());
             return;
         }
         for (i, r) in cards.iter().enumerate() {
@@ -336,10 +365,21 @@ impl Profiles {
     }
 
     pub fn draw(&self, view: &View) {
+        if let Some(l) = &self.link {
+            l.draw(view);
+            return;
+        }
         let pressed = |r: Rect| (self.press == Some(r)) as i32 as f32;
         match &self.mode {
             Mode::Pick => {
                 ui::ribbon(view, "Who's playing?", vec2(view.w / 2.0, 100.0), self.t);
+                ui::painted_button(
+                    Self::link_rect(view),
+                    "Link device",
+                    "blue",
+                    pressed(Self::link_rect(view)),
+                    1.0,
+                );
                 let list = profile::list();
                 let current = profile::current_id();
                 for (i, r) in Self::card_rects(view, list.len()).iter().enumerate() {
@@ -632,6 +672,42 @@ mod tests {
         tap(&mut p, &v, del);
         assert_eq!(profile::list().len(), 1);
         assert_eq!(p.mode, Mode::Pick);
+    }
+
+    #[test]
+    fn the_link_button_never_sits_on_a_player_card() {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+            View::fit(844.0, 390.0),
+        ] {
+            let link = Profiles::link_rect(&v);
+            assert!(link.y + link.h <= v.h + 1.0, "{v:?}");
+            for n in 0..=MAX_PROFILES {
+                for c in Profiles::card_rects(&v, n) {
+                    assert!(
+                        !c.overlaps(&link),
+                        "card hits link button with {n} players in {v:?}"
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn tapping_link_opens_the_link_screen_and_back_returns() {
+        crate::save::reset_for_test();
+        profile::create("Mia", 0).unwrap();
+        let v = View::ipad_landscape();
+        let mut p = Profiles::new();
+        tap(&mut p, &v, Profiles::link_rect(&v).center());
+        assert!(p.link.is_some());
+        let back = crate::link::Link::back_rect(&v).center();
+        tap(&mut p, &v, back);
+        assert!(p.link.is_none());
+        assert_eq!(p.mode, Mode::Pick);
+        assert!(!p.done);
     }
 
     #[test]
