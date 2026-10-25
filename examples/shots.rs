@@ -1,5 +1,5 @@
 use kids_games::engine::*;
-use kids_games::games::{self, count, mathpop};
+use kids_games::games::{self, count, mathpop, merge};
 use kids_games::safe::Insets;
 use kids_games::{begin_frame_safe, menu::App, window_conf};
 use macroquad::prelude::*;
@@ -43,7 +43,8 @@ fn scripted(game: &str, f: usize, view: &View) -> Input {
                 i.swipe = Some([Dir::Down, Dir::Right, Dir::Up, Dir::Right][(f / 60) % 4]);
             }
         }
-        "2048" if f.is_multiple_of(5) => i.swipe = Some(Dir::ALL[(f / 5) % 4]),
+        "2048" if f == 300 => tap(&mut i, merge::complete_buttons(view).1.center()),
+        "2048" if f < 300 && f.is_multiple_of(5) => i.swipe = Some(Dir::ALL[(f / 5) % 4]),
         "Fruit Slice" => {
             if f == 1 {
                 i.pressed = true;
