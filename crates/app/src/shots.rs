@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod blocks_scene;
 mod breakout_scene;
 mod fruit_scene;
 mod jumper_scene;
@@ -98,6 +99,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (85, "jumper spring boing"),
     (86, "jumper game over with the board"),
     (87, "jumper new best"),
+    (120, "blocks ready"),
+    (121, "blocks first piece with the hint"),
+    (122, "blocks mid game"),
+    (123, "blocks rows clearing"),
+    (124, "blocks four rows and level up"),
+    (125, "blocks game over with the board"),
+    (126, "blocks new best"),
+    (127, "blocks fresh start rescue"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -334,6 +343,7 @@ fn setup(n: u32, view: &View) -> Stage {
         60..=69 => stack_scene::setup(n, view),
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
+        120..=129 => blocks_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -501,6 +511,11 @@ mod tests {
     #[test]
     fn jumper_scenes_land_in_the_state_they_are_named_for() {
         jumper_scene::check();
+    }
+
+    #[test]
+    fn blocks_scenes_land_in_the_state_they_are_named_for() {
+        blocks_scene::check();
     }
 
     #[test]

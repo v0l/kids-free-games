@@ -2,6 +2,7 @@ use crate::paint::Pen;
 use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
+pub mod blocks;
 pub mod breakout;
 pub mod crossy;
 pub mod flappy;
@@ -54,6 +55,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         stack::KEY => Some(|| Box::new(stack::StackPlay::new())),
         breakout::KEY => Some(|| Box::new(breakout::BreakoutPlay::new())),
         jumper::KEY => Some(|| Box::new(jumper::JumperPlay::new())),
+        blocks::KEY => Some(|| Box::new(blocks::BlocksPlay::new())),
         _ => None,
     }
 }
