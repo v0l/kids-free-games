@@ -7,6 +7,7 @@ pub mod flappy;
 pub mod fruit;
 pub mod merge;
 pub mod snake;
+pub mod stack;
 
 pub trait IntoAny {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
@@ -48,6 +49,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
         merge::KEY => Some(|| Box::new(merge::MergePlay::new())),
         fruit::KEY => Some(|| Box::new(fruit::FruitPlay::new())),
+        stack::KEY => Some(|| Box::new(stack::StackPlay::new())),
         _ => None,
     }
 }

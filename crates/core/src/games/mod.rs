@@ -3,6 +3,7 @@ pub mod flappy;
 pub mod fruit;
 pub mod merge;
 pub mod snake;
+pub mod stack;
 
 use crate::geom::Color;
 
