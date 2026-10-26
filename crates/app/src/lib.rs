@@ -22,7 +22,7 @@ use kg_core::engine::{Finger, InputTracker, Key, Pointer, Raw, View};
 use kg_core::safe::SafeArea;
 
 pub enum Scene {
-    Menu(menu::App),
+    Menu(Box<menu::App>),
     Shot(shots::Shot),
 }
 
@@ -223,7 +223,7 @@ pub fn run() {
     text::prewarm();
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),
-        None => Scene::Menu(menu::App::new()),
+        None => Scene::Menu(Box::default()),
     };
     let audio = !matches!(scene, Scene::Shot(_));
     build(scene, audio).run();

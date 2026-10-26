@@ -84,7 +84,13 @@ impl Pen {
         self.gradient(view.full(), top, bottom);
     }
 
-    pub fn fan(&mut self, c: Vec2, rx: f32, ry: f32, rot: f32, from: f32, to: f32, col: Color) {
+    pub fn arc(&mut self, c: Vec2, r: f32, from: f32, to: f32, col: Color) {
+        self.fan(c, vec2(r, r), 0.0, (from, to), col);
+    }
+
+    pub fn fan(&mut self, c: Vec2, radii: Vec2, rot: f32, span: (f32, f32), col: Color) {
+        let (rx, ry) = (radii.x, radii.y);
+        let (from, to) = span;
         let n = self.sides(rx.abs().max(ry.abs())).max(3);
         let segs = ((n as f32) * ((to - from).abs() / TAU)).ceil().max(2.0) as usize;
         let h = Vec2::splat(0.5);
@@ -105,11 +111,11 @@ impl Pen {
     }
 
     pub fn circle(&mut self, c: Vec2, r: f32, col: Color) {
-        self.fan(c, r, r, 0.0, 0.0, TAU, col);
+        self.fan(c, vec2(r, r), 0.0, (0.0, TAU), col);
     }
 
     pub fn ellipse(&mut self, c: Vec2, rx: f32, ry: f32, rot: f32, col: Color) {
-        self.fan(c, rx, ry, rot, 0.0, TAU, col);
+        self.fan(c, vec2(rx, ry), rot, (0.0, TAU), col);
     }
 
     pub fn ring(&mut self, c: Vec2, r: f32, width: f32, col: Color) {
@@ -179,7 +185,7 @@ impl Pen {
                 col,
             );
         }
-        self.fan(c, r * 0.45, r * 0.45, 0.0, 0.0, TAU, col);
+        self.fan(c, Vec2::splat(r * 0.45), 0.0, (0.0, TAU), col);
     }
 
     pub fn soft_shadow(&mut self, c: Vec2, rx: f32, ry: f32, alpha: f32) {
@@ -312,7 +318,12 @@ impl Pen {
 
     pub fn glyphs(&mut self, s: &str, at: Vec2, size: f32, fill: Color, edge: Color, shadow: Color) {
         let (px, k) = font_params(size);
-        let Some((placed, width, atlas)) = crate::text::layout(s, px) else {
+        let Some(crate::text::Line {
+            glyphs: placed,
+            width,
+            atlas,
+        }) = crate::text::layout(s, px)
+        else {
             return;
         };
         let start_x = at.x - width * k / 2.0;

@@ -15,10 +15,20 @@ fn with<R>(f: impl FnOnce(&mut Cache) -> R) -> Option<R> {
     })
 }
 
-pub fn layout(s: &str, px: u16) -> Option<(Vec<(Glyph, f32)>, f32, usize)> {
+pub struct Line {
+    pub glyphs: Vec<(Glyph, f32)>,
+    pub width: f32,
+    pub atlas: usize,
+}
+
+pub fn layout(s: &str, px: u16) -> Option<Line> {
     with(|c| {
         let (placed, w) = c.layout(s, px);
-        (placed, w, c.atlas.size)
+        Line {
+            glyphs: placed,
+            width: w,
+            atlas: c.atlas.size,
+        }
     })
 }
 

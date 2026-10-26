@@ -230,6 +230,9 @@ fn glyph_image(size: usize, alpha: &[u8]) -> Image {
     img
 }
 
+type CameraParts = (&'static mut Projection, &'static mut Transform);
+type CameraOnly = (With<PaintCamera>, Without<Layer>);
+
 #[allow(clippy::too_many_arguments)]
 fn sync(
     mut commands: Commands,
@@ -239,7 +242,7 @@ fn sync(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut layers: Query<(&mut Visibility, &mut MeshMaterial2d<ColorMaterial>, &mut Transform), With<Layer>>,
-    mut camera: Query<(&mut Projection, &mut Transform), (With<PaintCamera>, Without<Layer>)>,
+    mut camera: Query<CameraParts, CameraOnly>,
     window: Query<&Window>,
 ) {
     let Some(view) = pen.view else { return };

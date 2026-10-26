@@ -33,9 +33,9 @@ pub fn requested() -> Option<u32> {
 }
 
 enum Stage {
-    Menu(App),
-    Profiles(Profiles),
-    Flappy(FlappyPlay),
+    Menu(Box<App>),
+    Profiles(Box<Profiles>),
+    Flappy(Box<FlappyPlay>),
 }
 
 pub struct Shot {
@@ -114,7 +114,7 @@ fn setup(n: u32, view: &View) -> Stage {
             for _ in 0..90 {
                 app.update(&Input::default(), view, DT);
             }
-            Stage::Menu(app)
+            Stage::Menu(Box::new(app))
         }
         3..=6 => {
             players();
@@ -140,7 +140,7 @@ fn setup(n: u32, view: &View) -> Stage {
             for _ in 0..60 {
                 p.update(&Input::default(), view, DT);
             }
-            Stage::Profiles(p)
+            Stage::Profiles(Box::new(p))
         }
         _ => {
             kg_core::save::reset_for_test();
@@ -195,7 +195,7 @@ fn setup(n: u32, view: &View) -> Stage {
                 }
             }
             kg_core::sfx::take_cues();
-            Stage::Flappy(p)
+            Stage::Flappy(Box::new(p))
         }
     }
 }
