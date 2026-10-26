@@ -9,6 +9,7 @@ pub struct Audio {
     stream: Option<cpal::Stream>,
     loader: Loader,
     resumed: bool,
+    reported: bool,
 }
 
 fn open(mixer: Arc<Mutex<Mixer>>) -> Option<(cpal::Stream, u32)> {
@@ -78,6 +79,7 @@ impl Audio {
             stream,
             loader: Loader::new(kg_core::sfx::wanted_music().unwrap_or(Mood::Menu)),
             resumed: false,
+            reported: false,
         }
     }
 
@@ -109,6 +111,15 @@ pub fn tick(audio: &mut Audio, now: f64, dt: f32, touched: bool) {
         }
     }
     if let Ok(mut m) = audio.mixer.lock() {
+        if !audio.reported && now > 3.0 {
+            audio.reported = true;
+            info!(
+                "audio: {} Hz, {} frames rendered, device {}",
+                m.out_rate,
+                m.frames_rendered,
+                if audio.stream.is_some() { "open" } else { "missing" }
+            );
+        }
         m.control(now, dt);
         m.played.clear();
         if audio.stream.is_none() {

@@ -17,6 +17,19 @@ canvas { display: block; width: 100%; height: 100%; outline: none; }
 </head>
 <body>
 <canvas id="bevy" tabindex="1"></canvas>
+<script>
+(function () {
+  var made = [];
+  var Real = window.AudioContext || window.webkitAudioContext;
+  if (!Real) return;
+  function Ctx(opts) { var c = new Real(opts); made.push(c); return c; }
+  Ctx.prototype = Real.prototype;
+  window.AudioContext = Ctx;
+  function wake() { made.forEach(function (c) { if (c.state !== "running") c.resume(); }); }
+  ["pointerdown", "touchend", "keydown"].forEach(function (e) { window.addEventListener(e, wake, true); });
+  window.kgAudioState = function () { return made.map(function (c) { return c.state; }).join(","); };
+})();
+</script>
 <script type="module">
 import init from "./kids_games.js";
 init();

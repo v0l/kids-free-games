@@ -105,6 +105,7 @@ pub struct Mixer {
     music_now: f32,
     music_target: f32,
     pub played: Vec<String>,
+    pub frames_rendered: u64,
 }
 
 impl Mixer {
@@ -122,6 +123,7 @@ impl Mixer {
             music_now: 0.0,
             music_target: 0.0,
             played: vec![],
+            frames_rendered: 0,
         }
     }
 
@@ -246,6 +248,7 @@ impl Mixer {
         let channels = channels.max(1);
         out.fill(0.0);
         let frames = out.len() / channels;
+        self.frames_rendered += frames as u64;
         let ramp = MUSIC_RAMP_PER_SEC / self.out_rate as f32;
         let target = self.music_target;
         let mut music = self.music_now;
@@ -495,6 +498,7 @@ mod tests {
         let mut buf = vec![0.0; 2048];
         m.render(&mut buf, 2);
         assert!(buf.iter().any(|s| *s > 0.15));
+        assert_eq!(m.frames_rendered, 1024 + 441 * 100);
         m.render(&mut buf, 2);
         assert_eq!(m.active_effects(), 0);
         for _ in 0..200 {

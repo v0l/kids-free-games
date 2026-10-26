@@ -85,6 +85,13 @@ async function run(wsUrl) {
   });
   await send("Page.navigate", { url });
   await new Promise((r) => setTimeout(r, Number(waitMs)));
+  if (process.env.CLICK) {
+    const [x, y] = process.env.CLICK.split(",").map(Number);
+    for (const type of ["mousePressed", "mouseReleased"]) {
+      await send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
+    }
+    await new Promise((r) => setTimeout(r, 3000));
+  }
   if (process.env.EVAL) {
     const r = await send("Runtime.evaluate", { expression: process.env.EVAL, returnByValue: true, awaitPromise: true });
     console.log(`[eval] ${JSON.stringify(r.result.result.value)}`);
