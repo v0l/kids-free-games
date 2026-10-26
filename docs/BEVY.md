@@ -138,6 +138,10 @@ A scene number plus 1000 (`IDLE`) keeps the game running with no input until gam
 
 Run windows only inside a private headless sway (see the user's desktop rules); `--demo 1` drives a scripted first launch and a Flappy run.
 
+## Screenshot scenes for a game
+
+Put a game's scenes in their own file, `crates/app/src/shots/<key>_scene.rs`. It holds `pub fn setup(n: u32, view: &View) -> Stage` returning `Stage::Game(Box::new(play))`, and a `#[cfg(test)] pub fn check()` that uses `super::game::<YourPlay>(setup(n, &v))` to reach the concrete game. The shared `shots.rs` then gains only these lines: `mod <key>_scene;`, your entries in `SCENES` (a slice, so no length to edit), one `NN..=MM => <key>_scene::setup(n, view),` arm, and one test calling `<key>_scene::check()`. Idle scenes (scene plus `IDLE`) step `Stage::Game` until `Play::over()` is true, so implement `over` for your game. Don't add `Stage` variants.
+
 ## Checklist for one game
 
 1. Move the logic file to `crates/core/src/games/`, strip drawing, keep every test, add it to `games/mod.rs`. `cargo test -p kg_core` passes.
