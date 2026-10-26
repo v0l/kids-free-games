@@ -4,7 +4,7 @@ use crate::fx::approach as feel_approach;
 use crate::fx::*;
 use crate::geom::*;
 use crate::sfx::{self, Sfx};
-use glam::vec2;
+use glam::{vec2, vec3, Mat4, Vec2, Vec3};
 use std::f32::consts::TAU;
 
 pub const SEGMENTS: usize = 12;
@@ -16,12 +16,19 @@ pub const SMASH_FLOORS: u32 = 3;
 pub const GAME: &str = "helix";
 pub const MAX_LEVEL: u32 = 30;
 pub const GRID_COLS: usize = 6;
+pub const RING_OUTER: f32 = 150.0;
+pub const RING_INNER: f32 = 60.0;
+pub const RING_THICK: f32 = 18.0;
+pub const FOV: f32 = 0.5236;
+pub const PITCH: f32 = 0.42;
 const DRAG_DEADZONE_MM: f32 = 1.0;
 const DRAG_TURN: f32 = 0.012;
 const DRAG_EASE: f32 = 28.0;
 const WIN_DELAY: f32 = 0.8;
 const STAR_START: f32 = 0.3;
 const STAR_GAP: f32 = 0.25;
+
+static NEXT_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Seg {
@@ -47,6 +54,7 @@ pub enum State {
 }
 
 pub struct Helix {
+    pub serial: u64,
     pub floors: Vec<Floor>,
     pub angle: f32,
     pub y: f32,
@@ -83,6 +91,35 @@ pub fn ball_angle() -> f32 {
 pub fn segment_at(angle: f32, rotation: f32) -> usize {
     let local = (angle - rotation).rem_euclid(TAU);
     ((local / TAU * SEGMENTS as f32) as usize).min(SEGMENTS - 1)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Rig {
+    pub eye: Vec3,
+    pub target: Vec3,
+}
+
+impl Rig {
+    pub fn new(view: &View, cam: f32) -> Self {
+        let f = view.full();
+        let dist = f.h / 2.0 / (FOV / 2.0).tan();
+        let target = vec3(0.0, -(cam + view.h * 0.35), 0.0);
+        let eye = target + vec3(0.0, PITCH.sin(), PITCH.cos()) * dist;
+        Self { eye, target }
+    }
+
+    pub fn distance(&self) -> f32 {
+        (self.eye - self.target).length()
+    }
+
+    pub fn project(&self, view: &View, p: Vec3) -> Vec2 {
+        let f = view.full();
+        let m = Mat4::perspective_rh(FOV, f.w / f.h, 1.0, 20000.0)
+            * Mat4::look_at_rh(self.eye, self.target, Vec3::Y);
+        let c = m * p.extend(1.0);
+        let n = vec2(c.x / c.w, c.y / c.w);
+        vec2(f.x + (n.x * 0.5 + 0.5) * f.w, f.y + (0.5 - n.y * 0.5) * f.h)
+    }
 }
 
 pub fn floor_count(level: u32) -> usize {
@@ -195,6 +232,7 @@ impl Helix {
         let rotation = ball_angle() - (first_gap as f32 + 0.5) / SEGMENTS as f32 * TAU + TAU * turn;
         floors[0].segs[segment_at(ball_angle(), rotation)] = Seg::Solid;
         Self {
+            serial: NEXT_SERIAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             floors,
             angle: rotation,
             y: -60.0,
@@ -232,6 +270,14 @@ impl Helix {
         let best = self.best;
         *self = Self::build(level, fails);
         self.best = best;
+    }
+
+    pub fn ball_world(&self) -> Vec3 {
+        vec3(0.0, -self.y, (RING_OUTER + RING_INNER) / 2.0)
+    }
+
+    pub fn ball_screen(&self, view: &View) -> Vec2 {
+        Rig::new(view, self.cam).project(view, self.ball_world())
     }
 
     pub fn open_select(&mut self) {
@@ -409,7 +455,7 @@ impl Game for Helix {
             }
             State::Playing => {
                 let before = self.passed;
-                let ball_screen = vec2(view.w / 2.0, self.y - self.cam + view.h * 0.15);
+                let ball_screen = self.ball_screen(view);
                 match self.physics(dt) {
                     Some(Seg::Solid) => {
                         self.squash = 1.0;
@@ -612,6 +658,22 @@ mod tests {
             assert_ne!(floor_tile(k as f32 / 100.0), "tile_red");
         }
         assert_eq!(floor_tile(1.0), floor_tile(0.0));
+    }
+
+    #[test]
+    fn the_ball_stays_on_screen_and_above_the_middle_in_both_orientations() {
+        setup();
+        for view in [View::ipad_landscape(), View::ipad_portrait()] {
+            let mut g = Helix::new();
+            g.state = State::Playing;
+            for y in [-60.0, 400.0, 3000.0] {
+                g.y = y;
+                g.cam = (y - view.h * 0.35).max(0.0);
+                let at = g.ball_screen(&view);
+                assert!(at.x > view.w * 0.4 && at.x < view.w * 0.6, "{at:?}");
+                assert!(at.y > 0.0 && at.y < view.h * 0.6, "{at:?}");
+            }
+        }
     }
 
     #[test]
