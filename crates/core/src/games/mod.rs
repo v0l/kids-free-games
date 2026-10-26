@@ -1,7 +1,8 @@
 pub mod crossy;
 pub mod flappy;
-pub mod snake;
+pub mod fruit;
 pub mod merge;
+pub mod snake;
 
 use crate::geom::Color;
 

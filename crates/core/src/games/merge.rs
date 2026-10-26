@@ -205,7 +205,6 @@ pub enum Screen {
     Lost,
 }
 
-
 #[derive(Clone)]
 struct Snapshot {
     board: Board,
@@ -825,8 +824,17 @@ mod tests {
 
     #[test]
     fn merge_sprites_all_exist() {
-        let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/merge.kga")).unwrap();
-        let have: Vec<String> = crate::art::parse(&b).unwrap().frames.keys().cloned().collect();
+        let b = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/art/merge.kga"
+        ))
+        .unwrap();
+        let have: Vec<String> = crate::art::parse(&b)
+            .unwrap()
+            .frames
+            .keys()
+            .cloned()
+            .collect();
         for n in ["bg", "tile", "cell", "board", "crown"] {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }

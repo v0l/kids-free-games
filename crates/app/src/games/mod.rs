@@ -4,6 +4,7 @@ use kg_core::games::{Info, CATALOG};
 
 pub mod crossy;
 pub mod flappy;
+pub mod fruit;
 pub mod merge;
 pub mod snake;
 
@@ -46,6 +47,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
         snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
         merge::KEY => Some(|| Box::new(merge::MergePlay::new())),
+        fruit::KEY => Some(|| Box::new(fruit::FruitPlay::new())),
         _ => None,
     }
 }

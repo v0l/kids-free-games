@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod fruit_scene;
 mod merge_scene;
 mod snake_scene;
 
@@ -59,6 +60,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (47, "2048 no more moves with the board"),
     (48, "2048 fresh start rescue"),
     (49, "2048 goal hint on a limited undo level"),
+    (50, "fruit ready"),
+    (51, "fruit first swipe with the hint"),
+    (52, "fruit mid run with a combo"),
+    (53, "fruit level up"),
+    (54, "fruit bomb warning"),
+    (55, "fruit bomb blast"),
+    (56, "fruit game over with the board"),
+    (57, "fruit game over after a bomb"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -291,6 +300,7 @@ fn setup(n: u32, view: &View) -> Stage {
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
         40..=49 => merge_scene::setup(n, view),
+        50..=59 => fruit_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -448,6 +458,11 @@ mod tests {
     #[test]
     fn merge_scenes_land_in_the_state_they_are_named_for() {
         merge_scene::check();
+    }
+
+    #[test]
+    fn fruit_scenes_land_in_the_state_they_are_named_for() {
+        fruit_scene::check();
     }
 
     #[test]
