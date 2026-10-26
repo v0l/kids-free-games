@@ -1,0 +1,241 @@
+pub mod art;
+pub mod audio;
+pub mod draw;
+pub mod games;
+pub mod link;
+pub mod menu;
+pub mod paint;
+pub mod platform;
+pub mod profiles;
+pub mod shots;
+pub mod text;
+pub mod ui;
+pub mod web;
+
+use bevy::input::keyboard::{Key as BKey, KeyboardInput};
+use bevy::input::touch::TouchPhase;
+use bevy::input::ButtonState;
+use bevy::prelude::*;
+use bevy::window::{PrimaryWindow, WindowResolution};
+use glam::vec2;
+use kg_core::engine::{Finger, InputTracker, Key, Pointer, Raw, View};
+use kg_core::safe::SafeArea;
+
+pub enum Scene {
+    Menu(menu::App),
+    Shot(shots::Shot),
+}
+
+pub struct Frame {
+    pub scene: Scene,
+    tracker: InputTracker,
+    safe: SafeArea,
+    audio: Option<audio::Audio>,
+    per_mm: Option<Option<f32>>,
+    last_size: (f32, f32),
+}
+
+#[derive(Default)]
+struct Gathered {
+    touches: Vec<(u64, Finger, glam::Vec2)>,
+    typed: Vec<char>,
+    pressed: Vec<Key>,
+}
+
+fn map_key(k: KeyCode) -> Option<Key> {
+    Some(match k {
+        KeyCode::ArrowUp => Key::Up,
+        KeyCode::ArrowDown => Key::Down,
+        KeyCode::ArrowLeft => Key::Left,
+        KeyCode::ArrowRight => Key::Right,
+        KeyCode::KeyW => Key::W,
+        KeyCode::KeyA => Key::A,
+        KeyCode::KeyS => Key::S,
+        KeyCode::KeyD => Key::D,
+        KeyCode::Space => Key::Space,
+        KeyCode::Enter | KeyCode::NumpadEnter => Key::Enter,
+        KeyCode::Escape => Key::Escape,
+        KeyCode::Backspace => Key::Backspace,
+        _ => return None,
+    })
+}
+
+const KEYS: [KeyCode; 13] = [
+    KeyCode::ArrowUp,
+    KeyCode::ArrowDown,
+    KeyCode::ArrowLeft,
+    KeyCode::ArrowRight,
+    KeyCode::KeyW,
+    KeyCode::KeyA,
+    KeyCode::KeyS,
+    KeyCode::KeyD,
+    KeyCode::Space,
+    KeyCode::Enter,
+    KeyCode::NumpadEnter,
+    KeyCode::Escape,
+    KeyCode::Backspace,
+];
+
+#[allow(clippy::too_many_arguments)]
+fn frame(
+    mut state: NonSendMut<Frame>,
+    mut pen: ResMut<paint::Pen>,
+    time: Res<Time<Real>>,
+    window: Query<&Window, With<PrimaryWindow>>,
+    keys: Res<ButtonInput<KeyCode>>,
+    mouse: Res<ButtonInput<MouseButton>>,
+    mut touch_events: MessageReader<TouchInput>,
+    mut key_events: MessageReader<KeyboardInput>,
+    mut clear: ResMut<ClearColor>,
+) {
+    let Ok(win) = window.single() else { return };
+    let dpi = win.scale_factor();
+    let (lw, lh) = (win.width(), win.height());
+    if lw < 2.0 || lh < 2.0 {
+        return;
+    }
+    let mut g = Gathered::default();
+    for t in touch_events.read() {
+        let f = match t.phase {
+            TouchPhase::Started => Finger::Started,
+            TouchPhase::Moved => Finger::Held,
+            TouchPhase::Ended | TouchPhase::Canceled => Finger::Ended,
+        };
+        if let Some(slot) = g.touches.iter_mut().find(|x| x.0 == t.id) {
+            if !(slot.1 == Finger::Started && f == Finger::Held) {
+                slot.1 = f;
+            }
+            slot.2 = t.position;
+        } else {
+            g.touches.push((t.id, f, t.position));
+        }
+    }
+    for e in key_events.read() {
+        if e.state != ButtonState::Pressed {
+            continue;
+        }
+        if e.key_code == KeyCode::Backspace {
+            g.typed.push(profiles::BACKSPACE);
+        } else if let BKey::Character(s) = &e.logical_key {
+            g.typed.extend(s.chars().filter(|c| !c.is_control()));
+        }
+    }
+    let state = &mut *state;
+    let px_size = (lw * dpi, lh * dpi);
+    if px_size != state.last_size {
+        state.last_size = px_size;
+    }
+    let inset = state.safe.get(px_size, platform::insets_px).scaled(1.0 / dpi);
+    let view = View::fit_safe(lw, lh, inset);
+    let per_mm = *state
+        .per_mm
+        .get_or_insert_with(|| platform::units_per_mm_px().map(|px| px / dpi));
+    for k in KEYS {
+        if keys.just_pressed(k) {
+            g.pressed.extend(map_key(k));
+        }
+    }
+    let raw = Raw {
+        touches: g.touches,
+        mouse: Pointer {
+            pos: win.cursor_position().unwrap_or_default(),
+            down: mouse.pressed(MouseButton::Left),
+            pressed: mouse.just_pressed(MouseButton::Left),
+            released: mouse.just_released(MouseButton::Left),
+        },
+        keys_down: KEYS.iter().filter(|k| keys.pressed(**k)).filter_map(|k| map_key(*k)).collect(),
+        keys_pressed: g.pressed,
+        typed: g.typed,
+        units_per_mm: per_mm,
+        screen: vec2(lw, lh),
+    };
+    let input = state.tracker.poll(&raw, &view);
+    let dt = time.delta_secs().min(1.0 / 20.0);
+    pen.begin(view, view.scale * dpi);
+    match &mut state.scene {
+        Scene::Menu(app) => {
+            app.update(&input, &view, dt);
+            app.draw(&mut pen, &view);
+        }
+        Scene::Shot(s) => s.frame(&mut pen, &view, dt),
+    }
+    let touched = input.pressed || input.action || !input.typed.is_empty();
+    if let Some(a) = &mut state.audio {
+        audio::tick(a, time.elapsed_secs_f64(), time.delta_secs().min(0.1), touched);
+    }
+    let _ = &mut clear;
+}
+
+pub fn window() -> Window {
+    Window {
+        title: "Kids Free Games".into(),
+        canvas: Some("#bevy".into()),
+        fit_canvas_to_parent: true,
+        prevent_default_event_handling: true,
+        resolution: WindowResolution::new(1024, 768),
+        mode: if cfg!(any(target_os = "android", target_os = "ios")) {
+            bevy::window::WindowMode::BorderlessFullscreen(bevy::window::MonitorSelection::Primary)
+        } else {
+            bevy::window::WindowMode::Windowed
+        },
+        prefers_home_indicator_hidden: true,
+        prefers_status_bar_hidden: true,
+        ..default()
+    }
+}
+
+pub fn build(scene: Scene, with_audio: bool) -> App {
+    if let Some(d) = platform::save_dir() {
+        kg_core::save::set_dir(d);
+    }
+    let mut app = App::new();
+    app.add_plugins(
+        DefaultPlugins
+            .set(WindowPlugin {
+                primary_window: Some(window()),
+                ..default()
+            })
+            .set(bevy::log::LogPlugin {
+                filter: "wgpu=error,naga=warn,bevy_render=warn".into(),
+                ..default()
+            }),
+    )
+    .insert_resource(ClearColor(Color::srgb(1.0, 0.7, 0.47)))
+    .add_plugins(paint::PaintPlugin)
+    .insert_non_send(Frame {
+        scene,
+        tracker: InputTracker::default(),
+        safe: SafeArea::default(),
+        audio: None,
+        per_mm: None,
+        last_size: (0.0, 0.0),
+    })
+    .add_systems(Update, frame);
+    if with_audio {
+        app.add_systems(Startup, |mut f: NonSendMut<Frame>| {
+            f.audio = Some(audio::Audio::new());
+        });
+    }
+    app
+}
+
+pub fn run() {
+    text::prewarm();
+    let scene = match shots::requested() {
+        Some(n) => Scene::Shot(shots::Shot::new(n)),
+        None => Scene::Menu(menu::App::new()),
+    };
+    let audio = !matches!(scene, Scene::Shot(_));
+    build(scene, audio).run();
+}
+
+#[bevy_main]
+pub fn main() {
+    run();
+}
+
+#[cfg(target_arch = "wasm32")]
+#[wasm_bindgen::prelude::wasm_bindgen(start)]
+pub fn start() {
+    run();
+}

@@ -1,0 +1,295 @@
+use crate::games::flappy::FlappyPlay;
+use crate::games::Play;
+use crate::link::{Link, Tab};
+use crate::menu::App;
+use crate::paint::Pen;
+use crate::profiles::{Mode, Profiles};
+use glam::vec2;
+use kg_core::engine::{Input, View};
+use kg_core::games::flappy::{self, Pipe, State, PIPE_W};
+use kg_core::profile;
+
+pub const SCENES: [(u32, &str); 14] = [
+    (0, "menu"),
+    (1, "menu scrolled to Learn"),
+    (2, "menu with the second tile focused"),
+    (3, "who's playing"),
+    (4, "new player"),
+    (5, "link: show code"),
+    (6, "link: type code"),
+    (10, "flappy ready"),
+    (11, "flappy first flight with the hint"),
+    (12, "flappy mid run"),
+    (13, "flappy crossing ten"),
+    (14, "flappy moving pipes at night"),
+    (15, "flappy game over with the board"),
+    (16, "flappy new best"),
+];
+
+pub fn requested() -> Option<u32> {
+    crate::web::query("shot")
+        .or_else(crate::web::hash)
+        .and_then(|s| s.parse().ok())
+}
+
+enum Stage {
+    Menu(App),
+    Profiles(Profiles),
+    Flappy(FlappyPlay),
+}
+
+pub struct Shot {
+    pub n: u32,
+    stage: Option<Stage>,
+    size: (f32, f32),
+}
+
+const DT: f32 = 1.0 / 60.0;
+
+fn players() {
+    kg_core::save::reset_for_test();
+    let mia = profile::create("Mia", 2).unwrap();
+    profile::create("Leo", 5);
+    profile::create("Ava", 9);
+    profile::select(&mia.id);
+}
+
+fn flap() -> Input {
+    Input::press_at(vec2(500.0, 500.0))
+}
+
+fn fly(p: &mut FlappyPlay, view: &View, frames: usize) {
+    for _ in 0..frames {
+        let g = &p.g;
+        let bx = flappy::Flappy::bird_x(view);
+        let target = g
+            .pipes
+            .iter()
+            .find(|q| q.x + PIPE_W > bx - flappy::BIRD_R)
+            .map(|q| q.gap_y + q.gap * 0.15)
+            .unwrap_or(view.h * 0.5);
+        let input = if g.y > target && g.vy > 0.0 { flap() } else { Input::default() };
+        p.update(&input, view, DT);
+        if p.g.state == State::Dead {
+            break;
+        }
+    }
+}
+
+fn crash(p: &mut FlappyPlay, view: &View) {
+    p.g.y = 100.0;
+    p.g.pipes.push(Pipe::new(flappy::Flappy::bird_x(view) - 10.0, 450.0));
+    p.update(&Input::default(), view, DT);
+    for _ in 0..90 {
+        p.update(&Input::default(), view, DT);
+    }
+}
+
+fn board(scores: &[(&str, usize, i64)]) {
+    let me = profile::current_id();
+    for (name, avatar, score) in scores {
+        let p = profile::create(name, *avatar).unwrap();
+        profile::select(&p.id);
+        profile::submit(flappy::GAME, *score, profile::Better::Higher);
+    }
+    if let Some(me) = me {
+        profile::select(&me);
+    }
+}
+
+fn setup(n: u32, view: &View) -> Stage {
+    quad_rand::srand(7);
+    match n {
+        0..=2 => {
+            players();
+            let mut app = App::new();
+            match n {
+                1 => app.scroll_to_end(view),
+                2 => {
+                    app.update(&Input::key(kg_core::engine::Dir::Right), view, DT);
+                    app.update(&Input::key(kg_core::engine::Dir::Right), view, DT);
+                }
+                _ => {}
+            }
+            for _ in 0..90 {
+                app.update(&Input::default(), view, DT);
+            }
+            Stage::Menu(app)
+        }
+        3..=6 => {
+            players();
+            let mut p = Profiles::new();
+            match n {
+                4 => {
+                    p.mode = Mode::Edit {
+                        id: None,
+                        name: "Zoe".into(),
+                        avatar: 7,
+                        confirm_delete: false,
+                    }
+                }
+                5 => p.link = Some(Link::new()),
+                6 => {
+                    let mut l = Link::new();
+                    l.tab = Tab::Join;
+                    l.typed = "K7QM2X".into();
+                    p.link = Some(l);
+                }
+                _ => {}
+            }
+            for _ in 0..60 {
+                p.update(&Input::default(), view, DT);
+            }
+            Stage::Profiles(p)
+        }
+        _ => {
+            kg_core::save::reset_for_test();
+            let mia = profile::create("Mia", 2).unwrap();
+            if n != 11 {
+                profile::set(flappy::GAME, "passed", 1);
+            }
+            profile::select(&mia.id);
+            let mut p = FlappyPlay::new();
+            match n {
+                10 => {
+                    for _ in 0..40 {
+                        p.update(&Input::default(), view, DT);
+                    }
+                }
+                11 => {
+                    p.update(&flap(), view, DT);
+                    fly(&mut p, view, 200);
+                }
+                12 => {
+                    p.update(&flap(), view, DT);
+                    fly(&mut p, view, 60 * 14);
+                }
+                13 => {
+                    p.update(&flap(), view, DT);
+                    for _ in 0..60 * 60 {
+                        fly(&mut p, view, 1);
+                        if p.g.score >= flappy::MILESTONE {
+                            break;
+                        }
+                    }
+                    fly(&mut p, view, 25);
+                }
+                14 => {
+                    p.update(&flap(), view, DT);
+                    p.g.score = 31;
+                    fly(&mut p, view, 60 * 9);
+                }
+                15 => {
+                    board(&[("Leo", 5, 23), ("Ava", 9, 14), ("Sam", 3, 6)]);
+                    p = FlappyPlay::new();
+                    p.update(&flap(), view, DT);
+                    fly(&mut p, view, 60 * 6);
+                    crash(&mut p, view);
+                }
+                _ => {
+                    board(&[("Leo", 5, 2), ("Ava", 9, 1)]);
+                    p = FlappyPlay::new();
+                    p.update(&flap(), view, DT);
+                    fly(&mut p, view, 60 * 12);
+                    crash(&mut p, view);
+                }
+            }
+            kg_core::sfx::take_cues();
+            Stage::Flappy(p)
+        }
+    }
+}
+
+impl Shot {
+    pub fn new(n: u32) -> Self {
+        kg_core::save::use_memory_only();
+        Self {
+            n,
+            stage: None,
+            size: (0.0, 0.0),
+        }
+    }
+
+    pub fn frame(&mut self, pen: &mut Pen, view: &View, _dt: f32) {
+        if self.size != (view.w, view.h) || self.stage.is_none() {
+            self.size = (view.w, view.h);
+            self.stage = Some(setup(self.n % 100, view));
+        }
+        if self.n >= 100 {
+            if let Some(Stage::Flappy(p)) = &mut self.stage {
+                if p.g.state != State::Dead {
+                    p.update(&Input::default(), view, DT);
+                }
+            }
+        }
+        match self.stage.as_ref().unwrap() {
+            Stage::Menu(a) => a.draw(pen, view),
+            Stage::Profiles(p) => {
+                draw_backdrop(pen, view);
+                pen.fill_screen(view, kg_core::geom::Color::new(0.1, 0.04, 0.25, 0.45));
+                p.draw(pen, view);
+            }
+            Stage::Flappy(p) => {
+                p.draw(pen, view);
+                pen.offset = glam::Vec2::ZERO;
+                let r = kg_core::geom::Rect::new(
+                    crate::menu::HOME.x,
+                    crate::menu::HOME.y - 4.0,
+                    crate::menu::HOME.h + 8.0,
+                    crate::menu::HOME.h + 8.0,
+                );
+                pen.painted_round(r, "icon_home", 0.0);
+            }
+        }
+    }
+}
+
+fn draw_backdrop(pen: &mut Pen, view: &View) {
+    let f = view.full();
+    let name = if f.h > f.w * 1.05 { "bg_tall" } else { "bg_wide" };
+    let sz = crate::art::size("menu", name);
+    let k = (f.w / sz.x).max(f.h / sz.y) * 1.04;
+    let (w, h) = (sz.x * k, sz.y * k);
+    pen.sprite(
+        "menu",
+        name,
+        kg_core::geom::Rect::new(f.x + (f.w - w) / 2.0, f.y + (f.h - h) / 2.0, w, h),
+        crate::draw::Draw::default(),
+    );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn every_scene_builds_and_draws_in_both_orientations() {
+        for v in [View::ipad_landscape(), View::ipad_portrait()] {
+            for (n, name) in SCENES {
+                let mut s = Shot::new(n);
+                let mut pen = Pen::default();
+                pen.begin(v, 1.0);
+                s.frame(&mut pen, &v, DT);
+                assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
+            }
+        }
+    }
+
+    #[test]
+    fn flappy_scenes_land_in_the_state_they_are_named_for() {
+        let v = View::ipad_landscape();
+        let get = |n: u32| match setup(n, &v) {
+            Stage::Flappy(p) => p,
+            _ => panic!(),
+        };
+        assert_eq!(get(10).g.state, State::Ready);
+        let t = get(11);
+        assert!(t.g.training && t.g.state == State::Playing);
+        assert!(get(12).g.score >= 3);
+        assert!(get(13).g.score >= flappy::MILESTONE);
+        assert!(get(14).g.pipes.iter().any(|p| p.amp > 0.0));
+        let over = get(15);
+        assert!(over.g.shows_results() && over.g.rank.is_some_and(|r| r > 0));
+        assert_eq!(get(16).g.rank, Some(0));
+    }
+}
