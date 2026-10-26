@@ -3,7 +3,7 @@ use crate::draw::Draw;
 use crate::paint::Pen;
 use glam::{vec2, vec3, Vec2};
 use kg_core::engine::View;
-use kg_core::fx::{ease_out_back, ease_out_cubic};
+use kg_core::fx::ease_out_back;
 use kg_core::games::hotel::layout::*;
 use kg_core::games::hotel::sim::*;
 use kg_core::games::hotel::*;
@@ -158,7 +158,7 @@ impl Hud<'_> {
                 bubble(pen, c, r * 0.7, "broom", None);
             }
         }
-        self.draw_pad_labels(pen, r);
+        self.draw_pad_labels(pen);
         for w in sim.locked() {
             let mid = w.center();
             if let Some(c) = self.at(vec3(mid.x, 1.6, mid.y)) {
@@ -180,12 +180,11 @@ impl Hud<'_> {
         self.draw_pops(pen);
     }
 
-    fn draw_pad_labels(&self, pen: &mut Pen, r: f32) {
+    fn draw_pad_labels(&self, pen: &mut Pen) {
         let sim = &self.h.sim;
         let px = self
             .cam
             .px_per_unit(&self.view, vec3(sim.player.pos.x, 0.0, sim.player.pos.y));
-        let _ = r;
         for i in sim.visible_pads() {
             let p = &sim.lay.pads[i];
             let Some(c) = self.at(vec3(p.pos.x, 0.0, p.pos.y)) else {
@@ -475,8 +474,4 @@ pub fn guide_arrow(pen: &mut Pen, p: Vec2, size: f32) {
         Rect::new(p.x - size * 0.25, p.y - size * 1.3, size * 0.5, size * 0.75),
         ARROW,
     );
-}
-
-pub fn eased(k: f32) -> f32 {
-    ease_out_cubic(k)
 }

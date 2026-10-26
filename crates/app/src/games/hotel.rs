@@ -9,7 +9,6 @@ use hud::Hud;
 use kg_core::engine::{Game, Input, View};
 use kg_core::fx::Particles;
 use kg_core::games::hotel::{Hotel, Mode};
-use kg_core::geom::Color;
 use world::World;
 
 pub const KEY: &str = kg_core::games::hotel::GAME;
@@ -104,10 +103,6 @@ impl crate::games::Play for HotelPlay {
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
     }
-}
-
-pub fn backdrop() -> Color {
-    Color::new(0.4, 0.7, 0.35, 1.0)
 }
 
 #[cfg(test)]

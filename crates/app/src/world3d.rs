@@ -315,7 +315,6 @@ fn sync(
             }),
             Transform::from_translation(scene.eye).looking_at(scene.target, Vec3::Y),
             bevy::core_pipeline::tonemapping::Tonemapping::None,
-            Msaa::Off,
             Eye,
             World3d,
         ));
