@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod merge_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (40, "2048 teaching deal with the hint"),
+    (41, "2048 level 4 mid game"),
+    (42, "2048 level 8 with big tiles and the crown"),
+    (43, "2048 tiles sliding and merging"),
+    (44, "2048 level picker"),
+    (45, "2048 level complete"),
+    (46, "2048 final level complete"),
+    (47, "2048 no more moves with the board"),
+    (48, "2048 fresh start rescue"),
+    (49, "2048 goal hint on a limited undo level"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +290,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        40..=49 => merge_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -431,6 +443,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn merge_scenes_land_in_the_state_they_are_named_for() {
+        merge_scene::check();
     }
 
     #[test]

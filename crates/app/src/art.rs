@@ -14,6 +14,7 @@ pub static SHEETS: &[(&str, &[u8])] = &[
     ("flappy", include_bytes!("../../../assets/art/flappy.kga")),
     ("crossy", include_bytes!("../../../assets/art/crossy.kga")),
     ("snake", include_bytes!("../../../assets/art/snake.kga")),
+    ("merge", include_bytes!("../../../assets/art/merge.kga")),
 ];
 
 struct Sheet {
