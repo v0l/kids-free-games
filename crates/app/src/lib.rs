@@ -2,6 +2,7 @@ pub mod art;
 pub mod audio;
 pub mod draw;
 pub mod games;
+pub mod jev;
 pub mod link;
 pub mod menu;
 pub mod paint;
@@ -24,6 +25,7 @@ use kg_core::safe::SafeArea;
 pub enum Scene {
     Menu(Box<menu::App>),
     Shot(shots::Shot),
+    Jev(Box<jev::Jev>),
 }
 
 pub struct Frame {
@@ -164,6 +166,7 @@ fn frame(
             app.draw(&mut pen, &view);
         }
         Scene::Shot(s) => s.frame(&mut pen, &view, dt),
+        Scene::Jev(j) => j.frame(&mut pen, &view, dt),
     }
     let touched = input.pressed || input.action || !input.typed.is_empty();
     if let Some(a) = &mut state.audio {
@@ -178,7 +181,7 @@ fn demo_input(f: u32, raw: &mut Raw, view: &View) {
         30 => raw.keys_pressed.push(Key::Enter),
         60 => raw.keys_pressed.push(Key::Right),
         90 => raw.keys_pressed.push(Key::Enter),
-        _ if f > 150 && f % 22 == 0 => {
+        _ if f > 150 && f.is_multiple_of(22) => {
             let at = view.to_screen(view.center());
             raw.mouse = Pointer {
                 pos: at,
@@ -250,6 +253,7 @@ pub fn run() {
     text::prewarm();
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),
+        None if jev::requested() => Scene::Jev(Box::default()),
         None => Scene::Menu(Box::default()),
     };
     let audio = !matches!(scene, Scene::Shot(_));

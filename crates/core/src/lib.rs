@@ -6,6 +6,7 @@ pub mod font;
 pub mod fx;
 pub mod games;
 pub mod geom;
+pub mod jev;
 pub mod learn;
 pub mod mastery;
 pub mod mixer;
