@@ -599,10 +599,7 @@ mod tests {
             {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
-                let world = *app
-                    .world()
-                    .resource::<bevy::state::state::State<crate::game3d::World3d>>()
-                    .get();
+                let world = crate::game3d::testing::open(&app);
                 let parts = crate::game3d::testing::parts(&mut app).len();
                 let (want, least) = if n >= 170 {
                     (crate::game3d::World3d::Hotel, 150)

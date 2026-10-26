@@ -14,7 +14,7 @@ use std::f32::consts::{FRAC_PI_2, TAU};
 
 pub const MENU_CLEAR: Color = Color::srgb(1.0, 0.7, 0.47);
 
-#[derive(States, Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
 pub enum World3d {
     #[default]
     Flat,
@@ -22,26 +22,34 @@ pub enum World3d {
     Helix,
 }
 
+#[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Owned(pub World3d);
+
 #[derive(SystemSet, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Step;
 
 #[derive(SystemSet, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct Switch;
+
+#[derive(SystemSet, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Sync3d;
+
+pub fn is_open(world: World3d) -> impl FnMut(Res<Palette>) -> bool + Clone {
+    move |pal: Res<Palette>| pal.now == world
+}
+
+pub fn opened(world: World3d) -> impl FnMut(Res<Palette>) -> bool + Clone {
+    move |pal: Res<Palette>| pal.now == world && pal.was != world
+}
 
 pub struct Game3dPlugin;
 
 impl Plugin for Game3dPlugin {
     fn build(&self, app: &mut App) {
-        app.init_state::<World3d>()
-            .init_resource::<Palette>()
-            .configure_sets(Update, Sync3d.after(Step))
-            .add_systems(
-                Update,
-                (
-                    pick_world.after(Step),
-                    clear_under_world.run_if(state_changed::<World3d>),
-                ),
-            )
+        app.init_resource::<Palette>()
+            .configure_sets(Update, (Switch.after(Step), Sync3d.after(Switch)))
+            .add_systems(Update, switch.in_set(Switch))
+            .add_systems(Update, aim_rig.after(Sync3d))
             .add_plugins((
                 crate::games::helix::world::HelixWorld,
                 crate::games::hotel::world::HotelWorld,
@@ -49,20 +57,29 @@ impl Plugin for Game3dPlugin {
     }
 }
 
-fn pick_world(
+fn switch(
+    mut commands: Commands,
     frame: NonSend<crate::Frame>,
-    now: Res<State<World3d>>,
-    mut next: ResMut<NextState<World3d>>,
+    mut pal: ResMut<Palette>,
+    owned: Query<(Entity, &Owned)>,
+    mut paint: Query<&mut Camera, With<PaintCamera>>,
 ) {
-    let want = frame.play().map_or(World3d::Flat, |p| p.world());
-    if *now.get() != want {
-        next.set(want);
+    let now = frame.play().map_or(World3d::Flat, |p| p.world());
+    let was = pal.now;
+    if pal.was != was || now != was {
+        pal.was = was;
+        pal.now = now;
     }
-}
-
-fn clear_under_world(now: Res<State<World3d>>, mut paint: Query<&mut Camera, With<PaintCamera>>) {
+    if now == was {
+        return;
+    }
+    for (e, o) in &owned {
+        if o.0 != now {
+            commands.entity(e).despawn();
+        }
+    }
     for mut c in &mut paint {
-        c.clear_color = match now.get() {
+        c.clear_color = match now {
             World3d::Flat => ClearColorConfig::Custom(MENU_CLEAR),
             _ => ClearColorConfig::None,
         };
@@ -81,36 +98,99 @@ pub fn v3(v: glam::Vec3) -> Vec3 {
     Vec3::new(v.x, v.y, v.z)
 }
 
-pub fn camera(sky: Col, ambient: f32) -> impl Bundle {
-    (
-        Camera3d::default(),
-        Camera {
-            order: 0,
-            clear_color: ClearColorConfig::Custom(bevy_color(sky)),
-            ..default()
-        },
-        Projection::Perspective(PerspectiveProjection::default()),
-        Tonemapping::None,
-        DebandDither::Disabled,
-        AmbientLight {
-            color: Color::WHITE,
-            brightness: ambient,
-            affects_lightmapped_meshes: true,
-        },
-    )
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Rig {
+    pub eye: Vec3,
+    pub target: Vec3,
+    pub fov: f32,
+    pub near: f32,
+    pub far: f32,
+    pub sky: Col,
+    pub shadow_reach: f32,
 }
 
-pub fn sun(illuminance: f32, color: Col, toward: Vec3, reach: f32) -> impl Bundle {
-    (
-        DirectionalLight {
-            illuminance,
-            shadow_maps_enabled: true,
-            color: bevy_color(color),
-            ..default()
-        },
-        Transform::default().looking_to(toward.normalize(), Vec3::Y),
-        shadow_reach(reach),
-    )
+impl Default for Rig {
+    fn default() -> Self {
+        Self {
+            eye: Vec3::new(0.0, 10.0, 10.0),
+            target: Vec3::ZERO,
+            fov: 0.8,
+            near: 0.5,
+            far: 200.0,
+            sky: kg_core::geom::WHITE,
+            shadow_reach: 40.0,
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct Eye;
+
+#[derive(Component)]
+pub struct Sun;
+
+pub struct Lighting {
+    pub ambient: f32,
+    pub illuminance: f32,
+    pub color: Col,
+    pub toward: Vec3,
+}
+
+pub struct Spawned {
+    pub root: Entity,
+    pub eye: Entity,
+}
+
+pub fn spawn_world(
+    commands: &mut Commands,
+    root: impl Bundle,
+    world: World3d,
+    light: Lighting,
+) -> Spawned {
+    let mut eye = None;
+    let root = commands
+        .spawn((
+            root,
+            Owned(world),
+            Transform::default(),
+            Visibility::default(),
+        ))
+        .with_children(|w| {
+            let e = w.spawn((
+                Camera3d::default(),
+                Camera {
+                    order: 0,
+                    ..default()
+                },
+                Projection::Perspective(PerspectiveProjection::default()),
+                Tonemapping::None,
+                DebandDither::Disabled,
+                AmbientLight {
+                    color: Color::WHITE,
+                    brightness: light.ambient,
+                    affects_lightmapped_meshes: true,
+                },
+                Rig::default(),
+                Eye,
+            ));
+            eye = Some(e.id());
+            w.spawn((
+                DirectionalLight {
+                    illuminance: light.illuminance,
+                    shadow_maps_enabled: true,
+                    color: bevy_color(light.color),
+                    ..default()
+                },
+                Transform::default().looking_to(light.toward.normalize(), Vec3::Y),
+                shadow_reach(40.0),
+                Sun,
+            ));
+        })
+        .id();
+    Spawned {
+        root,
+        eye: eye.unwrap_or(root),
+    }
 }
 
 pub fn shadow_reach(reach: f32) -> CascadeShadowConfig {
@@ -124,34 +204,39 @@ pub fn shadow_reach(reach: f32) -> CascadeShadowConfig {
     .build()
 }
 
-pub struct Aim {
-    pub eye: Vec3,
-    pub target: Vec3,
-    pub fov: f32,
-    pub near: f32,
-    pub far: f32,
-}
+type EyeParts<'a> = (
+    &'a Rig,
+    &'a mut Camera,
+    &'a mut Transform,
+    &'a mut Projection,
+);
 
-pub fn aim(t: &mut Mut<Transform>, p: &mut Mut<Projection>, a: &Aim) {
-    let want = Transform::from_translation(a.eye).looking_at(a.target, Vec3::Y);
-    t.set_if_neq(want);
-    let lens = PerspectiveProjection {
-        fov: a.fov,
-        near: a.near,
-        far: a.far,
-        ..default()
-    };
-    let same = matches!(p.as_ref(), Projection::Perspective(q) if q.fov == lens.fov && q.near == lens.near && q.far == lens.far);
-    if !same {
-        **p = Projection::Perspective(lens);
-    }
-}
-
-pub fn set_sky(cam: &mut Mut<Camera>, sky: Col) {
-    let want = ClearColorConfig::Custom(bevy_color(sky));
-    if !matches!((&cam.clear_color, &want), (ClearColorConfig::Custom(a), ClearColorConfig::Custom(b)) if a == b)
-    {
-        cam.clear_color = want;
+fn aim_rig(
+    mut eye: Query<EyeParts, (With<Eye>, Changed<Rig>)>,
+    mut sun: Query<&mut CascadeShadowConfig, With<Sun>>,
+) {
+    for (rig, mut cam, mut t, mut p) in &mut eye {
+        let sky = ClearColorConfig::Custom(bevy_color(rig.sky));
+        if !matches!((&cam.clear_color, &sky), (ClearColorConfig::Custom(a), ClearColorConfig::Custom(b)) if a == b)
+        {
+            cam.clear_color = sky;
+        }
+        t.set_if_neq(Transform::from_translation(rig.eye).looking_at(rig.target, Vec3::Y));
+        let lens = PerspectiveProjection {
+            fov: rig.fov,
+            near: rig.near,
+            far: rig.far,
+            ..default()
+        };
+        let same = matches!(p.as_ref(), Projection::Perspective(q) if q.fov == lens.fov && q.near == lens.near && q.far == lens.far);
+        if !same {
+            *p = Projection::Perspective(lens);
+        }
+        for mut c in &mut sun {
+            if c.bounds.first() != Some(&rig.shadow_reach) {
+                *c = shadow_reach(rig.shadow_reach);
+            }
+        }
     }
 }
 
@@ -296,6 +381,8 @@ fn key_of(p: &Paint) -> MatKey {
 
 #[derive(Resource, Default)]
 pub struct Palette {
+    pub now: World3d,
+    pub was: World3d,
     meshes: HashMap<Shape, Handle<Mesh>>,
     mats: HashMap<MatKey, Handle<StandardMaterial>>,
     tiles: HashMap<(&'static str, &'static str), Handle<Image>>,
@@ -588,19 +675,15 @@ pub mod testing {
 
     pub fn app(scene: crate::Scene, view: View) -> App {
         let mut app = App::new();
-        app.add_plugins((
-            MinimalPlugins,
-            bevy::state::app::StatesPlugin,
-            bevy::transform::TransformPlugin,
-        ))
-        .init_resource::<Assets<Mesh>>()
-        .init_resource::<Assets<StandardMaterial>>()
-        .init_resource::<Assets<Image>>()
-        .init_resource::<Gpu>()
-        .insert_resource(pen_for(view))
-        .insert_non_send(crate::Frame::new(scene))
-        .add_systems(Update, (|| {}).in_set(Step))
-        .add_plugins(Game3dPlugin);
+        app.add_plugins((MinimalPlugins, bevy::transform::TransformPlugin))
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
+            .init_resource::<Assets<Image>>()
+            .init_resource::<Gpu>()
+            .insert_resource(pen_for(view))
+            .insert_non_send(crate::Frame::new(scene))
+            .add_systems(Update, (|| {}).in_set(Step))
+            .add_plugins(Game3dPlugin);
         app
     }
 
@@ -636,6 +719,10 @@ pub mod testing {
         if let crate::Scene::Menu(m) = &mut frame(app).scene {
             m.current = None;
         }
+    }
+
+    pub fn open(app: &App) -> World3d {
+        app.world().resource::<Palette>().now
     }
 
     pub fn count(app: &mut App) -> usize {
@@ -725,10 +812,7 @@ mod tests {
             kg_core::engine::View::ipad_landscape(),
         );
         testing::step(&mut app, 3);
-        assert_eq!(
-            *app.world().resource::<State<World3d>>().get(),
-            World3d::Flat
-        );
+        assert_eq!(app.world().resource::<Palette>().now, World3d::Flat);
         assert!(testing::parts(&mut app).is_empty());
     }
 }

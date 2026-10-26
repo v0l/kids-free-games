@@ -67,10 +67,12 @@ pub enum Anim {
     Kick(f32),
     Turn,
     Wake(usize),
+    PadRing,
     Fill(usize),
     Charge(usize),
-    Drop(usize, usize),
-    Wave(usize),
+    Trail,
+    Drop(usize),
+    Wave,
 }
 
 #[derive(Component, Clone, Copy, Debug, PartialEq)]

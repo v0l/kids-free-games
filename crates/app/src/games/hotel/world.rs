@@ -11,7 +11,6 @@ use kg_core::games::hotel::sim::*;
 use kg_core::games::hotel::Hotel;
 use kg_core::geom::{Color as Col, Rect, WHITE};
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashMap;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
 use std::hash::{Hash, Hasher};
 
@@ -27,12 +26,16 @@ pub struct HotelWorld;
 
 impl Plugin for HotelWorld {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(World3d::Hotel), spawn).add_systems(
+        app.add_systems(
             Update,
-            (aim, reconcile, place, animate)
+            (
+                spawn.run_if(opened(World3d::Hotel)),
+                (reconcile, place, animate)
+                    .chain()
+                    .run_if(is_open(World3d::Hotel)),
+            )
                 .chain()
-                .in_set(Sync3d)
-                .run_if(in_state(World3d::Hotel)),
+                .in_set(Sync3d),
         );
     }
 }
@@ -44,13 +47,7 @@ pub fn stage_sits(st: Stage) -> bool {
 #[derive(Component)]
 pub struct Root;
 
-#[derive(Component)]
-pub struct Eye;
-
-#[derive(Component)]
-struct Sun;
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Sec {
     Ground,
     Shell,
@@ -61,7 +58,7 @@ pub enum Sec {
     Coins,
 }
 
-#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum Thing {
     Sec(Sec),
     Pad(usize),
@@ -69,19 +66,11 @@ pub enum Thing {
     Staff(usize),
     Player,
     Splash(usize),
-}
-
-impl Thing {
-    fn agent(self) -> bool {
-        matches!(self, Thing::Guest(_) | Thing::Staff(_) | Thing::Player)
-    }
+    Body,
 }
 
 #[derive(Component)]
 pub struct Built(u64);
-
-#[derive(Component)]
-pub struct Body;
 
 #[derive(Component, Clone, Copy, Debug, Default, PartialEq)]
 pub struct Pose {
@@ -98,16 +87,6 @@ pub struct Pose {
     pub moving: bool,
 }
 
-#[derive(Component, Clone, Copy, Debug, PartialEq)]
-pub enum Mark {
-    PadRing,
-    Fill(usize),
-    Charge(usize),
-    Trail,
-    Drop(usize),
-    Wave,
-}
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Holder {
     Root,
@@ -117,16 +96,11 @@ enum Holder {
 struct Group {
     holder: Holder,
     model: Model,
-    marks: Vec<(usize, Mark)>,
 }
 
 impl Group {
     fn on(holder: Holder, model: Model) -> Self {
-        Self {
-            holder,
-            model,
-            marks: vec![],
-        }
+        Self { holder, model }
     }
 }
 
@@ -145,62 +119,17 @@ fn view_of(pen: &crate::paint::Pen) -> View {
 }
 
 fn spawn(mut commands: Commands) {
-    commands
-        .spawn((
-            Root,
-            DespawnOnExit(World3d::Hotel),
-            Transform::default(),
-            Visibility::default(),
-        ))
-        .with_children(|w| {
-            w.spawn((camera(WHITE, 700.0), Eye));
-            w.spawn((
-                sun(
-                    9000.0,
-                    Col::new(1.0, 0.97, 0.9, 1.0),
-                    Vec3::new(6.0, -14.0, -8.0),
-                    40.0,
-                ),
-                Sun,
-            ));
-        });
-}
-
-type EyeParts<'a> = (&'a mut Camera, &'a mut Transform, &'a mut Projection);
-
-fn aim(
-    frame: NonSend<crate::Frame>,
-    pen: Res<crate::paint::Pen>,
-    mut eye: Query<EyeParts, With<Eye>>,
-    mut sun: Query<&mut bevy::light::CascadeShadowConfig, With<Sun>>,
-) {
-    let Some(p) = playing::<HotelPlay>(&frame) else {
-        return;
-    };
-    let h = &p.h;
-    let cam = h.cam(&view_of(&pen));
-    let shake = h.shake.offset();
-    let nudge = cam.right() * shake.x * 0.02 + cam.up() * -shake.y * 0.02;
-    if let Ok((mut c, mut t, mut proj)) = eye.single_mut() {
-        set_sky(&mut c, h.sim.lay.theme.outside);
-        crate::game3d::aim(
-            &mut t,
-            &mut proj,
-            &Aim {
-                eye: cam.eye + nudge,
-                target: cam.target + nudge,
-                fov: cam.fov,
-                near: 0.5,
-                far: 200.0,
-            },
-        );
-    }
-    if let Ok(mut c) = sun.single_mut() {
-        let want = (40.0 / h.zoom.max(0.3)).max(20.0);
-        if c.bounds.first() != Some(&want) {
-            *c = shadow_reach(want);
-        }
-    }
+    spawn_world(
+        &mut commands,
+        Root,
+        World3d::Hotel,
+        Lighting {
+            ambient: 700.0,
+            illuminance: 9000.0,
+            color: Col::new(1.0, 0.97, 0.9, 1.0),
+            toward: Vec3::new(6.0, -14.0, -8.0),
+        },
+    );
 }
 
 fn sections(h: &Hotel) -> Vec<Sec> {
@@ -409,6 +338,7 @@ fn build(h: &Hotel, thing: Thing) -> Vec<Group> {
             vec![Group::on(Holder::Root, m)]
         }
         Thing::Pad(_) => vec![pad_group()],
+        Thing::Body => vec![],
         Thing::Splash(_) => vec![splash_group()],
         t => stance_of(h, t).map(agent_groups).unwrap_or_default(),
     }
@@ -423,24 +353,20 @@ fn pad_group() -> Group {
         PLUM.with_alpha(0.4),
     );
     m.ring(Vec2::ZERO, 0.75, LAYER * 5.0, WHITE);
-    let mut marks = vec![(1, Mark::PadRing)];
+    m.tag(Anim::PadRing);
     for i in 0..ARC_DOTS {
-        marks.push((m.pieces.len(), Mark::Fill(i)));
         dot(
             &mut m,
             arc_dot(Vec2::ZERO, 0.75, i, LAYER * 6.0),
             rgb(120, 230, 90),
         );
+        m.tag(Anim::Fill(i));
     }
     for i in 0..ARC_DOTS {
-        marks.push((m.pieces.len(), Mark::Charge(i)));
         dot(&mut m, arc_dot(Vec2::ZERO, 0.6, i, LAYER * 7.0), GOLD);
+        m.tag(Anim::Charge(i));
     }
-    Group {
-        holder: Holder::Root,
-        model: m,
-        marks,
-    }
+    Group::on(Holder::Root, m)
 }
 
 fn dot(m: &mut Model, at: Transform, color: Col) {
@@ -454,27 +380,21 @@ fn dot(m: &mut Model, at: Transform, color: Col) {
 
 fn splash_group() -> Group {
     let mut m = Model::new();
-    let mut marks = vec![];
     for i in 0..6 {
-        marks.push((m.pieces.len(), Mark::Drop(i)));
         m.sphere(
             Vec3::ZERO,
             Vec3::splat(0.05),
             Col::new(0.85, 0.95, 1.0, 1.0),
         );
+        m.tag(Anim::Drop(i));
     }
-    marks.push((m.pieces.len(), Mark::Wave));
     m.ring(Vec2::ZERO, 0.5, LAYER * 5.0, Col::new(1.0, 1.0, 1.0, 0.7));
-    Group {
-        holder: Holder::Root,
-        model: m,
-        marks,
-    }
+    m.tag(Anim::Wave);
+    Group::on(Holder::Root, m)
 }
 
 fn agent_groups(s: Stance3) -> Vec<Group> {
     let mut root = Model::new();
-    let mut marks = vec![];
     let mut person = Model::new();
     if s.swim {
         wake(&mut root, WATER);
@@ -489,8 +409,8 @@ fn agent_groups(s: Stance3) -> Vec<Group> {
             );
         }
         if let Some(c) = s.shoes_trail {
-            marks.push((root.pieces.len(), Mark::Trail));
             root.disc(Vec2::ZERO, vec2(0.18, 0.14), LAYER * 6.0, c);
+            root.tag(Anim::Trail);
         }
         body(&mut person, &s.look, s.stance);
         let local = |y: f32, fwd: f32| vec3(0.0, y / s.size, fwd / s.size);
@@ -514,35 +434,34 @@ fn agent_groups(s: Stance3) -> Vec<Group> {
         }
     }
     vec![
-        Group {
-            holder: Holder::Root,
-            model: root,
-            marks,
-        },
+        Group::on(Holder::Root, root),
         Group::on(Holder::Body, person),
     ]
 }
 
+fn emit(out: &mut ChildSpawnerCommands, kit: &mut Kit, m: Model) {
+    for p in m.pieces {
+        let mut e = out.spawn(kit.part(p.shape, p.paint, p.at));
+        if let Some(a) = p.anim {
+            e.insert((a, Rest(p.at)));
+        }
+    }
+}
+
 fn fill(commands: &mut ChildSpawnerCommands, kit: &mut Kit, groups: Vec<Group>) {
     for g in groups {
-        let marks: HashMap<usize, Mark> = g.marks.into_iter().collect();
-        let mut emit = |out: &mut ChildSpawnerCommands, m: Model| {
-            for (i, p) in m.pieces.into_iter().enumerate() {
-                let mut e = out.spawn(kit.part(p.shape, p.paint, p.at));
-                if let Some(a) = p.anim {
-                    e.insert((a, Rest(p.at)));
-                }
-                if let Some(mk) = marks.get(&i) {
-                    e.insert((*mk, Rest(p.at)));
-                }
-            }
-        };
         match g.holder {
-            Holder::Root => emit(commands, g.model),
+            Holder::Root => emit(commands, kit, g.model),
             Holder::Body => {
                 commands
-                    .spawn((Body, Transform::default(), Visibility::default()))
-                    .with_children(|b| emit(b, g.model));
+                    .spawn((
+                        Thing::Body,
+                        Built(0),
+                        Pose::default(),
+                        Transform::default(),
+                        Visibility::default(),
+                    ))
+                    .with_children(|b| emit(b, kit, g.model));
             }
         }
     }
@@ -560,13 +479,18 @@ fn reconcile(
     };
     let Ok(root) = root.single() else { return };
     let h = &p.h;
-    let want: HashMap<Thing, u64> = wanted(h).into_iter().collect();
-    let mut have = std::collections::HashSet::new();
+    let mut want = wanted(h);
+    want.sort_unstable_by_key(|(t, _)| *t);
+    let mut have = vec![false; want.len()];
     for (e, thing, mut built) in &mut things {
-        match want.get(thing) {
-            None => commands.entity(e).despawn(),
-            Some(&key) => {
-                have.insert(*thing);
+        if *thing == Thing::Body {
+            continue;
+        }
+        match want.binary_search_by_key(thing, |(t, _)| *t) {
+            Err(_) => commands.entity(e).despawn(),
+            Ok(i) => {
+                have[i] = true;
+                let key = want[i].1;
                 if built.0 != key {
                     built.0 = key;
                     let groups = build(h, *thing);
@@ -577,24 +501,20 @@ fn reconcile(
             }
         }
     }
-    let mut fresh: Vec<(Thing, u64)> = want
-        .into_iter()
-        .filter(|(t, _)| !have.contains(t))
-        .collect();
-    fresh.sort_by_key(|(t, _)| format!("{t:?}"));
-    for (thing, key) in fresh {
+    for (i, (thing, key)) in want.into_iter().enumerate() {
+        if have[i] {
+            continue;
+        }
         let groups = build(h, thing);
         commands.entity(root).with_children(|w| {
-            let mut pose = w.spawn((
+            w.spawn((
                 thing,
                 Built(key),
+                Pose::default(),
                 Transform::default(),
                 Visibility::default(),
-            ));
-            if thing.agent() {
-                pose.insert(Pose::default());
-            }
-            pose.with_children(|c| fill(c, &mut kit, groups));
+            ))
+            .with_children(|c| fill(c, &mut kit, groups));
         });
     }
 }
@@ -742,18 +662,48 @@ fn room_pop(h: &Hotel, r: usize) -> f32 {
         .min(h.pop_of(Build::Decor(r, 3)))
 }
 
+type Placed<'a> = (
+    Entity,
+    &'a Thing,
+    Option<&'a ChildOf>,
+    &'a mut Transform,
+    &'a mut Pose,
+);
+
 fn place(
     frame: NonSend<crate::Frame>,
-    mut things: Query<(Entity, &Thing, &mut Transform, Option<&mut Pose>), Without<Body>>,
-    mut bodies: Query<(&ChildOf, &mut Transform), With<Body>>,
+    pen: Res<crate::paint::Pen>,
+    mut eye: Query<&mut Rig>,
+    mut things: Query<Placed>,
 ) {
     let Some(p) = playing::<HotelPlay>(&frame) else {
         return;
     };
     let h = &p.h;
-    let mut posed = HashMap::new();
-    for (e, thing, mut t, pose) in &mut things {
+    let cam = h.cam(&view_of(&pen));
+    let shake = h.shake.offset();
+    let nudge = cam.right() * shake.x * 0.02 + cam.up() * -shake.y * 0.02;
+    for mut rig in &mut eye {
+        rig.set_if_neq(Rig {
+            eye: cam.eye + nudge,
+            target: cam.target + nudge,
+            fov: cam.fov,
+            near: 0.5,
+            far: 200.0,
+            sky: h.sim.lay.theme.outside,
+            shadow_reach: (40.0 / h.zoom.max(0.3)).max(20.0),
+        });
+    }
+    let mut posed = vec![];
+    let mut bodies = vec![];
+    for (e, thing, parent, mut t, mut pose) in &mut things {
         let want = match *thing {
+            Thing::Body => {
+                if let Some(p) = parent {
+                    bodies.push((e, p.parent()));
+                }
+                continue;
+            }
             Thing::Sec(Sec::Room(r)) => {
                 let c = room_center(r);
                 Transform::from_xyz(c.x, 0.0, c.y).with_scale(Vec3::splat(room_pop(h, r)))
@@ -766,10 +716,8 @@ fn place(
             }
             agent => match agent_pose(h, agent) {
                 Some((at, ap)) => {
-                    posed.insert(e, ap);
-                    if let Some(mut pose) = pose {
-                        pose.set_if_neq(ap);
-                    }
+                    posed.push((e, ap));
+                    pose.set_if_neq(ap);
                     Transform::from_xyz(at.x, shadow_tie(agent), at.y)
                 }
                 None => *t,
@@ -777,8 +725,10 @@ fn place(
         };
         t.set_if_neq(want);
     }
-    for (parent, mut t) in &mut bodies {
-        if let Some(pose) = posed.get(&parent.parent()) {
+    for (body, owner) in bodies {
+        let pose = posed.iter().find(|(e, _)| *e == owner).map(|(_, p)| p);
+        if let (Some(pose), Ok((_, _, _, mut t, mut p))) = (pose, things.get_mut(body)) {
+            p.set_if_neq(*pose);
             t.set_if_neq(body_transform(pose));
         }
     }
@@ -808,8 +758,7 @@ fn faded(a: f32) -> f32 {
 type Animated<'a> = (
     &'a ChildOf,
     &'a Rest,
-    Option<&'a Anim>,
-    Option<&'a Mark>,
+    &'a Anim,
     &'a mut Transform,
     &'a mut Visibility,
     &'a mut Part,
@@ -819,48 +768,50 @@ type Animated<'a> = (
 fn animate(
     frame: NonSend<crate::Frame>,
     mut kit: Kit,
-    mut parts: Query<Animated, Without<Body>>,
-    owners: Query<(Option<&Thing>, Option<&Pose>, Option<&ChildOf>)>,
+    mut parts: Query<Animated>,
+    owners: Query<(&Thing, &Pose, Option<&ChildOf>)>,
 ) {
     let Some(play) = playing::<HotelPlay>(&frame) else {
         return;
     };
     let h = &play.h;
     let sim = &h.sim;
-    for (parent, rest, anim, mark, mut t, mut vis, mut part, mut mat) in &mut parts {
-        let (mut thing, mut pose, up) = owners.get(parent.parent()).unwrap_or((None, None, None));
-        if thing.is_none() {
-            if let Some(Ok((th, po, _))) = up.map(|u| owners.get(u.parent())) {
-                thing = th;
-                pose = pose.or(po);
+    for (parent, rest, anim, mut t, mut vis, mut part, mut mat) in &mut parts {
+        let Ok((mut thing, pose, up)) = owners.get(parent.parent()) else {
+            continue;
+        };
+        if *thing == Thing::Body {
+            if let Some(Ok((owner, _, _))) = up.map(|u| owners.get(u.parent())) {
+                thing = owner;
             }
         }
-        let pose = pose.copied().unwrap_or_default();
+        let pose = *pose;
+        let thing = Some(thing);
         let r = rest.0;
         let mut want = r;
         let mut show = true;
-        match anim {
-            Some(Anim::Bob) => want.translation.y += coin_bob(h.t),
-            Some(Anim::Orbit(at, phase)) => {
-                let d = orbit(*at, *phase, h.t) - *at;
+        match *anim {
+            Anim::Bob => want.translation.y += coin_bob(h.t),
+            Anim::Orbit(at, phase) => {
+                let d = orbit(at, phase, h.t) - at;
                 want.translation += Vec3::new(d.x, 0.0, d.y);
             }
-            Some(Anim::Ripple(phase, amp)) => want.translation.z += (h.t * 1.3 + phase).sin() * amp,
-            Some(Anim::Leg(side)) => want.translation.z += pose.swing * side * 0.12,
-            Some(Anim::Arm(side)) => want.translation.z += arm_swing(&pose, *side),
-            Some(Anim::Stroke(side)) => want.translation = stroke(*side, pose.t),
-            Some(Anim::Kick(side)) => want.translation = kick(*side, pose.t),
-            Some(Anim::Turn) => want.translation.x += head_turn(pose.t),
-            Some(Anim::Wake(k)) => {
-                let rr = wake_radius(*k, h.t);
-                let back = -vec2(pose.face.sin(), pose.face.cos()) * (0.35 + *k as f32 * 0.32);
+            Anim::Ripple(phase, amp) => want.translation.z += (h.t * 1.3 + phase).sin() * amp,
+            Anim::Leg(side) => want.translation.z += pose.swing * side * 0.12,
+            Anim::Arm(side) => want.translation.z += arm_swing(&pose, side),
+            Anim::Stroke(side) => want.translation = stroke(side, pose.t),
+            Anim::Kick(side) => want.translation = kick(side, pose.t),
+            Anim::Turn => want.translation.x += head_turn(pose.t),
+            Anim::Wake(k) => {
+                let rr = wake_radius(k, h.t);
+                let back = -vec2(pose.face.sin(), pose.face.cos()) * (0.35 + k as f32 * 0.32);
                 want.translation = Vec3::new(back.x, r.translation.y, back.y);
                 want.scale = Vec3::new(rr * 2.0, 1.0, rr * 1.6);
             }
             _ => {}
         }
-        match (mark, thing) {
-            (Some(Mark::PadRing), Some(Thing::Pad(i))) => {
+        match (*anim, thing) {
+            (Anim::PadRing, Some(Thing::Pad(i))) => {
                 let pad = &sim.lay.pads[*i];
                 let afford = sim.wallet + sim.paid[*i] >= pad.cost;
                 let c = if afford {
@@ -871,24 +822,24 @@ fn animate(
                 let finish = if afford { Finish::Glow } else { Finish::Ghost };
                 kit.repaint(&mut part, &mut mat, Paint::new(finish, c));
             }
-            (Some(Mark::Fill(n)), Some(Thing::Pad(i))) => {
+            (Anim::Fill(n), Some(Thing::Pad(i))) => {
                 let k = sim.paid[*i] as f32 / sim.lay.pads[*i].cost as f32;
-                show = k > 0.0 && *n < arc_shown(k);
+                show = k > 0.0 && n < arc_shown(k);
             }
-            (Some(Mark::Charge(n)), Some(Thing::Pad(i))) => {
+            (Anim::Charge(n), Some(Thing::Pad(i))) => {
                 let afford = sim.wallet + sim.paid[*i] >= sim.lay.pads[*i].cost;
                 let arming = sim.pad_under_player() == Some(*i) && sim.pad_arm < PAD_ARM && afford;
-                show = arming && *n < arc_shown(sim.pad_arm / PAD_ARM);
+                show = arming && n < arc_shown(sim.pad_arm / PAD_ARM);
             }
-            (Some(Mark::Trail), _) => {
+            (Anim::Trail, _) => {
                 show = pose.moving;
                 let back = -vec2(pose.face.sin(), pose.face.cos()) * 0.45;
                 want.translation = Vec3::new(back.x, r.translation.y, back.y);
             }
-            (Some(Mark::Drop(n)), Some(Thing::Splash(i))) => {
+            (Anim::Drop(n), Some(Thing::Splash(i))) => {
                 if let Some(sp) = h.splashes.get(*i) {
                     let k = (sp.age / SPLASH_LIFE).min(1.0);
-                    let a = *n as f32 / 6.0 * TAU;
+                    let a = n as f32 / 6.0 * TAU;
                     let rad = 0.2 + k * 0.6;
                     let up = (k * PI).sin() * 0.6;
                     want.translation =
@@ -904,7 +855,7 @@ fn animate(
                     kit.repaint(&mut part, &mut mat, paint);
                 }
             }
-            (Some(Mark::Wave), Some(Thing::Splash(i))) => {
+            (Anim::Wave, Some(Thing::Splash(i))) => {
                 if let Some(sp) = h.splashes.get(*i) {
                     let k = (sp.age / SPLASH_LIFE).min(1.0);
                     let rad = 0.3 + k * 0.9;
@@ -1391,10 +1342,7 @@ mod tests {
             testing::step(&mut app, 3);
             let open = testing::count(&mut app);
             assert!(open > menu + 150, "{menu} -> {open}");
-            assert_eq!(
-                *app.world().resource::<State<World3d>>().get(),
-                World3d::Hotel
-            );
+            assert_eq!(testing::open(&app), World3d::Hotel);
             testing::step(&mut app, 5);
             assert_eq!(
                 testing::count(&mut app),
@@ -1484,13 +1432,13 @@ mod tests {
         let mut app = open(fresh(1, &[]), View::ipad_landscape());
         let shown = |app: &mut App| {
             let w = app.world_mut();
-            let all: Vec<(Entity, Mark)> = w
-                .query::<(Entity, &Mark)>()
+            let all: Vec<(Entity, Anim)> = w
+                .query::<(Entity, &Anim)>()
                 .iter(w)
                 .map(|(e, m)| (e, *m))
                 .collect();
             all.into_iter()
-                .filter(|(e, m)| matches!(m, Mark::Fill(_)) && visible(w, *e))
+                .filter(|(e, m)| matches!(m, Anim::Fill(_)) && visible(w, *e))
                 .count()
         };
         assert_eq!(shown(&mut app), 0);
