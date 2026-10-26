@@ -1,5 +1,6 @@
 pub mod blocks;
 pub mod breakout;
+pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;

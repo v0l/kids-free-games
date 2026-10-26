@@ -15,6 +15,7 @@ pub const IDLE: u32 = 1000;
 
 mod blocks_scene;
 mod breakout_scene;
+mod count_scene;
 mod fruit_scene;
 mod jumper_scene;
 mod mathpop_scene;
@@ -118,6 +119,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (137, "mathpop level done with one star"),
     (138, "mathpop final screen with the board"),
     (139, "mathpop level picker with everything open"),
+    (140, "count first question with the hint"),
+    (141, "count ticking things"),
+    (142, "count celebrating a right answer"),
+    (143, "count wrong answers revealing the number"),
+    (144, "count to 20 with four choices"),
+    (145, "count level picker"),
+    (146, "count level done report"),
+    (147, "count cleared with the board"),
+    (148, "count level up moment"),
+    (149, "count first wrong answer"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -356,6 +367,7 @@ fn setup(n: u32, view: &View) -> Stage {
         80..=89 => jumper_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
+        140..=149 => count_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -533,6 +545,11 @@ mod tests {
     #[test]
     fn mathpop_scenes_land_in_the_state_they_are_named_for() {
         mathpop_scene::check();
+    }
+
+    #[test]
+    fn count_scenes_land_in_the_state_they_are_named_for() {
+        count_scene::check();
     }
 
     #[test]

@@ -4,6 +4,7 @@ use kg_core::games::{Info, CATALOG};
 
 pub mod blocks;
 pub mod breakout;
+pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
@@ -58,6 +59,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         jumper::KEY => Some(|| Box::new(jumper::JumperPlay::new())),
         blocks::KEY => Some(|| Box::new(blocks::BlocksPlay::new())),
         mathpop::KEY => Some(|| Box::new(mathpop::MathPopPlay::new())),
+        count::KEY => Some(|| Box::new(count::CountPlay::new())),
         _ => None,
     }
 }
