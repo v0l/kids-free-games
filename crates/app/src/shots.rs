@@ -14,6 +14,7 @@ use kg_core::profile;
 pub const IDLE: u32 = 1000;
 
 mod snake_scene;
+mod stack_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
@@ -48,6 +49,15 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (60, "stack first drop with the hint"),
+    (61, "stack mid run"),
+    (62, "stack tall tower at dusk"),
+    (63, "stack perfect streak"),
+    (64, "stack tower fell with the board"),
+    (65, "stack level won"),
+    (66, "stack level picker"),
+    (67, "stack night near the goal"),
+    (68, "stack new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +289,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        60..=69 => stack_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -436,6 +447,11 @@ mod tests {
     #[test]
     fn snake_scenes_land_in_the_state_they_are_named_for() {
         snake_scene::check();
+    }
+
+    #[test]
+    fn stack_scenes_land_in_the_state_they_are_named_for() {
+        stack_scene::check();
     }
 
     #[test]
