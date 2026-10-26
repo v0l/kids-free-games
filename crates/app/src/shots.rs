@@ -17,6 +17,7 @@ mod blocks_scene;
 mod breakout_scene;
 mod fruit_scene;
 mod jumper_scene;
+mod mathpop_scene;
 mod merge_scene;
 mod snake_scene;
 mod stack_scene;
@@ -107,6 +108,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (125, "blocks game over with the board"),
     (126, "blocks new best"),
     (127, "blocks fresh start rescue"),
+    (130, "mathpop first question with the hint"),
+    (131, "mathpop mid level with a wrong balloon"),
+    (132, "mathpop answer revealed after two misses"),
+    (133, "mathpop right pop with the bunnies cheering"),
+    (134, "mathpop times tables"),
+    (135, "mathpop level picker"),
+    (136, "mathpop level done"),
+    (137, "mathpop level done with one star"),
+    (138, "mathpop final screen with the board"),
+    (139, "mathpop level picker with everything open"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -344,6 +355,7 @@ fn setup(n: u32, view: &View) -> Stage {
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
+        130..=139 => mathpop_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -516,6 +528,11 @@ mod tests {
     #[test]
     fn blocks_scenes_land_in_the_state_they_are_named_for() {
         blocks_scene::check();
+    }
+
+    #[test]
+    fn mathpop_scenes_land_in_the_state_they_are_named_for() {
+        mathpop_scene::check();
     }
 
     #[test]

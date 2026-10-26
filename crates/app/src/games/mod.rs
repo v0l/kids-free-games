@@ -8,6 +8,7 @@ pub mod crossy;
 pub mod flappy;
 pub mod fruit;
 pub mod jumper;
+pub mod mathpop;
 pub mod merge;
 pub mod snake;
 pub mod stack;
@@ -56,6 +57,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         breakout::KEY => Some(|| Box::new(breakout::BreakoutPlay::new())),
         jumper::KEY => Some(|| Box::new(jumper::JumperPlay::new())),
         blocks::KEY => Some(|| Box::new(blocks::BlocksPlay::new())),
+        mathpop::KEY => Some(|| Box::new(mathpop::MathPopPlay::new())),
         _ => None,
     }
 }
