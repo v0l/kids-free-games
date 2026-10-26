@@ -7,6 +7,7 @@ pub mod fruit;
 pub mod jumper;
 pub mod mathpop;
 pub mod merge;
+pub mod paper;
 pub mod snake;
 pub mod stack;
 

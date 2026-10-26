@@ -11,6 +11,7 @@ pub mod fruit;
 pub mod jumper;
 pub mod mathpop;
 pub mod merge;
+pub mod paper;
 pub mod snake;
 pub mod stack;
 
@@ -60,6 +61,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         blocks::KEY => Some(|| Box::new(blocks::BlocksPlay::new())),
         mathpop::KEY => Some(|| Box::new(mathpop::MathPopPlay::new())),
         count::KEY => Some(|| Box::new(count::CountPlay::new())),
+        paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
         _ => None,
     }
 }

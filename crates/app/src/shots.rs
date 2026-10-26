@@ -20,6 +20,7 @@ mod fruit_scene;
 mod jumper_scene;
 mod mathpop_scene;
 mod merge_scene;
+mod paper_scene;
 mod snake_scene;
 mod stack_scene;
 
@@ -129,6 +130,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (147, "count cleared with the board"),
     (148, "count level up moment"),
     (149, "count first wrong answer"),
+    (150, "paper arena 1 intro"),
+    (151, "paper go out onto the grass hint"),
+    (152, "paper come back home hint"),
+    (153, "paper first grab with the popup"),
+    (154, "paper arena 5 mid run against bots"),
+    (155, "paper arena 12 with four bots"),
+    (156, "paper lost with the board"),
+    (157, "paper arena clear"),
+    (158, "paper arenas picker"),
+    (159, "paper last arena cleared with a new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -368,6 +379,7 @@ fn setup(n: u32, view: &View) -> Stage {
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
+        150..=159 => paper_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -550,6 +562,11 @@ mod tests {
     #[test]
     fn count_scenes_land_in_the_state_they_are_named_for() {
         count_scene::check();
+    }
+
+    #[test]
+    fn paper_scenes_land_in_the_state_they_are_named_for() {
+        paper_scene::check();
     }
 
     #[test]
