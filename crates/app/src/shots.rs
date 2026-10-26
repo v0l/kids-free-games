@@ -25,6 +25,7 @@ mod memory_scene;
 mod merge_scene;
 mod paper_scene;
 mod snake_scene;
+mod spell_scene;
 mod stack_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -152,6 +153,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (96, "memory level clear, three stars"),
     (97, "memory level clear, one star"),
     (98, "memory last level mid game"),
+    (160, "spell first word with the hint line"),
+    (161, "spell a wrong tap"),
+    (162, "spell stuck, next letter glowing"),
+    (163, "spell word won"),
+    (164, "spell level picker"),
+    (165, "spell level done"),
+    (166, "spell all levels done"),
+    (167, "spell long word on level nine"),
     (99, "memory all done with the board"),
     (170, "hotel first steps with the hint"),
     (171, "hotel first guests"),
@@ -420,6 +429,7 @@ fn setup(n: u32, view: &View) -> Stage {
         150..=159 => paper_scene::setup(n, view),
         90..=99 => memory_scene::setup(n, view),
         170..=189 => hotel_scene::setup(n, view),
+        160..=169 => spell_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -675,6 +685,11 @@ mod tests {
     #[test]
     fn hotel_scenes_land_in_the_state_they_are_named_for() {
         hotel_scene::check();
+    }
+
+    #[test]
+    fn spell_scenes_land_in_the_state_they_are_named_for() {
+        spell_scene::check();
     }
 
     #[test]

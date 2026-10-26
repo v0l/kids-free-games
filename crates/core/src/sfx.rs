@@ -216,6 +216,11 @@ pub struct Cue {
 
 pub static PACK: &[u8] = include_bytes!("../../../assets/sound.kgs");
 
+pub fn packed() -> &'static [(&'static str, &'static [u8])] {
+    static P: std::sync::OnceLock<Vec<(&'static str, &'static [u8])>> = std::sync::OnceLock::new();
+    P.get_or_init(|| unpack(PACK).unwrap_or_default())
+}
+
 pub fn unpack(bytes: &[u8]) -> Option<Vec<(&str, &[u8])>> {
     let u32_at = |at: usize| -> Option<usize> {
         Some(u32::from_le_bytes(bytes.get(at..at + 4)?.try_into().ok()?) as usize)
@@ -326,6 +331,7 @@ pub enum Say {
     Go,
     Best,
     Number(u8),
+    Word(&'static str),
 }
 
 impl Say {
@@ -341,6 +347,7 @@ impl Say {
             Say::Go => "say_go".into(),
             Say::Best => "say_best".into(),
             Say::Number(n) => format!("say_{}", n.clamp(1, 10)),
+            Say::Word(w) => format!("word_{w}"),
         }
     }
 }

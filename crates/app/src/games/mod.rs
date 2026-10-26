@@ -16,6 +16,7 @@ pub mod memory;
 pub mod merge;
 pub mod paper;
 pub mod snake;
+pub mod spell;
 pub mod stack;
 
 pub trait IntoAny {
@@ -76,6 +77,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
+        spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
         _ => None,
     }
 }

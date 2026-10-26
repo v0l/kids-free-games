@@ -12,6 +12,8 @@ pub mod memory;
 pub mod merge;
 pub mod paper;
 pub mod snake;
+pub mod spell;
+pub mod spell_words;
 pub mod stack;
 
 use crate::geom::Color;

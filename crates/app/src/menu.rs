@@ -850,46 +850,24 @@ mod tests {
     }
 
     #[test]
-    fn a_game_not_yet_ported_wobbles_and_stays_on_the_menu() {
+    fn every_game_on_the_menu_is_ported_and_opens() {
         let v = View::ipad_landscape();
-        let mut app = menu();
-        let target = crate::games::all().iter().position(|e| !e.ready()).unwrap();
-        app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
-        for _ in 0..40 {
-            let at = app.focus.unwrap();
-            if at == target {
-                break;
+        let all = crate::games::all();
+        assert_eq!(all.len(), 16);
+        for (i, e) in all.iter().enumerate() {
+            assert!(e.ready(), "{} has no Bevy port", e.info.name);
+            let mut app = menu();
+            app.open(i);
+            assert_eq!(
+                app.current.as_ref().map(|c| c.0),
+                Some(i),
+                "{}",
+                e.info.name
+            );
+            for _ in 0..3 {
+                app.update(&Input::default(), &v, 1.0 / 60.0);
             }
-            let tiles = app.layout(&v).tiles;
-            let (a, b) = (tiles[at], tiles[target]);
-            let dir = if (b.y - a.y).abs() > a.h / 2.0 {
-                if b.y > a.y {
-                    Dir::Down
-                } else {
-                    Dir::Up
-                }
-            } else if b.x > a.x {
-                Dir::Right
-            } else {
-                Dir::Left
-            };
-            app.update(&Input::key(dir), &v, 1.0 / 60.0);
         }
-        assert_eq!(app.focus, Some(target));
-        kg_core::sfx::take_pending();
-        app.update(
-            &Input {
-                action: true,
-                ..Default::default()
-            },
-            &v,
-            1.0 / 60.0,
-        );
-        assert!(kg_core::sfx::take_pending().contains(&Sfx::Wrong));
-        for _ in 0..30 {
-            app.update(&Input::default(), &v, 1.0 / 60.0);
-        }
-        assert!(app.current.is_none());
     }
 
     #[test]
