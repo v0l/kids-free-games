@@ -52,6 +52,7 @@ pub struct Pen {
     pub offset: Vec2,
     pub detail: f32,
     pub view: Option<View>,
+    pub scene: Option<crate::scene3::Scene3>,
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
@@ -81,6 +82,7 @@ impl Pen {
         self.detail = detail.max(0.01);
         kg_core::font::set_text_scale(self.detail);
         self.view = Some(view);
+        self.scene = None;
     }
 
     pub fn used(&self) -> &[Batch] {
@@ -153,6 +155,17 @@ pub struct Gpu {
     glyph_generation: u64,
 }
 
+impl Gpu {
+    pub fn page_handle(&mut self, images: &mut Assets<Image>, tex: Tex) -> Handle<Image> {
+        if let Some(h) = self.pages.get(&tex) {
+            return h.clone();
+        }
+        let h = images.add(page_image(tex));
+        self.pages.insert(tex, h.clone());
+        h
+    }
+}
+
 #[derive(Component)]
 pub struct PaintCamera;
 
@@ -162,8 +175,9 @@ impl Plugin for PaintPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Pen>()
             .init_resource::<Gpu>()
+            .init_resource::<crate::scene3::Gpu3>()
             .add_systems(Startup, spawn_camera)
-            .add_systems(PostUpdate, sync);
+            .add_systems(PostUpdate, (sync, crate::scene3::sync3).chain());
     }
 }
 

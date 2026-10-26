@@ -4,7 +4,7 @@ use crate::fx::approach as feel_approach;
 use crate::fx::*;
 use crate::geom::*;
 use crate::sfx::{self, Sfx};
-use glam::{vec2, vec3, Mat4, Vec2, Vec3};
+use glam::{vec2, vec3, Vec2, Vec3};
 use std::f32::consts::TAU;
 
 pub const SEGMENTS: usize = 12;
@@ -114,10 +114,13 @@ impl Rig {
 
     pub fn project(&self, view: &View, p: Vec3) -> Vec2 {
         let f = view.full();
-        let m = Mat4::perspective_rh(FOV, f.w / f.h, 1.0, 20000.0)
-            * Mat4::look_at_rh(self.eye, self.target, Vec3::Y);
-        let c = m * p.extend(1.0);
-        let n = vec2(c.x / c.w, c.y / c.w);
+        let fwd = (self.target - self.eye).normalize();
+        let right = fwd.cross(Vec3::Y).normalize();
+        let up = right.cross(fwd);
+        let d = p - self.eye;
+        let depth = d.dot(fwd);
+        let k = 1.0 / (FOV / 2.0).tan();
+        let n = vec2(d.dot(right) * k / (depth * f.w / f.h), d.dot(up) * k / depth);
         vec2(f.x + (n.x * 0.5 + 0.5) * f.w, f.y + (0.5 - n.y * 0.5) * f.h)
     }
 }
