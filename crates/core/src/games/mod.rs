@@ -1,3 +1,4 @@
+pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod snake;

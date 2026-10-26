@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod count_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (140, "count first question with the hint"),
+    (141, "count ticking things"),
+    (142, "count celebrating a right answer"),
+    (143, "count wrong answers revealing the number"),
+    (144, "count to 20 with four choices"),
+    (145, "count level picker"),
+    (146, "count level done report"),
+    (147, "count cleared with the board"),
+    (148, "count level up moment"),
+    (149, "count first wrong answer"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +290,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        140..=149 => count_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -431,6 +443,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn count_scenes_land_in_the_state_they_are_named_for() {
+        count_scene::check();
     }
 
     #[test]
