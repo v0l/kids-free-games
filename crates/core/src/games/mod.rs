@@ -3,6 +3,7 @@ pub mod breakout;
 pub mod count;
 pub mod crossy;
 pub mod flappy;
+pub mod helix;
 pub mod fruit;
 pub mod jumper;
 pub mod mathpop;
