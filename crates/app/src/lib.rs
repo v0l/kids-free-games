@@ -8,6 +8,7 @@ pub mod menu;
 pub mod paint;
 pub mod platform;
 pub mod profiles;
+pub mod scene3;
 pub mod shots;
 pub mod text;
 pub mod ui;

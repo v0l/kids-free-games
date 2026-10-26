@@ -3,8 +3,8 @@ use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
 use crate::profile::{self, Better};
+use crate::rng as rand;
 use crate::sfx::{self, Sfx};
-use quad_rand as rand;
 
 pub const KEY: &str = "memory";
 pub const LEVELS: [usize; 5] = [3, 4, 6, 8, 10];

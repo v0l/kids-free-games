@@ -2,9 +2,9 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
+use crate::rng as rand;
 use crate::sfx::{self, Sfx};
 use glam::{ivec2, vec2, IVec2, Vec2};
-use quad_rand as rand;
 use std::collections::VecDeque;
 
 pub const LONG: i32 = 24;

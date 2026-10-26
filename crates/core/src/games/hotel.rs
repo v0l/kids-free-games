@@ -6,10 +6,10 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
+use crate::rng as rand;
 use crate::sfx::{self, Say, Sfx};
 use glam::{vec2, vec3, Vec2, Vec3};
 use layout::*;
-use quad_rand as rand;
 use sim::*;
 
 pub const GAME: &str = "hotel";

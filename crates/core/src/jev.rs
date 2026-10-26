@@ -584,7 +584,7 @@ mod tests {
         for latency in [0.0f32, 0.15, 0.3, 0.35] {
             let mut lowest = u32::MAX;
             for seed in 0..12 {
-                quad_rand::srand(seed);
+                crate::rng::srand(seed);
                 let mut g = Flappy::new();
                 g.update(&input_for("flap"), &v, dt);
                 let mut inflight: Option<(f32, &str)> = None;

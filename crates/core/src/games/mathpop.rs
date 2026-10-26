@@ -4,9 +4,9 @@ use crate::fx::*;
 use crate::geom::*;
 use crate::learn::{choices, hud_bottom, tall, ui_scale, PRAISE};
 use crate::profile;
+use crate::rng as rand;
 use crate::sfx::{self, Sfx};
 use glam::{vec2, Vec2};
-use quad_rand as rand;
 
 pub const KEY: &str = "mathpop";
 pub const LEVEL_NAMES: [&str; 9] = [

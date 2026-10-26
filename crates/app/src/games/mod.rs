@@ -8,6 +8,7 @@ pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
+pub mod helix;
 pub mod hotel;
 pub mod jumper;
 pub mod mathpop;
@@ -66,6 +67,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
         memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
+        helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         _ => None,
     }
 }
@@ -86,7 +88,7 @@ mod tests {
 
     #[test]
     fn every_ported_game_survives_a_minute_of_random_input() {
-        quad_rand::srand(1);
+        kg_core::rng::srand(1);
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
             for e in all().into_iter().filter(Entry::ready) {
                 kg_core::save::reset_for_test();
@@ -94,8 +96,8 @@ mod tests {
                 let mut pen = Pen::default();
                 for f in 0..3600 {
                     let pos = glam::vec2(
-                        quad_rand::gen_range(0.0, v.w),
-                        quad_rand::gen_range(0.0, v.h),
+                        kg_core::rng::gen_range(0.0, v.w),
+                        kg_core::rng::gen_range(0.0, v.h),
                     );
                     let mut input = Input {
                         pos,
@@ -106,7 +108,8 @@ mod tests {
                     input.pressed = f % 7 == 0;
                     input.released = f % 7 == 4;
                     if f % 11 == 0 {
-                        input.swipe = Some(kg_core::engine::Dir::ALL[quad_rand::gen_range(0, 4)]);
+                        input.swipe =
+                            Some(kg_core::engine::Dir::ALL[kg_core::rng::gen_range(0, 4)]);
                     }
                     g.update(&input, &v, 1.0 / 60.0);
                     if f % 60 == 0 {

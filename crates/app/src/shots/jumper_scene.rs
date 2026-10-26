@@ -115,7 +115,8 @@ pub fn setup(n: u32, view: &View) -> Stage {
         }
         83 => {
             p.update(&tap, view, DT);
-            climb(&mut p, view, 60 * 400, jumper::STAGES[0].0);
+            teleport(&mut p.g, view, jumper::STAGES[0].0 - 6);
+            climb(&mut p, view, 60 * 20, jumper::STAGES[0].0);
             climb(&mut p, view, 25, u32::MAX);
         }
         84 => {

@@ -3,9 +3,9 @@ use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
 use crate::learn::*;
+use crate::rng as rand;
 use crate::sfx::{self, Sfx};
 use glam::{vec2, Vec2};
-use quad_rand as rand;
 
 pub const GAME: &str = "count";
 pub const RANGES: [(i32, i32); 6] = [(1, 3), (1, 5), (3, 8), (5, 10), (8, 15), (11, 20)];

@@ -2,9 +2,9 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
+use crate::rng as rand;
 use crate::sfx::{self, Sfx};
 use glam::{vec2, Vec2};
-use quad_rand as rand;
 
 pub const GRAVITY: f32 = 1500.0;
 pub const FLAP: f32 = -520.0;

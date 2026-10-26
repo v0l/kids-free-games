@@ -1,7 +1,7 @@
 use crate::engine::{View, HUD_LEFT};
 use crate::geom::{Color, Rect, WHITE};
+use crate::rng as rand;
 use glam::{vec2, Vec2};
-use quad_rand as rand;
 
 pub fn ease_out_back(t: f32) -> f32 {
     let t = t.clamp(0.0, 1.0);

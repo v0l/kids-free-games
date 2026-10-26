@@ -1,5 +1,5 @@
 use crate::engine::View;
-use quad_rand as rand;
+use crate::rng as rand;
 
 pub const UP_STREAK: u32 = 4;
 pub const DOWN_SLIPS: u32 = 3;

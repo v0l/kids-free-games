@@ -13,6 +13,7 @@ pub mod mixer;
 pub mod net;
 pub mod outline;
 pub mod profile;
+pub mod rng;
 pub mod safe;
 pub mod save;
 pub mod sfx;

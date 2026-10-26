@@ -3288,7 +3288,6 @@ dependencies = [
  "glam",
  "image",
  "lewton",
- "quad-rand",
  "serde_json",
  "ureq",
  "wasm-bindgen",
@@ -3325,7 +3324,6 @@ dependencies = [
  "jni 0.21.1",
  "kg_core",
  "objc2 0.6.5",
- "quad-rand",
  "serde_json",
  "wasm-bindgen",
  "web-sys",
@@ -4416,12 +4414,6 @@ name = "pxfm"
 version = "0.1.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d55d956fa96f5ec02be2e13af0e20391a5aa83d6a074e3ad368959d0fab299ea"
-
-[[package]]
-name = "quad-rand"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5a651516ddc9168ebd67b24afd085a718be02f8858fe406591b013d101ce2f40"
 
 [[package]]
 name = "quick-error"

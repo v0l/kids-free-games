@@ -4,6 +4,7 @@ pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
+pub mod helix;
 pub mod hotel;
 pub mod jumper;
 pub mod mathpop;

@@ -5,10 +5,10 @@ use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
 use crate::profile::{self, Better};
+use crate::rng as rand;
 use crate::sfx::{self, Sfx};
 use arena::{Arena, MAX_LEVEL};
 use glam::{ivec2, vec2, IVec2, Vec2};
-use quad_rand as rand;
 use std::collections::VecDeque;
 
 pub const GAME: &str = "paper";
