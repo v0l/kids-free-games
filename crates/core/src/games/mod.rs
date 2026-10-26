@@ -1,4 +1,5 @@
 pub mod flappy;
+pub mod snake;
 
 use crate::geom::Color;
 

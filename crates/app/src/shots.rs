@@ -1,4 +1,5 @@
 use crate::games::flappy::FlappyPlay;
+use crate::games::snake::SnakePlay;
 use crate::games::Play;
 use crate::link::{Link, Tab};
 use crate::menu::App;
@@ -11,7 +12,9 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
-pub const SCENES: [(u32, &str); 14] = [
+mod snake_scene;
+
+pub const SCENES: [(u32, &str); 22] = [
     (0, "menu"),
     (1, "menu scrolled to Learn"),
     (2, "menu with the second tile focused"),
@@ -26,6 +29,14 @@ pub const SCENES: [(u32, &str); 14] = [
     (14, "flappy moving pipes at night"),
     (15, "flappy game over with the board"),
     (16, "flappy new best"),
+    (30, "snake ready"),
+    (31, "snake first moves with the hint"),
+    (32, "snake mid run"),
+    (33, "snake stage up"),
+    (34, "snake long and fast"),
+    (35, "snake bonk"),
+    (36, "snake game over with the board"),
+    (37, "snake new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -38,6 +49,7 @@ enum Stage {
     Menu(Box<App>),
     Profiles(Box<Profiles>),
     Flappy(Box<FlappyPlay>),
+    Snake(Box<SnakePlay>),
 }
 
 pub struct Shot {
@@ -144,6 +156,7 @@ fn setup(n: u32, view: &View) -> Stage {
             }
             Stage::Profiles(Box::new(p))
         }
+        30..=39 => snake_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -218,6 +231,9 @@ impl Shot {
             self.stage = Some(setup(self.n % IDLE, view));
         }
         if self.n >= IDLE {
+            if let Some(Stage::Snake(p)) = &mut self.stage {
+                snake_scene::idle(p, view);
+            }
             if let Some(Stage::Flappy(p)) = &mut self.stage {
                 if p.g.state != State::Dead {
                     p.update(&Input::default(), view, DT);
@@ -230,6 +246,10 @@ impl Shot {
                 draw_backdrop(pen, view);
                 pen.fill_screen(view, kg_core::geom::Color::new(0.1, 0.04, 0.25, 0.45));
                 p.draw(pen, view);
+            }
+            Stage::Snake(p) => {
+                p.draw(pen, view);
+                snake_scene::home(pen);
             }
             Stage::Flappy(p) => {
                 p.draw(pen, view);
@@ -275,6 +295,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn snake_scenes_land_in_the_state_they_are_named_for() {
+        snake_scene::check();
     }
 
     #[test]

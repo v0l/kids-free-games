@@ -3,6 +3,7 @@ use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
 pub mod flappy;
+pub mod snake;
 
 pub trait Play {
     fn update(&mut self, input: &Input, view: &View, dt: f32);
@@ -27,6 +28,7 @@ impl Entry {
 fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
     match key {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
+        snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
         _ => None,
     }
 }
