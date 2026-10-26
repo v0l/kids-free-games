@@ -18,9 +18,11 @@ mod native {
         out
     }
 
-    static READER: OnceLock<fn(&str) -> Option<Vec<u8>>> = OnceLock::new();
+    pub type Reader = fn(&str) -> Option<Vec<u8>>;
 
-    pub fn set_reader(f: fn(&str) -> Option<Vec<u8>>) {
+    static READER: OnceLock<Reader> = OnceLock::new();
+
+    pub fn set_reader(f: Reader) {
         let _ = READER.set(f);
     }
 
