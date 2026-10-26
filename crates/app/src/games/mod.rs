@@ -2,10 +2,20 @@ use crate::paint::Pen;
 use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
+pub mod blocks;
+pub mod breakout;
+pub mod count;
 pub mod crossy;
 pub mod flappy;
-pub mod snake;
+pub mod fruit;
 pub mod hotel;
+pub mod jumper;
+pub mod mathpop;
+pub mod memory;
+pub mod merge;
+pub mod paper;
+pub mod snake;
+pub mod stack;
 
 pub trait IntoAny {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
@@ -45,6 +55,16 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
         crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
         snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
+        merge::KEY => Some(|| Box::new(merge::MergePlay::new())),
+        fruit::KEY => Some(|| Box::new(fruit::FruitPlay::new())),
+        stack::KEY => Some(|| Box::new(stack::StackPlay::new())),
+        breakout::KEY => Some(|| Box::new(breakout::BreakoutPlay::new())),
+        jumper::KEY => Some(|| Box::new(jumper::JumperPlay::new())),
+        blocks::KEY => Some(|| Box::new(blocks::BlocksPlay::new())),
+        mathpop::KEY => Some(|| Box::new(mathpop::MathPopPlay::new())),
+        count::KEY => Some(|| Box::new(count::CountPlay::new())),
+        paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
+        memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
         _ => None,
     }

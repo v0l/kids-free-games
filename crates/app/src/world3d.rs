@@ -66,7 +66,15 @@ pub fn peek<R>(f: impl FnOnce(Option<&Scene3d>) -> R) -> R {
 }
 
 impl Scene3d {
-    pub fn push(&mut self, shape: Shape, surface: Surface, color: Col, at: Vec3, rot: Quat, scale: Vec3) {
+    pub fn push(
+        &mut self,
+        shape: Shape,
+        surface: Surface,
+        color: Col,
+        at: Vec3,
+        rot: Quat,
+        scale: Vec3,
+    ) {
         self.items.push(Item {
             shape,
             surface,
@@ -135,7 +143,10 @@ fn ring_mesh(inner: f32, segments: u32) -> Mesh {
             idx.extend([b, b + 2, b + 1, b + 1, b + 2, b + 3]);
         }
     }
-    let mut m = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+    let mut m = Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::RENDER_WORLD,
+    );
     m.insert_attribute(Mesh::ATTRIBUTE_POSITION, pos);
     m.insert_attribute(Mesh::ATTRIBUTE_NORMAL, nor);
     m.insert_attribute(Mesh::ATTRIBUTE_UV_0, uv);
@@ -232,7 +243,12 @@ fn material(
             let tex = cache
                 .textures
                 .entry((sheet, name))
-                .or_insert_with(|| images.add(floor_image(sheet, name).unwrap_or_else(|| crate::paint::rgba_image(1, 1, vec![vec![255; 4]]))))
+                .or_insert_with(|| {
+                    images.add(
+                        floor_image(sheet, name)
+                            .unwrap_or_else(|| crate::paint::rgba_image(1, 1, vec![vec![255; 4]])),
+                    )
+                })
                 .clone();
             m.base_color_texture = Some(tex);
             m.uv_transform = bevy::math::Affine2::from_scale(item.uv_repeat);
@@ -402,15 +418,47 @@ mod tests {
     #[test]
     fn flat_and_see_through_things_cast_no_shadow() {
         let mut s = Scene3d::default();
-        s.push(Shape::Cube, Surface::Matte, kg_core::geom::WHITE, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE);
-        s.push(Shape::Disc, Surface::Matte, kg_core::geom::WHITE, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE);
-        s.push(Shape::Cube, Surface::Ghost, kg_core::geom::WHITE, Vec3::ZERO, Quat::IDENTITY, Vec3::ONE);
-        assert_eq!(s.items.iter().map(|i| i.shadow).collect::<Vec<_>>(), [true, false, false]);
+        s.push(
+            Shape::Cube,
+            Surface::Matte,
+            kg_core::geom::WHITE,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        );
+        s.push(
+            Shape::Disc,
+            Surface::Matte,
+            kg_core::geom::WHITE,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        );
+        s.push(
+            Shape::Cube,
+            Surface::Ghost,
+            kg_core::geom::WHITE,
+            Vec3::ZERO,
+            Quat::IDENTITY,
+            Vec3::ONE,
+        );
+        assert_eq!(
+            s.items.iter().map(|i| i.shadow).collect::<Vec<_>>(),
+            [true, false, false]
+        );
     }
 
     #[test]
     fn every_shape_builds_a_mesh() {
-        for s in [Shape::Cube, Shape::Sphere, Shape::Cylinder(10), Shape::Cone(10), Shape::Disc, Shape::Ring, Shape::Plane] {
+        for s in [
+            Shape::Cube,
+            Shape::Sphere,
+            Shape::Cylinder(10),
+            Shape::Cone(10),
+            Shape::Disc,
+            Shape::Ring,
+            Shape::Plane,
+        ] {
             assert!(build_mesh(s).count_vertices() > 3, "{s:?}");
         }
     }

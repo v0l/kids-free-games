@@ -29,7 +29,12 @@ fn icon(pen: &mut Pen, name: &str, c: Vec2, box_size: f32, d: Draw) {
     pen.sprite(
         SHEET,
         name,
-        Rect::new(c.x - sz.x * fit / 2.0, c.y - sz.y * fit / 2.0, sz.x * fit, sz.y * fit),
+        Rect::new(
+            c.x - sz.x * fit / 2.0,
+            c.y - sz.y * fit / 2.0,
+            sz.x * fit,
+            sz.y * fit,
+        ),
         d,
     );
 }
@@ -104,7 +109,13 @@ impl Hud<'_> {
                 continue;
             };
             let bob = (h.t * 3.0 + g.id as f32).sin() * 3.0;
-            bubble(pen, c + vec2(0.0, bob), r * 0.8, name, waiting.then(|| g.patience / g.max));
+            bubble(
+                pen,
+                c + vec2(0.0, bob),
+                r * 0.8,
+                name,
+                waiting.then(|| g.patience / g.max),
+            );
         }
         for (k, room) in sim.rooms.iter().enumerate() {
             if !room.is_dirty() {
@@ -119,7 +130,13 @@ impl Hud<'_> {
                 };
                 let bob = (h.t * 4.0 + i as f32).sin() * 3.0;
                 let work = room.spot_work[i];
-                bubble(pen, c + vec2(0.0, bob), r * 0.6, "broom", (work > 0.0).then_some(1.0 - work));
+                bubble(
+                    pen,
+                    c + vec2(0.0, bob),
+                    r * 0.6,
+                    "broom",
+                    (work > 0.0).then_some(1.0 - work),
+                );
             }
         }
         for (k, st) in sim.stalls.iter().enumerate() {
@@ -146,7 +163,12 @@ impl Hud<'_> {
             let mid = w.center();
             if let Some(c) = self.at(vec3(mid.x, 1.6, mid.y)) {
                 let d = (r * 1.1).max(22.0);
-                pen.sprite("ui", "icon_lock", Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d), Draw::tint(PLUM));
+                pen.sprite(
+                    "ui",
+                    "icon_lock",
+                    Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d),
+                    Draw::tint(PLUM),
+                );
             }
         }
         if let Some(task) = h.guide() {
@@ -160,7 +182,9 @@ impl Hud<'_> {
 
     fn draw_pad_labels(&self, pen: &mut Pen, r: f32) {
         let sim = &self.h.sim;
-        let px = self.cam.px_per_unit(&self.view, vec3(sim.player.pos.x, 0.0, sim.player.pos.y));
+        let px = self
+            .cam
+            .px_per_unit(&self.view, vec3(sim.player.pos.x, 0.0, sim.player.pos.y));
         let _ = r;
         for i in sim.visible_pads() {
             let p = &sim.lay.pads[i];
@@ -168,12 +192,32 @@ impl Hud<'_> {
                 continue;
             };
             let size = (px * 0.5).clamp(24.0, 52.0);
-            icon(pen, build_icon(p.build), c + vec2(0.0, -size * 0.3), size, Draw::default());
+            icon(
+                pen,
+                build_icon(p.build),
+                c + vec2(0.0, -size * 0.3),
+                size,
+                Draw::default(),
+            );
             let left = p.cost - sim.paid[i];
             let col = if sim.wallet >= left { GOLD } else { WHITE };
-            pen.text_outline(&format!("${left}"), c.x, c.y + size * 0.4, (size * 0.5).round().max(20.0), col, PLUM);
+            pen.text_outline(
+                &format!("${left}"),
+                c.x,
+                c.y + size * 0.4,
+                (size * 0.5).round().max(20.0),
+                col,
+                PLUM,
+            );
             if (sim.player.pos - p.pos).length() < 2.2 {
-                pen.text_outline(&build_label(p.build), c.x, c.y - size * 1.05, 20.0, WHITE, PLUM);
+                pen.text_outline(
+                    &build_label(p.build),
+                    c.x,
+                    c.y - size * 1.05,
+                    20.0,
+                    WHITE,
+                    PLUM,
+                );
             }
         }
     }
@@ -187,9 +231,23 @@ impl Hud<'_> {
             let k = ease_out_back((pop.age / 0.25).min(1.0)).max(0.1);
             let d = Draw::tint(WHITE.with_alpha(a));
             match pop.kind {
-                PopKind::Cash(n) => pen.text_outline(&format!("+{n}"), c.x, c.y, (36.0 * k).round(), GOLD.with_alpha(a), PLUM.with_alpha(a)),
+                PopKind::Cash(n) => pen.text_outline(
+                    &format!("+{n}"),
+                    c.x,
+                    c.y,
+                    (36.0 * k).round(),
+                    GOLD.with_alpha(a),
+                    PLUM.with_alpha(a),
+                ),
                 PopKind::Heart => pen.sprite_at(SHEET, "heart", c, 44.0 * k, d),
-                PopKind::Angry => pen.text_outline("!", c.x, c.y, (56.0 * k).round(), rgb(240, 80, 70).with_alpha(a), PLUM.with_alpha(a)),
+                PopKind::Angry => pen.text_outline(
+                    "!",
+                    c.x,
+                    c.y,
+                    (56.0 * k).round(),
+                    rgb(240, 80, 70).with_alpha(a),
+                    PLUM.with_alpha(a),
+                ),
                 PopKind::Sparkle => pen.sprite_at("ui", "p_star", c, 48.0 * k, d),
                 PopKind::Money => pen.sprite_at(SHEET, "cash", c, 40.0 * k, d),
             }
@@ -203,7 +261,11 @@ impl Hud<'_> {
                 continue;
             }
             let k = f.k();
-            let to = if f.xp { Hotel::xp_target(view) } else { Hotel::coin_target(view) };
+            let to = if f.xp {
+                Hotel::xp_target(view)
+            } else {
+                Hotel::coin_target(view)
+            };
             let Some(from) = self.at(f.from) else {
                 continue;
             };
@@ -222,32 +284,102 @@ impl Hud<'_> {
         let w = Hotel::wallet_rect(view);
         pen.chip_box(w);
         let k = h.wallet_bump.scale(0.25);
-        pen.sprite_at("ui", "p_coin", vec2(w.x + 30.0, w.y + w.h / 2.0), 42.0 * k, Draw::default());
-        pen.text_outline(&format!("{}", h.shown_wallet.round() as u32), w.x + 108.0, w.y + w.h / 2.0, (34.0 * k).round(), GOLD, PLUM);
+        pen.sprite_at(
+            "ui",
+            "p_coin",
+            vec2(w.x + 30.0, w.y + w.h / 2.0),
+            42.0 * k,
+            Draw::default(),
+        );
+        pen.text_outline(
+            &format!("{}", h.shown_wallet.round() as u32),
+            w.x + 108.0,
+            w.y + w.h / 2.0,
+            (34.0 * k).round(),
+            GOLD,
+            PLUM,
+        );
         let bar = Hotel::level_rect(view);
         let maxed = h.sim.level >= h.sim.lay.max_level;
-        pen.round_rect(Rect::new(bar.x - 3.0, bar.y - 3.0, bar.w + 6.0, bar.h + 6.0), 15.0, Color::new(0.1, 0.05, 0.2, 0.6));
-        let fill = if maxed { 1.0 } else { h.shown_xp.clamp(0.0, 1.0) };
+        pen.round_rect(
+            Rect::new(bar.x - 3.0, bar.y - 3.0, bar.w + 6.0, bar.h + 6.0),
+            15.0,
+            Color::new(0.1, 0.05, 0.2, 0.6),
+        );
+        let fill = if maxed {
+            1.0
+        } else {
+            h.shown_xp.clamp(0.0, 1.0)
+        };
         if fill > 0.0 {
-            pen.round_rect(Rect::new(bar.x, bar.y, (bar.w * fill).max(bar.h), bar.h), 13.0, rgb(90, 160, 255));
+            pen.round_rect(
+                Rect::new(bar.x, bar.y, (bar.w * fill).max(bar.h), bar.h),
+                13.0,
+                rgb(90, 160, 255),
+            );
         }
-        let label = if maxed { "MAX".to_string() } else { format!("{}/{}", h.sim.xp, h.sim.xp_needed()) };
-        pen.text_outline(&label, bar.center().x + 14.0, bar.center().y, 20.0, WHITE, PLUM);
+        let label = if maxed {
+            "MAX".to_string()
+        } else {
+            format!("{}/{}", h.sim.xp, h.sim.xp_needed())
+        };
+        pen.text_outline(
+            &label,
+            bar.center().x + 14.0,
+            bar.center().y,
+            20.0,
+            WHITE,
+            PLUM,
+        );
         let kx = h.xp_bump.scale(0.3);
         let star = Hotel::xp_target(view);
         pen.sprite_at("ui", "p_star", star, 52.0 * kx, Draw::default());
-        pen.text_outline(&format!("{}", h.sim.level), star.x, star.y + 2.0, (24.0 * kx).round(), WHITE, PLUM);
-        pen.text_outline(h.sim.lay.theme.name, view.w / 2.0, bar.y + bar.h + 22.0, 22.0, WHITE, PLUM);
+        pen.text_outline(
+            &format!("{}", h.sim.level),
+            star.x,
+            star.y + 2.0,
+            (24.0 * kx).round(),
+            WHITE,
+            PLUM,
+        );
+        pen.text_outline(
+            h.sim.lay.theme.name,
+            view.w / 2.0,
+            bar.y + bar.h + 22.0,
+            22.0,
+            WHITE,
+            PLUM,
+        );
         if let Some(next) = h.sim.next_locked_level() {
             if h.sim.visible_pads().is_empty() {
-                pen.text_outline(&format!("Level {next} opens more"), view.w / 2.0, bar.y + bar.h + 48.0, 20.0, rgb(200, 230, 255), PLUM);
+                pen.text_outline(
+                    &format!("Level {next} opens more"),
+                    view.w / 2.0,
+                    bar.y + bar.h + 48.0,
+                    20.0,
+                    rgb(200, 230, 255),
+                    PLUM,
+                );
             }
         }
         if let Some(item) = h.sim.player.carry {
             let r = Hotel::carry_rect(view);
             pen.chip_box(r);
-            icon(pen, item_icon(item), vec2(r.x + 32.0, r.center().y), 40.0, Draw::default());
-            pen.text_outline(&format!("{}/{}", h.sim.player.count, h.sim.capacity()), r.x + 96.0, r.center().y, 28.0, WHITE, PLUM);
+            icon(
+                pen,
+                item_icon(item),
+                vec2(r.x + 32.0, r.center().y),
+                40.0,
+                Draw::default(),
+            );
+            pen.text_outline(
+                &format!("{}/{}", h.sim.player.count, h.sim.capacity()),
+                r.x + 96.0,
+                r.center().y,
+                28.0,
+                WHITE,
+                PLUM,
+            );
         }
         if !h.learned_move && h.mode == Mode::Play {
             let pulse = 1.0 + (h.t * 4.0).sin() * 0.05;
@@ -275,9 +407,29 @@ impl Hud<'_> {
                 pen.fill_screen(view, Color::new(0.1, 0.04, 0.25, 0.35 * a));
                 let k = ease_out_back((t / 0.4).min(1.0)).max(0.01);
                 let c = vec2(view.w / 2.0, view.h * 0.42);
-                pen.sprite_at("ui", "p_star", c, 150.0 * k, Draw::tint(WHITE.with_alpha(a)));
-                pen.text_outline(&format!("{level}"), c.x, c.y + 6.0, (64.0 * k).round(), WHITE.with_alpha(a), PLUM.with_alpha(a));
-                pen.text_outline("Level up!", c.x, c.y + 110.0, 46.0, GOLD.with_alpha(a), PLUM.with_alpha(a));
+                pen.sprite_at(
+                    "ui",
+                    "p_star",
+                    c,
+                    150.0 * k,
+                    Draw::tint(WHITE.with_alpha(a)),
+                );
+                pen.text_outline(
+                    &format!("{level}"),
+                    c.x,
+                    c.y + 6.0,
+                    (64.0 * k).round(),
+                    WHITE.with_alpha(a),
+                    PLUM.with_alpha(a),
+                );
+                pen.text_outline(
+                    "Level up!",
+                    c.x,
+                    c.y + 110.0,
+                    46.0,
+                    GOLD.with_alpha(a),
+                    PLUM.with_alpha(a),
+                );
             }
             Mode::Moving(t) => {
                 let a = (t / 0.4).min(1.0);
@@ -285,9 +437,22 @@ impl Hud<'_> {
                 pen.ribbon(view, "Hotel done!", vec2(view.w / 2.0, view.h * 0.32), t);
                 for s in 0..3 {
                     let k = ease_out_back(((t - 0.3 - s as f32 * 0.2) / 0.4).clamp(0.0, 1.0));
-                    pen.sprite_at("ui", "p_star", vec2(view.w / 2.0 + (s as f32 - 1.0) * 90.0, view.h * 0.5), 84.0 * k.max(0.01), Draw::default());
+                    pen.sprite_at(
+                        "ui",
+                        "p_star",
+                        vec2(view.w / 2.0 + (s as f32 - 1.0) * 90.0, view.h * 0.5),
+                        84.0 * k.max(0.01),
+                        Draw::default(),
+                    );
                 }
-                pen.text_outline(&format!("Next: {}", h.next_theme().name), view.w / 2.0, view.h * 0.66, 40.0, WHITE, PLUM);
+                pen.text_outline(
+                    &format!("Next: {}", h.next_theme().name),
+                    view.w / 2.0,
+                    view.h * 0.66,
+                    40.0,
+                    WHITE,
+                    PLUM,
+                );
             }
             Mode::Done(t) if t < 4.0 => {
                 let a = 1.0 - (t - 3.0).max(0.0);
@@ -306,7 +471,10 @@ pub fn guide_arrow(pen: &mut Pen, p: Vec2, size: f32) {
         p + vec2(0.0, size * 0.3),
         ARROW,
     );
-    pen.rect(Rect::new(p.x - size * 0.25, p.y - size * 1.3, size * 0.5, size * 0.75), ARROW);
+    pen.rect(
+        Rect::new(p.x - size * 0.25, p.y - size * 1.3, size * 0.5, size * 0.75),
+        ARROW,
+    );
 }
 
 pub fn eased(k: f32) -> f32 {

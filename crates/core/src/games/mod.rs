@@ -1,7 +1,17 @@
+pub mod blocks;
+pub mod breakout;
+pub mod count;
 pub mod crossy;
 pub mod flappy;
-pub mod snake;
+pub mod fruit;
 pub mod hotel;
+pub mod jumper;
+pub mod mathpop;
+pub mod memory;
+pub mod merge;
+pub mod paper;
+pub mod snake;
+pub mod stack;
 
 use crate::geom::Color;
 

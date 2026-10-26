@@ -13,8 +13,18 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
-mod snake_scene;
+mod blocks_scene;
+mod breakout_scene;
+mod count_scene;
+mod fruit_scene;
 mod hotel_scene;
+mod jumper_scene;
+mod mathpop_scene;
+mod memory_scene;
+mod merge_scene;
+mod paper_scene;
+mod snake_scene;
+mod stack_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
@@ -49,20 +59,113 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
-    (120, "hotel first steps with the hint"),
-    (121, "hotel first guests"),
-    (122, "hotel a few minutes in"),
-    (123, "hotel city tower lobby"),
-    (124, "hotel royal palace busy"),
-    (125, "hotel sunny inn built out"),
-    (126, "hotel snowy lodge built out"),
-    (127, "hotel city tower built out"),
-    (128, "hotel royal palace built out"),
-    (129, "hotel pool with swimmers"),
-    (130, "hotel room upgrade spot"),
-    (131, "hotel level up"),
-    (132, "hotel moving to the next hotel"),
-    (133, "hotel boss finale"),
+    (40, "2048 teaching deal with the hint"),
+    (41, "2048 level 4 mid game"),
+    (42, "2048 level 8 with big tiles and the crown"),
+    (43, "2048 tiles sliding and merging"),
+    (44, "2048 level picker"),
+    (45, "2048 level complete"),
+    (46, "2048 final level complete"),
+    (47, "2048 no more moves with the board"),
+    (48, "2048 fresh start rescue"),
+    (49, "2048 goal hint on a limited undo level"),
+    (50, "fruit ready"),
+    (51, "fruit first swipe with the hint"),
+    (52, "fruit mid run with a combo"),
+    (53, "fruit level up"),
+    (54, "fruit bomb warning"),
+    (55, "fruit bomb blast"),
+    (56, "fruit game over with the board"),
+    (57, "fruit game over after a bomb"),
+    (60, "stack first drop with the hint"),
+    (61, "stack mid run"),
+    (62, "stack tall tower at dusk"),
+    (63, "stack perfect streak"),
+    (64, "stack tower fell with the board"),
+    (65, "stack level won"),
+    (66, "stack level picker"),
+    (67, "stack night near the goal"),
+    (68, "stack new best"),
+    (70, "breakout first serve with the hint"),
+    (71, "breakout level one mid play"),
+    (72, "breakout level seven with combo and lives"),
+    (73, "breakout level select"),
+    (74, "breakout level cleared"),
+    (75, "breakout out of lives with the board"),
+    (76, "breakout last level serve"),
+    (77, "breakout level twelve mid play"),
+    (78, "breakout cleared on the last level"),
+    (79, "breakout serve with the levels button"),
+    (80, "jumper ready"),
+    (81, "jumper first jumps with the hint"),
+    (82, "jumper mid climb"),
+    (83, "jumper moving platforms cheer"),
+    (84, "jumper crumbly platforms high up"),
+    (85, "jumper spring boing"),
+    (86, "jumper game over with the board"),
+    (87, "jumper new best"),
+    (120, "blocks ready"),
+    (121, "blocks first piece with the hint"),
+    (122, "blocks mid game"),
+    (123, "blocks rows clearing"),
+    (124, "blocks four rows and level up"),
+    (125, "blocks game over with the board"),
+    (126, "blocks new best"),
+    (127, "blocks fresh start rescue"),
+    (130, "mathpop first question with the hint"),
+    (131, "mathpop mid level with a wrong balloon"),
+    (132, "mathpop answer revealed after two misses"),
+    (133, "mathpop right pop with the bunnies cheering"),
+    (134, "mathpop times tables"),
+    (135, "mathpop level picker"),
+    (136, "mathpop level done"),
+    (137, "mathpop level done with one star"),
+    (138, "mathpop final screen with the board"),
+    (139, "mathpop level picker with everything open"),
+    (140, "count first question with the hint"),
+    (141, "count ticking things"),
+    (142, "count celebrating a right answer"),
+    (143, "count wrong answers revealing the number"),
+    (144, "count to 20 with four choices"),
+    (145, "count level picker"),
+    (146, "count level done report"),
+    (147, "count cleared with the board"),
+    (148, "count level up moment"),
+    (149, "count first wrong answer"),
+    (150, "paper arena 1 intro"),
+    (151, "paper go out onto the grass hint"),
+    (152, "paper come back home hint"),
+    (153, "paper first grab with the popup"),
+    (154, "paper arena 5 mid run against bots"),
+    (155, "paper arena 12 with four bots"),
+    (156, "paper lost with the board"),
+    (157, "paper arena clear"),
+    (158, "paper arenas picker"),
+    (159, "paper last arena cleared with a new best"),
+    (90, "memory first level with the hint"),
+    (91, "memory level 3 mid game"),
+    (92, "memory a miss"),
+    (93, "memory the twin helper"),
+    (94, "memory level select"),
+    (95, "memory locked level tapped"),
+    (96, "memory level clear, three stars"),
+    (97, "memory level clear, one star"),
+    (98, "memory last level mid game"),
+    (99, "memory all done with the board"),
+    (170, "hotel first steps with the hint"),
+    (171, "hotel first guests"),
+    (172, "hotel a few minutes in"),
+    (173, "hotel city tower lobby"),
+    (174, "hotel royal palace busy"),
+    (175, "hotel sunny inn built out"),
+    (176, "hotel snowy lodge built out"),
+    (177, "hotel city tower built out"),
+    (178, "hotel royal palace built out"),
+    (179, "hotel pool with swimmers"),
+    (180, "hotel room upgrade spot"),
+    (181, "hotel level up"),
+    (182, "hotel moving to the next hotel"),
+    (183, "hotel boss finale"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -294,7 +397,17 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
-        120..=139 => hotel_scene::setup(n, view),
+        40..=49 => merge_scene::setup(n, view),
+        50..=59 => fruit_scene::setup(n, view),
+        60..=69 => stack_scene::setup(n, view),
+        70..=79 => breakout_scene::setup(n, view),
+        80..=89 => jumper_scene::setup(n, view),
+        120..=129 => blocks_scene::setup(n, view),
+        130..=139 => mathpop_scene::setup(n, view),
+        140..=149 => count_scene::setup(n, view),
+        150..=159 => paper_scene::setup(n, view),
+        90..=99 => memory_scene::setup(n, view),
+        170..=189 => hotel_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -450,8 +563,58 @@ mod tests {
     }
 
     #[test]
+    fn merge_scenes_land_in_the_state_they_are_named_for() {
+        merge_scene::check();
+    }
+
+    #[test]
+    fn fruit_scenes_land_in_the_state_they_are_named_for() {
+        fruit_scene::check();
+    }
+
+    #[test]
+    fn jumper_scenes_land_in_the_state_they_are_named_for() {
+        jumper_scene::check();
+    }
+
+    #[test]
+    fn blocks_scenes_land_in_the_state_they_are_named_for() {
+        blocks_scene::check();
+    }
+
+    #[test]
+    fn mathpop_scenes_land_in_the_state_they_are_named_for() {
+        mathpop_scene::check();
+    }
+
+    #[test]
+    fn count_scenes_land_in_the_state_they_are_named_for() {
+        count_scene::check();
+    }
+
+    #[test]
+    fn paper_scenes_land_in_the_state_they_are_named_for() {
+        paper_scene::check();
+    }
+
+    #[test]
     fn snake_scenes_land_in_the_state_they_are_named_for() {
         snake_scene::check();
+    }
+
+    #[test]
+    fn stack_scenes_land_in_the_state_they_are_named_for() {
+        stack_scene::check();
+    }
+
+    #[test]
+    fn breakout_scenes_land_in_the_state_they_are_named_for() {
+        breakout_scene::check();
+    }
+
+    #[test]
+    fn memory_scenes_land_in_the_state_they_are_named_for() {
+        memory_scene::check();
     }
 
     #[test]

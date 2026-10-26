@@ -14,6 +14,19 @@ pub static SHEETS: &[(&str, &[u8])] = &[
     ("flappy", include_bytes!("../../../assets/art/flappy.kga")),
     ("crossy", include_bytes!("../../../assets/art/crossy.kga")),
     ("snake", include_bytes!("../../../assets/art/snake.kga")),
+    ("merge", include_bytes!("../../../assets/art/merge.kga")),
+    ("fruit", include_bytes!("../../../assets/art/fruit.kga")),
+    ("stack", include_bytes!("../../../assets/art/stack.kga")),
+    (
+        "breakout",
+        include_bytes!("../../../assets/art/breakout.kga"),
+    ),
+    ("jumper", include_bytes!("../../../assets/art/jumper.kga")),
+    ("blocks", include_bytes!("../../../assets/art/blocks.kga")),
+    ("mathpop", include_bytes!("../../../assets/art/mathpop.kga")),
+    ("count", include_bytes!("../../../assets/art/count.kga")),
+    ("paper", include_bytes!("../../../assets/art/paper.kga")),
+    ("memory", include_bytes!("../../../assets/art/memory.kga")),
     ("hotel", include_bytes!("../../../assets/art/hotel.kga")),
 ];
 

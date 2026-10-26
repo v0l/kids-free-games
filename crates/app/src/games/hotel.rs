@@ -139,7 +139,10 @@ mod tests {
             assert!(have.iter().any(|h| h == n), "hotel sheet lacks {n}");
         }
         for n in ["p_star", "p_coin", "icon_lock"] {
-            assert!(crate::art::names("ui").iter().any(|h| h == n), "ui sheet lacks {n}");
+            assert!(
+                crate::art::names("ui").iter().any(|h| h == n),
+                "ui sheet lacks {n}"
+            );
         }
     }
 
@@ -173,7 +176,11 @@ mod tests {
             p.h.sim.add_swimmers(3);
             for v in [View::ipad_landscape(), View::ipad_portrait()] {
                 let scene = p.scene(&v);
-                assert!(scene.items.len() > 300, "hotel {n}: {} parts", scene.items.len());
+                assert!(
+                    scene.items.len() > 300,
+                    "hotel {n}: {} parts",
+                    scene.items.len()
+                );
                 drawn(&p, &v);
             }
         }
@@ -207,7 +214,8 @@ mod tests {
     fn juice_bursts_turn_into_sparks_on_screen() {
         let v = View::ipad_landscape();
         let mut p = fresh(1, &[]);
-        p.h.bursts.push((glam::vec3(0.0, 1.0, 1.2), kg_core::geom::GOLD));
+        p.h.bursts
+            .push((glam::vec3(0.0, 1.0, 1.2), kg_core::geom::GOLD));
         p.update(&Input::default(), &v, 1.0 / 60.0);
         assert!(p.h.bursts.is_empty());
         assert!(!p.sparks.list.is_empty());

@@ -1,8 +1,8 @@
 use super::build::{Scene, Xf};
 use super::models::{
-    bed, bin, burger, car, coin_stack, darker, desk, dust, guest_look, lamp, locked_door, person, plant,
-    player_look, rgb, roll, rug, shadow, shelf, sofa, staff_look, swimmer, toilet, towel, tv, umbrella,
-    wake, wardrobe, Pose,
+    bed, bin, burger, car, coin_stack, darker, desk, dust, guest_look, lamp, locked_door, person,
+    plant, player_look, rgb, roll, rug, shadow, shelf, sofa, staff_look, swimmer, toilet, towel,
+    tv, umbrella, wake, wardrobe, Pose,
 };
 use super::SHEET;
 use bevy::math::Vec3;
@@ -609,7 +609,6 @@ impl World<'_> {
     }
 }
 
-
 fn carried(s: &mut Scene, item: Item, at: Vec3, n: u8) {
     for k in 0..n.max(1) {
         let p = at + vec3(0.0, k as f32 * 0.2, 0.0);
@@ -620,4 +619,3 @@ fn carried(s: &mut Scene, item: Item, at: Vec3, n: u8) {
         }
     }
 }
-

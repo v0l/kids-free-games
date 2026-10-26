@@ -310,8 +310,19 @@ pub fn item_icon(item: Item) -> &'static str {
 }
 
 pub const SPRITES: [&str; 13] = [
-    "parquet", "roomfloor", "cash", "heart", "moon", "broom", "paper", "burger", "ring", "bed",
-    "towels", "shoe", "key",
+    "parquet",
+    "roomfloor",
+    "cash",
+    "heart",
+    "moon",
+    "broom",
+    "paper",
+    "burger",
+    "ring",
+    "bed",
+    "towels",
+    "shoe",
+    "key",
 ];
 
 impl Default for Hotel {
@@ -812,7 +823,13 @@ mod tests {
                 assert!(SPRITES.contains(&build_icon(p.build)));
             }
         }
-        for st in [Stage::Queue, Stage::WaitStall, Stage::WaitSnack(0), Stage::WaitTowel(0), Stage::Sleep(0, 1.0)] {
+        for st in [
+            Stage::Queue,
+            Stage::WaitStall,
+            Stage::WaitSnack(0),
+            Stage::WaitTowel(0),
+            Stage::Sleep(0, 1.0),
+        ] {
             assert!(SPRITES.contains(&want_icon(st).unwrap()));
         }
         for i in [Item::Paper, Item::Snack, Item::Towel] {
