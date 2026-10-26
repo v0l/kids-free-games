@@ -9,6 +9,8 @@ use kg_core::engine::{Input, View};
 use kg_core::games::flappy::{self, Pipe, State, PIPE_W};
 use kg_core::profile;
 
+pub const IDLE: u32 = 1000;
+
 pub const SCENES: [(u32, &str); 14] = [
     (0, "menu"),
     (1, "menu scrolled to Learn"),
@@ -213,9 +215,9 @@ impl Shot {
     pub fn frame(&mut self, pen: &mut Pen, view: &View, _dt: f32) {
         if self.size != (view.w, view.h) || self.stage.is_none() {
             self.size = (view.w, view.h);
-            self.stage = Some(setup(self.n % 100, view));
+            self.stage = Some(setup(self.n % IDLE, view));
         }
-        if self.n >= 100 {
+        if self.n >= IDLE {
             if let Some(Stage::Flappy(p)) = &mut self.stage {
                 if p.g.state != State::Dead {
                     p.update(&Input::default(), view, DT);

@@ -124,7 +124,7 @@ OUT=/tmp/p scripts/shots.sh 768 1024         # portrait
 ONLY="10 15" INSET=60 PORT=8800 scripts/shots.sh   # a few scenes with a fake cutout, own port
 ```
 
-A scene number plus 100 keeps the game running with no input until game over. Use your own `PORT` and `OUT` when several sessions run at once. Look at the sheet in both orientations every time.
+A scene number plus 1000 (`IDLE`) keeps the game running with no input until game over. Use your own `PORT` and `OUT` when several sessions run at once. Look at the sheet in both orientations every time.
 
 ## Running it
 
