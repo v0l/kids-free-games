@@ -64,7 +64,7 @@ fn die(p: &mut HelixPlay, view: &View) {
             break;
         }
     }
-    for _ in 0..40 {
+    for _ in 0..100 {
         p.update(&Input::default(), view, DT);
     }
 }

@@ -124,9 +124,7 @@ impl Frame {
         let f = self.view.full();
         let per_px = self.dist * k / self.dist;
         let c = vec2(f.x + f.w / 2.0, f.y + f.h / 2.0);
-        let p = self.eye
-            + self.fwd * self.dist * k
-            + self.right * (px.x - c.x) * per_px
+        let p = self.eye + self.fwd * self.dist * k + self.right * (px.x - c.x) * per_px
             - self.up * (px.y - c.y) * per_px;
         (p, per_px)
     }
@@ -207,11 +205,7 @@ fn floor_items(g: &Helix, items: &mut Vec<Item>) {
             it.blend = f.broken > 0.0;
             it.cast = f.broken == 0.0;
             it.rot = yaw(a0);
-            it.pos = [
-                mid.cos() * fall * 0.6,
-                -fy - fall,
-                mid.sin() * fall * 0.6,
-            ];
+            it.pos = [mid.cos() * fall * 0.6, -fy - fall, mid.sin() * fall * 0.6];
             items.push(it);
         }
         if f.broken == 0.0 {
@@ -339,13 +333,26 @@ fn draw_select(g: &Helix, pen: &mut Pen, view: &View) {
             r.w * pulse,
             r.h * pulse,
         );
-        pen.nine("ui", "panel", rr, 14.0, (rr.w.min(rr.h) / 64.0).clamp(0.6, 2.5), tint);
+        pen.nine(
+            "ui",
+            "panel",
+            rr,
+            14.0,
+            (rr.w.min(rr.h) / 64.0).clamp(0.6, 2.5),
+            tint,
+        );
         let ink = if locked {
             Color::new(0.4, 0.38, 0.5, 0.7)
         } else {
             INK
         };
-        pen.text_center(&n.to_string(), r.center().x, r.y + r.h * 0.38, r.h * 0.4, ink);
+        pen.text_center(
+            &n.to_string(),
+            r.center().x,
+            r.y + r.h * 0.38,
+            r.h * 0.4,
+            ink,
+        );
         if !locked {
             let earned = kg_core::profile::stars(GAME, n);
             for k in 0..3u8 {
@@ -356,7 +363,11 @@ fn draw_select(g: &Helix, pen: &mut Pen, view: &View) {
                 };
                 pen.sprite_at(
                     "ui",
-                    if k < earned { "star_yellow" } else { "star_white" },
+                    if k < earned {
+                        "star_yellow"
+                    } else {
+                        "star_white"
+                    },
                     vec2(
                         r.center().x + (k as f32 - 1.0) * r.w * 0.26,
                         r.y + r.h * 0.74,
@@ -384,7 +395,13 @@ fn draw_win(g: &Helix, pen: &mut Pen, view: &View) {
     pen.ribbon(view, "Hooray!", vec2(c.x, r.y + 8.0 * s), age);
     let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
     let line = format!("Level {} done!", g.level);
-    pen.text_center(&line, c.x, r.y + 100.0 * s, 36.0 * s, with_alpha(BODY, a(0.12)));
+    pen.text_center(
+        &line,
+        c.x,
+        r.y + 100.0 * s,
+        36.0 * s,
+        with_alpha(BODY, a(0.12)),
+    );
     for k in 0..3usize {
         let earned = k < g.stars as usize;
         let pop = if earned {
@@ -407,7 +424,13 @@ fn draw_win(g: &Helix, pen: &mut Pen, view: &View) {
         );
     }
     let score = format!("Score {}   Best {}", g.score, g.best.0);
-    pen.text_center(&score, c.x, r.y + 292.0 * s, 30.0 * s, with_alpha(BODY, a(0.5)));
+    pen.text_center(
+        &score,
+        c.x,
+        r.y + 292.0 * s,
+        30.0 * s,
+        with_alpha(BODY, a(0.5)),
+    );
     let label = if g.level >= MAX_LEVEL {
         "Play again"
     } else {

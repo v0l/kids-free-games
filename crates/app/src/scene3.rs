@@ -145,7 +145,10 @@ pub fn sector_mesh(outer: f32, inner: f32, thick: f32, span: f32, steps: usize) 
             [[k0, 0.8], [k0, 1.0], [k1, 1.0], [k1, 0.8]],
         );
     }
-    for (a, n) in [(0.0, [0.0, 0.0, -1.0]), (span, [-span.sin(), 0.0, span.cos()])] {
+    for (a, n) in [
+        (0.0, [0.0, 0.0, -1.0]),
+        (span, [-span.sin(), 0.0, span.cos()]),
+    ] {
         quad(
             [
                 at(a, inner, 0.0),
@@ -181,24 +184,16 @@ fn mesh_for(shape: Shape3) -> Mesh {
 fn key_of(it: &Item) -> MatKey {
     let q = |v: f32| (v.clamp(0.0, 1.0) * 255.0).round() as u8;
     MatKey {
-        skin: it.skin.map(|s| {
-            (
-                s.sheet,
-                s.name,
-                s.crop.map(|c| (c * 1000.0).round() as i32),
-            )
-        }),
+        skin: it
+            .skin
+            .map(|s| (s.sheet, s.name, s.crop.map(|c| (c * 1000.0).round() as i32))),
         color: it.color.map(q),
         unlit: it.unlit,
         blend: it.blend,
     }
 }
 
-fn material_for(
-    it: &Item,
-    gpu: &mut Gpu,
-    images: &mut Assets<Image>,
-) -> StandardMaterial {
+fn material_for(it: &Item, gpu: &mut Gpu, images: &mut Assets<Image>) -> StandardMaterial {
     let mut m = StandardMaterial {
         base_color: Color::srgba(it.color[0], it.color[1], it.color[2], it.color[3]),
         perceptual_roughness: 0.55,
@@ -221,16 +216,33 @@ fn material_for(
             let [cx, cy, cw, ch] = s.crop;
             let (u0, v0) = ((f.src.x + f.src.w * cx) / pw, (f.src.y + f.src.h * cy) / ph);
             let (su, sv) = (f.src.w * cw / pw, f.src.h * ch / ph);
-            m.uv_transform = Affine2::from_scale_angle_translation(
-                BVec2::new(su, sv),
-                0.0,
-                BVec2::new(u0, v0),
-            );
+            m.uv_transform =
+                Affine2::from_scale_angle_translation(BVec2::new(su, sv), 0.0, BVec2::new(u0, v0));
         }
     }
     let _ = Face::Back;
     m
 }
+
+type CamParts = (
+    &'static mut Camera,
+    &'static mut Transform,
+    &'static mut Projection,
+);
+type CamOnly = (With<Cam3>, Without<Sun3>, Without<Piece3>);
+type SunParts = (
+    &'static mut DirectionalLight,
+    &'static mut Transform,
+    &'static mut Visibility,
+);
+type SunOnly = (With<Sun3>, Without<Cam3>, Without<Piece3>);
+type PieceParts = (
+    &'static mut Visibility,
+    &'static mut Transform,
+    &'static mut Mesh3d,
+    &'static mut MeshMaterial3d<StandardMaterial>,
+);
+type PieceOnly = (With<Piece3>, Without<Cam3>, Without<Sun3>);
 
 #[allow(clippy::too_many_arguments)]
 pub fn sync3(
@@ -241,17 +253,9 @@ pub fn sync3(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
-    mut cam: Query<(&mut Camera, &mut Transform, &mut Projection), (With<Cam3>, Without<Sun3>, Without<Piece3>)>,
-    mut sun: Query<(&mut DirectionalLight, &mut Transform, &mut Visibility), (With<Sun3>, Without<Cam3>, Without<Piece3>)>,
-    mut pieces: Query<
-        (
-            &mut Visibility,
-            &mut Transform,
-            &mut Mesh3d,
-            &mut MeshMaterial3d<StandardMaterial>,
-        ),
-        (With<Piece3>, Without<Cam3>, Without<Sun3>),
-    >,
+    mut cam: Query<CamParts, CamOnly>,
+    mut sun: Query<SunParts, SunOnly>,
+    mut pieces: Query<PieceParts, PieceOnly>,
     mut paint: Query<&mut Camera, (With<PaintCamera>, Without<Cam3>)>,
 ) {
     let Some(scene) = pen.scene.as_ref() else {
@@ -294,7 +298,8 @@ pub fn sync3(
     };
     if let Ok((mut c, mut t, mut p)) = cam.single_mut() {
         c.is_active = true;
-        c.clear_color = ClearColorConfig::Custom(Color::srgb(scene.sky[0], scene.sky[1], scene.sky[2]));
+        c.clear_color =
+            ClearColorConfig::Custom(Color::srgb(scene.sky[0], scene.sky[1], scene.sky[2]));
         *t = tf;
         *p = projection;
     } else {
@@ -302,7 +307,11 @@ pub fn sync3(
             Camera3d::default(),
             Camera {
                 order: 0,
-                clear_color: ClearColorConfig::Custom(Color::srgb(scene.sky[0], scene.sky[1], scene.sky[2])),
+                clear_color: ClearColorConfig::Custom(Color::srgb(
+                    scene.sky[0],
+                    scene.sky[1],
+                    scene.sky[2],
+                )),
                 ..default()
             },
             projection,
@@ -350,11 +359,14 @@ pub fn sync3(
             .or_insert_with(|| meshes.add(mesh_for(it.shape)))
             .clone();
         let key = key_of(it);
-        if !g3.mats.contains_key(&key) {
-            let m = materials.add(material_for(it, &mut gpu, &mut images));
-            g3.mats.insert(key, m);
-        }
-        let mat = g3.mats[&key].clone();
+        let mat = match g3.mats.get(&key) {
+            Some(m) => m.clone(),
+            None => {
+                let m = materials.add(material_for(it, &mut gpu, &mut images));
+                g3.mats.insert(key, m.clone());
+                m
+            }
+        };
         let t = Transform {
             translation: Vec3::from(it.pos),
             rotation: Quat::from_array(it.rot),

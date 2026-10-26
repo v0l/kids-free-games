@@ -19,7 +19,7 @@ pub const GRID_COLS: usize = 6;
 pub const RING_OUTER: f32 = 150.0;
 pub const RING_INNER: f32 = 60.0;
 pub const RING_THICK: f32 = 18.0;
-pub const FOV: f32 = 0.5236;
+pub const FOV: f32 = std::f32::consts::FRAC_PI_6;
 pub const PITCH: f32 = 0.4;
 const DRAG_DEADZONE_MM: f32 = 1.0;
 const DRAG_TURN: f32 = 0.012;
@@ -120,7 +120,10 @@ impl Rig {
         let d = p - self.eye;
         let depth = d.dot(fwd);
         let k = 1.0 / (FOV / 2.0).tan();
-        let n = vec2(d.dot(right) * k / (depth * f.w / f.h), d.dot(up) * k / depth);
+        let n = vec2(
+            d.dot(right) * k / (depth * f.w / f.h),
+            d.dot(up) * k / depth,
+        );
         vec2(f.x + (n.x * 0.5 + 0.5) * f.w, f.y + (0.5 - n.y * 0.5) * f.h)
     }
 }
@@ -178,7 +181,8 @@ fn make_floor(index: usize, level: u32, fails: u32, prev_gap: Option<usize>) -> 
     let gap_at = match prev_gap {
         Some(p) => {
             let shift = max_shift(level);
-            (p as i32 + quad_rand::gen_range(-shift, shift + 1)).rem_euclid(SEGMENTS as i32) as usize
+            (p as i32 + quad_rand::gen_range(-shift, shift + 1)).rem_euclid(SEGMENTS as i32)
+                as usize
         }
         None => quad_rand::gen_range(0, SEGMENTS),
     };
@@ -189,7 +193,8 @@ fn make_floor(index: usize, level: u32, fails: u32, prev_gap: Option<usize>) -> 
     }
     if index >= 2 {
         let rate = danger_rate(level, fails);
-        let dangers = rate.floor() as usize + usize::from(quad_rand::gen_range(0.0, 1.0) < rate.fract());
+        let dangers =
+            rate.floor() as usize + usize::from(quad_rand::gen_range(0.0, 1.0) < rate.fract());
         for _ in 0..dangers.min(5) {
             let k = quad_rand::gen_range(0, SEGMENTS);
             if segs[k] == Seg::Solid {
@@ -612,7 +617,6 @@ pub fn levels_button(view: &View) -> Rect {
     Rect::new(view.w / 2.0 - 95.0, view.h - 70.0, 190.0, 54.0)
 }
 
-
 pub fn floor_tile(hue: f32) -> &'static str {
     ["tile_green", "tile_blue", "tile_pink", "tile_grey"][(hue.rem_euclid(1.0) * 4.0) as usize % 4]
 }
@@ -632,8 +636,17 @@ mod tests {
 
     #[test]
     fn helix_sprites_all_exist() {
-        let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/helix.kga")).unwrap();
-        let have: Vec<String> = crate::art::parse(&b).unwrap().frames.keys().cloned().collect();
+        let b = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/art/helix.kga"
+        ))
+        .unwrap();
+        let have: Vec<String> = crate::art::parse(&b)
+            .unwrap()
+            .frames
+            .keys()
+            .cloned()
+            .collect();
         for n in [
             "tile_green",
             "tile_pink",
