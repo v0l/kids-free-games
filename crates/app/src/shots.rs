@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod jumper_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (80, "jumper ready"),
+    (81, "jumper first jumps with the hint"),
+    (82, "jumper mid climb"),
+    (83, "jumper moving platforms cheer"),
+    (84, "jumper crumbly platforms high up"),
+    (85, "jumper spring boing"),
+    (86, "jumper game over with the board"),
+    (87, "jumper new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +288,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        80..=89 => jumper_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -431,6 +441,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn jumper_scenes_land_in_the_state_they_are_named_for() {
+        jumper_scene::check();
     }
 
     #[test]

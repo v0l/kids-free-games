@@ -5,6 +5,7 @@ use kg_core::games::{Info, CATALOG};
 pub mod crossy;
 pub mod flappy;
 pub mod snake;
+pub mod jumper;
 
 pub trait IntoAny {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
@@ -44,6 +45,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
         crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
         snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
+        jumper::KEY => Some(|| Box::new(jumper::JumperPlay::new())),
         _ => None,
     }
 }
