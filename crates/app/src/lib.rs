@@ -246,6 +246,7 @@ pub fn run() {
     if let Some(d) = platform::save_dir() {
         kg_core::save::set_dir(d);
     }
+    art::predecode();
     text::prewarm();
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),

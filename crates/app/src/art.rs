@@ -107,10 +107,45 @@ pub fn mip_chain(w: u32, h: u32, px: Vec<u8>) -> Vec<Vec<u8>> {
     out
 }
 
-pub fn decode(sheet: &'static str, page: usize) -> Option<(u32, u32, Vec<Vec<u8>>)> {
-    let bytes = with(sheet, |s| page_bytes(s.bytes, &s.index, page)).flatten()?;
-    let (w, h, px) = decode_page(bytes)?;
+pub type Decoded = (u32, u32, Vec<Vec<u8>>);
+
+type Ready = std::sync::Mutex<HashMap<(&'static str, usize), Decoded>>;
+
+static READY: std::sync::OnceLock<Ready> = std::sync::OnceLock::new();
+
+fn ready() -> &'static Ready {
+    READY.get_or_init(Default::default)
+}
+
+fn decode_now(bytes: &'static [u8], sheet: &'static str, page: usize) -> Option<Decoded> {
+    let index = parse(bytes)?;
+    let (w, h, px) = decode_page(page_bytes(bytes, &index, page)?)?;
+    let _ = sheet;
     Some((w, h, mip_chain(w, h, px)))
+}
+
+pub fn predecode() {
+    #[cfg(not(target_arch = "wasm32"))]
+    for (sheet, bytes) in SHEETS {
+        let pages = parse(bytes).map_or(0, |i| i.pages.len());
+        for page in 0..pages {
+            std::thread::spawn(move || {
+                if let Some(d) = decode_now(bytes, sheet, page) {
+                    if let Ok(mut r) = ready().lock() {
+                        r.insert((sheet, page), d);
+                    }
+                }
+            });
+        }
+    }
+}
+
+pub fn decode(sheet: &'static str, page: usize) -> Option<Decoded> {
+    if let Some(d) = ready().lock().ok().and_then(|mut r| r.remove(&(sheet, page))) {
+        return Some(d);
+    }
+    let bytes = SHEETS.iter().find(|(n, _)| *n == sheet)?.1;
+    decode_now(bytes, sheet, page)
 }
 
 #[cfg(test)]
@@ -126,6 +161,20 @@ mod tests {
             assert_eq!((w as u32, h as u32), (dw, dh), "{name}");
             assert_eq!(mips[0].len(), (dw * dh * 4) as usize);
         }
+    }
+
+    #[test]
+    fn pages_decoded_ahead_match_pages_decoded_on_demand() {
+        predecode();
+        let mut waited = 0;
+        while ready().lock().unwrap().get(&("ui", 0)).is_none() && waited < 200 {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            waited += 1;
+        }
+        let ahead = decode("ui", 0).unwrap();
+        let now = decode("ui", 0).unwrap();
+        assert_eq!((ahead.0, ahead.1), (now.0, now.1));
+        assert_eq!(ahead.2[0], now.2[0]);
     }
 
     #[test]

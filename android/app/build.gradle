@@ -1,0 +1,42 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace 'io.v0l.kids_games'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "io.v0l.kids_games"
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName "0.1.0"
+        ndk {
+            abiFilters(project.findProperty('abi') ?: 'arm64-v8a')
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    buildFeatures {
+        prefab true
+    }
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+        }
+    }
+}
+
+dependencies {
+    implementation libs.appcompat
+    implementation libs.games.activity
+}
