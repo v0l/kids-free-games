@@ -141,6 +141,56 @@ mod tests {
         }
     }
 
+    const LAYER_GAP: f32 = crate::games::hotel::build::LAYER;
+
+    fn flat_layers(scene: &crate::world3d::Scene3d) -> Vec<(f32, f32, f32, f32, f32, String)> {
+        use crate::world3d::Shape;
+        scene
+            .items
+            .iter()
+            .filter(|i| matches!(i.shape, Shape::Plane | Shape::Disc) && i.rot.is_near_identity())
+            .map(|i| {
+                (
+                    i.at.x - i.scale.x / 2.0,
+                    i.at.x + i.scale.x / 2.0,
+                    i.at.z - i.scale.z / 2.0,
+                    i.at.z + i.scale.z / 2.0,
+                    i.at.y,
+                    format!("{:?} {:?}", i.shape, i.surface),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn no_two_overlapping_floors_share_a_height() {
+        let all: Vec<bool> = vec![true; 64];
+        for number in 1..=4 {
+            for v in [View::ipad_landscape(), View::ipad_portrait()] {
+                let p = fresh(number, &all);
+                let layers = flat_layers(&p.scene(&v));
+                for (i, a) in layers.iter().enumerate() {
+                    for b in &layers[i + 1..] {
+                        let overlap =
+                            (a.1.min(b.1) - a.0.max(b.0)).min(a.3.min(b.3) - a.2.max(b.2));
+                        let both_ghosts = a.5.contains("Ghost") && b.5.contains("Ghost");
+                        let need = if both_ghosts { 1e-3 } else { LAYER_GAP * 0.99 };
+                        if overlap > 0.05 {
+                            assert!(
+                                (a.4 - b.4).abs() >= need,
+                                "hotel {number}: {} at y {} and {} at y {} overlap",
+                                a.5,
+                                a.4,
+                                b.5,
+                                b.4
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     #[test]
     fn the_hotel_is_built_in_3d_and_the_hud_draws_on_top() {
         let v = View::ipad_landscape();

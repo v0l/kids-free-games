@@ -1,4 +1,4 @@
-use super::build::{Scene, Xf};
+use super::build::{Scene, Xf, LAYER};
 use bevy::math::Vec3;
 use glam::{vec2, vec3, Vec2};
 use kg_core::games::hotel::layout::Theme;
@@ -246,10 +246,11 @@ fn lying(s: &mut Scene, look: &Look) {
 }
 
 pub fn shadow(s: &mut Scene, at: Vec2, r: f32) {
+    let tie = ((at.x * 7.3 + at.y * 3.1).rem_euclid(1.0)) * LAYER * 0.9;
     s.disc(
         at,
         vec2(r, r * 0.9),
-        0.012,
+        LAYER * 5.0 + tie,
         Color::new(0.1, 0.05, 0.15, 0.22),
     );
 }
@@ -543,15 +544,15 @@ pub fn wake(s: &mut Scene, at: Vec2, water: f32, face: f32, t: f32) {
         s.disc(
             p,
             vec2(r, r * 0.8),
-            water + 0.004,
+            water + LAYER,
             Color::new(1.0, 1.0, 1.0, 0.55 - k as f32 * 0.12),
         );
     }
 }
 
 pub fn rug(s: &mut Scene, at: Vec2, c: Color) {
-    s.disc(at, vec2(0.85, 0.6), 0.008, c);
-    s.disc(at, vec2(0.6, 0.4), 0.01, darker(c, 1.15));
+    s.disc(at, vec2(0.85, 0.6), LAYER * 3.0, c);
+    s.disc(at, vec2(0.6, 0.4), LAYER * 4.0, darker(c, 1.15));
 }
 
 pub fn bin(s: &mut Scene, at: Vec2, full: bool) {

@@ -3,6 +3,8 @@ use bevy::math::{Quat, Vec3};
 use glam::{vec3, Vec2};
 use kg_core::geom::Color;
 
+pub const LAYER: f32 = 0.02;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Xf {
     pub origin: Vec3,
@@ -190,7 +192,19 @@ impl Scene {
         name: &'static str,
         tint: Color,
     ) {
-        let c = vec3(area.x + area.w / 2.0, 0.0, area.y + area.h / 2.0);
+        self.floor_at(area, 0.0, tile, sheet, name, tint);
+    }
+
+    pub fn floor_at(
+        &mut self,
+        area: kg_core::geom::Rect,
+        y: f32,
+        tile: f32,
+        sheet: &'static str,
+        name: &'static str,
+        tint: Color,
+    ) {
+        let c = vec3(area.x + area.w / 2.0, y, area.y + area.h / 2.0);
         let at = self.xf.point(c);
         self.out.push(
             Shape::Plane,

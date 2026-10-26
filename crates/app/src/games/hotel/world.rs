@@ -1,4 +1,4 @@
-use super::build::{Scene, Xf};
+use super::build::{Scene, Xf, LAYER};
 use super::models::{
     bed, bin, burger, car, coin_stack, darker, desk, dust, guest_look, lamp, locked_door, person,
     plant, player_look, rgb, roll, rug, shadow, shelf, sofa, staff_look, swimmer, toilet, towel,
@@ -27,6 +27,8 @@ pub fn stage_sits(st: Stage) -> bool {
     matches!(st, Stage::WaitSnack(_) | Stage::Eat(..) | Stage::Toilet(..))
 }
 
+const ROOM_FLOOR_Y: f32 = LAYER * 2.0;
+
 impl World<'_> {
     fn zone_open(&self, b: Build) -> bool {
         self.h.sim.has(b)
@@ -38,10 +40,24 @@ impl World<'_> {
         let hall = Rect::new(-HALL_W, lay.end_z(), HALL_W * 2.0, LOBBY_S - lay.end_z());
         s.floor(hall, 2.5, SHEET, "parquet", th.floor_tint);
         if lay.has_toilets && self.zone_open(Build::Toilets) {
-            s.floor(lay.toilet_room, 2.5, SHEET, "parquet", rgb(210, 235, 245));
+            s.floor_at(
+                lay.toilet_room,
+                ROOM_FLOOR_Y,
+                2.5,
+                SHEET,
+                "parquet",
+                rgb(210, 235, 245),
+            );
         }
         if lay.has_cafe && self.zone_open(Build::Cafe) {
-            s.floor(lay.cafe, 2.5, SHEET, "parquet", rgb(255, 225, 190));
+            s.floor_at(
+                lay.cafe,
+                ROOM_FLOOR_Y,
+                2.5,
+                SHEET,
+                "parquet",
+                rgb(255, 225, 190),
+            );
         }
         for (k, r) in lay.rooms.iter().enumerate() {
             let tint = if self.h.sim.room_open(k) {
@@ -49,7 +65,7 @@ impl World<'_> {
             } else {
                 Color::new(0.5, 0.5, 0.55, 1.0)
             };
-            s.floor(*r, 2.0, SHEET, "roomfloor", tint);
+            s.floor_at(*r, ROOM_FLOOR_Y, 2.0, SHEET, "roomfloor", tint);
         }
     }
 
@@ -66,7 +82,7 @@ impl World<'_> {
         s.flat_rect(
             vec2(0.0, (LOBBY_S + lay.end_z()) / 2.0),
             vec2(CORR * 2.0 - 0.3, LOBBY_S - lay.end_z()),
-            0.004,
+            LAYER,
             th.carpet,
         );
         let locked_zone = Color::new(0.3, 0.3, 0.35, 0.35);
@@ -75,7 +91,7 @@ impl World<'_> {
             s.flat_rect(
                 vec2(r.x + r.w / 2.0, r.y + r.h / 2.0),
                 vec2(r.w, r.h),
-                0.003,
+                LAYER * 3.0,
                 locked_zone,
             );
         }
@@ -84,7 +100,7 @@ impl World<'_> {
             s.flat_rect(
                 vec2(r.x + r.w / 2.0, r.y + r.h / 2.0),
                 vec2(r.w, r.h),
-                0.003,
+                LAYER * 3.0,
                 locked_zone,
             );
         }
@@ -93,7 +109,7 @@ impl World<'_> {
             s.flat_rect(
                 vec2(g.x + g.w / 2.0, g.y + g.h / 2.0),
                 vec2(g.w, g.h),
-                0.002,
+                LAYER,
                 if self.zone_open(Build::Pool) {
                     rgb(235, 225, 200)
                 } else {
@@ -333,15 +349,20 @@ impl World<'_> {
         let th = lay.theme;
         let p = lay.pool;
         let c = vec2(p.x + p.w / 2.0, p.y + p.h / 2.0);
-        s.flat_rect(c, vec2(p.w + 0.9, p.h + 0.9), 0.004, rgb(245, 245, 252));
-        s.flat_rect(c, vec2(p.w, p.h), 0.008, rgb(40, 160, 230));
+        s.flat_rect(
+            c,
+            vec2(p.w + 0.9, p.h + 0.9),
+            LAYER * 2.0,
+            rgb(245, 245, 252),
+        );
+        s.flat_rect(c, vec2(p.w, p.h), LAYER * 3.0, rgb(40, 160, 230));
         for k in 0..6 {
             let x = p.x + 0.6 + k as f32 * (p.w - 1.2) / 5.0;
             let z = p.y + p.h / 2.0 + (self.h.t * 1.3 + k as f32).sin() * (p.h * 0.3);
             s.disc(
                 vec2(x, z),
                 vec2(0.5, 0.12),
-                0.01,
+                LAYER * 4.0,
                 Color::new(0.6, 0.88, 1.0, 0.6),
             );
         }
@@ -401,7 +422,7 @@ impl World<'_> {
                 sp.at,
                 0.3 + k * 0.9,
                 0.08,
-                0.012,
+                LAYER * 5.0,
                 1.0,
                 Color::new(1.0, 1.0, 1.0, 0.7 * (1.0 - k)),
             );
@@ -473,20 +494,25 @@ impl World<'_> {
             } else {
                 Color::new(1.0, 1.0, 1.0, 0.55)
             };
-            s.flat_rect(p.pos, vec2(1.5, 1.5) * pulse, 0.02, PLUM.with_alpha(0.4));
-            s.ring_flat(p.pos, 0.75 * pulse, 0.1, 0.03, 1.0, base);
+            s.flat_rect(
+                p.pos,
+                vec2(1.5, 1.5) * pulse,
+                LAYER * 4.0,
+                PLUM.with_alpha(0.4),
+            );
+            s.ring_flat(p.pos, 0.75 * pulse, 0.1, LAYER * 5.0, 1.0, base);
             if k > 0.0 {
-                s.ring_flat(p.pos, 0.75 * pulse, 0.1, 0.035, k, rgb(120, 230, 90));
+                s.ring_flat(p.pos, 0.75 * pulse, 0.1, LAYER * 6.0, k, rgb(120, 230, 90));
             }
             if sim.pad_under_player() == Some(i) && sim.pad_arm < PAD_ARM && afford {
-                s.ring_flat(p.pos, 0.6, 0.12, 0.04, sim.pad_arm / PAD_ARM, GOLD);
+                s.ring_flat(p.pos, 0.6, 0.12, LAYER * 7.0, sim.pad_arm / PAD_ARM, GOLD);
             }
         }
     }
 
     fn draw_people(&self, s: &mut Scene) {
         let sim = &self.h.sim;
-        let water = 0.02;
+        let water = LAYER * 3.0;
         for g in &sim.guests {
             let look = guest_look(g.look, g.vip);
             if let Stage::Swim(_, t) = g.stage {
@@ -598,7 +624,7 @@ impl World<'_> {
             s.disc(
                 back,
                 vec2(0.18, 0.14),
-                0.02,
+                LAYER * 6.0,
                 SHOE_COLORS[sim.shoes() - 1].with_alpha(0.45),
             );
         }
