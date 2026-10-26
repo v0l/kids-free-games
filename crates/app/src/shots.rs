@@ -14,6 +14,7 @@ use kg_core::profile;
 pub const IDLE: u32 = 1000;
 
 mod snake_scene;
+mod spell_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
@@ -48,6 +49,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (160, "spell first word with the hint line"),
+    (161, "spell a wrong tap"),
+    (162, "spell stuck, next letter glowing"),
+    (163, "spell word won"),
+    (164, "spell level picker"),
+    (165, "spell level done"),
+    (166, "spell all levels done"),
+    (167, "spell long word on level nine"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +288,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        160..=169 => spell_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -436,6 +446,11 @@ mod tests {
     #[test]
     fn snake_scenes_land_in_the_state_they_are_named_for() {
         snake_scene::check();
+    }
+
+    #[test]
+    fn spell_scenes_land_in_the_state_they_are_named_for() {
+        spell_scene::check();
     }
 
     #[test]
