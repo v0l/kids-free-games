@@ -27,6 +27,7 @@ bevy = { version = "0.20", default-features = false, features = [
   "bevy_render",
   "bevy_core_pipeline",
   "bevy_sprite_render",
+  "bevy_pbr",
   "bevy_state",
   "mouse",
   "keyboard",

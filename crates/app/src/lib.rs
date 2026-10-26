@@ -12,6 +12,7 @@ pub mod shots;
 pub mod text;
 pub mod ui;
 pub mod web;
+pub mod world3d;
 
 use bevy::input::keyboard::{Key as BKey, KeyboardInput};
 use bevy::input::touch::TouchPhase;
@@ -239,6 +240,7 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     )
     .insert_resource(ClearColor(Color::srgb(1.0, 0.7, 0.47)))
     .add_plugins(paint::PaintPlugin)
+    .add_plugins(world3d::World3dPlugin)
     .insert_non_send(Frame {
         scene,
         demo: web::query("demo").map(|_| 0),

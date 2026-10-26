@@ -14,6 +14,7 @@ use kg_core::profile;
 pub const IDLE: u32 = 1000;
 
 mod snake_scene;
+mod hotel_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
@@ -48,6 +49,20 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (120, "hotel first steps with the hint"),
+    (121, "hotel first guests"),
+    (122, "hotel a few minutes in"),
+    (123, "hotel city tower lobby"),
+    (124, "hotel royal palace busy"),
+    (125, "hotel sunny inn built out"),
+    (126, "hotel snowy lodge built out"),
+    (127, "hotel city tower built out"),
+    (128, "hotel royal palace built out"),
+    (129, "hotel pool with swimmers"),
+    (130, "hotel room upgrade spot"),
+    (131, "hotel level up"),
+    (132, "hotel moving to the next hotel"),
+    (133, "hotel boss finale"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +294,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        120..=139 => hotel_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -436,6 +452,11 @@ mod tests {
     #[test]
     fn snake_scenes_land_in_the_state_they_are_named_for() {
         snake_scene::check();
+    }
+
+    #[test]
+    fn hotel_scenes_land_in_the_state_they_are_named_for() {
+        hotel_scene::check();
     }
 
     #[test]

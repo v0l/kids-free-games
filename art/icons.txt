@@ -1,6 +1,6 @@
 icon_flappy | gen:iconr_flappy.png | max=256
 icon_paper | gen:iconr_paper.png | max=256
-icon_hotel | gen:iconr_hotel.png | max=256
+icon_hotel | gen:iconr_hotel3d.png | max=256
 icon_snake | gen:iconr_snake.png | max=256
 icon_merge | gen:iconr_merge.png | max=256
 icon_fruit | gen:iconr_fruit.png | max=256

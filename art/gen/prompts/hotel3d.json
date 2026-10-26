@@ -1,0 +1,50 @@
+[
+ {
+  "name": "hotel3d_paper",
+  "w": 1024,
+  "h": 1024,
+  "seed": 900,
+  "cut": true,
+  "prompt": "A single fat roll of white toilet paper standing upright with a little sheet unrolling, soft and fluffy. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel3d_burger",
+  "w": 1024,
+  "h": 1024,
+  "seed": 901,
+  "cut": true,
+  "prompt": "A big tasty cartoon burger with sesame bun, lettuce, cheese and tomato. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel3d_ring",
+  "w": 1024,
+  "h": 1024,
+  "seed": 902,
+  "cut": true,
+  "prompt": "A glossy inflatable swim ring with red and white stripes, seen from a slight angle. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel3d_moon",
+  "w": 1024,
+  "h": 1024,
+  "seed": 903,
+  "cut": true,
+  "prompt": "A cute sleepy yellow crescent moon with closed eyes and a tiny nightcap, three small stars beside it. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "hotel3d_bed",
+  "w": 1024,
+  "h": 1024,
+  "seed": 904,
+  "cut": true,
+  "prompt": "A cute chunky hotel bed with a fluffy white duvet, two pillows and a red wooden headboard, three quarter view from above. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "iconr_hotel3d",
+  "w": 1024,
+  "h": 1024,
+  "seed": 950,
+  "cut": false,
+  "prompt": "Square mobile game app icon: a cute chubby bellhop boy in a red uniform and cap carrying a stack of gold coins in front of a tiny colourful 3D isometric hotel lobby with a reception desk, a bed and a swimming pool, warm sunny colours, rounded chunky shapes, fills the whole square edge to edge. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, sharp focus"
+ }
+]
