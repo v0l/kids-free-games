@@ -364,6 +364,7 @@ mod tests {
         kg_core::profile::set(GAME, "cleared", 1);
         p.update(&tap(), &v, 1.0 / 60.0);
         p.g.cells = [[Some(2); W]; H];
+        p.g.piece = Piece { kind: 3, rot: 0, x: 3, y: -1 };
         for _ in 0..400 {
             p.update(&Input::default(), &v, 1.0 / 60.0);
         }
