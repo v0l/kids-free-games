@@ -1,3 +1,4 @@
+pub mod crossy;
 pub mod flappy;
 
 use crate::geom::Color;

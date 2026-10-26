@@ -2,6 +2,7 @@ use crate::paint::Pen;
 use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
+pub mod crossy;
 pub mod flappy;
 
 pub trait Play {
@@ -27,6 +28,7 @@ impl Entry {
 fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
     match key {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
+        crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
         _ => None,
     }
 }
