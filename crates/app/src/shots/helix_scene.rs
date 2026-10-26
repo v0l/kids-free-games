@@ -57,6 +57,7 @@ fn die(p: &mut HelixPlay, view: &View) {
     let i = p.g.passed;
     let k = segment_at(ball_angle(), p.g.angle);
     p.g.floors[i].segs[k] = Seg::Danger;
+    p.g.streak = 0;
     for _ in 0..180 {
         p.update(&Input::default(), view, DT);
         if p.g.state == State::Dead {
@@ -172,7 +173,8 @@ pub fn check() {
         assert!(red.g.floors.iter().any(|f| f.segs.contains(&Seg::Danger)));
         assert!(get(115).g.streak >= SMASH_FLOORS);
         let dead = get(116);
-        assert!(dead.over() && dead.g.rank.is_some());
+        assert!(dead.over(), "{:?} {}", dead.g.state, dead.g.passed);
+        assert!(dead.g.rank.is_some());
         assert_eq!(get(117).g.state, State::Won);
         assert_eq!(get(117).g.stars, 3);
         assert!(get(118).g.stars < 3);

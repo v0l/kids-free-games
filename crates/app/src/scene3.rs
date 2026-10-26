@@ -71,7 +71,7 @@ pub struct Scene3 {
     pub items: Vec<Item>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 struct MatKey {
     skin: Option<(&'static str, &'static str, [i32; 4])>,
     color: [u8; 4],
