@@ -487,7 +487,7 @@ fn pose(
                 }
                 t.set_if_neq(flying(k, fl.broken));
                 if part.paint.color.a > 0.999 {
-                    commands.entity(e).insert(NotShadowCaster);
+                    commands.entity(e).try_insert(NotShadowCaster);
                 }
                 let paint = tile_paint(fl.segs[k], fl.hue, fade(fl.broken).min(0.98));
                 kit.repaint(&mut part, &mut mat, paint);
@@ -495,7 +495,7 @@ fn pose(
             Role::Splat => {
                 let gone = floor_of(parent).is_some_and(|fl| fl.broken > 0.0);
                 if gone {
-                    commands.entity(e).despawn();
+                    commands.entity(e).try_despawn();
                 }
             }
             Role::Pole => {}
@@ -660,6 +660,17 @@ mod tests {
         let mut app = open(p);
         let floors = helix(&mut app).g.floors.len();
         assert_eq!(nodes(&mut app, |n| matches!(n, Node::Ring(_))), floors - 1);
+    }
+
+    #[test]
+    fn a_floor_that_fades_out_in_one_frame_is_despawned_cleanly() {
+        let mut app = open(fresh());
+        let rings = nodes(&mut app, |n| matches!(n, Node::Ring(_)));
+        helix(&mut app).g.splats.push((0, 3.0, 0.0));
+        testing::step(&mut app, 1);
+        helix(&mut app).g.floors[0].broken = 0.9;
+        testing::step(&mut app, 2);
+        assert_eq!(nodes(&mut app, |n| matches!(n, Node::Ring(_))), rings - 1);
     }
 
     #[test]
