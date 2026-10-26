@@ -15,6 +15,7 @@ pub const IDLE: u32 = 1000;
 
 mod breakout_scene;
 mod fruit_scene;
+mod jumper_scene;
 mod merge_scene;
 mod snake_scene;
 mod stack_scene;
@@ -89,6 +90,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (77, "breakout level twelve mid play"),
     (78, "breakout cleared on the last level"),
     (79, "breakout serve with the levels button"),
+    (80, "jumper ready"),
+    (81, "jumper first jumps with the hint"),
+    (82, "jumper mid climb"),
+    (83, "jumper moving platforms cheer"),
+    (84, "jumper crumbly platforms high up"),
+    (85, "jumper spring boing"),
+    (86, "jumper game over with the board"),
+    (87, "jumper new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -324,6 +333,7 @@ fn setup(n: u32, view: &View) -> Stage {
         50..=59 => fruit_scene::setup(n, view),
         60..=69 => stack_scene::setup(n, view),
         70..=79 => breakout_scene::setup(n, view),
+        80..=89 => jumper_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -486,6 +496,11 @@ mod tests {
     #[test]
     fn fruit_scenes_land_in_the_state_they_are_named_for() {
         fruit_scene::check();
+    }
+
+    #[test]
+    fn jumper_scenes_land_in_the_state_they_are_named_for() {
+        jumper_scene::check();
     }
 
     #[test]

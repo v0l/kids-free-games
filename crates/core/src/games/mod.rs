@@ -2,6 +2,7 @@ pub mod breakout;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
+pub mod jumper;
 pub mod merge;
 pub mod snake;
 pub mod stack;
