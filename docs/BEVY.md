@@ -83,7 +83,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
 
 A tile with no maker shows greyed and says "Coming soon". Once it has one it opens like Flappy.
 
-## 3D games (Hotel Hop first)
+## 3D games (Happy Hotel first)
 
 Real 3D goes beside the 2D layer, not through `Pen`. The paint camera is a `Camera2d` with `order: 10` that clears the screen. For a 3D game:
 

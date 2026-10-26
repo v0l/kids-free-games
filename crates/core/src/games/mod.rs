@@ -72,7 +72,7 @@ pub const CATALOG: [Info; 16] = [
     ),
     info(
         "hotel",
-        "Hotel Hop",
+        "Happy Hotel",
         Kind::Arcade,
         "My Perfect Hotel",
         (180, 70, 80),

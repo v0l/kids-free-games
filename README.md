@@ -10,7 +10,7 @@ See [GAMES.md](GAMES.md) for the list of popular games and which ones are done.
 
 ## Games
 
-Flappy Bird, Paper Land (Paper.io), Hotel Hop (hotel management), Snake, 2048, Fruit Slice, Stack Tower, Brick Breaker, Sky Jumper (Doodle Jump), Memory Match, Road Hopper (Crossy Road), Helix Drop (Helix Jump), Block Drop (Tetris), Math Pop, Count It and Spell It (learning games).
+Flappy Bird, Paper Land (Paper.io), Happy Hotel (hotel management), Snake, 2048, Fruit Slice, Stack Tower, Brick Breaker, Sky Jumper (Doodle Jump), Memory Match, Road Hopper (Crossy Road), Helix Drop (Helix Jump), Block Drop (Tetris), Math Pop, Count It and Spell It (learning games).
 
 All of them work with touch (tap and swipe), mouse and keyboard (arrows or WASD, space), in portrait and landscape. The house button top left goes back to the menu.
 
