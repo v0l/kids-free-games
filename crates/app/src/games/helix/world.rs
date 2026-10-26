@@ -1,6 +1,6 @@
 use super::{HelixPlay, SHEET};
-use crate::game3d::Rig;
 use crate::game3d::*;
+use crate::game3d::{Lens, Rig};
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::light::NotShadowCaster;
 use bevy::prelude::*;
@@ -30,7 +30,7 @@ impl Plugin for HelixWorld {
             Update,
             (
                 spawn.run_if(opened(World3d::Helix)),
-                (build, pose).chain().run_if(is_open(World3d::Helix)),
+                sync.run_if(is_open(World3d::Helix)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -169,25 +169,50 @@ fn tile_paint(seg: Seg, hue: f32, alpha: f32) -> Paint {
     )
 }
 
-fn build(
+type Nodes<'a> = (Entity, &'a Node, &'a mut Transform, &'a mut Visibility);
+
+#[allow(clippy::too_many_arguments)]
+fn sync(
     mut commands: Commands,
     frame: NonSend<crate::Frame>,
     pen: Res<crate::paint::Pen>,
     mut kit: Kit,
     mut root: Query<&mut Root>,
-    nodes: Query<(Entity, &Node)>,
-    mut eye: Query<&mut Rig>,
+    mut nodes: Query<Nodes, (Without<Role>, Without<Eye>)>,
+    mut eye: Lens,
+    mut parts: Query<Posed, Without<Eye>>,
 ) {
     let Some(p) = playing::<HelixPlay>(&frame) else {
         return;
     };
+    build(
+        &mut commands,
+        p,
+        &pen,
+        &mut kit,
+        &mut root,
+        &nodes,
+        &mut eye,
+    );
+    pose(&mut commands, p, &pen, &mut kit, &mut nodes, &mut parts);
+}
+
+fn build(
+    commands: &mut Commands,
+    p: &HelixPlay,
+    pen: &crate::paint::Pen,
+    kit: &mut Kit,
+    root: &mut Query<&mut Root>,
+    nodes: &Query<Nodes, (Without<Role>, Without<Eye>)>,
+    eye: &mut Lens,
+) {
     let Ok(mut root) = root.single_mut() else {
         return;
     };
     let g = &p.g;
-    let l = lens(g, &view_of(&pen));
-    for mut rig in &mut eye {
-        rig.set_if_neq(Rig {
+    let l = lens(g, &view_of(pen));
+    {
+        eye.aim(Rig {
             eye: l.eye,
             target: l.eye + l.fwd * l.dist,
             fov: FOV,
@@ -200,20 +225,20 @@ fn build(
     let ring_of = |i: usize| {
         nodes
             .iter()
-            .find(|(_, n)| **n == Node::Ring(i))
-            .map(|(e, _)| e)
+            .find(|(_, n, _, _)| **n == Node::Ring(i))
+            .map(|(e, ..)| e)
     };
     if root.serial != g.serial {
         root.serial = g.serial;
         root.splats = 0;
-        if let Some((tower, _)) = nodes.iter().find(|(_, n)| **n == Node::Tower) {
+        if let Some((tower, ..)) = nodes.iter().find(|(_, n, _, _)| **n == Node::Tower) {
             let mut t = commands.entity(tower);
             t.despawn_children();
-            t.with_children(|t| tower_parts(t, &mut kit, g));
+            t.with_children(|t| tower_parts(t, kit, g));
         }
         return;
     }
-    for (e, n) in &nodes {
+    for (e, n, _, _) in nodes.iter() {
         if let Node::Ring(i) = *n {
             if g.floors
                 .get(i)
@@ -245,7 +270,7 @@ fn build(
             sprite("splat", WHOLE),
         );
         commands.entity(ring).with_children(|r| {
-            piece(r, &mut kit, Role::Splat, Shape::Quad, paint, at);
+            piece(r, kit, Role::Splat, Shape::Quad, paint, at);
         });
     }
 }
@@ -316,20 +341,20 @@ fn view_of(pen: &crate::paint::Pen) -> View {
     pen.view.unwrap_or_else(View::ipad_landscape)
 }
 
-struct Lens {
+struct Shot {
     eye: Vec3,
     fwd: Vec3,
     dist: f32,
 }
 
-fn lens(g: &Helix, view: &View) -> Lens {
+fn lens(g: &Helix, view: &View) -> Shot {
     let rig = kg_core::games::helix::Rig::new(view, g.cam);
     let (eye, target) = (v3(rig.eye), v3(rig.target));
     let fwd = (target - eye).normalize();
     let right = fwd.cross(Vec3::Y).normalize();
     let up = right.cross(fwd);
     let sh = g.shake.offset();
-    Lens {
+    Shot {
         eye: eye + right * -sh.x + up * -sh.y,
         fwd,
         dist: rig.distance(),
@@ -365,18 +390,15 @@ fn shown(on: bool) -> Visibility {
 }
 
 fn pose(
-    mut commands: Commands,
-    frame: NonSend<crate::Frame>,
-    pen: Res<crate::paint::Pen>,
-    mut kit: Kit,
-    mut nodes: Query<(&Node, &mut Transform, &mut Visibility), Without<Role>>,
-    mut parts: Query<Posed>,
+    commands: &mut Commands,
+    p: &HelixPlay,
+    pen: &crate::paint::Pen,
+    kit: &mut Kit,
+    nodes: &mut Query<Nodes, (Without<Role>, Without<Eye>)>,
+    parts: &mut Query<Posed, Without<Eye>>,
 ) {
-    let Some(p) = playing::<HelixPlay>(&frame) else {
-        return;
-    };
     let g = &p.g;
-    let view = view_of(&pen);
+    let view = view_of(pen);
     let f = view.full();
     let dist = lens(g, &view).dist;
     let c = f.center();
@@ -385,7 +407,7 @@ fn pose(
         rotation: Quat::IDENTITY,
         scale: Vec3::new(w * depth, w * depth * aspect, 1.0),
     };
-    for (n, mut t, mut v) in &mut nodes {
+    for (_, n, mut t, mut v) in nodes.iter_mut() {
         match n {
             Node::Stage => {
                 v.set_if_neq(shown(g.state != Phase::Select));
@@ -399,7 +421,7 @@ fn pose(
     let floor_of = |parent: Option<&ChildOf>| {
         parent
             .and_then(|r| nodes.get(r.parent()).ok())
-            .and_then(|(n, _, _)| match n {
+            .and_then(|(_, n, _, _)| match n {
                 Node::Ring(i) => g.floors.get(*i),
                 _ => None,
             })
@@ -407,7 +429,7 @@ fn pose(
     let base = v3(g.ball_world());
     let is_dead = g.state == Phase::Dead;
     let blazing = g.streak >= SMASH_FLOORS && g.state == Phase::Playing;
-    for (e, role, parent, mut t, mut v, mut part, mut mat) in &mut parts {
+    for (e, role, parent, mut t, mut v, mut part, mut mat) in parts.iter_mut() {
         match *role {
             Role::Sky => {
                 let s = crate::art::size(SHEET, "bg");

@@ -98,12 +98,12 @@ Happy Hotel and Helix Drop are the worked examples: `crates/app/src/games/hotel/
 4. Systems read the game state with `game3d::playing::<MyPlay>(&frame)` (a `NonSend<crate::Frame>`). The game logic never touches the ECS, so all of `kg_core` stays headless and engine-free.
 5. Register the plugin in `Game3dPlugin::build`.
 
-No Bevy `State` is used: `bevy_state` cost about 30 KB of wasm for what a two-field resource does.
+No Bevy `State` is used: `bevy_state` cost about 30 KB of wasm for what two fields on `Palette` do. Each game has one sync system (plus its spawn): every extra Bevy system costs a few KB of wasm, so merge systems that always run together.
 
 ### Spawn once, then update
 
 - `game3d::spawn_world(commands, root_bundle, world, Lighting { .. })` spawns the root (`Owned(world)`), a `Camera3d` with a `Rig` component, and a `DirectionalLight` with single-cascade shadows (WebGL2 only supports one). It returns the root and the camera entity, so camera-attached things (Helix's sky and clouds) can be children of the camera.
-- Aim the camera by writing the `Rig` component (eye, target, fov, near, far, sky colour, shadow reach). `aim_rig` applies it only when it changed.
+- Aim the camera with the `Lens` system param: `lens.aim(Rig { eye, target, fov, near, far, sky, shadow_reach })` touches the camera, projection and shadow cascade only when the rig changed.
 - Spawn everything else as children of the root. Static geometry is spawned once. When the game state changes, spawn or despawn only what changed:
   - Helix rebuilds the tower when `Helix::serial` changes (a new level), and otherwise only moves and fades entities: the tower is one `Node::Tower` that rotates, each floor is a `Node::Ring` child, smashed rings fly off and fade, then despawn.
   - Hotel keys each section (ground, shell, each room, toilets, café, pool, coin piles), each build spot, each guest, each staff member and the player by a hash of the inputs that shape it (`sec_key`, `stance_key`). `reconcile` respawns a node's children only when its key changes, spawns new guests as they arrive and despawns them when they leave.

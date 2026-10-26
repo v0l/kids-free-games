@@ -49,7 +49,6 @@ impl Plugin for Game3dPlugin {
         app.init_resource::<Palette>()
             .configure_sets(Update, (Switch.after(Step), Sync3d.after(Switch)))
             .add_systems(Update, switch.in_set(Switch))
-            .add_systems(Update, aim_rig.after(Sync3d))
             .add_plugins((
                 crate::games::helix::world::HelixWorld,
                 crate::games::hotel::world::HotelWorld,
@@ -204,37 +203,38 @@ pub fn shadow_reach(reach: f32) -> CascadeShadowConfig {
     .build()
 }
 
-type EyeParts<'a> = (
-    &'a Rig,
+pub type EyeParts<'a> = (
+    &'a mut Rig,
     &'a mut Camera,
     &'a mut Transform,
     &'a mut Projection,
 );
 
-fn aim_rig(
-    mut eye: Query<EyeParts, (With<Eye>, Changed<Rig>)>,
-    mut sun: Query<&mut CascadeShadowConfig, With<Sun>>,
-) {
-    for (rig, mut cam, mut t, mut p) in &mut eye {
-        let sky = ClearColorConfig::Custom(bevy_color(rig.sky));
-        if !matches!((&cam.clear_color, &sky), (ClearColorConfig::Custom(a), ClearColorConfig::Custom(b)) if a == b)
-        {
-            cam.clear_color = sky;
-        }
-        t.set_if_neq(Transform::from_translation(rig.eye).looking_at(rig.target, Vec3::Y));
-        let lens = PerspectiveProjection {
-            fov: rig.fov,
-            near: rig.near,
-            far: rig.far,
-            ..default()
-        };
-        let same = matches!(p.as_ref(), Projection::Perspective(q) if q.fov == lens.fov && q.near == lens.near && q.far == lens.far);
-        if !same {
-            *p = Projection::Perspective(lens);
-        }
-        for mut c in &mut sun {
-            if c.bounds.first() != Some(&rig.shadow_reach) {
-                *c = shadow_reach(rig.shadow_reach);
+#[derive(SystemParam)]
+pub struct Lens<'w, 's> {
+    eye: Query<'w, 's, EyeParts<'static>, With<Eye>>,
+    sun: Query<'w, 's, &'static mut CascadeShadowConfig, With<Sun>>,
+}
+
+impl Lens<'_, '_> {
+    pub fn aim(&mut self, want: Rig) {
+        for (mut rig, mut cam, mut t, mut p) in &mut self.eye {
+            if *rig == want {
+                continue;
+            }
+            *rig = want;
+            cam.clear_color = ClearColorConfig::Custom(bevy_color(want.sky));
+            *t = Transform::from_translation(want.eye).looking_at(want.target, Vec3::Y);
+            *p = Projection::Perspective(PerspectiveProjection {
+                fov: want.fov,
+                near: want.near,
+                far: want.far,
+                ..default()
+            });
+            for mut c in &mut self.sun {
+                if c.bounds.first() != Some(&want.shadow_reach) {
+                    *c = shadow_reach(want.shadow_reach);
+                }
             }
         }
     }

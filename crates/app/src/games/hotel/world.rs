@@ -30,9 +30,7 @@ impl Plugin for HotelWorld {
             Update,
             (
                 spawn.run_if(opened(World3d::Hotel)),
-                (reconcile, place, animate)
-                    .chain()
-                    .run_if(is_open(World3d::Hotel)),
+                sync.run_if(is_open(World3d::Hotel)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -468,21 +466,16 @@ fn fill(commands: &mut ChildSpawnerCommands, kit: &mut Kit, groups: Vec<Group>) 
 }
 
 fn reconcile(
-    mut commands: Commands,
-    frame: NonSend<crate::Frame>,
-    mut kit: Kit,
-    root: Query<Entity, With<Root>>,
-    mut things: Query<(Entity, &Thing, &mut Built)>,
+    commands: &mut Commands,
+    h: &Hotel,
+    kit: &mut Kit,
+    root: Entity,
+    things: &mut Query<Placed, Without<Eye>>,
 ) {
-    let Some(p) = playing::<HotelPlay>(&frame) else {
-        return;
-    };
-    let Ok(root) = root.single() else { return };
-    let h = &p.h;
     let mut want = wanted(h);
     want.sort_unstable_by_key(|(t, _)| *t);
     let mut have = vec![false; want.len()];
-    for (e, thing, mut built) in &mut things {
+    for (e, thing, _, _, _, mut built) in things.iter_mut() {
         if *thing == Thing::Body {
             continue;
         }
@@ -496,7 +489,7 @@ fn reconcile(
                     let groups = build(h, *thing);
                     let mut ec = commands.entity(e);
                     ec.despawn_children();
-                    ec.with_children(|c| fill(c, &mut kit, groups));
+                    ec.with_children(|c| fill(c, kit, groups));
                 }
             }
         }
@@ -514,7 +507,7 @@ fn reconcile(
                 Transform::default(),
                 Visibility::default(),
             ))
-            .with_children(|c| fill(c, &mut kit, groups));
+            .with_children(|c| fill(c, kit, groups));
         });
     }
 }
@@ -668,23 +661,39 @@ type Placed<'a> = (
     Option<&'a ChildOf>,
     &'a mut Transform,
     &'a mut Pose,
+    &'a mut Built,
 );
 
-fn place(
+#[allow(clippy::too_many_arguments)]
+fn sync(
+    mut commands: Commands,
     frame: NonSend<crate::Frame>,
     pen: Res<crate::paint::Pen>,
-    mut eye: Query<&mut Rig>,
-    mut things: Query<Placed>,
+    mut kit: Kit,
+    root: Query<Entity, With<Root>>,
+    mut eye: Lens,
+    mut things: Query<Placed, Without<Eye>>,
+    mut parts: Query<Animated, (Without<Thing>, Without<Eye>)>,
 ) {
-    let Some(p) = playing::<HotelPlay>(&frame) else {
+    let (Some(p), Ok(root)) = (playing::<HotelPlay>(&frame), root.single()) else {
         return;
     };
-    let h = &p.h;
-    let cam = h.cam(&view_of(&pen));
+    reconcile(&mut commands, &p.h, &mut kit, root, &mut things);
+    place(&p.h, &pen, &mut eye, &mut things);
+    animate(&p.h, &mut kit, &mut parts, &things);
+}
+
+fn place(
+    h: &Hotel,
+    pen: &crate::paint::Pen,
+    eye: &mut Lens,
+    things: &mut Query<Placed, Without<Eye>>,
+) {
+    let cam = h.cam(&view_of(pen));
     let shake = h.shake.offset();
     let nudge = cam.right() * shake.x * 0.02 + cam.up() * -shake.y * 0.02;
-    for mut rig in &mut eye {
-        rig.set_if_neq(Rig {
+    {
+        eye.aim(Rig {
             eye: cam.eye + nudge,
             target: cam.target + nudge,
             fov: cam.fov,
@@ -696,7 +705,7 @@ fn place(
     }
     let mut posed = vec![];
     let mut bodies = vec![];
-    for (e, thing, parent, mut t, mut pose) in &mut things {
+    for (e, thing, parent, mut t, mut pose, _) in things.iter_mut() {
         let want = match *thing {
             Thing::Body => {
                 if let Some(p) = parent {
@@ -727,7 +736,7 @@ fn place(
     }
     for (body, owner) in bodies {
         let pose = posed.iter().find(|(e, _)| *e == owner).map(|(_, p)| p);
-        if let (Some(pose), Ok((_, _, _, mut t, mut p))) = (pose, things.get_mut(body)) {
+        if let (Some(pose), Ok((_, _, _, mut t, mut p, _))) = (pose, things.get_mut(body)) {
             p.set_if_neq(*pose);
             t.set_if_neq(body_transform(pose));
         }
@@ -766,22 +775,18 @@ type Animated<'a> = (
 );
 
 fn animate(
-    frame: NonSend<crate::Frame>,
-    mut kit: Kit,
-    mut parts: Query<Animated>,
-    owners: Query<(&Thing, &Pose, Option<&ChildOf>)>,
+    h: &Hotel,
+    kit: &mut Kit,
+    parts: &mut Query<Animated, (Without<Thing>, Without<Eye>)>,
+    owners: &Query<Placed, Without<Eye>>,
 ) {
-    let Some(play) = playing::<HotelPlay>(&frame) else {
-        return;
-    };
-    let h = &play.h;
     let sim = &h.sim;
-    for (parent, rest, anim, mut t, mut vis, mut part, mut mat) in &mut parts {
-        let Ok((mut thing, pose, up)) = owners.get(parent.parent()) else {
+    for (parent, rest, anim, mut t, mut vis, mut part, mut mat) in parts.iter_mut() {
+        let Ok((_, mut thing, up, _, pose, _)) = owners.get(parent.parent()) else {
             continue;
         };
         if *thing == Thing::Body {
-            if let Some(Ok((owner, _, _))) = up.map(|u| owners.get(u.parent())) {
+            if let Some(Ok((_, owner, ..))) = up.map(|u| owners.get(u.parent())) {
                 thing = owner;
             }
         }
