@@ -21,6 +21,7 @@ crates/app    kids_games: the Bevy app, desktop, web, Android and iOS
   ui.rs       the painted UI kit: panels, buttons, ribbons, chips, hints, results board
   art.rs      embedded .kga sheets, page decode with mips (ahead of time on a thread)
   audio.rs    cpal output that runs kg_core::mixer::Mixer
+  game3d.rs   the shared 3D world: open/close, camera rig, light, part and material cache
   menu.rs profiles.rs link.rs shots.rs jev.rs platform.rs
   games/      one renderer per game, implementing games::Play
 ```
@@ -83,15 +84,46 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
 
 A tile with no maker shows greyed and says "Coming soon". Once it has one it opens like Flappy.
 
-## 3D games (Happy Hotel first)
+## 3D games
 
-Real 3D goes beside the 2D layer, not through `Pen`. The paint camera is a `Camera2d` with `order: 10` that clears the screen. For a 3D game:
+Happy Hotel and Helix Drop are the worked examples: `crates/app/src/games/hotel/world.rs` and `crates/app/src/games/helix/world.rs`. The shared pieces live in `crates/app/src/game3d.rs`. A 3D game is still a `Play`: it updates its `kg_core` state and draws the HUD with `Pen`, exactly like a 2D game. The only extra is a small Bevy plugin that owns the 3D entities.
 
-- Spawn a `Camera3d` with `order: 0` when the game opens and despawn it, with every mesh it owns, when it closes. Tag them with one marker component so `App::go_home` (via `Play`) can clean up.
-- Set the paint camera's `clear_color` to `ClearColorConfig::None` while the 3D game is open, so the HUD and the painted UI kit draw over the 3D scene.
-- Keep the simulation in `kg_core` (`new-hotel:src/games/hotel/sim.rs` is already free of drawing apart from `Rect`/`Vec2`, which map to `kg_core::geom` and `glam`). The renderer syncs `Sim` into entity transforms each frame; a `Play` impl that needs the ECS gets it by adding a Bevy system for its own components. Leave `Pen` for the HUD.
-- Replace `new-hotel:src/three.rs` (a software projector) with Bevy meshes, `StandardMaterial` and one `DirectionalLight` with shadows. Compute-shader features are off on WebGL2: do not rely on SSAO, depth of field, atmosphere or OIT.
-- Tune the camera with `View::full()` so portrait and landscape both frame the hotel, as `Cam3::for_view` did.
+### How a 3D game plugs in
+
+1. `Play::world()` returns which 3D world the game wants (`World3d::Hotel`, `World3d::Helix`). 2D games keep the default, `World3d::Flat`.
+2. Every frame, after the `frame` system has updated the open game (`game3d::Step`), the `switch` system reads `Frame::play()` and records the open world in the `Palette` resource. When it changes, every entity tagged `Owned(world)` for the old world is despawned with its whole hierarchy, and the paint camera stops clearing the screen so the HUD draws over the 3D camera.
+3. The game's plugin adds its systems to `Update` in `game3d::Sync3d` (after `Switch`) with two run conditions:
+   - `opened(World3d::X)`: runs once on the frame the game opens, to spawn the world.
+   - `is_open(World3d::X)`: runs every frame while it is open, to sync the entities from the game state.
+4. Systems read the game state with `game3d::playing::<MyPlay>(&frame)` (a `NonSend<crate::Frame>`). The game logic never touches the ECS, so all of `kg_core` stays headless and engine-free.
+5. Register the plugin in `Game3dPlugin::build`.
+
+No Bevy `State` is used: `bevy_state` cost about 30 KB of wasm for what a two-field resource does.
+
+### Spawn once, then update
+
+- `game3d::spawn_world(commands, root_bundle, world, Lighting { .. })` spawns the root (`Owned(world)`), a `Camera3d` with a `Rig` component, and a `DirectionalLight` with single-cascade shadows (WebGL2 only supports one). It returns the root and the camera entity, so camera-attached things (Helix's sky and clouds) can be children of the camera.
+- Aim the camera by writing the `Rig` component (eye, target, fov, near, far, sky colour, shadow reach). `aim_rig` applies it only when it changed.
+- Spawn everything else as children of the root. Static geometry is spawned once. When the game state changes, spawn or despawn only what changed:
+  - Helix rebuilds the tower when `Helix::serial` changes (a new level), and otherwise only moves and fades entities: the tower is one `Node::Tower` that rotates, each floor is a `Node::Ring` child, smashed rings fly off and fade, then despawn.
+  - Hotel keys each section (ground, shell, each room, toilets, café, pool, coin piles), each build spot, each guest, each staff member and the player by a hash of the inputs that shape it (`sec_key`, `stance_key`). `reconcile` respawns a node's children only when its key changes, spawns new guests as they arrive and despawns them when they leave.
+- Per-frame motion goes through components, not respawns: Hotel tags animated parts with `Anim` (legs, arms, swimmers, coin bob, dust, pool ripples, pad rings, splashes) plus their `Rest` transform, and `animate` moves them. People are a `Thing` with a `Pose` and a `Thing::Body` child that carries the walk bob, squash and facing.
+
+### Shared helpers in `game3d.rs`
+
+- `Kit` (a `SystemParam`): `kit.part(shape, paint, transform)` returns a bundle with a cached mesh and a material cached by colour, finish and texture. `kit.repaint` swaps a part's material when its colour changes (fades quantise alpha to tenths so the cache stays small).
+- `Shape` (cube, sphere, cylinder, cone, disc, ring, plane, quad, helix sector) and `Finish` (matte, gloss, satin, glow, ghost, floor, sticker, backdrop). `Skin::Tile` repeats a sprite as a texture (painted floors); `Skin::Sprite` maps a sprite or a crop of one from an art sheet.
+- Flat and see-through parts never cast shadows (`Part::casts`).
+- `game3d::testing` builds a headless app with `MinimalPlugins` and the real plugins, for entity-count tests.
+
+Hotel's furniture and people are primitives built with `hotel::build::Model` (a list of parts in model space, spawned once). glTF was tried and left out: enabling `bevy_gltf` alone adds 1.4 MB to the web wasm.
+
+### Rules
+
+- Floors and decals that overlap sit at least `LAYER` apart in height (`no_two_overlapping_floors_share_a_height` checks the spawned world).
+- Compute-shader features are off on WebGL2: no SSAO, depth of field, atmosphere or OIT.
+- Frame the camera from `View::full()` so portrait and landscape both work (`Hotel::cam`, `helix::Rig`).
+- Test that the world spawns when the game opens and that closing it brings the entity count back to the menu's (`opening_spawns_the_hotel_once_and_closing_despawns_all_of_it`, `opening_and_closing_helix_leaves_the_menu_as_it_was`).
 
 ## Assets
 
@@ -140,7 +172,7 @@ Run windows only inside a private headless sway (see the user's desktop rules); 
 
 ## Screenshot scenes for a game
 
-Put a game's scenes in their own file, `crates/app/src/shots/<key>_scene.rs`. It holds `pub fn setup(n: u32, view: &View) -> Stage` returning `Stage::Game(Box::new(play))`, and a `#[cfg(test)] pub fn check()` that uses `super::game::<YourPlay>(setup(n, &v))` to reach the concrete game. The shared `shots.rs` then gains only these lines: `mod <key>_scene;`, your entries in `SCENES` (a slice, so no length to edit), one `NN..=MM => <key>_scene::setup(n, view),` arm, and one test calling `<key>_scene::check()`. Idle scenes (scene plus `IDLE`) step `Stage::Game` until `Play::over()` is true, so implement `over` for your game. Don't add `Stage` variants.
+Put a game's scenes in their own file, `crates/app/src/shots/<key>_scene.rs`. It holds `pub fn setup(n: u32, view: &View) -> Stage` returning `Stage::Game(Box::new(play))`, and a `#[cfg(test)] pub fn check()` that uses `super::game::<YourPlay>(setup(n, &v))` to reach the concrete game. The shared `shots.rs` then gains only these lines: `mod <key>_scene;`, your entries in `SCENES` (a slice, so no length to edit), one `NN..=MM => <key>_scene::setup(n, view),` arm, and one test calling `<key>_scene::check()`. Idle scenes (scene plus `IDLE`) step `Stage::Game` until `Play::over()` is true, so implement `over` for your game. Don't add `Stage` variants. A 3D scene needs nothing extra: `Shot::play()` hands the staged game to the 3D world systems, and `every_3d_scene_spawns_its_world` steps each 3D scene headlessly.
 
 ## Checklist for one game
 
