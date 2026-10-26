@@ -2,6 +2,7 @@ use crate::paint::Pen;
 use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
+pub mod breakout;
 pub mod crossy;
 pub mod flappy;
 pub mod snake;
@@ -44,6 +45,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
         crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
         snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
+        breakout::KEY => Some(|| Box::new(breakout::BreakoutPlay::new())),
         _ => None,
     }
 }
