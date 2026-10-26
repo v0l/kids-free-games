@@ -52,7 +52,6 @@ pub struct Pen {
     pub offset: Vec2,
     pub detail: f32,
     pub view: Option<View>,
-    pub scene: Option<crate::scene3::Scene3>,
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
@@ -82,7 +81,6 @@ impl Pen {
         self.detail = detail.max(0.01);
         kg_core::font::set_text_scale(self.detail);
         self.view = Some(view);
-        self.scene = None;
     }
 
     pub fn used(&self) -> &[Batch] {
@@ -175,9 +173,8 @@ impl Plugin for PaintPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Pen>()
             .init_resource::<Gpu>()
-            .init_resource::<crate::scene3::Gpu3>()
             .add_systems(Startup, spawn_camera)
-            .add_systems(PostUpdate, (sync, crate::scene3::sync3).chain());
+            .add_systems(PostUpdate, sync);
     }
 }
 
@@ -204,6 +201,7 @@ fn spawn_camera(mut commands: Commands) {
 
 pub fn rgba_image(w: u32, h: u32, mips: Vec<Vec<u8>>) -> Image {
     let levels = mips.len().max(1) as u32;
+    let base = mips.first().cloned().unwrap_or_default();
     let mut img = Image::new(
         Extent3d {
             width: w,
@@ -211,10 +209,13 @@ pub fn rgba_image(w: u32, h: u32, mips: Vec<Vec<u8>>) -> Image {
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
-        mips.concat(),
+        base,
         TextureFormat::Rgba8UnormSrgb,
         RenderAssetUsages::RENDER_WORLD,
     );
+    if levels > 1 {
+        img.data = Some(mips.concat());
+    }
     img.texture_descriptor.mip_level_count = levels;
     img.sampler = ImageSampler::Descriptor(ImageSamplerDescriptor::linear());
     img
@@ -379,6 +380,15 @@ mod tests {
         p.offset = vec2(5.0, 7.0);
         p.tri(vec2(10.0, 20.0), vec2(1.0, 0.0), vec2(0.0, 1.0), WHITE);
         assert_eq!(p.used()[0].pos[0], [15.0, -27.0, 0.0]);
+    }
+
+    #[test]
+    fn a_page_with_a_full_mip_chain_becomes_one_image() {
+        let chain = crate::art::mip_chain(8, 4, vec![200u8; 8 * 4 * 4]);
+        let total: usize = chain.iter().map(Vec::len).sum();
+        let img = rgba_image(8, 4, chain);
+        assert_eq!(img.texture_descriptor.mip_level_count, 4);
+        assert_eq!(img.data.as_ref().map(Vec::len), Some(total));
     }
 
     #[test]

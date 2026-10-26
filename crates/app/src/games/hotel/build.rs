@@ -1,6 +1,8 @@
-use crate::world3d::{Scene3d, Shape, Surface};
+use crate::game3d::{Finish, Paint, Shape, Skin};
+use bevy::math::Vec2;
 use bevy::math::{Quat, Vec3};
-use glam::{vec3, Vec2};
+use bevy::prelude::{Component, Transform};
+use glam::vec3;
 use kg_core::geom::Color;
 
 pub const LAYER: f32 = 0.02;
@@ -44,45 +46,95 @@ impl Xf {
             scale: self.scale * inner.scale,
         }
     }
+
+    pub fn transform(&self) -> Transform {
+        Transform {
+            translation: self.origin,
+            rotation: Quat::from_rotation_y(self.yaw),
+            scale: self.scale,
+        }
+    }
 }
 
-pub struct Scene {
-    pub out: Scene3d,
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub enum Anim {
+    Bob,
+    Orbit(Vec2, f32),
+    Ripple(f32, f32),
+    Leg(f32),
+    Arm(f32),
+    Stroke(f32),
+    Kick(f32),
+    Turn,
+    Wake(usize),
+    Fill(usize),
+    Charge(usize),
+    Drop(usize, usize),
+    Wave(usize),
+}
+
+#[derive(Component, Clone, Copy, Debug, PartialEq)]
+pub struct Rest(pub Transform);
+
+#[derive(Clone, Copy, Debug)]
+pub struct Piece {
+    pub shape: Shape,
+    pub paint: Paint,
+    pub at: Transform,
+    pub anim: Option<Anim>,
+}
+
+#[derive(Default)]
+pub struct Model {
+    pub pieces: Vec<Piece>,
     pub xf: Xf,
-    pub alpha: f32,
 }
 
-impl Scene {
+pub fn box_at(base: Vec3, size: Vec3) -> Transform {
+    Transform::from_translation(base + vec3(0.0, size.y / 2.0, 0.0)).with_scale(size)
+}
+
+pub fn ball_at(c: Vec3, r: Vec3) -> Transform {
+    Transform::from_translation(c).with_scale(r * 2.0)
+}
+
+fn sides(n: usize) -> u8 {
+    (n.clamp(6, 24) as u8 / 2) * 2
+}
+
+impl Model {
     pub fn new() -> Self {
-        Self {
-            out: Scene3d::default(),
-            xf: Xf::default(),
-            alpha: 1.0,
+        Self::default()
+    }
+
+    pub fn tag(&mut self, anim: Anim) {
+        if let Some(p) = self.pieces.last_mut() {
+            p.anim = Some(anim);
         }
     }
 
-    fn rot(&self) -> Quat {
-        Quat::from_rotation_y(self.xf.yaw)
-    }
-
-    fn put(&mut self, shape: Shape, surface: Surface, color: Color, center: Vec3, size: Vec3) {
-        let at = self.xf.point(center);
-        let mut c = color;
-        c.a *= self.alpha;
-        let surface = if c.a < 0.99 && matches!(surface, Surface::Matte | Surface::Gloss) {
-            Surface::Ghost
+    fn put(&mut self, shape: Shape, finish: Finish, color: Color, center: Vec3, size: Vec3) {
+        let finish = if color.a < 0.99 && matches!(finish, Finish::Matte | Finish::Gloss) {
+            Finish::Ghost
         } else {
-            surface
+            finish
         };
-        let rot = self.rot();
-        self.out
-            .push(shape, surface, c, at, rot, size * self.xf.scale);
+        self.pieces.push(Piece {
+            shape,
+            paint: Paint::new(finish, color),
+            at: Transform {
+                translation: self.xf.point(center),
+                rotation: Quat::from_rotation_y(self.xf.yaw),
+                scale: size * self.xf.scale,
+            },
+            anim: None,
+        });
     }
 
     pub fn cuboid(&mut self, base: Vec3, size: Vec3, color: Color) {
         self.put(
             Shape::Cube,
-            Surface::Matte,
+            Finish::Matte,
             color,
             base + vec3(0.0, size.y / 2.0, 0.0),
             size,
@@ -93,106 +145,70 @@ impl Scene {
         let cap = (size.y * 0.12).min(0.06);
         self.put(
             Shape::Cube,
-            Surface::Matte,
+            Finish::Matte,
             side,
             base + vec3(0.0, (size.y - cap) / 2.0, 0.0),
             vec3(size.x, size.y - cap, size.z),
         );
         self.put(
             Shape::Cube,
-            Surface::Matte,
+            Finish::Matte,
             top,
             base + vec3(0.0, size.y - cap / 2.0, 0.0),
             vec3(size.x, cap, size.z),
         );
     }
 
-    pub fn cylinder(&mut self, base: Vec3, r: f32, h: f32, sides: usize, side: Color, _top: Color) {
-        let n = (sides.clamp(6, 24) as u8 / 2) * 2;
+    pub fn cylinder(&mut self, base: Vec3, r: f32, h: f32, n: usize, side: Color) {
         self.put(
-            Shape::Cylinder(n),
-            Surface::Matte,
+            Shape::Cylinder(sides(n)),
+            Finish::Matte,
             side,
             base + vec3(0.0, h / 2.0, 0.0),
             vec3(r * 2.0, h, r * 2.0),
         );
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn frustum(
-        &mut self,
-        base: Vec3,
-        r0: f32,
-        r1: f32,
-        h: f32,
-        sides: usize,
-        side: Color,
-        _top: Color,
-    ) {
-        let n = (sides.clamp(6, 24) as u8 / 2) * 2;
-        if r1 < 0.08 {
-            self.put(
-                Shape::Cone(n),
-                Surface::Matte,
-                side,
-                base + vec3(0.0, h / 2.0, 0.0),
-                vec3(r0 * 2.0, h, r0 * 2.0),
-            );
+    pub fn frustum(&mut self, base: Vec3, r0: f32, r1: f32, h: f32, n: usize, side: Color) {
+        let (shape, r) = if r1 < 0.08 {
+            (Shape::Cone(sides(n)), r0)
         } else {
-            let r = (r0 + r1) / 2.0;
-            self.put(
-                Shape::Cylinder(n),
-                Surface::Matte,
-                side,
-                base + vec3(0.0, h / 2.0, 0.0),
-                vec3(r * 2.0, h, r * 2.0),
-            );
-        }
-    }
-
-    pub fn sphere(&mut self, c: Vec3, r: Vec3, _detail: usize, color: Color) {
-        self.put(Shape::Sphere, Surface::Gloss, color, c, r * 2.0);
-    }
-
-    pub fn disc(&mut self, center: Vec2, r: Vec2, y: f32, color: Color) {
-        let surface = if color.a < 0.99 {
-            Surface::Ghost
-        } else {
-            Surface::Matte
+            (Shape::Cylinder(sides(n)), (r0 + r1) / 2.0)
         };
         self.put(
-            Shape::Disc,
-            surface,
-            color,
-            vec3(center.x, y, center.y),
-            vec3(r.x * 2.0, 1.0, r.y * 2.0),
+            shape,
+            Finish::Matte,
+            side,
+            base + vec3(0.0, h / 2.0, 0.0),
+            vec3(r * 2.0, h, r * 2.0),
         );
     }
 
-    pub fn flat_rect(&mut self, center: Vec2, size: Vec2, y: f32, color: Color) {
-        let surface = if color.a < 0.99 {
-            Surface::Ghost
+    pub fn sphere(&mut self, c: Vec3, r: Vec3, color: Color) {
+        self.put(Shape::Sphere, Finish::Gloss, color, c, r * 2.0);
+    }
+
+    fn flat(&mut self, shape: Shape, center: Vec2, size: Vec2, y: f32, color: Color) {
+        let finish = if color.a < 0.99 {
+            Finish::Ghost
         } else {
-            Surface::Matte
+            Finish::Matte
         };
         self.put(
-            Shape::Plane,
-            surface,
+            shape,
+            finish,
             color,
             vec3(center.x, y, center.y),
             vec3(size.x, 1.0, size.y),
         );
     }
 
-    pub fn floor(
-        &mut self,
-        area: kg_core::geom::Rect,
-        tile: f32,
-        sheet: &'static str,
-        name: &'static str,
-        tint: Color,
-    ) {
-        self.floor_at(area, 0.0, tile, sheet, name, tint);
+    pub fn disc(&mut self, center: Vec2, r: Vec2, y: f32, color: Color) {
+        self.flat(Shape::Disc, center, r * 2.0, y, color);
+    }
+
+    pub fn flat_rect(&mut self, center: Vec2, size: Vec2, y: f32, color: Color) {
+        self.flat(Shape::Plane, center, size, y, color);
     }
 
     pub fn floor_at(
@@ -204,57 +220,47 @@ impl Scene {
         name: &'static str,
         tint: Color,
     ) {
-        let c = vec3(area.x + area.w / 2.0, y, area.y + area.h / 2.0);
-        let at = self.xf.point(c);
-        self.out.push(
-            Shape::Plane,
-            Surface::Floor(sheet, name),
-            tint,
-            at,
-            Quat::IDENTITY,
-            vec3(area.w, 1.0, area.h),
-        );
-        if let Some(last) = self.out.items.last_mut() {
-            last.uv_repeat = bevy::math::Vec2::new(area.w / tile, area.h / tile);
-        }
+        let repeat = Vec2::new(area.w / tile, area.h / tile);
+        self.pieces.push(Piece {
+            shape: Shape::Plane,
+            paint: Paint::skinned(Finish::Floor, tint, Skin::Tile(sheet, name, repeat)),
+            at: Transform::from_translation(self.xf.point(vec3(
+                area.x + area.w / 2.0,
+                y,
+                area.y + area.h / 2.0,
+            )))
+            .with_scale(vec3(area.w, 1.0, area.h)),
+            anim: None,
+        });
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub fn ring_flat(&mut self, center: Vec2, r: f32, _width: f32, y: f32, k: f32, color: Color) {
-        if k >= 0.999 {
-            let surface = if color.a < 0.99 {
-                Surface::Ghost
-            } else {
-                Surface::Glow
-            };
-            self.put(
-                Shape::Ring,
-                surface,
-                color,
-                vec3(center.x, y, center.y),
-                vec3(r * 2.0, 1.0, r * 2.0),
-            );
-            return;
-        }
-        let n = (24.0 * k.clamp(0.0, 1.0)).ceil() as usize;
-        for i in 0..n {
-            let a = std::f32::consts::FRAC_PI_2 - (i as f32 + 0.5) / 24.0 * std::f32::consts::TAU;
-            let p = center + glam::vec2(a.cos(), -a.sin()) * (r * 0.9);
-            self.put(
-                Shape::Disc,
-                Surface::Glow,
-                color,
-                vec3(p.x, y, p.y),
-                vec3(r * 0.24, 1.0, r * 0.24),
-            );
-        }
+    pub fn ring(&mut self, center: Vec2, r: f32, y: f32, color: Color) {
+        let finish = if color.a < 0.99 {
+            Finish::Ghost
+        } else {
+            Finish::Glow
+        };
+        self.put(
+            Shape::Ring,
+            finish,
+            color,
+            vec3(center.x, y, center.y),
+            vec3(r * 2.0, 1.0, r * 2.0),
+        );
     }
 }
 
-impl Default for Scene {
-    fn default() -> Self {
-        Self::new()
-    }
+pub const ARC_DOTS: usize = 24;
+
+pub fn arc_dot(center: Vec2, r: f32, i: usize, y: f32) -> Transform {
+    let a =
+        std::f32::consts::FRAC_PI_2 - (i as f32 + 0.5) / ARC_DOTS as f32 * std::f32::consts::TAU;
+    let p = center + Vec2::new(a.cos(), -a.sin()) * (r * 0.9);
+    Transform::from_xyz(p.x, y, p.y).with_scale(vec3(r * 0.24, 1.0, r * 0.24))
+}
+
+pub fn arc_shown(k: f32) -> usize {
+    (ARC_DOTS as f32 * k.clamp(0.0, 1.0)).ceil() as usize
 }
 
 #[cfg(test)]
@@ -265,23 +271,33 @@ mod tests {
     fn yaw_turns_local_forward_to_face_the_heading() {
         let xf = Xf::at(Vec3::ZERO, std::f32::consts::FRAC_PI_2, 1.0);
         assert!((xf.point(vec3(0.0, 0.0, 1.0)) - vec3(1.0, 0.0, 0.0)).length() < 1e-5);
+        let t = xf.transform();
+        assert!((t.rotation * vec3(0.0, 0.0, 1.0) - vec3(1.0, 0.0, 0.0)).length() < 1e-5);
     }
 
     #[test]
     fn a_box_sits_on_its_base_not_its_middle() {
-        let mut s = Scene::new();
+        let mut s = Model::new();
         s.cuboid(Vec3::ZERO, vec3(1.0, 2.0, 1.0), kg_core::geom::WHITE);
-        let it = s.out.items[0];
-        assert_eq!(it.at, vec3(0.0, 1.0, 0.0));
-        assert_eq!(it.scale, vec3(1.0, 2.0, 1.0));
+        let it = s.pieces[0];
+        assert_eq!(it.at.translation, vec3(0.0, 1.0, 0.0));
+        assert_eq!(it.at.scale, vec3(1.0, 2.0, 1.0));
+        assert_eq!(box_at(Vec3::ZERO, vec3(1.0, 2.0, 1.0)), it.at);
     }
 
     #[test]
-    fn faded_scenes_turn_solid_parts_see_through() {
-        let mut s = Scene::new();
-        s.alpha = 0.5;
-        s.sphere(Vec3::ZERO, Vec3::ONE, 4, kg_core::geom::WHITE);
-        assert_eq!(s.out.items[0].surface, Surface::Ghost);
-        assert!(!s.out.items[0].shadow);
+    fn see_through_solids_turn_ghostly() {
+        let mut s = Model::new();
+        s.sphere(Vec3::ZERO, Vec3::ONE, kg_core::geom::WHITE.with_alpha(0.5));
+        assert_eq!(s.pieces[0].paint.finish, Finish::Ghost);
+    }
+
+    #[test]
+    fn a_progress_arc_shows_one_dot_per_slice_from_the_top() {
+        assert_eq!(arc_shown(0.0), 0);
+        assert_eq!(arc_shown(0.01), 1);
+        assert_eq!(arc_shown(0.5), ARC_DOTS / 2);
+        let first = arc_dot(Vec2::ZERO, 1.0, 0, 0.0).translation;
+        assert!(first.z < -0.8 && first.x > 0.0);
     }
 }

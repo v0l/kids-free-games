@@ -20,10 +20,15 @@ pub mod stack;
 
 pub trait IntoAny {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
+    fn any_ref(&self) -> &dyn std::any::Any;
 }
 
 impl<T: 'static> IntoAny for T {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
+
+    fn any_ref(&self) -> &dyn std::any::Any {
         self
     }
 }
@@ -36,6 +41,9 @@ pub trait Play: IntoAny {
     }
     fn over(&self) -> bool {
         false
+    }
+    fn world(&self) -> crate::game3d::World3d {
+        crate::game3d::World3d::Flat
     }
     fn as_any(&mut self) -> &mut dyn std::any::Any;
 }

@@ -488,6 +488,22 @@ impl Shot {
         }
     }
 
+    pub fn play(&self) -> Option<&dyn Play> {
+        match self.stage.as_ref()? {
+            Stage::Game(p) => Some(&**p),
+            Stage::Flappy(p) => Some(&**p),
+            _ => None,
+        }
+    }
+
+    pub fn play_mut(&mut self) -> Option<&mut dyn Play> {
+        match self.stage.as_mut()? {
+            Stage::Game(p) => Some(&mut **p),
+            Stage::Flappy(p) => Some(&mut **p),
+            _ => None,
+        }
+    }
+
     pub fn frame(&mut self, pen: &mut Pen, view: &View, _dt: f32) {
         if self.size != (view.w, view.h) || self.stage.is_none() {
             self.size = (view.w, view.h);
@@ -570,6 +586,31 @@ mod tests {
                 pen.begin(v, 1.0);
                 s.frame(&mut pen, &v, DT);
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
+            }
+        }
+    }
+
+    #[test]
+    fn every_3d_scene_spawns_its_world() {
+        for v in [View::ipad_landscape(), View::ipad_portrait()] {
+            for &(n, name) in SCENES
+                .iter()
+                .filter(|(n, _)| (110..=119).contains(n) || (170..=189).contains(n))
+            {
+                let mut app = crate::game3d::testing::shot(n, v);
+                crate::game3d::testing::step(&mut app, 3);
+                let world = *app
+                    .world()
+                    .resource::<bevy::state::state::State<crate::game3d::World3d>>()
+                    .get();
+                let parts = crate::game3d::testing::parts(&mut app).len();
+                let (want, least) = if n >= 170 {
+                    (crate::game3d::World3d::Hotel, 150)
+                } else {
+                    (crate::game3d::World3d::Helix, 1)
+                };
+                assert_eq!(world, want, "scene {n} ({name})");
+                assert!(parts >= least, "scene {n} ({name}) has {parts} parts");
             }
         }
     }

@@ -3,13 +3,12 @@ pub mod hud;
 pub mod models;
 pub mod world;
 
+use crate::game3d::World3d;
 use crate::paint::Pen;
-use build::Scene;
 use hud::Hud;
 use kg_core::engine::{Game, Input, View};
 use kg_core::fx::Particles;
 use kg_core::games::hotel::{Hotel, Mode};
-use world::World;
 
 pub const KEY: &str = kg_core::games::hotel::GAME;
 pub const SHEET: &str = "hotel";
@@ -33,22 +32,6 @@ impl HotelPlay {
         }
     }
 
-    pub fn scene(&self, view: &View) -> crate::world3d::Scene3d {
-        let mut s = Scene::new();
-        World { h: &self.h }.draw_world(&mut s);
-        let cam = self.h.cam(view);
-        let shake = self.h.shake.offset();
-        let right = cam.right() * shake.x * 0.02;
-        let up = cam.up() * -shake.y * 0.02;
-        let mut out = s.out;
-        out.eye = to_bevy(cam.eye + right + up);
-        out.target = to_bevy(cam.target + right + up);
-        out.fov = cam.fov;
-        out.sky = self.h.sim.lay.theme.outside;
-        out.shadow_reach = 40.0 / self.h.zoom.max(0.3);
-        out
-    }
-
     fn hud(&self, view: &View) -> Hud<'_> {
         Hud {
             h: &self.h,
@@ -56,10 +39,6 @@ impl HotelPlay {
             view: *view,
         }
     }
-}
-
-fn to_bevy(v: glam::Vec3) -> bevy::math::Vec3 {
-    bevy::math::Vec3::new(v.x, v.y, v.z)
 }
 
 impl Default for HotelPlay {
@@ -82,7 +61,6 @@ impl crate::games::Play for HotelPlay {
     }
 
     fn draw(&self, pen: &mut Pen, view: &View) {
-        crate::world3d::submit(self.scene(view));
         let hud = self.hud(view);
         hud.draw_overhead(pen);
         pen.particles(&self.sparks);
@@ -100,6 +78,10 @@ impl crate::games::Play for HotelPlay {
         matches!(self.h.mode, Mode::Moving(_) | Mode::Done(_))
     }
 
+    fn world(&self) -> World3d {
+        World3d::Hotel
+    }
+
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
     }
@@ -109,7 +91,6 @@ impl crate::games::Play for HotelPlay {
 mod tests {
     use super::*;
     use crate::games::Play;
-    use kg_core::games::hotel::layout::{Build, Layout};
     use kg_core::games::hotel::sim::Sim;
     use kg_core::games::hotel::SPRITES;
 
@@ -123,7 +104,6 @@ mod tests {
         let mut pen = Pen::default();
         pen.begin(*v, 1.0);
         p.draw(&mut pen, v);
-        let _ = crate::world3d::take();
         pen
     }
 
@@ -141,108 +121,13 @@ mod tests {
         }
     }
 
-    const LAYER_GAP: f32 = crate::games::hotel::build::LAYER;
-
-    fn flat_layers(scene: &crate::world3d::Scene3d) -> Vec<(f32, f32, f32, f32, f32, String)> {
-        use crate::world3d::Shape;
-        scene
-            .items
-            .iter()
-            .filter(|i| matches!(i.shape, Shape::Plane | Shape::Disc) && i.rot.is_near_identity())
-            .map(|i| {
-                (
-                    i.at.x - i.scale.x / 2.0,
-                    i.at.x + i.scale.x / 2.0,
-                    i.at.z - i.scale.z / 2.0,
-                    i.at.z + i.scale.z / 2.0,
-                    i.at.y,
-                    format!("{:?} {:?}", i.shape, i.surface),
-                )
-            })
-            .collect()
-    }
-
     #[test]
-    fn no_two_overlapping_floors_share_a_height() {
-        let all: Vec<bool> = vec![true; 64];
-        for number in 1..=4 {
-            for v in [View::ipad_landscape(), View::ipad_portrait()] {
-                let p = fresh(number, &all);
-                let layers = flat_layers(&p.scene(&v));
-                for (i, a) in layers.iter().enumerate() {
-                    for b in &layers[i + 1..] {
-                        let overlap =
-                            (a.1.min(b.1) - a.0.max(b.0)).min(a.3.min(b.3) - a.2.max(b.2));
-                        let both_ghosts = a.5.contains("Ghost") && b.5.contains("Ghost");
-                        let need = if both_ghosts { 1e-3 } else { LAYER_GAP * 0.99 };
-                        if overlap > 0.05 {
-                            assert!(
-                                (a.4 - b.4).abs() >= need,
-                                "hotel {number}: {} at y {} and {} at y {} overlap",
-                                a.5,
-                                a.4,
-                                b.5,
-                                b.4
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    #[test]
-    fn the_hotel_is_built_in_3d_and_the_hud_draws_on_top() {
+    fn the_hud_draws_over_the_3d_world() {
         let v = View::ipad_landscape();
         let p = fresh(1, &[]);
-        let scene = p.scene(&v);
-        assert!(scene.items.len() > 150, "only {} parts", scene.items.len());
-        assert!(scene.eye.y > 5.0 && scene.eye.z > scene.target.z);
         let pen = drawn(&p, &v);
         assert!(pen.vertex_count() > 100);
-    }
-
-    #[test]
-    fn drawing_hands_the_3d_scene_to_bevy_each_frame() {
-        let v = View::ipad_portrait();
-        let p = fresh(2, &[]);
-        let mut pen = Pen::default();
-        pen.begin(v, 1.0);
-        p.draw(&mut pen, &v);
-        assert!(crate::world3d::take().is_some());
-        assert!(crate::world3d::take().is_none());
-    }
-
-    #[test]
-    fn every_hotel_fully_built_draws_without_panicking() {
-        for n in 1..=kg_core::games::hotel::layout::MAX_HOTEL {
-            let pads = Layout::new(n).pads.len();
-            let mut p = fresh(n, &vec![true; pads - 1]);
-            p.h.sim.add_swimmers(3);
-            for v in [View::ipad_landscape(), View::ipad_portrait()] {
-                let scene = p.scene(&v);
-                assert!(
-                    scene.items.len() > 300,
-                    "hotel {n}: {} parts",
-                    scene.items.len()
-                );
-                drawn(&p, &v);
-            }
-        }
-    }
-
-    #[test]
-    fn upgrades_you_buy_show_in_the_3d_scene() {
-        let v = View::ipad_landscape();
-        let lay = Layout::new(2);
-        let at = |b: Build| lay.pads.iter().position(|p| p.build == b).unwrap();
-        let mut built = vec![false; lay.pads.len()];
-        let before = fresh(2, &built).scene(&v).items.len();
-        built[at(Build::Room(1))] = true;
-        built[at(Build::Decor(0, 2))] = true;
-        built[at(Build::Cafe)] = true;
-        let after = fresh(2, &built).scene(&v).items.len();
-        assert!(after > before + 30, "{before} -> {after}");
+        assert_eq!(p.world(), World3d::Hotel);
     }
 
     #[test]

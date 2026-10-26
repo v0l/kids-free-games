@@ -1,21 +1,18 @@
+pub mod world;
+
 use super::Play;
 use crate::draw::measure;
+use crate::game3d::World3d;
 use crate::paint::Pen;
-use crate::scene3::{Item, Scene3, Shape3, Skin};
 use crate::ui::{plain_score, Results, Tone, BODY, INK};
-use glam::{vec2, vec3, Quat, Vec2, Vec3};
+use glam::vec2;
 use kg_core::engine::{Game, Input, View};
 use kg_core::fx::{ease_out_back, ease_out_cubic, Side};
 use kg_core::games::helix::*;
-use kg_core::geom::{hsv, with_alpha, Color, Rect, WHITE};
-use std::f32::consts::TAU;
+use kg_core::geom::{with_alpha, Color, Rect, WHITE};
 
 pub const KEY: &str = GAME;
 const SHEET: &str = "helix";
-const SKY_DEPTH: f32 = 2.4;
-const CLOUD_DEPTH: f32 = 1.6;
-const TILE_CROP: [f32; 4] = [0.14, 0.14, 0.72, 0.72];
-const FADE_STEPS: f32 = 10.0;
 
 pub struct HelixPlay {
     pub g: Helix,
@@ -67,232 +64,12 @@ impl Play for HelixPlay {
         self.g.state == State::Dead
     }
 
+    fn world(&self) -> World3d {
+        World3d::Helix
+    }
+
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-}
-
-fn rgba(c: Color) -> [f32; 4] {
-    [c.r, c.g, c.b, c.a]
-}
-
-fn skin(name: &'static str) -> Skin {
-    Skin {
-        sheet: SHEET,
-        name,
-        crop: [0.0, 0.0, 1.0, 1.0],
-    }
-}
-
-fn yaw(angle: f32) -> [f32; 4] {
-    Quat::from_rotation_y(-angle).to_array()
-}
-
-struct Frame {
-    eye: Vec3,
-    fwd: Vec3,
-    right: Vec3,
-    up: Vec3,
-    dist: f32,
-    view: View,
-}
-
-impl Frame {
-    fn new(g: &Helix, view: &View) -> Self {
-        let rig = Rig::new(view, g.cam);
-        let fwd = (rig.target - rig.eye).normalize();
-        let right = fwd.cross(Vec3::Y).normalize();
-        let up = right.cross(fwd);
-        let sh = g.shake.offset();
-        let nudge = right * -sh.x + up * -sh.y;
-        Self {
-            eye: rig.eye + nudge,
-            fwd,
-            right,
-            up,
-            dist: rig.distance(),
-            view: *view,
-        }
-    }
-
-    fn facing(&self) -> [f32; 4] {
-        let m = glam::Mat3::from_cols(self.right, self.up, -self.fwd);
-        Quat::from_mat3(&m).to_array()
-    }
-
-    fn at_depth(&self, k: f32, px: Vec2) -> (Vec3, f32) {
-        let f = self.view.full();
-        let per_px = self.dist * k / self.dist;
-        let c = vec2(f.x + f.w / 2.0, f.y + f.h / 2.0);
-        let p = self.eye + self.fwd * self.dist * k + self.right * (px.x - c.x) * per_px
-            - self.up * (px.y - c.y) * per_px;
-        (p, per_px)
-    }
-
-    fn billboard(&self, name: &'static str, k: f32, px: Vec2, w: f32, tint: Color) -> Item {
-        let (pos, s) = self.at_depth(k, px);
-        let a = crate::art::size(SHEET, name);
-        let mut it = Item::new(Shape3::Quad);
-        it.skin = Some(skin(name));
-        it.color = rgba(tint);
-        it.pos = pos.to_array();
-        it.rot = self.facing();
-        it.scale = [w * s, w * s * a.y / a.x.max(1.0), 1.0];
-        it.unlit = true;
-        it.blend = true;
-        it.cast = false;
-        it
-    }
-}
-
-fn backdrop(g: &Helix, fr: &Frame, items: &mut Vec<Item>) {
-    let f = fr.view.full();
-    let s = crate::art::size(SHEET, "bg");
-    let k = (f.w / s.x).max(f.h / s.y) * 1.02;
-    let hue = (g.level as f32 * 0.07).rem_euclid(1.0);
-    let mut it = fr.billboard("bg", SKY_DEPTH, f.center(), s.x * k, hsv(hue, 0.12, 1.0));
-    it.blend = false;
-    items.push(it);
-    for i in 0..6 {
-        let depth = 0.08 + (i % 3) as f32 * 0.05;
-        let span = fr.view.w + 400.0;
-        let x = (i as f32 * 233.0 + g.t * (5.0 + depth * 40.0)).rem_euclid(span) - 200.0;
-        let y = ((i * 131 % 700) as f32 - g.cam * depth).rem_euclid(fr.view.h + 200.0) - 100.0;
-        items.push(fr.billboard(
-            if i % 2 == 0 { "cloud1" } else { "cloud2" },
-            CLOUD_DEPTH,
-            vec2(x, y),
-            150.0 + depth * 900.0,
-            Color::new(1.0, 1.0, 1.0, 0.85),
-        ));
-    }
-}
-
-fn floor_items(g: &Helix, items: &mut Vec<Item>) {
-    let near = g.cam - 500.0;
-    let far = g.cam + 1100.0;
-    let step = TAU / SEGMENTS as f32;
-    for (i, f) in g.floors.iter().enumerate() {
-        let fy = Helix::floor_y(i);
-        if fy < near || fy > far {
-            continue;
-        }
-        let fall = f.broken * f.broken * 900.0;
-        let fade = (1.0 - f.broken * 1.5).max(0.0);
-        if f.broken > 0.0 && fade <= 0.0 {
-            continue;
-        }
-        let alpha = (fade * FADE_STEPS).ceil() / FADE_STEPS;
-        for k in 0..SEGMENTS {
-            let seg = f.segs[k];
-            if seg == Seg::Gap {
-                continue;
-            }
-            let a0 = g.angle + k as f32 * step;
-            let mid = a0 + step / 2.0;
-            let name = if seg == Seg::Danger {
-                "tile_red"
-            } else {
-                floor_tile(f.hue)
-            };
-            let mut it = Item::new(Shape3::Sector);
-            it.skin = Some(Skin {
-                sheet: SHEET,
-                name,
-                crop: TILE_CROP,
-            });
-            it.color = [1.0, 1.0, 1.0, alpha];
-            it.blend = f.broken > 0.0;
-            it.cast = f.broken == 0.0;
-            it.rot = yaw(a0);
-            it.pos = [mid.cos() * fall * 0.6, -fy - fall, mid.sin() * fall * 0.6];
-            items.push(it);
-        }
-        if f.broken == 0.0 {
-            for (fi, seg, _) in &g.splats {
-                if *fi != i {
-                    continue;
-                }
-                let a = g.angle + (*seg + 0.5) * step;
-                let r = (RING_OUTER + RING_INNER) / 2.0;
-                let mut it = Item::new(Shape3::Quad);
-                it.skin = Some(skin("splat"));
-                it.color = [1.0, 1.0, 1.0, 0.92];
-                it.pos = [a.cos() * r, -fy + 0.4, a.sin() * r];
-                it.rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2).to_array();
-                it.scale = [BALL_R * 2.6, BALL_R * 2.6 * 1.05, 1.0];
-                it.blend = true;
-                it.cast = false;
-                items.push(it);
-            }
-        }
-    }
-}
-
-fn ball_items(g: &Helix, items: &mut Vec<Item>) {
-    let base = g.ball_world();
-    if g.state == State::Dead {
-        let floor = Helix::floor_y(g.passed.min(g.floors.len() - 1));
-        let mut it = Item::new(Shape3::Quad);
-        it.skin = Some(skin("splat"));
-        it.pos = [base.x, -floor + 0.6, base.z];
-        it.rot = Quat::from_rotation_x(-std::f32::consts::FRAC_PI_2).to_array();
-        it.scale = [BALL_R * 3.6, BALL_R * 3.8, 1.0];
-        it.blend = true;
-        it.cast = false;
-        items.push(it);
-        return;
-    }
-    if g.streak >= SMASH_FLOORS && g.state == State::Playing {
-        for k in 1..=6 {
-            let mut t = Item::new(Shape3::Sphere);
-            t.color = [1.0, 0.6, 0.2, 0.3];
-            t.unlit = true;
-            t.blend = true;
-            t.cast = false;
-            t.pos = [base.x, base.y + k as f32 * 12.0, base.z];
-            let r = BALL_R * (1.0 - k as f32 * 0.12);
-            t.scale = [r, r, r];
-            items.push(t);
-        }
-    }
-    let sq = g.squash * 0.35;
-    let stretch = (g.vy.abs() / 1200.0).min(0.25) * (1.0 - g.squash);
-    let sx = 1.0 + sq - stretch * 0.5;
-    let sy = 1.0 - sq + stretch;
-    let mut it = Item::new(Shape3::Sphere);
-    it.color = [1.0, 0.52, 0.12, 1.0];
-    it.pos = [base.x, base.y - BALL_R * (1.0 - sy), base.z];
-    it.scale = [BALL_R * sx, BALL_R * sy, BALL_R * sx];
-    items.push(it);
-}
-
-pub fn scene(g: &Helix, view: &View) -> Scene3 {
-    let fr = Frame::new(g, view);
-    let mut items = vec![];
-    backdrop(g, &fr, &mut items);
-    if g.state != State::Select {
-        let top = -(Helix::floor_y(0)) + 900.0;
-        let bottom = -(Helix::floor_y(g.floors.len())) - 500.0;
-        let mut pole = Item::new(Shape3::Cylinder);
-        pole.color = [0.86, 0.8, 0.95, 1.0];
-        pole.pos = [0.0, (top + bottom) / 2.0, 0.0];
-        pole.scale = [RING_INNER * 1.03, top - bottom, RING_INNER * 1.03];
-        items.push(pole);
-        floor_items(g, &mut items);
-        ball_items(g, &mut items);
-    }
-    Scene3 {
-        eye: fr.eye.to_array(),
-        target: (fr.eye + fr.fwd * fr.dist).to_array(),
-        fov: FOV,
-        near: fr.dist * 0.3,
-        far: fr.dist * 4.0,
-        light: [-0.45, -1.0, -0.55],
-        illuminance: 9000.0,
-        ambient: 420.0,
-        sky: [0.55, 0.78, 0.98],
-        items,
     }
 }
 
@@ -492,7 +269,6 @@ fn draw_progress(g: &Helix, pen: &mut Pen, view: &View) {
 }
 
 pub fn draw(g: &Helix, pen: &mut Pen, view: &View, results_age: f32) {
-    pen.scene = Some(scene(g, view));
     if g.state == State::Select {
         draw_select(g, pen, view);
         return;
@@ -533,5 +309,4 @@ pub fn draw(g: &Helix, pen: &mut Pen, view: &View, results_age: f32) {
         }
         _ => {}
     }
-    let _ = vec3(0.0, 0.0, 0.0);
 }

@@ -1,6 +1,7 @@
 pub mod art;
 pub mod audio;
 pub mod draw;
+pub mod game3d;
 pub mod games;
 pub mod jev;
 pub mod link;
@@ -8,12 +9,10 @@ pub mod menu;
 pub mod paint;
 pub mod platform;
 pub mod profiles;
-pub mod scene3;
 pub mod shots;
 pub mod text;
 pub mod ui;
 pub mod web;
-pub mod world3d;
 
 use bevy::input::keyboard::{Key as BKey, KeyboardInput};
 use bevy::input::touch::TouchPhase;
@@ -38,6 +37,39 @@ pub struct Frame {
     audio: Option<audio::Audio>,
     per_mm: Option<Option<f32>>,
     last_size: (f32, f32),
+}
+
+impl Frame {
+    pub fn new(scene: Scene) -> Self {
+        Self {
+            scene,
+            demo: web::query("demo").map(|_| 0),
+            tracker: InputTracker::default(),
+            safe: SafeArea::default(),
+            audio: None,
+            per_mm: None,
+            last_size: (0.0, 0.0),
+        }
+    }
+
+    pub fn play(&self) -> Option<&dyn games::Play> {
+        match &self.scene {
+            Scene::Menu(app) => app.current.as_ref().map(|(_, p)| &**p),
+            Scene::Shot(s) => s.play(),
+            Scene::Jev(_) => None,
+        }
+    }
+
+    pub fn play_mut(&mut self) -> Option<&mut dyn games::Play> {
+        match &mut self.scene {
+            Scene::Menu(app) => app
+                .current
+                .as_mut()
+                .map(|(_, p)| &mut **p as &mut dyn games::Play),
+            Scene::Shot(s) => s.play_mut(),
+            Scene::Jev(_) => None,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -241,17 +273,9 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     )
     .insert_resource(ClearColor(Color::srgb(1.0, 0.7, 0.47)))
     .add_plugins(paint::PaintPlugin)
-    .add_plugins(world3d::World3dPlugin)
-    .insert_non_send(Frame {
-        scene,
-        demo: web::query("demo").map(|_| 0),
-        tracker: InputTracker::default(),
-        safe: SafeArea::default(),
-        audio: None,
-        per_mm: None,
-        last_size: (0.0, 0.0),
-    })
-    .add_systems(Update, frame);
+    .insert_non_send(Frame::new(scene))
+    .add_systems(Update, frame.in_set(game3d::Step))
+    .add_plugins(game3d::Game3dPlugin);
     if with_audio {
         app.add_systems(Startup, |mut f: NonSendMut<Frame>| {
             f.audio = Some(audio::Audio::new());
