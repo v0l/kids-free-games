@@ -853,9 +853,11 @@ mod tests {
     fn a_game_not_yet_ported_wobbles_and_stays_on_the_menu() {
         let v = View::ipad_landscape();
         let mut app = menu();
-        app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
-        app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
-        assert_eq!(app.focus, Some(1));
+        let target = crate::games::all().iter().position(|e| !e.ready()).unwrap();
+        for _ in 0..=target {
+            app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
+        }
+        assert_eq!(app.focus, Some(target));
         kg_core::sfx::take_pending();
         app.update(
             &Input {

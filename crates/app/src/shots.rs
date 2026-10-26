@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod paper_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (150, "paper arena 1 intro"),
+    (151, "paper go out onto the grass hint"),
+    (152, "paper come back home hint"),
+    (153, "paper first grab with the popup"),
+    (154, "paper arena 5 mid run against bots"),
+    (155, "paper arena 12 with four bots"),
+    (156, "paper lost with the board"),
+    (157, "paper arena clear"),
+    (158, "paper arenas picker"),
+    (159, "paper last arena cleared with a new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +290,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        150..=159 => paper_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -431,6 +443,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn paper_scenes_land_in_the_state_they_are_named_for() {
+        paper_scene::check();
     }
 
     #[test]

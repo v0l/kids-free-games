@@ -1,5 +1,6 @@
 pub mod crossy;
 pub mod flappy;
+pub mod paper;
 pub mod snake;
 
 use crate::geom::Color;
