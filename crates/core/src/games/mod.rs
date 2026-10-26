@@ -6,6 +6,7 @@ pub mod flappy;
 pub mod fruit;
 pub mod jumper;
 pub mod mathpop;
+pub mod memory;
 pub mod merge;
 pub mod paper;
 pub mod snake;

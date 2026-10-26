@@ -19,6 +19,7 @@ mod count_scene;
 mod fruit_scene;
 mod jumper_scene;
 mod mathpop_scene;
+mod memory_scene;
 mod merge_scene;
 mod paper_scene;
 mod snake_scene;
@@ -140,6 +141,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (157, "paper arena clear"),
     (158, "paper arenas picker"),
     (159, "paper last arena cleared with a new best"),
+    (90, "memory first level with the hint"),
+    (91, "memory level 3 mid game"),
+    (92, "memory a miss"),
+    (93, "memory the twin helper"),
+    (94, "memory level select"),
+    (95, "memory locked level tapped"),
+    (96, "memory level clear, three stars"),
+    (97, "memory level clear, one star"),
+    (98, "memory last level mid game"),
+    (99, "memory all done with the board"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -380,6 +391,7 @@ fn setup(n: u32, view: &View) -> Stage {
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
         150..=159 => paper_scene::setup(n, view),
+        90..=99 => memory_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -582,6 +594,11 @@ mod tests {
     #[test]
     fn breakout_scenes_land_in_the_state_they_are_named_for() {
         breakout_scene::check();
+    }
+
+    #[test]
+    fn memory_scenes_land_in_the_state_they_are_named_for() {
+        memory_scene::check();
     }
 
     #[test]

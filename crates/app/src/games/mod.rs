@@ -10,6 +10,7 @@ pub mod flappy;
 pub mod fruit;
 pub mod jumper;
 pub mod mathpop;
+pub mod memory;
 pub mod merge;
 pub mod paper;
 pub mod snake;
@@ -62,6 +63,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         mathpop::KEY => Some(|| Box::new(mathpop::MathPopPlay::new())),
         count::KEY => Some(|| Box::new(count::CountPlay::new())),
         paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
+        memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         _ => None,
     }
 }
