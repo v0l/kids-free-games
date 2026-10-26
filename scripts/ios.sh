@@ -10,6 +10,9 @@ cargo build -p kids_games --bin kids_games --profile "$PROFILE" --target "$TARGE
 rm -rf "$APP"
 mkdir -p "$APP"
 cp "target/$TARGET/$PROFILE/kids_games" "$APP/KidsGames"
+mkdir -p "$APP/assets/art"
+cp assets/art/*.kga "$APP/assets/art/"
+cp assets/sound.kgs assets/sound_words.kgs "$APP/assets/"
 sips -z 120 120 ios/icon-1024.png --out "$APP/AppIcon60x60@2x.png" >/dev/null
 sips -z 152 152 ios/icon-1024.png --out "$APP/AppIcon76x76@2x~ipad.png" >/dev/null
 sips -z 167 167 ios/icon-1024.png --out "$APP/AppIcon83.5x83.5@2x~ipad.png" >/dev/null

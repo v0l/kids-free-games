@@ -1,5 +1,5 @@
 use crate::sfx::{
-    self, db_to_gain, decode, find, ladder_of, pick_take, takes_of, unpack, voice_line, Cue,
+    self, db_to_gain, decode, find, ladder_of, pick_take, takes_of, voice_line, Cue,
     Limiter, Mix, Mood, Pitch, Sfx, SFX_BUS_DB, VOICE_GAP,
 };
 use std::collections::HashMap;
@@ -207,7 +207,7 @@ impl Mixer {
             let last = self.last_voice.get(&key).copied();
             let roll = self.next_roll();
             let pick = if key.starts_with("word_") {
-                find(sfx::packed(), &key)
+                find(sfx::words(), &key)
                     .and_then(Clip::from_ogg)
                     .map(|c| (0, c))
             } else {
@@ -324,7 +324,7 @@ pub struct Loader {
 
 impl Loader {
     pub fn new(first: Mood) -> Self {
-        let pack = unpack(sfx::PACK).unwrap_or_default();
+        let pack = sfx::packed().to_vec();
         let order = later_order(&pack, first);
         Self {
             pack,
@@ -355,12 +355,11 @@ impl Loader {
 }
 
 pub fn effects_bank() -> Bank {
-    Bank::effects(&unpack(sfx::PACK).unwrap_or_default())
+    Bank::effects(sfx::packed())
 }
 
 pub fn music_clip(m: Mood) -> Option<Clip> {
-    let pack = unpack(sfx::PACK)?;
-    Clip::from_ogg(find(&pack, m.key())?)
+    Clip::from_ogg(find(sfx::packed(), m.key())?)
 }
 
 #[cfg(test)]
@@ -541,8 +540,7 @@ mod tests {
 
     #[test]
     fn the_real_pack_loads_effects_first_and_the_rest_in_order() {
-        let pack = unpack(sfx::PACK).unwrap();
-        let order = later_order(&pack, Mood::Arcade);
+        let order = later_order(sfx::packed(), Mood::Arcade);
         assert_eq!(order[0].0, Later::Music(Mood::Arcade));
         assert!(order.iter().any(|o| o.0 == Later::Voice("say_go".into())));
         assert_eq!(

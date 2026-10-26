@@ -6,6 +6,7 @@ pub mod games;
 pub mod jev;
 pub mod link;
 pub mod menu;
+pub mod packs;
 pub mod paint;
 pub mod platform;
 pub mod profiles;
@@ -125,6 +126,7 @@ fn frame(
     mut key_events: MessageReader<KeyboardInput>,
     mut clear: ResMut<ClearColor>,
 ) {
+    packs::pump();
     let Ok(win) = window.single() else { return };
     let dpi = win.scale_factor();
     let (lw, lh) = (win.width(), win.height());
@@ -288,7 +290,9 @@ pub fn run() {
     if let Some(d) = platform::save_dir() {
         kg_core::save::set_dir(d);
     }
+    platform::install_asset_reader();
     art::predecode();
+    packs::begin();
     text::prewarm();
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),

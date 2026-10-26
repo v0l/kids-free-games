@@ -515,6 +515,9 @@ impl Shot {
     }
 
     pub fn frame(&mut self, pen: &mut Pen, view: &View, _dt: f32) {
+        if !crate::art::all_ready() {
+            return;
+        }
         if self.size != (view.w, view.h) || self.stage.is_none() {
             self.size = (view.w, view.h);
             self.stage = Some(setup(self.n % IDLE, view));

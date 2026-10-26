@@ -148,6 +148,7 @@ pub struct App {
     pub focus: Option<usize>,
     pub profiles: Option<crate::profiles::Profiles>,
     soon: Option<(usize, f32)>,
+    pub loading: Option<usize>,
 }
 
 impl Default for App {
@@ -180,6 +181,7 @@ impl App {
                 .is_none()
                 .then(crate::profiles::Profiles::new),
             soon: None,
+            loading: None,
         }
     }
 
@@ -187,6 +189,11 @@ impl App {
         let Some(make) = self.entries[i].make else {
             return;
         };
+        if !crate::packs::ready(self.entries[i].info.key) {
+            self.loading = Some(i);
+            return;
+        }
+        self.loading = None;
         kg_core::net::begin_play(self.entries[i].info.key);
         self.current = Some((i, make()));
         self.curtain = 1.0;
@@ -196,6 +203,7 @@ impl App {
         sfx::play(Sfx::Whoosh);
         kg_core::net::end_play();
         self.current = None;
+        self.loading = None;
         self.since_menu = 0.0;
         self.curtain = 1.0;
         self.pressed_tile = None;
@@ -223,8 +231,12 @@ impl App {
         let r = rects[i];
         let at = vec2(r.center().x, r.center().y - self.scroll);
         if self.entries[i].ready() {
-            self.launch = Some((i, 0.0));
             sfx::play(Sfx::Pop);
+            if crate::packs::ready(self.entries[i].info.key) {
+                self.launch = Some((i, 0.0));
+            } else {
+                self.loading = Some(i);
+            }
             self.fx.sparkle(at, self.entries[i].info.color);
         } else {
             self.soon = Some((i, 0.0));
@@ -246,6 +258,12 @@ impl App {
         self.since_menu += dt;
         self.curtain = (self.curtain - dt * 5.0).max(0.0);
         self.fx.update(dt);
+        if let Some(i) = self.loading {
+            if self.current.is_none() && self.launch.is_none() && crate::packs::ready(self.entries[i].info.key) {
+                self.loading = None;
+                self.launch = Some((i, 0.0));
+            }
+        }
         if let Some((_, t)) = &mut self.soon {
             *t += dt;
             if *t > 1.2 {
@@ -473,6 +491,14 @@ impl App {
                 e,
                 (focused || self.press[i] > 0.01).then_some(self.t),
             );
+            if self.loading == Some(i) {
+                let dots = ".".repeat(1 + (self.t * 3.0) as usize % 3);
+                pen.hint(
+                    &format!("Loading{dots}"),
+                    vec2(r.center().x, r.y + r.w * 0.5),
+                    1.0,
+                );
+            }
             if let Some((si, st)) = self.soon.filter(|(si, _)| *si == i) {
                 let a = (1.0 - (st - 0.8).max(0.0) / 0.4).clamp(0.0, 1.0);
                 let _ = si;
@@ -847,6 +873,99 @@ mod tests {
             1.0 / 60.0,
         );
         assert!(app.current.is_none());
+    }
+
+    fn tile_center(app: &App, v: &View, i: usize) -> glam::Vec2 {
+        app.layout(v).tiles[i].center()
+    }
+
+    #[test]
+    fn a_game_tapped_before_its_pack_arrives_shows_loading_then_plays() {
+        let v = View::ipad_landscape();
+        let i = app_index("flappy");
+        crate::art::hold_for_test("flappy", true);
+        let mut app = menu();
+        for _ in 0..90 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        app.update(&Input::press_at(tile_center(&app, &v, i)), &v, 1.0 / 60.0);
+        app.update(&Input {
+                pos: tile_center(&app, &v, i),
+                released: true,
+                ..Default::default()
+            }, &v, 1.0 / 60.0);
+        assert_eq!(app.loading, Some(i));
+        assert!(app.launch.is_none() && app.current.is_none());
+        for _ in 0..120 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert!(app.current.is_none(), "must wait for the pack");
+        let mut pen = Pen::default();
+        pen.begin(v, 1.0);
+        app.draw(&mut pen, &v);
+        crate::art::arrive_for_test("flappy");
+        for _ in 0..60 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert_eq!(app.current.as_ref().map(|c| c.0), Some(i));
+        assert!(app.loading.is_none());
+        for _ in 0..120 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        let mut pen = Pen::default();
+        pen.begin(v, 1.0);
+        app.draw(&mut pen, &v);
+        assert!(pen.vertex_count() > 100);
+    }
+
+    fn app_index(key: &str) -> usize {
+        crate::games::all()
+            .iter()
+            .position(|e| e.info.key == key)
+            .unwrap()
+    }
+
+    #[test]
+    fn open_never_starts_a_game_whose_pack_is_missing() {
+        crate::art::hold_for_test("paper", true);
+        let mut app = menu();
+        let i = app_index("paper");
+        app.open(i);
+        assert!(app.current.is_none());
+        assert_eq!(app.loading, Some(i));
+        crate::art::hold_for_test("paper", false);
+        app.open(i);
+        assert!(app.current.is_some());
+    }
+
+    #[test]
+    fn spell_it_waits_for_the_word_voices_too() {
+        crate::packs::hold_words_for_test(true);
+        let mut app = menu();
+        let i = app_index("spell");
+        app.open(i);
+        assert!(app.current.is_none());
+        crate::packs::hold_words_for_test(false);
+        app.open(i);
+        assert!(app.current.is_some());
+    }
+
+    #[test]
+    fn the_tile_draws_a_loading_hint_while_waiting() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        for _ in 0..90 {
+            app.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        let mut pen = Pen::default();
+        pen.begin(v, 1.0);
+        app.draw(&mut pen, &v);
+        let before = pen.vertex_count();
+        app.loading = Some(0);
+        let mut pen = Pen::default();
+        pen.begin(v, 1.0);
+        app.draw(&mut pen, &v);
+        assert!(pen.vertex_count() > before);
     }
 
     #[test]

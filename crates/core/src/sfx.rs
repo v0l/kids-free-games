@@ -214,11 +214,53 @@ pub struct Cue {
     pub pitch: Pitch,
 }
 
-pub static PACK: &[u8] = include_bytes!("../../../assets/sound.kgs");
+type Pack = std::sync::OnceLock<Vec<(&'static str, &'static [u8])>>;
+
+static SOUND: Pack = std::sync::OnceLock::new();
+static WORDS: Pack = std::sync::OnceLock::new();
+
+fn install(slot: &'static Pack, bytes: &'static [u8]) -> bool {
+    match unpack(bytes) {
+        Some(p) => slot.set(p).is_ok(),
+        None => false,
+    }
+}
+
+fn slot(slot: &'static Pack, file: &str) -> &'static [(&'static str, &'static [u8])] {
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    {
+        if slot.get().is_none() {
+            if let Some(b) = crate::assets::leaked(file) {
+                install(slot, b);
+            }
+        }
+    }
+    let _ = file;
+    slot.get().map_or(&[], |p| p.as_slice())
+}
+
+pub fn install_sound(bytes: &'static [u8]) -> bool {
+    install(&SOUND, bytes)
+}
+
+pub fn install_words(bytes: &'static [u8]) -> bool {
+    install(&WORDS, bytes)
+}
 
 pub fn packed() -> &'static [(&'static str, &'static [u8])] {
-    static P: std::sync::OnceLock<Vec<(&'static str, &'static [u8])>> = std::sync::OnceLock::new();
-    P.get_or_init(|| unpack(PACK).unwrap_or_default())
+    slot(&SOUND, crate::assets::SOUND)
+}
+
+pub fn words() -> &'static [(&'static str, &'static [u8])] {
+    slot(&WORDS, crate::assets::WORDS)
+}
+
+pub fn sound_ready() -> bool {
+    !packed().is_empty()
+}
+
+pub fn words_ready() -> bool {
+    !words().is_empty()
 }
 
 pub fn unpack(bytes: &[u8]) -> Option<Vec<(&str, &[u8])>> {
@@ -473,7 +515,8 @@ mod tests {
     use super::*;
 
     fn pack() -> Vec<(&'static str, &'static [u8])> {
-        unpack(PACK).expect("sound pack parses")
+        unpack(crate::assets::leaked(crate::assets::SOUND).expect("sound pack exists"))
+            .expect("sound pack parses")
     }
 
     fn pcm(ogg: &[u8]) -> Vec<f32> {

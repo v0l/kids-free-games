@@ -284,6 +284,9 @@ impl Pen {
     }
 
     pub fn sprite(&mut self, sheet: &'static str, name: &str, dest: Rect, d: Draw) {
+        if !crate::art::ready(sheet) {
+            return;
+        }
         let Some(f) = crate::art::frame(sheet, name) else {
             self.rect(dest, kg_core::geom::MAGENTA);
             return;
@@ -354,6 +357,9 @@ impl Pen {
         scale: f32,
         tint: Color,
     ) {
+        if !crate::art::ready(sheet) {
+            return;
+        }
         let Some(f) = crate::art::frame(sheet, name) else {
             self.rect(dest, kg_core::geom::MAGENTA);
             return;
