@@ -201,6 +201,11 @@ thread_local! {
 
 pub fn set_dir(dir: std::path::PathBuf) {
     DIR.with(|d| *d.borrow_mut() = Some(dir));
+    STORE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.loaded = false;
+        s.map.clear();
+    });
 }
 
 pub fn dir() -> Option<std::path::PathBuf> {
@@ -300,6 +305,26 @@ mod tests {
         assert!(!dir.join("save.tmp").exists());
         assert_eq!(decode(&backend::read()), m);
         let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn pointing_at_the_platform_dir_after_a_first_read_loads_that_save() {
+        let dir = std::env::temp_dir().join(format!("kg-late-dir-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("save.txt"), "profiles=x\nmarker=42\n").unwrap();
+        let got = std::thread::spawn(move || {
+            MEMORY.with(|m| m.set(false));
+            DIR.with(|d| *d.borrow_mut() = Some(std::env::temp_dir().join("kg-no-such-dir")));
+            assert_eq!(get("marker"), 0);
+            set_dir(dir.clone());
+            let v = get("marker");
+            let _ = std::fs::remove_dir_all(dir);
+            v
+        })
+        .join()
+        .unwrap();
+        assert_eq!(got, 42);
     }
 
     #[test]

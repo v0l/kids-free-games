@@ -28,6 +28,7 @@ pub enum Scene {
 
 pub struct Frame {
     pub scene: Scene,
+    demo: Option<u32>,
     tracker: InputTracker,
     safe: SafeArea,
     audio: Option<audio::Audio>,
@@ -149,6 +150,11 @@ fn frame(
         units_per_mm: per_mm,
         screen: vec2(lw, lh),
     };
+    let mut raw = raw;
+    if let Some(f) = &mut state.demo {
+        *f += 1;
+        demo_input(*f, &mut raw, &view);
+    }
     let input = state.tracker.poll(&raw, &view);
     let dt = time.delta_secs().min(1.0 / 20.0);
     pen.begin(view, view.scale * dpi);
@@ -164,6 +170,25 @@ fn frame(
         audio::tick(a, time.elapsed_secs_f64(), time.delta_secs().min(0.1), touched);
     }
     let _ = &mut clear;
+}
+
+fn demo_input(f: u32, raw: &mut Raw, view: &View) {
+    match f {
+        20 => raw.typed.extend("Demo".chars()),
+        30 => raw.keys_pressed.push(Key::Enter),
+        60 => raw.keys_pressed.push(Key::Right),
+        90 => raw.keys_pressed.push(Key::Enter),
+        _ if f > 150 && f % 22 == 0 => {
+            let at = view.to_screen(view.center());
+            raw.mouse = Pointer {
+                pos: at,
+                down: true,
+                pressed: true,
+                released: false,
+            };
+        }
+        _ => {}
+    }
 }
 
 pub fn window() -> Window {
@@ -185,9 +210,6 @@ pub fn window() -> Window {
 }
 
 pub fn build(scene: Scene, with_audio: bool) -> App {
-    if let Some(d) = platform::save_dir() {
-        kg_core::save::set_dir(d);
-    }
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
@@ -204,6 +226,7 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     .add_plugins(paint::PaintPlugin)
     .insert_non_send(Frame {
         scene,
+        demo: web::query("demo").map(|_| 0),
         tracker: InputTracker::default(),
         safe: SafeArea::default(),
         audio: None,
@@ -220,6 +243,9 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
 }
 
 pub fn run() {
+    if let Some(d) = platform::save_dir() {
+        kg_core::save::set_dir(d);
+    }
     text::prewarm();
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),
