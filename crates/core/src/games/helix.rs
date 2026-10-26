@@ -169,7 +169,7 @@ pub fn stars_for(bounces: u32, floors: usize) -> u8 {
     }
 }
 
-fn gap_start(segs: &[Seg; SEGMENTS]) -> Option<usize> {
+pub fn gap_start(segs: &[Seg; SEGMENTS]) -> Option<usize> {
     (0..SEGMENTS).find(|k| segs[*k] == Seg::Gap && segs[(k + SEGMENTS - 1) % SEGMENTS] != Seg::Gap)
 }
 

@@ -17,6 +17,7 @@ mod blocks_scene;
 mod breakout_scene;
 mod count_scene;
 mod fruit_scene;
+mod helix_scene;
 mod jumper_scene;
 mod mathpop_scene;
 mod memory_scene;
@@ -151,6 +152,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (97, "memory level clear, one star"),
     (98, "memory last level mid game"),
     (99, "memory all done with the board"),
+    (110, "helix level select"),
+    (111, "helix ready"),
+    (112, "helix first drop with the hint"),
+    (113, "helix mid run"),
+    (114, "helix red segments"),
+    (115, "helix smash streak"),
+    (116, "helix splat with the board"),
+    (117, "helix level clear, three stars"),
+    (118, "helix level clear, one star"),
+    (119, "helix last level mid run"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -387,6 +398,7 @@ fn setup(n: u32, view: &View) -> Stage {
         60..=69 => stack_scene::setup(n, view),
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
+        110..=119 => helix_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -594,6 +606,11 @@ mod tests {
     #[test]
     fn breakout_scenes_land_in_the_state_they_are_named_for() {
         breakout_scene::check();
+    }
+
+    #[test]
+    fn helix_scenes_land_in_the_state_they_are_named_for() {
+        helix_scene::check();
     }
 
     #[test]
