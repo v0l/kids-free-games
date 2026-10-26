@@ -57,12 +57,24 @@ thread_local! {
     };
 }
 
+thread_local! {
+    static MEMORY: std::cell::Cell<bool> = const { std::cell::Cell::new(cfg!(test)) };
+}
+
+pub fn in_memory() -> bool {
+    MEMORY.with(|m| m.get())
+}
+
+pub fn use_memory_only() {
+    MEMORY.with(|m| m.set(true));
+}
+
 fn with<R>(f: impl FnOnce(&mut Map) -> R) -> R {
     STORE.with(|s| {
         let mut s = s.borrow_mut();
         if !s.loaded {
             s.loaded = true;
-            if cfg!(not(test)) {
+            if !in_memory() {
                 s.map = decode(&backend::read());
             }
         }
@@ -72,7 +84,7 @@ fn with<R>(f: impl FnOnce(&mut Map) -> R) -> R {
 
 fn persist(text: Option<String>) {
     if let Some(t) = text {
-        if cfg!(not(test)) {
+        if !in_memory() {
             backend::write(&t);
         }
     }
@@ -153,102 +165,74 @@ pub fn player_set_str(key: &str, value: &str) {
     set_str(&player_key(key), value);
 }
 
-#[cfg(test)]
 pub fn reset_for_test() {
+    use_memory_only();
     with(|m| m.clear());
 }
 
-#[cfg(test)]
 pub fn swap_for_test(other: Map) -> Map {
     with(|m| std::mem::replace(m, other))
 }
 
 #[cfg(target_arch = "wasm32")]
 mod backend {
-    extern "C" {
-        fn kg_save_len() -> u32;
-        fn kg_save_read(ptr: *mut u8, len: u32);
-        fn kg_save_write(ptr: *const u8, len: u32);
+    const KEY: &str = "kids-free-games-save";
+
+    fn storage() -> Option<web_sys::Storage> {
+        web_sys::window()?.local_storage().ok()?
     }
 
     pub fn read() -> String {
-        unsafe {
-            let n = kg_save_len();
-            let mut buf = vec![0u8; n as usize];
-            if n > 0 {
-                kg_save_read(buf.as_mut_ptr(), n);
-            }
-            String::from_utf8(buf).unwrap_or_default()
-        }
+        storage()
+            .and_then(|s| s.get_item(KEY).ok().flatten())
+            .unwrap_or_default()
     }
 
     pub fn write(text: &str) {
-        unsafe { kg_save_write(text.as_ptr(), text.len() as u32) }
+        if let Some(s) = storage() {
+            let _ = s.set_item(KEY, text);
+        }
     }
+}
+
+thread_local! {
+    static DIR: RefCell<Option<std::path::PathBuf>> = const { RefCell::new(None) };
+}
+
+pub fn set_dir(dir: std::path::PathBuf) {
+    DIR.with(|d| *d.borrow_mut() = Some(dir));
+}
+
+pub fn dir() -> Option<std::path::PathBuf> {
+    DIR.with(|d| d.borrow().clone()).or_else(default_dir)
+}
+
+#[cfg(target_arch = "wasm32")]
+fn default_dir() -> Option<std::path::PathBuf> {
+    None
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+fn default_dir() -> Option<std::path::PathBuf> {
+    backend::default_dir()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
 mod backend {
     use std::path::PathBuf;
 
-    #[cfg(target_os = "android")]
-    fn dir() -> Option<PathBuf> {
-        use macroquad::miniquad::native::android::{attach_jni_env, ACTIVITY};
-        unsafe {
-            let env = attach_jni_env();
-            if ACTIVITY.is_null() {
-                return None;
-            }
-            let get_class = (**env).GetObjectClass.unwrap();
-            let get_method = (**env).GetMethodID.unwrap();
-            let call_object = (**env).CallObjectMethod.unwrap();
-            let check = (**env).ExceptionCheck.unwrap();
-            let clear = (**env).ExceptionClear.unwrap();
-            let chars = (**env).GetStringUTFChars.unwrap();
-            let release = (**env).ReleaseStringUTFChars.unwrap();
-            let delete = (**env).DeleteLocalRef.unwrap();
-            let class = get_class(env, ACTIVITY);
-            let m = get_method(
-                env,
-                class,
-                c"getFilesDir".as_ptr(),
-                c"()Ljava/io/File;".as_ptr(),
-            );
-            let file = call_object(env, ACTIVITY, m);
-            if file.is_null() || check(env) != 0 {
-                clear(env);
-                return None;
-            }
-            let fclass = get_class(env, file);
-            let p = get_method(
-                env,
-                fclass,
-                c"getAbsolutePath".as_ptr(),
-                c"()Ljava/lang/String;".as_ptr(),
-            );
-            let s = call_object(env, file, p);
-            if s.is_null() || check(env) != 0 {
-                clear(env);
-                return None;
-            }
-            let c = chars(env, s, std::ptr::null_mut());
-            let out = std::ffi::CStr::from_ptr(c).to_string_lossy().into_owned();
-            release(env, s, c);
-            delete(env, s);
-            delete(env, fclass);
-            delete(env, file);
-            delete(env, class);
-            Some(PathBuf::from(out))
-        }
-    }
-
     #[cfg(target_os = "ios")]
-    fn dir() -> Option<PathBuf> {
+    pub fn default_dir() -> Option<PathBuf> {
         std::env::var_os("HOME").map(|h| PathBuf::from(h).join("Library/Application Support"))
     }
 
+    #[cfg(target_os = "android")]
+    pub fn default_dir() -> Option<PathBuf> {
+        None
+    }
+
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
-    fn dir() -> Option<PathBuf> {
+    pub fn default_dir() -> Option<PathBuf> {
         let base = std::env::var_os("XDG_DATA_HOME")
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("APPDATA").map(PathBuf::from))
@@ -257,7 +241,7 @@ mod backend {
     }
 
     fn path() -> Option<PathBuf> {
-        dir().map(|d| d.join("save.txt"))
+        super::dir().map(|d| d.join("save.txt"))
     }
 
     pub fn read() -> String {
@@ -302,6 +286,20 @@ mod tests {
         set("t.best", 1);
         assert_eq!(get("t.best"), 1);
         assert_eq!(get("missing"), 0);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn the_save_file_is_written_atomically_and_read_back() {
+        let dir = std::env::temp_dir().join(format!("kg-save-{}", std::process::id()));
+        set_dir(dir.clone());
+        let mut m = Map::new();
+        m.insert("p.x.name".into(), "Mia\nLou".into());
+        backend::write(&encode(&m));
+        assert!(dir.join("save.txt").exists());
+        assert!(!dir.join("save.tmp").exists());
+        assert_eq!(decode(&backend::read()), m);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

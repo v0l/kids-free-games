@@ -783,7 +783,7 @@ fn with<R>(f: impl FnOnce(&mut Net) -> R) -> Option<R> {
 }
 
 fn unix_now() -> i64 {
-    macroquad::miniquad::date::now() as i64
+    crate::clock::unix_secs() as i64
 }
 
 pub fn update(dt: f32, active: bool) {
@@ -841,14 +841,7 @@ pub fn clear_redeem() {
 }
 
 pub fn active(input: &crate::engine::Input) -> bool {
-    input.down
-        || input.pressed
-        || input.released
-        || input.swipe.is_some()
-        || input.key_dir.is_some()
-        || input.left
-        || input.right
-        || input.action
+    input.active()
 }
 
 pub fn request_board(game: &str) {

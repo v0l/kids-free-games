@@ -45,7 +45,7 @@ fn now_secs() -> i64 {
     }
     #[cfg(not(test))]
     {
-        (macroquad::miniquad::date::now()) as i64
+        crate::clock::unix_secs() as i64
     }
 }
 
@@ -56,7 +56,7 @@ pub(crate) fn entropy() -> [u8; 16] {
     SEED.with(|s| {
         let mut s = s.borrow_mut();
         if *s == 0 {
-            let t = (macroquad::miniquad::date::now() * 1e6) as u64;
+            let t = (crate::clock::unix_secs() * 1e6) as u64;
             let addr = &*s as *const u64 as u64;
             *s = t ^ addr.rotate_left(29) ^ 0x9e37_79b9_7f4a_7c15;
         }

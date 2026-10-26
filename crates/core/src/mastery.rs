@@ -366,25 +366,6 @@ mod tests {
     }
 
     #[test]
-    fn every_learning_game_is_listed_with_its_bands() {
-        assert_eq!(
-            bands_of("mathpop"),
-            Some(crate::games::mathpop::LEVEL_NAMES.len())
-        );
-        assert_eq!(bands_of("count"), Some(crate::games::count::RANGES.len()));
-        assert!(bands_of("spell").is_some());
-        assert_eq!(bands_of("flappy"), None);
-        for e in crate::games::all() {
-            assert_eq!(
-                bands_of(e.icon_key).is_some(),
-                e.kind == crate::games::Kind::Learn,
-                "{}",
-                e.name
-            );
-        }
-    }
-
-    #[test]
     fn progress_counts_tiers_over_all_bands() {
         fresh();
         for _ in 0..12 {

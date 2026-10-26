@@ -1,41 +1,25 @@
-[package]
-name = "kids_games"
+[workspace]
+resolver = "2"
+members = ["crates/core"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
 
-[dependencies]
-fontdue = "0.9"
-image = { version = "0.24", default-features = false, features = ["jpeg", "png", "webp"] }
-lewton = "0.10"
-macroquad = { version = "0.4", features = ["audio"] }
-serde_json = "1"
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ureq = { version = "2", default-features = false, features = ["tls"] }
-[target.'cfg(target_os = "ios")'.dependencies]
-objc = { version = "0.2", package = "objc-rs" }
+[workspace.dependencies]
+glam = { version = "0.33", default-features = false, features = ["std", "i32"] }
 
+[profile.dev.package."*"]
+opt-level = 2
 
 [profile.release]
 opt-level = 3
 lto = "thin"
 strip = true
 
-[package.metadata.android]
-package_name = "io.v0l.kids_games"
-label = "Kids Games"
-version_code = 1
-version_name = "0.1.0"
-android_version = 31
-target_sdk_version = 31
-min_sdk_version = 26
-build_targets = ["aarch64-linux-android", "armv7-linux-androideabi", "x86_64-linux-android"]
-fullscreen = true
-res = "android/res"
-icon = "@mipmap/ic_launcher"
-
-[[package.metadata.android.permission]]
-name = "android.permission.INTERNET"
-
-[package.metadata.android.activity_attributes]
-"android:screenOrientation" = "fullSensor"
-"android:exported" = "true"
+[profile.small]
+inherits = "release"
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

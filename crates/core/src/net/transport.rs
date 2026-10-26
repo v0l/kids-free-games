@@ -137,66 +137,72 @@ mod platform {
 #[cfg(target_arch = "wasm32")]
 mod platform {
     use super::*;
-
-    extern "C" {
-        fn kg_http_start(
-            method: *const u8,
-            method_len: u32,
-            url: *const u8,
-            url_len: u32,
-            token: *const u8,
-            token_len: u32,
-            body: *const u8,
-            body_len: u32,
-        ) -> u32;
-        fn kg_http_status(id: u32) -> i32;
-        fn kg_http_len(id: u32) -> u32;
-        fn kg_http_read(id: u32, ptr: *mut u8, len: u32);
-        fn kg_http_free(id: u32);
-    }
+    use std::cell::RefCell;
+    use std::collections::HashMap;
+    use std::rc::Rc;
+    use wasm_bindgen::JsCast;
 
     #[derive(Default)]
-    pub struct Platform;
+    pub struct Platform {
+        next: u32,
+        done: Rc<RefCell<HashMap<u32, HttpResponse>>>,
+    }
+
+    async fn call(req: HttpRequest) -> HttpResponse {
+        let fail = HttpResponse::network_error();
+        let Some(window) = web_sys::window() else {
+            return fail;
+        };
+        let init = web_sys::RequestInit::new();
+        init.set_method(req.method);
+        let Ok(headers) = web_sys::Headers::new() else {
+            return fail;
+        };
+        if let Some(t) = &req.token {
+            let _ = headers.set("Authorization", &format!("Bearer {t}"));
+        }
+        if let Some(b) = &req.body {
+            let _ = headers.set("Content-Type", "application/json");
+            init.set_body(&wasm_bindgen::JsValue::from_str(b));
+        }
+        init.set_headers(&headers);
+        let Ok(request) = web_sys::Request::new_with_str_and_init(&full_url(&req.path), &init)
+        else {
+            return fail;
+        };
+        let Ok(resp) = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
+            .await
+        else {
+            return fail;
+        };
+        let Ok(resp) = resp.dyn_into::<web_sys::Response>() else {
+            return fail;
+        };
+        let status = resp.status() as i32;
+        let Ok(text) = resp.text() else { return fail };
+        match wasm_bindgen_futures::JsFuture::from(text).await {
+            Ok(t) => HttpResponse {
+                status,
+                body: t.as_string().unwrap_or_default(),
+            },
+            Err(_) => fail,
+        }
+    }
 
     impl Transport for Platform {
         fn start(&mut self, req: HttpRequest) -> u32 {
-            let url = full_url(&req.path);
-            let token = req.token.unwrap_or_default();
-            let body = req.body.unwrap_or_default();
-            unsafe {
-                kg_http_start(
-                    req.method.as_ptr(),
-                    req.method.len() as u32,
-                    url.as_ptr(),
-                    url.len() as u32,
-                    token.as_ptr(),
-                    token.len() as u32,
-                    body.as_ptr(),
-                    body.len() as u32,
-                )
-            }
+            self.next += 1;
+            let id = self.next;
+            let done = self.done.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let r = call(req).await;
+                done.borrow_mut().insert(id, r);
+            });
+            id
         }
 
         fn poll(&mut self, id: u32) -> Option<HttpResponse> {
-            unsafe {
-                let status = kg_http_status(id);
-                if status == 0 {
-                    return None;
-                }
-                let n = kg_http_len(id);
-                let mut buf = vec![0u8; n as usize];
-                if n > 0 {
-                    kg_http_read(id, buf.as_mut_ptr(), n);
-                }
-                kg_http_free(id);
-                if status < 0 {
-                    return Some(HttpResponse::network_error());
-                }
-                Some(HttpResponse {
-                    status,
-                    body: String::from_utf8(buf).unwrap_or_default(),
-                })
-            }
+            self.done.borrow_mut().remove(&id)
         }
     }
 }

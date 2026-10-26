@@ -1,8 +1,10 @@
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
+use crate::geom::*;
 use crate::sfx::{self, Sfx};
-use macroquad::prelude::*;
+use glam::{vec2, Vec2};
+use quad_rand as rand;
 
 pub const GRAVITY: f32 = 1500.0;
 pub const FLAP: f32 = -520.0;
@@ -124,15 +126,15 @@ pub struct Flappy {
     pub training: bool,
     pub help: u32,
     pub furthest: u32,
-    t: f32,
-    dead_t: f32,
-    scroll: f32,
-    kick: f32,
-    flash: f32,
-    fx: Particles,
-    shake: Shake,
-    popups: Popups,
-    bump: Bump,
+    pub t: f32,
+    pub dead_t: f32,
+    pub scroll: f32,
+    pub kick: f32,
+    pub flash: f32,
+    pub fx: Particles,
+    pub shake: Shake,
+    pub popups: Popups,
+    pub bump: Bump,
 }
 
 impl Flappy {
@@ -161,7 +163,7 @@ impl Flappy {
         }
     }
 
-    fn bird_x(view: &View) -> f32 {
+    pub fn bird_x(view: &View) -> f32 {
         view.w * 0.3
     }
 
@@ -419,74 +421,6 @@ impl Game for Flappy {
             }
         }
     }
-
-    fn draw(&self, view: &View) {
-        set_view_camera(view, self.shake.offset());
-        self.draw_world(view);
-        self.fx.draw();
-        self.popups.draw();
-        set_view_camera(view, Vec2::ZERO);
-        if self.flash > 0.0 {
-            fill_screen(view, with_alpha(WHITE, self.flash * 0.7));
-        }
-        if self.state == State::Playing {
-            big_score(view, &self.score.to_string(), 80.0, self.bump.t);
-            self.draw_goal(view);
-            if self.training {
-                let pulse = 1.0 + (self.t * 5.0).sin() * 0.05;
-                crate::ui::hint(
-                    view,
-                    "Tap to fly up, fly through the gap",
-                    vec2(view.w / 2.0, view.h * 0.8),
-                    pulse,
-                );
-            }
-        }
-        chip(view, Side::Right, "BEST", &self.best.0.to_string(), 1.0);
-        match self.state {
-            State::Ready => {
-                let bob = (self.t * 4.0).sin() * 6.0;
-                crate::ui::ribbon(
-                    view,
-                    "Get Ready!",
-                    vec2(view.w / 2.0, view.h * 0.2 + bob),
-                    self.t,
-                );
-                let pulse = 1.0 + (self.t * 5.0).sin() * 0.05;
-                crate::ui::hint(
-                    view,
-                    "Tap to flap",
-                    vec2(view.w / 2.0, view.h * 0.74),
-                    pulse,
-                );
-                let goal = format!(
-                    "Goal: reach {}   Furthest: {}",
-                    MILESTONE,
-                    self.furthest * MILESTONE
-                );
-                text_shadow(&goal, view.w / 2.0, view.h * 0.84, 32.0, WHITE);
-            }
-            State::Dead if self.dead_t > 0.4 => {
-                let line = self.result_line();
-                results(
-                    view,
-                    &crate::ui::Results {
-                        game: GAME,
-                        title: "Bonk!",
-                        line: &line,
-                        rank: self.rank,
-                        action: "Fly again",
-                        format: crate::ui::plain_score,
-                    },
-                );
-            }
-            _ => {}
-        }
-    }
-}
-
-mod art {
-    crate::sprites!("flappy");
 }
 
 pub fn tile_x(view_x: f32, view_w: f32, tile_w: f32, scroll: f32) -> Vec<f32> {
@@ -498,22 +432,6 @@ pub fn tile_x(view_x: f32, view_w: f32, tile_w: f32, scroll: f32) -> Vec<f32> {
         x += tile_w;
     }
     out
-}
-
-fn band(name: &str, view: &View, bottom: f32, h: f32, scroll: f32, tint: Color) {
-    let f = view.full();
-    let s = art::size(name);
-    let w = h * s.x / s.y;
-    for x in tile_x(f.x, f.w, w, scroll) {
-        art::sprite_ex(
-            name,
-            Rect::new(x, bottom - h, w + 1.0, h),
-            crate::art::Draw {
-                tint,
-                ..Default::default()
-            },
-        );
-    }
 }
 
 impl Flappy {
@@ -531,81 +449,29 @@ impl Flappy {
         }
     }
 
-    fn draw_goal(&self, view: &View) {
+    pub fn goal_progress(&self) -> f32 {
         let goal = next_goal(self.score);
         let from = goal - MILESTONE;
-        let frac = (self.score - from) as f32 / MILESTONE as f32;
-        let w = 300.0f32.min(view.w * 0.5);
-        let r = Rect::new(view.w / 2.0 - w / 2.0, 118.0, w, 22.0);
-        round_rect(r, 11.0, Color::new(0.1, 0.05, 0.2, 0.45));
-        if frac > 0.0 {
-            let fill = Rect::new(r.x + 2.0, r.y + 2.0, (r.w - 4.0) * frac, r.h - 4.0);
-            round_rect(fill, fill.h / 2.0, Color::from_rgba(255, 200, 40, 255));
-        }
-        let label = format!("Next: {}", stage_name(stage_of(self.score) + 1));
-        text_shadow(&label, view.w / 2.0, r.y + 46.0, 26.0, WHITE);
+        (self.score - from) as f32 / MILESTONE as f32
     }
 
-    fn draw_world(&self, view: &View) {
-        let f = view.full();
-        let gy = view.h - GROUND;
-        let tint = stage_tint(stage_of(self.score));
-        band("sky", view, f.y + f.h, f.h, self.scroll * 0.08, tint);
-        band(
-            "hills",
-            view,
-            gy + 20.0,
-            (f.h * 0.42).max(260.0),
-            self.scroll * 0.35,
-            tint,
-        );
-        for p in &self.pipes {
-            Self::draw_pipe(p, view);
-        }
-        let gs = art::size("ground");
-        let gh = GROUND + 34.0 + view.inset.bottom + 40.0;
-        let top_frac = 116.0 / gs.y;
-        let h = (GROUND + 34.0) / (1.0 - top_frac);
-        let w = h * gs.x / gs.y;
-        for x in tile_x(f.x, f.w, w, self.scroll) {
-            art::sprite(
-                "ground",
-                Rect::new(x, gy - 34.0 - h * top_frac, w + 1.0, h.max(gh)),
-            );
-        }
-        self.draw_bird(view);
+    pub fn bird_angle(&self) -> f32 {
+        (self.vy / 900.0).clamp(-0.45, 1.1)
     }
 
-    fn draw_pipe(p: &Pipe, view: &View) {
-        let [top, bottom] = Self::pipe_rects(p, view);
-        let cap = art::size("pipe_cap");
-        let body = art::size("pipe_body");
-        let cw = PIPE_W * 1.24;
-        let ch = cw * cap.y / cap.x;
-        let bw = PIPE_W * 1.02;
-        let _ = body;
-        let seg = bw * body.y / body.x;
-        let cx = p.x + PIPE_W / 2.0;
-        let _ = seg;
-        let column = |from: f32, to: f32| {
-            if to > from {
-                art::sprite("pipe_body", Rect::new(cx - bw / 2.0, from, bw, to - from));
-            }
-        };
-        column(top.y, top.y + top.h - ch * 0.6);
-        art::sprite_ex(
-            "pipe_cap",
-            Rect::new(cx - cw / 2.0, top.y + top.h - ch, cw, ch),
-            crate::art::Draw {
-                flip_y: true,
-                ..Default::default()
-            },
-        );
-        column(bottom.y + ch * 0.6, bottom.y + bottom.h);
-        art::sprite("pipe_cap", Rect::new(cx - cw / 2.0, bottom.y, cw, ch));
+    pub fn shows_results(&self) -> bool {
+        self.state == State::Dead && self.dead_t > 0.4
     }
 
-    fn bird_frame(&self) -> &'static str {
+    pub fn ready_line(&self) -> String {
+        format!(
+            "Goal: reach {}   Furthest: {}",
+            MILESTONE,
+            self.furthest * MILESTONE
+        )
+    }
+
+    pub fn bird_frame(&self) -> &'static str {
         if self.state == State::Dead {
             return "bird_hurt";
         }
@@ -617,40 +483,6 @@ impl Flappy {
             "bird_up"
         }
     }
-
-    fn draw_bird(&self, view: &View) {
-        let bx = Self::bird_x(view);
-        let angle = (self.vy / 900.0).clamp(-0.45, 1.1);
-        let sc = bird_scale(self.vy, self.kick);
-        let ground_y = view.h - GROUND;
-        let height = (ground_y - self.y).max(0.0);
-        soft_shadow(
-            vec2(bx, ground_y + 6.0),
-            BIRD_R * (1.4 - (height / 600.0).min(0.7)),
-            5.0,
-            0.5,
-        );
-        let frame = self.bird_frame();
-        let h = BIRD_R * 3.4;
-        let w = h * art::size(frame).x / art::size(frame).y;
-        art::sprite_ex(
-            frame,
-            Rect::new(
-                bx - w * sc.x / 2.0,
-                self.y - h * sc.y / 2.0,
-                w * sc.x,
-                h * sc.y,
-            ),
-            crate::art::Draw {
-                rotation: angle,
-                ..Default::default()
-            },
-        );
-    }
-}
-
-pub fn icon(r: Rect) {
-    crate::ui::icon("flappy", r);
 }
 
 #[cfg(test)]
@@ -659,7 +491,9 @@ mod tests {
 
     #[test]
     fn flappy_sprites_all_exist() {
-        let have = art::names();
+        let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/flappy.kga")).unwrap();
+        let idx = crate::art::parse(&b).unwrap();
+        let have: Vec<String> = idx.frames.keys().cloned().collect();
         for n in [
             "sky",
             "hills",
