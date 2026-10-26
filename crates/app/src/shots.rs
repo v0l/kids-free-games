@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod memory_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (90, "memory first level with the hint"),
+    (91, "memory level 3 mid game"),
+    (92, "memory a miss"),
+    (93, "memory the twin helper"),
+    (94, "memory level select"),
+    (95, "memory locked level tapped"),
+    (96, "memory level clear, three stars"),
+    (97, "memory level clear, one star"),
+    (98, "memory last level mid game"),
+    (99, "memory all done with the board"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +290,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        90..=99 => memory_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -436,6 +448,11 @@ mod tests {
     #[test]
     fn snake_scenes_land_in_the_state_they_are_named_for() {
         snake_scene::check();
+    }
+
+    #[test]
+    fn memory_scenes_land_in_the_state_they_are_named_for() {
+        memory_scene::check();
     }
 
     #[test]
