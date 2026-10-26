@@ -20,13 +20,13 @@ pub const RING_OUTER: f32 = 150.0;
 pub const RING_INNER: f32 = 60.0;
 pub const RING_THICK: f32 = 18.0;
 pub const FOV: f32 = 0.5236;
-pub const PITCH: f32 = 0.42;
+pub const PITCH: f32 = 0.4;
 const DRAG_DEADZONE_MM: f32 = 1.0;
 const DRAG_TURN: f32 = 0.012;
 const DRAG_EASE: f32 = 28.0;
-const WIN_DELAY: f32 = 0.8;
-const STAR_START: f32 = 0.3;
-const STAR_GAP: f32 = 0.25;
+pub const WIN_DELAY: f32 = 0.8;
+pub const STAR_START: f32 = 0.3;
+pub const STAR_GAP: f32 = 0.25;
 
 static NEXT_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 

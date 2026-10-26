@@ -8,6 +8,7 @@ pub mod count;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
+pub mod helix;
 pub mod jumper;
 pub mod mathpop;
 pub mod memory;
@@ -64,6 +65,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         count::KEY => Some(|| Box::new(count::CountPlay::new())),
         paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
         memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
+        helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         _ => None,
     }
 }
