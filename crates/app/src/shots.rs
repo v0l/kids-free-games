@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod blocks_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (120, "blocks ready"),
+    (121, "blocks first piece with the hint"),
+    (122, "blocks mid game"),
+    (123, "blocks rows clearing"),
+    (124, "blocks four rows and level up"),
+    (125, "blocks game over with the board"),
+    (126, "blocks new best"),
+    (127, "blocks fresh start rescue"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +288,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        120..=129 => blocks_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -431,6 +441,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn blocks_scenes_land_in_the_state_they_are_named_for() {
+        blocks_scene::check();
     }
 
     #[test]
