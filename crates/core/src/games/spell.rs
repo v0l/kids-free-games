@@ -1509,4 +1509,118 @@ mod tests {
             }
         }
     }
+
+    #[test]
+    fn a_big_pool_mostly_shows_new_words_across_replays() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        let mut seen = std::collections::HashSet::new();
+        let mut total = 0;
+        for _ in 0..6 {
+            for w in level_words(4, &[]) {
+                total += 1;
+                seen.insert(w);
+                remember(w, memory_of(w).after(round() + 1, true));
+                profile::set(KEY, "round", round() as i64 + 1);
+            }
+        }
+        assert!(seen.len() as f32 >= total as f32 * 0.75, "{} of {total}", seen.len());
+    }
+
+    #[test]
+    fn a_missed_word_comes_back_soon_and_a_mastered_one_waits() {
+        let pool = ["aaa", "bbb", "ccc", "ddd", "eee", "fff", "ggg", "hhh"];
+        let memory = |w: &str| match w {
+            "aaa" => Memory { at: 1, due: 7, rung: 0 },
+            "bbb" => Memory { at: 1, due: 201, rung: 4 },
+            _ => Memory::default(),
+        };
+        let deck = choose(&pool, &memory, 10, &[], 5);
+        assert!(deck.contains(&"aaa"));
+        assert!(!deck.contains(&"bbb"));
+        let early = choose(&pool, &memory, 3, &[], 5);
+        assert!(!early.contains(&"aaa"));
+    }
+
+    #[test]
+    fn spacing_grows_with_each_perfect_spelling_and_resets_on_a_slip() {
+        let mut m = Memory::default();
+        let mut gaps = vec![];
+        for round in 1..=4 {
+            m = m.after(round * 1000, true);
+            gaps.push(m.due - round * 1000);
+        }
+        assert!(gaps.windows(2).all(|w| w[0] < w[1]));
+        let slipped = m.after(9000, false);
+        assert_eq!(slipped.due - 9000, GAPS[0]);
+    }
+
+    #[test]
+    fn new_words_are_preferred_over_seen_ones() {
+        let pool = ["aaa", "bbb", "ccc", "ddd", "eee", "fff"];
+        let memory = |w: &str| {
+            if w <= "ccc" {
+                Memory { at: 5, due: 500, rung: 2 }
+            } else {
+                Memory::default()
+            }
+        };
+        let deck = choose(&pool, &memory, 10, &[], 3);
+        assert!(deck.iter().all(|w| *w > "ccc"));
+    }
+
+    #[test]
+    fn decoys_include_look_alike_letters() {
+        let mut hit = 0;
+        for _ in 0..40 {
+            let t = make_tiles("bed", 2);
+            if t.iter().any(|c| "dpgaiu".contains(*c)) {
+                hit += 1;
+            }
+        }
+        assert!(hit >= 38);
+    }
+
+    #[test]
+    fn every_word_is_in_the_level_its_band_says() {
+        for (i, l) in LEVELS.iter().enumerate() {
+            for w in words_in(i) {
+                assert!(l.bands.contains(&crate::games::spell_words::band_of(w).unwrap()));
+            }
+        }
+        let covered: std::collections::HashSet<&str> =
+            (0..LEVELS.len()).flat_map(words_in).collect();
+        assert!(covered.len() >= 450, "{}", covered.len());
+    }
+
+    #[test]
+    fn a_strong_player_masters_levels_a_weak_one_does_not() {
+        let view = View::ipad_landscape();
+        let strong = |level: usize| {
+            let mut g = fresh(level);
+            solve_deck(&mut g, &view, true);
+            g.slips
+        };
+        let weak = |level: usize| {
+            let mut g = fresh(level);
+            solve_deck(&mut g, &view, false);
+            g.slips
+        };
+        for level in [0, 4, 8] {
+            assert_eq!(strong(level), 0, "level {level}");
+            assert!(weak(level) >= 4, "level {level}");
+        }
+    }
+
+    #[test]
+    fn finishing_a_word_updates_its_memory_and_the_round() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(0);
+        let first = g.word();
+        assert_eq!(memory_of(first), Memory::default());
+        solve_deck(&mut g, &view, true);
+        assert_eq!(round(), QUESTIONS as u32);
+        assert!(memory_of(first).seen());
+        assert!(memory_of(first).due > memory_of(first).at);
+    }
 }
