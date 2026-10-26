@@ -85,6 +85,10 @@ async function run(wsUrl) {
   });
   await send("Page.navigate", { url });
   await new Promise((r) => setTimeout(r, Number(waitMs)));
+  if (process.env.EVAL) {
+    const r = await send("Runtime.evaluate", { expression: process.env.EVAL, returnByValue: true, awaitPromise: true });
+    console.log(`[eval] ${JSON.stringify(r.result.result.value)}`);
+  }
   const shot = await send("Page.captureScreenshot", { format: "png" });
   fs.writeFileSync(out, Buffer.from(shot.result.data, "base64"));
   finish(0);
