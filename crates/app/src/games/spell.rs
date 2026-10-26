@@ -39,6 +39,10 @@ impl Play for SpellPlay {
         draw(&self.g, pen, view);
     }
 
+    fn over(&self) -> bool {
+        matches!(self.g.screen, Screen::Final(_))
+    }
+
     fn score(&self) -> u32 {
         profile::total_stars(KEY)
     }
@@ -169,7 +173,7 @@ pub fn draw(g: &Spell, pen: &mut Pen, view: &View) {
     };
     for (i, r) in l.slots.iter().enumerate() {
         if i >= g.board.filled {
-            let next = i == g.board.filled;
+            let next = i == g.board.filled && shows_next_slot(g.level);
             pen.sprite(
                 SHEET,
                 "tile",

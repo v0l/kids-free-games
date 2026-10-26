@@ -2,6 +2,7 @@ pub mod crossy;
 pub mod flappy;
 pub mod snake;
 pub mod spell;
+pub mod spell_words;
 
 use crate::geom::Color;
 

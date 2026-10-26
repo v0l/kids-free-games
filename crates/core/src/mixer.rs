@@ -206,10 +206,14 @@ impl Mixer {
             let key = v.key();
             let last = self.last_voice.get(&key).copied();
             let roll = self.next_roll();
-            let pick = self.bank.voices.get(&key).map(|takes| {
-                let i = pick_take(takes.len(), last, roll);
-                (i, takes[i].clone())
-            });
+            let pick = if key.starts_with("word_") {
+                find(sfx::packed(), &key).and_then(Clip::from_ogg).map(|c| (0, c))
+            } else {
+                self.bank.voices.get(&key).map(|takes| {
+                    let i = pick_take(takes.len(), last, roll);
+                    (i, takes[i].clone())
+                })
+            };
             if let Some((i, clip)) = pick {
                 self.last_voice.insert(key.clone(), i);
                 self.start(clip, gain, false);

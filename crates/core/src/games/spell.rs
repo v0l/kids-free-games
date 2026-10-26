@@ -1,8 +1,10 @@
 use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
+pub use crate::games::spell_words::{words, Word};
 use crate::geom::*;
 use crate::learn::{tall, ui_scale, PRAISE};
+use crate::mastery;
 use crate::profile;
 use crate::sfx::{self, Sfx};
 use glam::vec2;
@@ -16,15 +18,6 @@ const WIN_TIME: f32 = 1.6;
 const SLIDE_TIME: f32 = 0.22;
 const MIN_TILE: f32 = 96.0;
 
-pub const WORDS: [&str; 63] = [
-    "cat", "dog", "sun", "bus", "car", "hat", "cup", "egg", "bee", "pig", "cow", "fox", "owl", "hen",
-    "key", "bed", "fish", "tree", "cake", "star", "ball", "duck", "frog", "moon", "boat", "kite",
-    "bear", "bird", "lion", "shoe", "drum", "bell", "house", "apple", "heart", "train", "cloud",
-    "snail", "horse", "mouse", "zebra", "tiger", "clock", "chair", "lemon", "robot", "whale", "plane",
-    "flower", "rocket", "banana", "rainbow", "monkey", "rabbit", "orange", "turtle", "spider",
-    "guitar", "castle", "pencil", "penguin", "giraffe", "dolphin",
-];
-
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Guide {
     Always,
@@ -35,6 +28,7 @@ pub enum Guide {
 #[derive(Clone, Copy, Debug)]
 pub struct Level {
     pub name: &'static str,
+    pub bands: &'static [u8],
     pub min_len: usize,
     pub max_len: usize,
     pub decoys: usize,
@@ -44,16 +38,17 @@ pub struct Level {
 
 const fn lv(
     name: &'static str,
-    min_len: usize,
-    max_len: usize,
+    bands: &'static [u8],
+    lens: (usize, usize),
     decoys: usize,
     hints: u32,
     guide: Guide,
 ) -> Level {
     Level {
         name,
-        min_len,
-        max_len,
+        bands,
+        min_len: lens.0,
+        max_len: lens.1,
         decoys,
         hints,
         guide,
@@ -61,23 +56,23 @@ const fn lv(
 }
 
 pub const LEVELS: [Level; 9] = [
-    lv("3 letters", 3, 3, 0, 0, Guide::Always),
-    lv("Tricky 3s", 3, 3, 2, 3, Guide::Idle(5.0)),
-    lv("4 letters", 4, 4, 1, 3, Guide::Off),
-    lv("Tricky 4s", 4, 4, 3, 3, Guide::Off),
-    lv("5 letters", 5, 5, 2, 2, Guide::Off),
-    lv("Tricky 5s", 5, 5, 4, 2, Guide::Off),
-    lv("6 letters", 6, 6, 3, 2, Guide::Off),
-    lv("Tricky 6s", 6, 6, 4, 1, Guide::Off),
-    lv("Big words", 5, 7, 4, 1, Guide::Off),
+    lv("Cat words", &[0], (3, 3), 0, 0, Guide::Always),
+    lv("Blends", &[1], (4, 4), 1, 3, Guide::Idle(5.0)),
+    lv("Blends and digraphs", &[1, 2], (4, 5), 1, 3, Guide::Off),
+    lv("Sh, ch, th, ck", &[2, 3], (4, 5), 1, 3, Guide::Off),
+    lv("Silent e and pairs", &[3], (5, 6), 2, 2, Guide::Off),
+    lv("Mixed fives and sixes", &[3, 4], (5, 6), 2, 2, Guide::Off),
+    lv("Tricky patterns", &[4], (5, 6), 2, 2, Guide::Off),
+    lv("Long words", &[4], (6, 8), 2, 1, Guide::Off),
+    lv("Word champion", &[3, 4], (6, 9), 3, 1, Guide::Off),
 ];
 
 pub fn words_in(level: usize) -> Vec<&'static str> {
     let l = LEVELS[level.min(LEVELS.len() - 1)];
-    WORDS
+    words()
         .iter()
-        .copied()
-        .filter(|w| (l.min_len..=l.max_len).contains(&w.len()))
+        .filter(|w| l.bands.contains(&w.band) && (l.min_len..=l.max_len).contains(&w.text.len()))
+        .map(|w| w.text)
         .collect()
 }
 
@@ -87,12 +82,51 @@ fn shuffle<T>(v: &mut [T]) {
     }
 }
 
+fn confusables(c: char) -> &'static str {
+    match c {
+        'b' => "dp",
+        'd' => "bg",
+        'p' => "qb",
+        'q' => "pg",
+        'm' => "nw",
+        'n' => "mh",
+        'a' => "eo",
+        'e' => "ai",
+        'i' => "el",
+        'o' => "ua",
+        'u' => "ov",
+        'c' => "ks",
+        'k' => "ch",
+        's' => "cz",
+        'g' => "jq",
+        'j' => "g",
+        't' => "fl",
+        'f' => "t",
+        'l' => "it",
+        'v' => "uw",
+        'w' => "mv",
+        'h' => "n",
+        _ => "",
+    }
+}
+
 pub fn make_tiles(word: &str, decoys: usize) -> Vec<char> {
     let letters: Vec<char> = word.chars().collect();
-    let mut spare: Vec<char> = ('a'..='z').filter(|c| !letters.contains(c)).collect();
+    let mut likely: Vec<char> = vec![];
+    for c in &letters {
+        for x in confusables(*c).chars() {
+            if !letters.contains(&x) && !likely.contains(&x) {
+                likely.push(x);
+            }
+        }
+    }
+    shuffle(&mut likely);
+    let mut spare: Vec<char> = ('a'..='z')
+        .filter(|c| !letters.contains(c) && !likely.contains(c))
+        .collect();
     shuffle(&mut spare);
     let mut tiles = letters.clone();
-    tiles.extend(spare.into_iter().take(decoys));
+    tiles.extend(likely.into_iter().chain(spare).take(decoys));
     for _ in 0..8 {
         shuffle(&mut tiles);
         if tiles[..letters.len()] != letters[..] || letters.iter().all(|c| *c == letters[0]) {
@@ -102,19 +136,113 @@ pub fn make_tiles(word: &str, decoys: usize) -> Vec<char> {
     tiles
 }
 
-pub fn level_words(level: usize, avoid: &[&str]) -> Vec<&'static str> {
-    let mut pool = words_in(level);
-    let fresh: Vec<&'static str> = pool
+pub const TARGET_SECS: f32 = 12.0;
+
+pub fn mistakes_before_glow(level: usize) -> Option<u32> {
+    match level {
+        0..=3 => Some(2),
+        4..=5 => Some(3),
+        _ => None,
+    }
+}
+
+pub fn shows_next_slot(level: usize) -> bool {
+    level < 4
+}
+
+pub const GAPS: [u32; 5] = [6, 12, 30, 80, 200];
+pub const MAX_DUE: usize = 2;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Memory {
+    pub at: u32,
+    pub due: u32,
+    pub rung: u32,
+}
+
+impl Memory {
+    pub fn seen(&self) -> bool {
+        self.at > 0
+    }
+
+    pub fn after(self, round: u32, perfect: bool) -> Memory {
+        let rung = if perfect {
+            (self.rung + 1).min(GAPS.len() as u32 - 1)
+        } else {
+            0
+        };
+        Memory {
+            at: round,
+            due: round + GAPS[rung as usize],
+            rung,
+        }
+    }
+}
+
+pub fn memory_of(word: &str) -> Memory {
+    Memory {
+        at: profile::get(KEY, &format!("w.{word}.at")) as u32,
+        due: profile::get(KEY, &format!("w.{word}.due")) as u32,
+        rung: profile::get(KEY, &format!("w.{word}.rung")) as u32,
+    }
+}
+
+fn remember(word: &str, m: Memory) {
+    profile::set(KEY, &format!("w.{word}.at"), m.at as i64);
+    profile::set(KEY, &format!("w.{word}.due"), m.due as i64);
+    profile::set(KEY, &format!("w.{word}.rung"), m.rung as i64);
+}
+
+pub fn round() -> u32 {
+    profile::get(KEY, "round") as u32
+}
+
+pub fn choose(
+    pool: &[&'static str],
+    memory: &dyn Fn(&str) -> Memory,
+    round: u32,
+    avoid: &[&str],
+    n: usize,
+) -> Vec<&'static str> {
+    let mut open: Vec<&'static str> = pool.iter().copied().filter(|w| !avoid.contains(w)).collect();
+    if open.len() < n {
+        open = pool.to_vec();
+    }
+    shuffle(&mut open);
+    let mut due: Vec<&'static str> = open
         .iter()
         .copied()
-        .filter(|w| !avoid.contains(w))
+        .filter(|w| {
+            let m = memory(w);
+            m.seen() && round >= m.due
+        })
         .collect();
-    if fresh.len() >= QUESTIONS {
-        pool = fresh;
+    due.sort_by_key(|w| memory(w).due);
+    due.truncate(MAX_DUE);
+    let mut deck = due;
+    for w in open.iter().filter(|w| !memory(w).seen()) {
+        if deck.len() >= n {
+            break;
+        }
+        if !deck.contains(w) {
+            deck.push(w);
+        }
     }
-    shuffle(&mut pool);
-    pool.truncate(QUESTIONS);
-    pool
+    let mut rest: Vec<&'static str> = open.iter().copied().filter(|w| !deck.contains(w)).collect();
+    rest.sort_by_key(|w| memory(w).at);
+    for w in rest {
+        if deck.len() >= n {
+            break;
+        }
+        deck.push(w);
+    }
+    deck.truncate(n);
+    shuffle(&mut deck);
+    deck
+}
+
+pub fn level_words(level: usize, avoid: &[&str]) -> Vec<&'static str> {
+    choose(&words_in(level), &memory_of, round(), avoid, QUESTIONS)
 }
 
 pub fn stars_for(imperfect: u32) -> u8 {
@@ -228,6 +356,7 @@ pub struct Spell {
     pub rank: Option<usize>,
     pub teach: bool,
     pub idle: f32,
+    pub word_secs: f32,
     pub recent: Vec<&'static str>,
     pub wobble: Vec<f32>,
     pub pop: Vec<f32>,
@@ -274,6 +403,7 @@ impl Spell {
     fn build(level: usize, deck: Vec<&'static str>) -> Self {
         let board = Board::new(deck[0], LEVELS[level].decoys);
         let n = board.tiles.len();
+        sfx::say(sfx::Say::Word(deck[0]));
         Self {
             level,
             recent: deck.clone(),
@@ -291,6 +421,7 @@ impl Spell {
             rank: None,
             teach: false,
             idle: 0.0,
+            word_secs: 0.0,
             wobble: vec![0.0; n],
             pop: vec![0.0; 8],
             slide: vec![1.0; n],
@@ -331,7 +462,12 @@ impl Spell {
         self.load();
     }
 
+    pub fn say_word(&self) {
+        sfx::say(sfx::Say::Word(self.word()));
+    }
+
     fn load(&mut self) {
+        self.say_word();
         self.board = Board::new(self.word(), LEVELS[self.level].decoys);
         let n = self.board.tiles.len();
         self.wobble = vec![0.0; n];
@@ -339,6 +475,7 @@ impl Spell {
         self.pop = vec![0.0; self.board.word.len()];
         self.hint_on = None;
         self.idle = 0.0;
+        self.word_secs = 0.0;
         self.phase = Phase::Playing;
         self.picture_bump.kick();
     }
@@ -355,7 +492,8 @@ impl Spell {
             Guide::Idle(after) => self.idle >= after,
             Guide::Off => false,
         };
-        if guided || self.board.mistakes >= 2 {
+        let stuck = mistakes_before_glow(self.level).is_some_and(|m| self.board.mistakes >= m);
+        if guided || stuck {
             self.board.hint()
         } else {
             None
@@ -422,6 +560,24 @@ impl Spell {
         }
     }
 
+    fn record_word(&mut self, perfect: bool) {
+        let word = self.word();
+        let round = round() + 1;
+        profile::set(KEY, "round", round as i64);
+        remember(word, memory_of(word).after(round, perfect));
+        let secs = self.word_secs.min(mastery::MAX_SAMPLE_SECS);
+        mastery::record(
+            KEY,
+            self.level,
+            mastery::Answer {
+                first_try: self.board.mistakes == 0,
+                secs,
+                helped: self.board.hints > 0,
+            },
+            TARGET_SECS,
+        );
+    }
+
     pub fn tap_tile(&mut self, i: usize, layout: &Layout) -> Place {
         if self.phase != Phase::Playing {
             return Place::Ignored;
@@ -451,6 +607,7 @@ impl Spell {
         }
         if r == Place::Done {
             let perfect = self.board.perfect();
+            self.record_word(perfect);
             self.results.push(perfect);
             if perfect {
                 self.slip_run = 0;
@@ -718,6 +875,7 @@ impl Game for Spell {
             return;
         }
         self.idle += dt;
+        self.word_secs += dt;
         if input.tapped_in(levels_button(view)) {
             sfx::play(Sfx::Click);
             self.screen = Screen::Levels;
@@ -730,6 +888,7 @@ impl Game for Spell {
             }
             if l.picture.contains(input.pos) {
                 self.picture_bump.kick();
+                self.say_word();
             }
             if let Some(i) = l.tiles.iter().position(|r| r.contains(input.pos)) {
                 if self.board.used[i].is_none() {
@@ -747,23 +906,33 @@ mod tests {
     #[test]
     fn there_are_enough_words_in_every_level() {
         for level in 0..LEVELS.len() {
-            assert!(words_in(level).len() >= QUESTIONS * 2, "level {level}");
+            assert!(words_in(level).len() >= 40, "level {level}: {}", words_in(level).len());
         }
-        let mut seen: Vec<&str> = WORDS.iter().copied().collect();
+        assert!(words().len() >= 600);
+        let mut seen: Vec<&str> = words().iter().map(|w| w.text).collect();
         seen.sort();
         seen.dedup();
-        assert_eq!(seen.len(), WORDS.len());
-        assert!(WORDS
+        assert_eq!(seen.len(), words().len());
+        assert!(words()
             .iter()
-            .all(|w| w.chars().all(|c| c.is_ascii_lowercase())));
+            .all(|w| w.text.chars().all(|c| c.is_ascii_lowercase())));
     }
 
     #[test]
     fn spell_sprites_all_exist() {
         let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/spell.kga")).unwrap();
         let idx = crate::art::parse(&b).unwrap();
-        for n in WORDS.iter().chain(["bg", "tile"].iter()) {
-            assert!(idx.frames.contains_key(*n), "missing {n}");
+        for n in words().iter().map(|w| w.text).chain(["bg", "tile"]) {
+            assert!(idx.frames.contains_key(n), "missing {n}");
+        }
+    }
+
+    #[test]
+    fn every_word_is_spoken() {
+        let pack = sfx::packed();
+        for w in words() {
+            let key = sfx::Say::Word(w.text).key();
+            assert!(pack.iter().any(|(n, _)| *n == key), "no voice for {}", w.text);
         }
     }
 
@@ -783,7 +952,7 @@ mod tests {
 
     #[test]
     fn tiles_hold_every_letter_including_repeats() {
-        for w in WORDS {
+        for w in words().iter().map(|w| w.text) {
             for decoys in 0..5 {
                 let tiles = make_tiles(w, decoys);
                 assert_eq!(tiles.len(), w.len() + decoys);
@@ -798,7 +967,7 @@ mod tests {
 
     #[test]
     fn decoys_never_share_a_letter_with_the_word() {
-        for w in WORDS {
+        for w in words().iter().map(|w| w.text) {
             let tiles = make_tiles(w, 4);
             let extra: Vec<char> = tiles.iter().copied().filter(|c| !w.contains(*c)).collect();
             assert_eq!(extra.len(), 4, "{w}");
@@ -1029,10 +1198,10 @@ mod tests {
     fn levels_step_through_word_lengths() {
         let lens: Vec<(usize, usize)> = LEVELS.iter().map(|l| (l.min_len, l.max_len)).collect();
         assert_eq!(lens[0], (3, 3));
-        assert_eq!(lens[2], (4, 4));
-        assert_eq!(lens[4], (5, 5));
-        assert_eq!(lens[6], (6, 6));
-        assert!(lens[..8].windows(2).all(|w| w[0].0 <= w[1].0));
+        assert_eq!(lens[1], (4, 4));
+        assert_eq!(lens[4], (5, 6));
+        assert_eq!(lens[7], (6, 8));
+        assert!(lens.windows(2).all(|w| w[0].0 <= w[1].0 && w[0].1 <= w[1].1));
         for (level, spec) in LEVELS.iter().enumerate() {
             for w in words_in(level) {
                 assert!(
@@ -1074,7 +1243,30 @@ mod tests {
         let l = layout(&view, g.board.word.len(), g.board.tiles.len());
         slip(&mut g, &l);
         slip(&mut g, &l);
+        assert_eq!(g.glow(), None);
+        slip(&mut g, &l);
         assert!(g.glow().is_some());
+    }
+
+    #[test]
+    fn the_top_levels_never_glow() {
+        let view = View::ipad_landscape();
+        let mut g = fresh(7);
+        let l = layout(&view, g.board.word.len(), g.board.tiles.len());
+        for _ in 0..4 {
+            slip(&mut g, &l);
+        }
+        for _ in 0..1200 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+        }
+        assert_eq!(g.glow(), None);
+    }
+
+    #[test]
+    fn higher_levels_help_less_and_hide_the_next_slot() {
+        assert!(shows_next_slot(0) && !shows_next_slot(8));
+        let help: Vec<u32> = (0..9).map(|l| mistakes_before_glow(l).unwrap_or(99)).collect();
+        assert!(help.windows(2).all(|w| w[0] <= w[1]));
     }
 
     #[test]
