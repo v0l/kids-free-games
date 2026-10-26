@@ -20,7 +20,6 @@ mod imp {
             let _ = env.exception_clear();
             return None;
         }
-        std::mem::forget(activity);
         out
     }
 
