@@ -2,7 +2,7 @@
 
 Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, Android, the web and desktop. No ads, no purchases, no accounts, no network.
 
-Written in Rust with [macroquad](https://macroquad.rs), so one codebase builds for every platform.
+Written in Rust. This `bevy` branch moves the app to [Bevy](https://bevy.org) 0.20: `crates/core` holds the game logic, save, profiles and sync with no drawing, and `crates/app` is the Bevy app. Flappy Bird is ported; the other games are in `legacy/` until they move over. `docs/BEVY.md` is the porting guide.
 
 Art is painted with FLUX.1-dev. Sound effects and voice lines are from [Kenney](https://kenney.nl) (CC0). Music is Carnival Rides, Summer Park and Happy Lullaby from [OpenGameArt](https://opengameart.org) (CC0). The font is Fredoka (SIL OFL). `docs/DESIGN.md` explains the process and `docs/STYLE.md` the rules. Sprite sheets and the sound pack are built into `assets/` by `scripts/assets.py` from the manifests in `art/` and `sound.txt`; see `art/README.md`.
 
@@ -16,24 +16,22 @@ All of them work with touch (tap and swipe), mouse and keyboard (arrows or WASD,
 
 ## Layout
 
-- `src/fx.rs`: particles, screen shake, popups, easing, animated panels.
-- `src/engine.rs`: the shared layer every game uses. Resolution-independent `View`, `Input` (tap, swipe, keys), text, buttons and drawing helpers.
-- `src/games/*.rs`: one file per game, each a `Game` with `update` and `draw`. Game logic is plain Rust, unit tested without a window.
-- `src/menu.rs`: the game picker.
-- `examples/shots.rs` and `scripts/shots.sh`: render every game in headless Chrome for a screenshot sheet.
+- `crates/core`: game logic, save, profiles, leaderboards, mastery, sync, the audio mixer and text outlining, unit tested without a window.
+- `crates/app`: the Bevy app. `paint.rs` and `draw.rs` draw shapes, sprites and outlined text; `ui.rs` is the painted UI kit; `menu.rs` is the game picker; `games/` has one renderer per ported game.
+- `scripts/shots.sh`: render the numbered scenes in `crates/app/src/shots.rs` in headless Chrome for a screenshot sheet.
 
-To add a game, write `src/games/<name>.rs` with a `Game` impl and an `icon`, then add an `Entry` in `src/games/mod.rs`.
+To port a game, follow `docs/BEVY.md`.
 
 ## Run
 
 ```sh
-cargo run --release
-cargo test
+cargo run --release -p kids_games
+cargo test --workspace
 ```
 
 ## Android
 
-Needs Docker. Builds a signed debug APK for arm64, armv7 and x86_64:
+Needs the Android SDK and NDK 28 (`~/Android/Sdk`), cargo-ndk and Java 21. Builds an arm64 APK signed with the debug key (`ABI=x86_64` for the emulator):
 
 ```sh
 scripts/android.sh
@@ -69,5 +67,7 @@ xcrun devicectl device install app --device <id> target/ios/KidsGames.app
 scripts/web.sh
 python3 -m http.server -d dist 8080
 ```
+
+`scripts/deploy-web.sh` publishes to the Cloudflare Pages branch `bevy` (https://bevy.kids-free-games.pages.dev).
 
 Open it on the iPad and use Share > Add to Home Screen to get a full-screen app icon with no App Store needed.
