@@ -74,15 +74,21 @@ impl Sim {
                 return Some("hits the ground");
             }
             let r = flappy::BIRD_R - 5.0;
+            let bird = glam::vec2(bx, self.y);
             for (x, gap_y, gap) in &mut self.pipes {
                 *x -= speed * FLAPPY_DT;
-                let over = bx + r > *x && bx - r < *x + flappy::PIPE_W;
-                if over && self.y - r < *gap_y - *gap / 2.0 {
+                let top = *gap_y - *gap / 2.0;
+                let bottom = *gap_y + *gap / 2.0;
+                let roof = -1000.0;
+                let upper = crate::geom::Rect::new(*x, roof, flappy::PIPE_W, top - roof);
+                let lower = crate::geom::Rect::new(*x, bottom, flappy::PIPE_W, 2000.0);
+                if crate::geom::circle_hits_rect(bird, r, upper) {
                     return Some("hits the top pipe");
                 }
-                if over && self.y + r > *gap_y + *gap / 2.0 {
+                if crate::geom::circle_hits_rect(bird, r, lower) {
                     return Some("hits the bottom pipe");
                 }
+                let over = bx + r > *x && bx - r < *x + flappy::PIPE_W;
                 if over && self.passed.is_none() {
                     self.passed = Some((self.y - *gap_y) / (*gap / 2.0));
                 }
@@ -576,28 +582,33 @@ mod tests {
         let v = View::ipad_landscape();
         let dt = 1.0 / 60.0;
         for latency in [0.0f32, 0.15, 0.3, 0.35] {
-            let mut g = Flappy::new();
-            g.update(&input_for("flap"), &v, dt);
-            let mut inflight: Option<(f32, &str)> = None;
-            let mut t = 0.0;
-            while t < 40.0 && g.state == flappy::State::Playing {
-                let mut input = Input::default();
-                let mut applied = false;
-                if let Some((due, pick)) = inflight {
-                    if t >= due {
-                        input = input_for(pick);
-                        inflight = None;
-                        applied = true;
+            let mut lowest = u32::MAX;
+            for seed in 0..12 {
+                quad_rand::srand(seed);
+                let mut g = Flappy::new();
+                g.update(&input_for("flap"), &v, dt);
+                let mut inflight: Option<(f32, &str)> = None;
+                let mut t = 0.0;
+                while t < 40.0 && g.state == flappy::State::Playing {
+                    let mut input = Input::default();
+                    let mut applied = false;
+                    if let Some((due, pick)) = inflight {
+                        if t >= due {
+                            input = input_for(pick);
+                            inflight = None;
+                            applied = true;
+                        }
                     }
+                    if inflight.is_none() && !applied {
+                        let m = flappy_moment_after(&g, &v, latency);
+                        inflight = Some((t + latency, pick_flappy(&m)));
+                    }
+                    g.update(&input, &v, dt);
+                    t += dt;
                 }
-                if inflight.is_none() && !applied {
-                    let m = flappy_moment_after(&g, &v, latency);
-                    inflight = Some((t + latency, pick_flappy(&m)));
-                }
-                g.update(&input, &v, dt);
-                t += dt;
+                lowest = lowest.min(g.score);
             }
-            assert!(g.score >= 8, "latency {latency}: score {}", g.score);
+            assert!(lowest >= 8, "latency {latency}: lowest score {lowest}");
         }
     }
 
