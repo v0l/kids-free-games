@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod mathpop_scene;
 mod snake_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
@@ -48,6 +49,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (130, "mathpop first question with the hint"),
+    (131, "mathpop mid level with a wrong balloon"),
+    (132, "mathpop answer revealed after two misses"),
+    (133, "mathpop right pop with the bunnies cheering"),
+    (134, "mathpop times tables"),
+    (135, "mathpop level picker"),
+    (136, "mathpop level done"),
+    (137, "mathpop level done with one star"),
+    (138, "mathpop final screen with the board"),
+    (139, "mathpop level picker with everything open"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -279,6 +290,7 @@ fn setup(n: u32, view: &View) -> Stage {
         }
         20..=29 => crossy_scene(n, view),
         30..=39 => snake_scene::setup(n, view),
+        130..=139 => mathpop_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -431,6 +443,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn mathpop_scenes_land_in_the_state_they_are_named_for() {
+        mathpop_scene::check();
     }
 
     #[test]
