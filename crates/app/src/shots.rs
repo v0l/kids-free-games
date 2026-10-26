@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod breakout_scene;
 mod fruit_scene;
 mod merge_scene;
 mod snake_scene;
@@ -78,6 +79,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (66, "stack level picker"),
     (67, "stack night near the goal"),
     (68, "stack new best"),
+    (70, "breakout first serve with the hint"),
+    (71, "breakout level one mid play"),
+    (72, "breakout level seven with combo and lives"),
+    (73, "breakout level select"),
+    (74, "breakout level cleared"),
+    (75, "breakout out of lives with the board"),
+    (76, "breakout last level serve"),
+    (77, "breakout level twelve mid play"),
+    (78, "breakout cleared on the last level"),
+    (79, "breakout serve with the levels button"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -312,6 +323,7 @@ fn setup(n: u32, view: &View) -> Stage {
         40..=49 => merge_scene::setup(n, view),
         50..=59 => fruit_scene::setup(n, view),
         60..=69 => stack_scene::setup(n, view),
+        70..=79 => breakout_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -484,6 +496,11 @@ mod tests {
     #[test]
     fn stack_scenes_land_in_the_state_they_are_named_for() {
         stack_scene::check();
+    }
+
+    #[test]
+    fn breakout_scenes_land_in_the_state_they_are_named_for() {
+        breakout_scene::check();
     }
 
     #[test]

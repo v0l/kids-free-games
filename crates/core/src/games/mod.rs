@@ -1,3 +1,4 @@
+pub mod breakout;
 pub mod crossy;
 pub mod flappy;
 pub mod fruit;
