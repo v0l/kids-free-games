@@ -779,8 +779,17 @@ mod tests {
 
     #[test]
     fn crossy_sprites_all_exist() {
-        let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/crossy.kga")).unwrap();
-        let have: Vec<String> = crate::art::parse(&b).unwrap().frames.keys().cloned().collect();
+        let b = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/art/crossy.kga"
+        ))
+        .unwrap();
+        let have: Vec<String> = crate::art::parse(&b)
+            .unwrap()
+            .frames
+            .keys()
+            .cloned()
+            .collect();
         let mut names = vec![
             "grass",
             "road",
@@ -1112,8 +1121,17 @@ mod tests {
 
     #[test]
     fn every_vehicle_the_lanes_pick_has_a_sprite() {
-        let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/crossy.kga")).unwrap();
-        let have: Vec<String> = crate::art::parse(&b).unwrap().frames.keys().cloned().collect();
+        let b = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/art/crossy.kga"
+        ))
+        .unwrap();
+        let have: Vec<String> = crate::art::parse(&b)
+            .unwrap()
+            .frames
+            .keys()
+            .cloned()
+            .collect();
         for hue in [0.0, 0.3, 0.6, 0.99] {
             for len in [1.2, 1.7] {
                 for k in 0..12 {

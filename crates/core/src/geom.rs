@@ -175,7 +175,10 @@ mod tests {
 
     #[test]
     fn colours_from_bytes_and_hsv_hit_their_primaries() {
-        assert_eq!(Color::from_rgba(255, 0, 0, 255), Color::new(1.0, 0.0, 0.0, 1.0));
+        assert_eq!(
+            Color::from_rgba(255, 0, 0, 255),
+            Color::new(1.0, 0.0, 0.0, 1.0)
+        );
         assert_eq!(hsv(0.0, 1.0, 1.0), Color::new(1.0, 0.0, 0.0, 1.0));
         let g = hsv(1.0 / 3.0, 1.0, 1.0);
         assert!(g.g > 0.99 && g.r < 0.01);

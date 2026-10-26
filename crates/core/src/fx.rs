@@ -178,7 +178,6 @@ impl Particles {
         }
         self.list.retain(|p| p.life > 0.0);
     }
-
 }
 
 #[derive(Default)]
@@ -253,7 +252,10 @@ pub fn popup_scale(p: &Popup) -> (f32, f32) {
 
 pub fn particle_look(p: &Particle) -> (f32, f32) {
     let k = (p.life / p.max_life).clamp(0.0, 1.0);
-    (p.color.a * k.min(1.0) * (0.3 + 0.7 * k.sqrt()), p.size * (0.4 + 0.6 * k))
+    (
+        p.color.a * k.min(1.0) * (0.3 + 0.7 * k.sqrt()),
+        p.size * (0.4 + 0.6 * k),
+    )
 }
 
 pub fn bump_scale(bump: f32, amount: f32) -> f32 {

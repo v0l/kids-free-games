@@ -491,7 +491,11 @@ mod tests {
 
     #[test]
     fn flappy_sprites_all_exist() {
-        let b = std::fs::read(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/art/flappy.kga")).unwrap();
+        let b = std::fs::read(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets/art/flappy.kga"
+        ))
+        .unwrap();
         let idx = crate::art::parse(&b).unwrap();
         let have: Vec<String> = idx.frames.keys().cloned().collect();
         for n in [

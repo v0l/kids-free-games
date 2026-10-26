@@ -117,10 +117,7 @@ mod tests {
         let mut jpg = vec![];
         let img = image::RgbaImage::from_pixel(8, 4, image::Rgba([200, 100, 50, 255]));
         image::DynamicImage::ImageRgba8(img.clone())
-            .write_to(
-                &mut std::io::Cursor::new(&mut png),
-                image::ImageFormat::Png,
-            )
+            .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
             .unwrap();
         image::DynamicImage::ImageRgba8(img)
             .to_rgb8()

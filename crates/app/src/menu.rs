@@ -255,7 +255,11 @@ impl App {
         if let Some((_, game)) = &mut self.current {
             self.home_press = approach(
                 self.home_press,
-                if input.down && HOME.contains(input.pos) { 1.0 } else { 0.0 },
+                if input.down && HOME.contains(input.pos) {
+                    1.0
+                } else {
+                    0.0
+                },
                 20.0,
                 dt,
             );
@@ -325,7 +329,8 @@ impl App {
                 self.pick(i, &rects);
             }
         }
-        let hit = |p: Vec2, scroll: f32| rects.iter().position(|r| r.contains(p + vec2(0.0, scroll)));
+        let hit =
+            |p: Vec2, scroll: f32| rects.iter().position(|r| r.contains(p + vec2(0.0, scroll)));
         if input.pressed {
             self.focus = None;
             self.drag_from = Some((input.pos, self.scroll));
@@ -344,7 +349,9 @@ impl App {
         }
         if input.released {
             if !self.dragged {
-                if let Some(i) = hit(input.pos, self.scroll).filter(|i| Some(*i) == self.pressed_tile) {
+                if let Some(i) =
+                    hit(input.pos, self.scroll).filter(|i| Some(*i) == self.pressed_tile)
+                {
                     self.pick(i, &rects);
                 }
             }
@@ -363,7 +370,10 @@ impl App {
             game.draw(pen, view);
             pen.offset = Vec2::ZERO;
             if self.feel.flash_alpha() > 0.0 {
-                pen.fill_screen(view, self.feel.flash_color().with_alpha(self.feel.flash_alpha()));
+                pen.fill_screen(
+                    view,
+                    self.feel.flash_color().with_alpha(self.feel.flash_alpha()),
+                );
             }
             let r = Rect::new(HOME.x, HOME.y - 4.0, HOME.h + 8.0, HOME.h + 8.0);
             pen.painted_round(r, "icon_home", self.home_press);
@@ -381,12 +391,25 @@ impl App {
         let m = mute_rect(view);
         pen.painted_round(
             Rect::new(m.x + 4.0, m.y - 4.0 - self.scroll, m.h + 8.0, m.h + 8.0),
-            if sfx::muted() { "icon_audio_off" } else { "icon_audio" },
+            if sfx::muted() {
+                "icon_audio_off"
+            } else {
+                "icon_audio"
+            },
             0.0,
         );
         pen.painted_round(
-            Rect::new(MUSIC.x, MUSIC.y - 4.0 - self.scroll, MUSIC.h + 8.0, MUSIC.h + 8.0),
-            if sfx::music_on() { "icon_music" } else { "icon_music_off" },
+            Rect::new(
+                MUSIC.x,
+                MUSIC.y - 4.0 - self.scroll,
+                MUSIC.h + 8.0,
+                MUSIC.h + 8.0,
+            ),
+            if sfx::music_on() {
+                "icon_music"
+            } else {
+                "icon_music_off"
+            },
             0.0,
         );
         crate::profiles::draw_player_chip(pen, header(view).player, self.scroll);
@@ -409,7 +432,8 @@ impl App {
             if r.y > view.h || r.y + r.h < 0.0 {
                 continue;
             }
-            let intro = ease_out_back(((self.since_menu - 0.05 - i as f32 * 0.02) / 0.3).clamp(0.0, 1.0));
+            let intro =
+                ease_out_back(((self.since_menu - 0.05 - i as f32 * 0.02) / 0.3).clamp(0.0, 1.0));
             if intro <= 0.0 {
                 continue;
             }
@@ -429,7 +453,12 @@ impl App {
                 }
             }
             let c = r.center() + vec2(0.0, bob + (1.0 - intro) * 40.0);
-            let r = Rect::new(c.x - r.w * scale / 2.0, c.y - r.h * scale / 2.0, r.w * scale, r.h * scale);
+            let r = Rect::new(
+                c.x - r.w * scale / 2.0,
+                c.y - r.h * scale / 2.0,
+                r.w * scale,
+                r.h * scale,
+            );
             if focused {
                 let g = 6.0 + (self.t * 5.0).sin() * 2.0;
                 pen.round_rect(
@@ -438,16 +467,26 @@ impl App {
                     WHITE,
                 );
             }
-            draw_tile(pen, r, e, (focused || self.press[i] > 0.01).then_some(self.t));
+            draw_tile(
+                pen,
+                r,
+                e,
+                (focused || self.press[i] > 0.01).then_some(self.t),
+            );
             if let Some((si, st)) = self.soon.filter(|(si, _)| *si == i) {
                 let a = (1.0 - (st - 0.8).max(0.0) / 0.4).clamp(0.0, 1.0);
                 let _ = si;
-                pen.hint("Coming soon", vec2(r.center().x, r.y + r.w * 0.5), a.max(0.3));
+                pen.hint(
+                    "Coming soon",
+                    vec2(r.center().x, r.y + r.w * 0.5),
+                    a.max(0.3),
+                );
             }
         }
         pen.particles(&self.fx);
         if let Some((i, lt)) = self.launch {
-            let k = ease_out_cubic(((lt - LAUNCH_TIME * 0.4) / (LAUNCH_TIME * 0.6)).clamp(0.0, 1.0));
+            let k =
+                ease_out_cubic(((lt - LAUNCH_TIME * 0.4) / (LAUNCH_TIME * 0.6)).clamp(0.0, 1.0));
             if k > 0.0 {
                 let c = lay.tiles[i].center() - vec2(0.0, self.scroll);
                 let rad = k * view.full().w.hypot(view.full().h);
@@ -459,7 +498,11 @@ impl App {
 
     fn draw_backdrop(&self, pen: &mut Pen, view: &View) {
         let f = view.full();
-        let name = if f.h > f.w * 1.05 { "bg_tall" } else { "bg_wide" };
+        let name = if f.h > f.w * 1.05 {
+            "bg_tall"
+        } else {
+            "bg_wide"
+        };
         let sz = crate::art::size("menu", name);
         let k = (f.w / sz.x).max(f.h / sz.y) * 1.04;
         let (w, h) = (sz.x * k, sz.y * k);
@@ -470,7 +513,12 @@ impl App {
         pen.sprite(
             "menu",
             name,
-            Rect::new(f.x + (f.w - w) / 2.0 + drift.x, f.y + (f.h - h) / 2.0 + drift.y, w, h),
+            Rect::new(
+                f.x + (f.w - w) / 2.0 + drift.x,
+                f.y + (f.h - h) / 2.0 + drift.y,
+                w,
+                h,
+            ),
             Draw::default(),
         );
         pen.gradient(
@@ -507,15 +555,35 @@ impl App {
             if ch != ' ' {
                 let shadow = Color::new(0.2, 0.05, 0.3, 0.45);
                 let cy = y + wave - (1.0 - intro) * 60.0;
-                pen.text_outline(&s, x + w / 2.0, cy + size * 0.06, size * intro.max(0.01), shadow, shadow);
-                pen.text_outline(&s, x + w / 2.0, cy, size * intro.max(0.01), col, Color::from_rgba(70, 20, 90, 255));
+                pen.text_outline(
+                    &s,
+                    x + w / 2.0,
+                    cy + size * 0.06,
+                    size * intro.max(0.01),
+                    shadow,
+                    shadow,
+                );
+                pen.text_outline(
+                    &s,
+                    x + w / 2.0,
+                    cy,
+                    size * intro.max(0.01),
+                    col,
+                    Color::from_rgba(70, 20, 90, 255),
+                );
             }
             x += w;
         }
         let a = ((self.since_menu - 0.15) / 0.25).clamp(0.0, 1.0);
         let r = h.tag.offset(vec2(0.0, -self.scroll));
         pen.round_rect(r, r.h / 2.0, Color::new(0.15, 0.05, 0.3, 0.45 * a));
-        pen.text_center(TAGLINE, r.center().x, r.y + r.h / 2.0, TAG_SIZE, WHITE.with_alpha(a));
+        pen.text_center(
+            TAGLINE,
+            r.center().x,
+            r.y + r.h / 2.0,
+            TAG_SIZE,
+            WHITE.with_alpha(a),
+        );
     }
 
     fn draw_curtain(&self, pen: &mut Pen, view: &View) {
@@ -551,8 +619,17 @@ fn draw_tile(pen: &mut Pen, r: Rect, e: &Entry, shine: Option<f32>) {
         ir.w * 0.22,
         Color::new(0.08, 0.02, 0.2, 0.35),
     );
-    let tint = if e.ready() { WHITE } else { Color::new(0.75, 0.72, 0.8, 1.0) };
-    pen.sprite("icons", &format!("icon_{}", e.info.key), ir, Draw::tint(tint));
+    let tint = if e.ready() {
+        WHITE
+    } else {
+        Color::new(0.75, 0.72, 0.8, 1.0)
+    };
+    pen.sprite(
+        "icons",
+        &format!("icon_{}", e.info.key),
+        ir,
+        Draw::tint(tint),
+    );
     if let Some(t) = shine {
         pen.shine_sweep(ir, t);
     }
@@ -561,7 +638,14 @@ fn draw_tile(pen: &mut Pen, r: Rect, e: &Entry, shine: Option<f32>) {
     }
     let label_y = ir.y + ir.h + (r.h - ir.h) * 0.5;
     let size = (r.w * 0.9 / measure(e.info.name, 10.0) * 10.0).min(r.w * 0.16);
-    pen.text_outline(e.info.name, r.center().x, label_y, size, WHITE, Color::from_rgba(50, 15, 80, 255));
+    pen.text_outline(
+        e.info.name,
+        r.center().x,
+        label_y,
+        size,
+        WHITE,
+        Color::from_rgba(50, 15, 80, 255),
+    );
 }
 
 #[cfg(test)]
@@ -589,9 +673,15 @@ mod tests {
                 h.tag.y + h.tag.h <= h.player.y || h.tag.x + h.tag.w <= h.player.x,
                 "tagline hits the player chip in {v:?}"
             );
-            assert!(h.title_band.1 <= h.tag.y, "title runs into tagline in {v:?}");
+            assert!(
+                h.title_band.1 <= h.tag.y,
+                "title runs into tagline in {v:?}"
+            );
             let tiles = App::new().layout(&v).tiles;
-            assert!(h.bottom <= tiles[0].y - 8.0, "tagline touches tiles in {v:?}");
+            assert!(
+                h.bottom <= tiles[0].y - 8.0,
+                "tagline touches tiles in {v:?}"
+            );
             assert!(
                 h.title_band.1 < HOME.y + HOME.h
                     || mute_rect(&v).x > v.w / 2.0 + measure("Kids Free Games", h.title_size) / 2.0,
@@ -606,10 +696,37 @@ mod tests {
         let mm = (495.0 / 25.4 / 2.625) / v.scale;
         let mut app = menu();
         let at = app.layout(&v).tiles[0].center();
-        app.update(&Input { mm, ..Input::press_at(at) }, &v, 1.0 / 60.0);
+        app.update(
+            &Input {
+                mm,
+                ..Input::press_at(at)
+            },
+            &v,
+            1.0 / 60.0,
+        );
         let moved = at + vec2(0.0, 3.0 * mm);
-        app.update(&Input { pos: moved, prev_pos: at, down: true, mm, ..Default::default() }, &v, 1.0 / 60.0);
-        app.update(&Input { pos: moved, prev_pos: moved, released: true, mm, ..Default::default() }, &v, 1.0 / 60.0);
+        app.update(
+            &Input {
+                pos: moved,
+                prev_pos: at,
+                down: true,
+                mm,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        app.update(
+            &Input {
+                pos: moved,
+                prev_pos: moved,
+                released: true,
+                mm,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
         assert!(app.launch.is_some());
     }
 
@@ -620,15 +737,37 @@ mod tests {
         let at = app.layout(&v).tiles[4].center();
         app.update(&Input::press_at(at), &v, 1.0 / 60.0);
         let to = at - vec2(0.0, 80.0);
-        app.update(&Input { pos: to, down: true, mm: 5.0, ..Default::default() }, &v, 1.0 / 60.0);
-        app.update(&Input { pos: to, released: true, mm: 5.0, ..Default::default() }, &v, 1.0 / 60.0);
+        app.update(
+            &Input {
+                pos: to,
+                down: true,
+                mm: 5.0,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
+        app.update(
+            &Input {
+                pos: to,
+                released: true,
+                mm: 5.0,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
         assert!(app.launch.is_none());
         assert!(app.scroll > 0.0 || app.max_scroll(&v) == 0.0);
     }
 
     #[test]
     fn every_tile_is_reachable_by_scrolling() {
-        for v in [View::ipad_landscape(), View::ipad_portrait(), View::fit(390.0, 844.0)] {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+        ] {
             let app = App::new();
             let ms = app.max_scroll(&v);
             for r in app.layout(&v).tiles {
@@ -640,10 +779,17 @@ mod tests {
 
     #[test]
     fn sections_split_play_from_learn_without_overlap() {
-        for v in [View::ipad_landscape(), View::ipad_portrait(), View::fit(390.0, 844.0)] {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+        ] {
             let app = App::new();
             let lay = app.layout(&v);
-            assert_eq!(lay.labels.iter().map(|l| l.1).collect::<Vec<_>>(), vec![Kind::Arcade, Kind::Learn]);
+            assert_eq!(
+                lay.labels.iter().map(|l| l.1).collect::<Vec<_>>(),
+                vec![Kind::Arcade, Kind::Learn]
+            );
             let learn = lay.labels[1].0;
             for (r, e) in lay.tiles.iter().zip(&app.entries) {
                 match e.info.kind {
@@ -680,12 +826,26 @@ mod tests {
         let mut app = menu();
         app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
         assert_eq!(app.focus, Some(0));
-        app.update(&Input { action: true, ..Default::default() }, &v, 1.0 / 60.0);
+        app.update(
+            &Input {
+                action: true,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
         for _ in 0..30 {
             app.update(&Input::default(), &v, 1.0 / 60.0);
         }
         assert_eq!(app.current.as_ref().map(|c| c.0), Some(0));
-        app.update(&Input { back: true, ..Default::default() }, &v, 1.0 / 60.0);
+        app.update(
+            &Input {
+                back: true,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
         assert!(app.current.is_none());
     }
 
@@ -697,7 +857,14 @@ mod tests {
         app.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
         assert_eq!(app.focus, Some(1));
         kg_core::sfx::take_pending();
-        app.update(&Input { action: true, ..Default::default() }, &v, 1.0 / 60.0);
+        app.update(
+            &Input {
+                action: true,
+                ..Default::default()
+            },
+            &v,
+            1.0 / 60.0,
+        );
         assert!(kg_core::sfx::take_pending().contains(&Sfx::Wrong));
         for _ in 0..30 {
             app.update(&Input::default(), &v, 1.0 / 60.0);
@@ -755,13 +922,20 @@ mod tests {
             draw_tile(&mut pen, r, e, None);
             pen.vertex_count()
         };
-        let learn_i = app.entries.iter().position(|e| e.info.kind == Kind::Learn).unwrap();
+        let learn_i = app
+            .entries
+            .iter()
+            .position(|e| e.info.kind == Kind::Learn)
+            .unwrap();
         let learn = &app.entries[learn_i];
         let as_play: &'static kg_core::games::Info = Box::leak(Box::new(kg_core::games::Info {
             key: "not_a_learning_game",
             ..*learn.info
         }));
-        let plain = Entry { info: as_play, make: None };
+        let plain = Entry {
+            info: as_play,
+            make: None,
+        };
         assert!(count(learn, lay.tiles[0]) > count(&plain, lay.tiles[0]));
     }
 }

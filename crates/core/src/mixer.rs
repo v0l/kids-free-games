@@ -177,7 +177,12 @@ impl Mixer {
                 continue;
             }
             let stepped = match c.pitch {
-                Pitch::Step(n) => self.bank.ladders.get(&c.sfx).and_then(|l| l.get(n)).cloned(),
+                Pitch::Step(n) => self
+                    .bank
+                    .ladders
+                    .get(&c.sfx)
+                    .and_then(|l| l.get(n))
+                    .cloned(),
                 Pitch::Vary => None,
             };
             let clip = stepped.or_else(|| {
@@ -398,7 +403,16 @@ mod tests {
         let mut m = Mixer::new(bank(), 44100);
         settle(&mut m, Some(Mood::Menu), 1.0);
         let full = m.music_gain();
-        assert!((full - Mix { fade_in: 1.0, ..Default::default() }.music_gain()).abs() < 1e-3);
+        assert!(
+            (full
+                - Mix {
+                    fade_in: 1.0,
+                    ..Default::default()
+                }
+                .music_gain())
+            .abs()
+                < 1e-3
+        );
         m.apply(&[cue(Sfx::Win)], None, Some(Mood::Menu), true, 1.0, 0.01);
         let mut buf = vec![0.0; 441 * 2];
         for _ in 0..20 {
@@ -526,7 +540,10 @@ mod tests {
         assert_eq!(order[0].0, Later::Music(Mood::Arcade));
         assert!(order.iter().any(|o| o.0 == Later::Voice("say_go".into())));
         assert_eq!(
-            order.iter().filter(|o| matches!(o.0, Later::Music(_))).count(),
+            order
+                .iter()
+                .filter(|o| matches!(o.0, Later::Music(_)))
+                .count(),
             3
         );
         let b = effects_bank();

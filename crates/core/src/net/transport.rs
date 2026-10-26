@@ -170,8 +170,8 @@ mod platform {
         else {
             return fail;
         };
-        let Ok(resp) = wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request))
-            .await
+        let Ok(resp) =
+            wasm_bindgen_futures::JsFuture::from(window.fetch_with_request(&request)).await
         else {
             return fail;
         };

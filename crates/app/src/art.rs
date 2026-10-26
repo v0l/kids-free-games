@@ -7,9 +7,13 @@ pub static SHEETS: &[(&str, &[u8])] = &[
     ("ui", include_bytes!("../../../assets/art/ui.kga")),
     ("icons", include_bytes!("../../../assets/art/icons.kga")),
     ("menu", include_bytes!("../../../assets/art/menu.kga")),
-    ("profiles", include_bytes!("../../../assets/art/profiles.kga")),
+    (
+        "profiles",
+        include_bytes!("../../../assets/art/profiles.kga"),
+    ),
     ("flappy", include_bytes!("../../../assets/art/flappy.kga")),
     ("crossy", include_bytes!("../../../assets/art/crossy.kga")),
+    ("snake", include_bytes!("../../../assets/art/snake.kga")),
 ];
 
 struct Sheet {
@@ -142,7 +146,11 @@ pub fn predecode() {
 }
 
 pub fn decode(sheet: &'static str, page: usize) -> Option<Decoded> {
-    if let Some(d) = ready().lock().ok().and_then(|mut r| r.remove(&(sheet, page))) {
+    if let Some(d) = ready()
+        .lock()
+        .ok()
+        .and_then(|mut r| r.remove(&(sheet, page)))
+    {
         return Some(d);
     }
     let bytes = SHEETS.iter().find(|(n, _)| *n == sheet)?.1;
@@ -195,7 +203,11 @@ mod tests {
             assert!(have.iter().any(|h| h == n), "ui sheet lacks {n}");
         }
         for g in kg_core::games::CATALOG {
-            assert!(frame("icons", &format!("icon_{}", g.key)).is_some(), "no icon for {}", g.key);
+            assert!(
+                frame("icons", &format!("icon_{}", g.key)).is_some(),
+                "no icon for {}",
+                g.key
+            );
         }
     }
 }

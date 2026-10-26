@@ -4,12 +4,26 @@ use kg_core::games::{Info, CATALOG};
 
 pub mod crossy;
 pub mod flappy;
+pub mod snake;
 
-pub trait Play {
+pub trait IntoAny {
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
+}
+
+impl<T: 'static> IntoAny for T {
+    fn into_any(self: Box<Self>) -> Box<dyn std::any::Any> {
+        self
+    }
+}
+
+pub trait Play: IntoAny {
     fn update(&mut self, input: &Input, view: &View, dt: f32);
     fn draw(&self, pen: &mut Pen, view: &View);
     fn score(&self) -> u32 {
         0
+    }
+    fn over(&self) -> bool {
+        false
     }
     fn as_any(&mut self) -> &mut dyn std::any::Any;
 }
@@ -29,6 +43,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
     match key {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
         crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
+        snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
         _ => None,
     }
 }

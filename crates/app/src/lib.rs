@@ -128,7 +128,10 @@ fn frame(
     if px_size != state.last_size {
         state.last_size = px_size;
     }
-    let inset = state.safe.get(px_size, platform::insets_px).scaled(1.0 / dpi);
+    let inset = state
+        .safe
+        .get(px_size, platform::insets_px)
+        .scaled(1.0 / dpi);
     let view = View::fit_safe(lw, lh, inset);
     let per_mm = *state
         .per_mm
@@ -146,7 +149,11 @@ fn frame(
             pressed: mouse.just_pressed(MouseButton::Left),
             released: mouse.just_released(MouseButton::Left),
         },
-        keys_down: KEYS.iter().filter(|k| keys.pressed(**k)).filter_map(|k| map_key(*k)).collect(),
+        keys_down: KEYS
+            .iter()
+            .filter(|k| keys.pressed(**k))
+            .filter_map(|k| map_key(*k))
+            .collect(),
         keys_pressed: g.pressed,
         typed: g.typed,
         units_per_mm: per_mm,
@@ -170,7 +177,12 @@ fn frame(
     }
     let touched = input.pressed || input.action || !input.typed.is_empty();
     if let Some(a) = &mut state.audio {
-        audio::tick(a, time.elapsed_secs_f64(), time.delta_secs().min(0.1), touched);
+        audio::tick(
+            a,
+            time.elapsed_secs_f64(),
+            time.delta_secs().min(0.1),
+            touched,
+        );
     }
     let _ = &mut clear;
 }

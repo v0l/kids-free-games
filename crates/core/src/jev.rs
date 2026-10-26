@@ -12,7 +12,6 @@ pub enum StateMode {
     Raw,
 }
 
-
 #[derive(Clone, Debug, PartialEq)]
 pub struct Moment {
     pub state: Value,
@@ -426,7 +425,12 @@ impl Player {
             false,
         ));
         out.push((
-            format!("run {}   score {}   best {}", self.runs + 1, score, self.best),
+            format!(
+                "run {}   score {}   best {}",
+                self.runs + 1,
+                score,
+                self.best
+            ),
             false,
         ));
         match self.last.as_ref().and_then(|d| d.state.as_object()) {
@@ -437,7 +441,10 @@ impl Player {
                     .take(2)
                 {
                     let v = &o[k];
-                    let shown = v.as_str().map(String::from).unwrap_or_else(|| v.to_string());
+                    let shown = v
+                        .as_str()
+                        .map(String::from)
+                        .unwrap_or_else(|| v.to_string());
                     let k = k.trim_start_matches("if_").replace('_', " ");
                     out.push((format!("{k}: {shown}"), false));
                 }

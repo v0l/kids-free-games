@@ -241,7 +241,14 @@ fn sync(
     mut images: ResMut<Assets<Image>>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
-    mut layers: Query<(&mut Visibility, &mut MeshMaterial2d<ColorMaterial>, &mut Transform), With<Layer>>,
+    mut layers: Query<
+        (
+            &mut Visibility,
+            &mut MeshMaterial2d<ColorMaterial>,
+            &mut Transform,
+        ),
+        With<Layer>,
+    >,
     mut camera: Query<CameraParts, CameraOnly>,
     window: Query<&Window>,
 ) {
@@ -286,7 +293,10 @@ fn sync(
             gpu.materials.insert(tex, mat);
         }
         let mat = gpu.materials[&tex].clone();
-        let mut mesh = Mesh::new(PrimitiveTopology::TriangleList, RenderAssetUsages::RENDER_WORLD);
+        let mut mesh = Mesh::new(
+            PrimitiveTopology::TriangleList,
+            RenderAssetUsages::RENDER_WORLD,
+        );
         mesh.insert_attribute(Mesh::ATTRIBUTE_POSITION, b.pos.clone());
         mesh.insert_attribute(Mesh::ATTRIBUTE_UV_0, b.uv.clone());
         mesh.insert_attribute(Mesh::ATTRIBUTE_COLOR, b.color.clone());

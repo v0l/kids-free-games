@@ -1,5 +1,6 @@
 pub mod crossy;
 pub mod flappy;
+pub mod snake;
 
 use crate::geom::Color;
 
@@ -27,7 +28,13 @@ pub struct Info {
     pub color: Color,
 }
 
-const fn info(key: &'static str, name: &'static str, kind: Kind, like: &'static str, c: (u8, u8, u8)) -> Info {
+const fn info(
+    key: &'static str,
+    name: &'static str,
+    kind: Kind,
+    like: &'static str,
+    c: (u8, u8, u8),
+) -> Info {
     Info {
         key,
         name,
@@ -38,22 +45,112 @@ const fn info(key: &'static str, name: &'static str, kind: Kind, like: &'static 
 }
 
 pub const CATALOG: [Info; 16] = [
-    info("flappy", "Flappy Bird", Kind::Arcade, "Flappy Bird", (90, 190, 240)),
-    info("paper", "Paper Land", Kind::Arcade, "Paper.io 2", (70, 140, 250)),
-    info("hotel", "Hotel Hop", Kind::Arcade, "My Perfect Hotel", (180, 70, 80)),
-    info("snake", "Snake", Kind::Arcade, "Snake.io, Slither.io", (90, 170, 70)),
+    info(
+        "flappy",
+        "Flappy Bird",
+        Kind::Arcade,
+        "Flappy Bird",
+        (90, 190, 240),
+    ),
+    info(
+        "paper",
+        "Paper Land",
+        Kind::Arcade,
+        "Paper.io 2",
+        (70, 140, 250),
+    ),
+    info(
+        "hotel",
+        "Hotel Hop",
+        Kind::Arcade,
+        "My Perfect Hotel",
+        (180, 70, 80),
+    ),
+    info(
+        "snake",
+        "Snake",
+        Kind::Arcade,
+        "Snake.io, Slither.io",
+        (90, 170, 70),
+    ),
     info("merge", "2048", Kind::Arcade, "2048", (237, 194, 46)),
-    info("fruit", "Fruit Slice", Kind::Arcade, "Fruit Ninja", (230, 90, 60)),
-    info("stack", "Stack Tower", Kind::Arcade, "Stack", (120, 110, 230)),
-    info("breakout", "Brick Breaker", Kind::Arcade, "Bricks Breaker Quest", (80, 60, 160)),
-    info("jumper", "Sky Jumper", Kind::Arcade, "Doodle Jump", (110, 190, 90)),
-    info("memory", "Memory Match", Kind::Arcade, "Memory card games", (60, 170, 200)),
-    info("crossy", "Road Hopper", Kind::Arcade, "Crossy Road", (100, 190, 80)),
-    info("helix", "Helix Drop", Kind::Arcade, "Helix Jump", (255, 130, 70)),
-    info("blocks", "Block Drop", Kind::Arcade, "Tetris", (110, 90, 210)),
-    info("mathpop", "Math Pop", Kind::Learn, "Math games for kids", (235, 100, 170)),
-    info("count", "Count It", Kind::Learn, "Counting games for kids", (250, 170, 60)),
-    info("spell", "Spell It", Kind::Learn, "Spelling games", (250, 150, 80)),
+    info(
+        "fruit",
+        "Fruit Slice",
+        Kind::Arcade,
+        "Fruit Ninja",
+        (230, 90, 60),
+    ),
+    info(
+        "stack",
+        "Stack Tower",
+        Kind::Arcade,
+        "Stack",
+        (120, 110, 230),
+    ),
+    info(
+        "breakout",
+        "Brick Breaker",
+        Kind::Arcade,
+        "Bricks Breaker Quest",
+        (80, 60, 160),
+    ),
+    info(
+        "jumper",
+        "Sky Jumper",
+        Kind::Arcade,
+        "Doodle Jump",
+        (110, 190, 90),
+    ),
+    info(
+        "memory",
+        "Memory Match",
+        Kind::Arcade,
+        "Memory card games",
+        (60, 170, 200),
+    ),
+    info(
+        "crossy",
+        "Road Hopper",
+        Kind::Arcade,
+        "Crossy Road",
+        (100, 190, 80),
+    ),
+    info(
+        "helix",
+        "Helix Drop",
+        Kind::Arcade,
+        "Helix Jump",
+        (255, 130, 70),
+    ),
+    info(
+        "blocks",
+        "Block Drop",
+        Kind::Arcade,
+        "Tetris",
+        (110, 90, 210),
+    ),
+    info(
+        "mathpop",
+        "Math Pop",
+        Kind::Learn,
+        "Math games for kids",
+        (235, 100, 170),
+    ),
+    info(
+        "count",
+        "Count It",
+        Kind::Learn,
+        "Counting games for kids",
+        (250, 170, 60),
+    ),
+    info(
+        "spell",
+        "Spell It",
+        Kind::Learn,
+        "Spelling games",
+        (250, 150, 80),
+    ),
 ];
 
 pub fn find(key: &str) -> Option<&'static Info> {

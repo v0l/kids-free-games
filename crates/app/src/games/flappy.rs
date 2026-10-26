@@ -62,7 +62,12 @@ fn band(pen: &mut Pen, name: &str, view: &View, bottom: f32, h: f32, scroll: f32
     let s = crate::art::size(SHEET, name);
     let w = h * s.x / s.y;
     for x in tile_x(f.x, f.w, w, scroll) {
-        pen.sprite(SHEET, name, Rect::new(x, bottom - h, w + 1.0, h), Draw::tint(tint));
+        pen.sprite(
+            SHEET,
+            name,
+            Rect::new(x, bottom - h, w + 1.0, h),
+            Draw::tint(tint),
+        );
     }
 }
 
@@ -75,7 +80,12 @@ fn draw_pipe(pen: &mut Pen, p: &Pipe, view: &View) {
     let cx = p.x + PIPE_W / 2.0;
     let column = |pen: &mut Pen, from: f32, to: f32| {
         if to > from {
-            pen.sprite(SHEET, "pipe_body", Rect::new(cx - bw / 2.0, from, bw, to - from), Draw::default());
+            pen.sprite(
+                SHEET,
+                "pipe_body",
+                Rect::new(cx - bw / 2.0, from, bw, to - from),
+                Draw::default(),
+            );
         }
     };
     column(pen, top.y, top.y + top.h - ch * 0.6);
@@ -89,7 +99,12 @@ fn draw_pipe(pen: &mut Pen, p: &Pipe, view: &View) {
         },
     );
     column(pen, bottom.y + ch * 0.6, bottom.y + bottom.h);
-    pen.sprite(SHEET, "pipe_cap", Rect::new(cx - cw / 2.0, bottom.y, cw, ch), Draw::default());
+    pen.sprite(
+        SHEET,
+        "pipe_cap",
+        Rect::new(cx - cw / 2.0, bottom.y, cw, ch),
+        Draw::default(),
+    );
 }
 
 fn draw_bird(g: &Flappy, pen: &mut Pen, view: &View) {
@@ -110,7 +125,12 @@ fn draw_bird(g: &Flappy, pen: &mut Pen, view: &View) {
     pen.sprite(
         SHEET,
         frame,
-        Rect::new(bx - w * sc.x / 2.0, g.y - h * sc.y / 2.0, w * sc.x, h * sc.y),
+        Rect::new(
+            bx - w * sc.x / 2.0,
+            g.y - h * sc.y / 2.0,
+            w * sc.x,
+            h * sc.y,
+        ),
         Draw::rot(g.bird_angle()),
     );
 }
@@ -120,7 +140,15 @@ fn draw_world(g: &Flappy, pen: &mut Pen, view: &View) {
     let gy = view.h - GROUND;
     let tint = stage_tint(stage_of(g.score));
     band(pen, "sky", view, f.y + f.h, f.h, g.scroll * 0.08, tint);
-    band(pen, "hills", view, gy + 20.0, (f.h * 0.42).max(260.0), g.scroll * 0.35, tint);
+    band(
+        pen,
+        "hills",
+        view,
+        gy + 20.0,
+        (f.h * 0.42).max(260.0),
+        g.scroll * 0.35,
+        tint,
+    );
     for p in &g.pipes {
         draw_pipe(pen, p, view);
     }
@@ -130,7 +158,12 @@ fn draw_world(g: &Flappy, pen: &mut Pen, view: &View) {
     let h = (GROUND + 34.0) / (1.0 - top_frac);
     let w = h * gs.x / gs.y;
     for x in tile_x(f.x, f.w, w, g.scroll) {
-        pen.sprite(SHEET, "ground", Rect::new(x, gy - 34.0 - h * top_frac, w + 1.0, h.max(gh)), Draw::default());
+        pen.sprite(
+            SHEET,
+            "ground",
+            Rect::new(x, gy - 34.0 - h * top_frac, w + 1.0, h.max(gh)),
+            Draw::default(),
+        );
     }
     draw_bird(g, pen, view);
 }
@@ -162,14 +195,23 @@ pub fn draw(g: &Flappy, pen: &mut Pen, view: &View, results_age: f32) {
         draw_goal(g, pen, view);
         if g.training {
             let pulse = 1.0 + (g.t * 5.0).sin() * 0.05;
-            pen.hint("Tap to fly up, fly through the gap", vec2(view.w / 2.0, view.h * 0.8), pulse);
+            pen.hint(
+                "Tap to fly up, fly through the gap",
+                vec2(view.w / 2.0, view.h * 0.8),
+                pulse,
+            );
         }
     }
     pen.chip(view, Side::Right, "BEST", &g.best.0.to_string(), 1.0);
     match g.state {
         State::Ready => {
             let bob = (g.t * 4.0).sin() * 6.0;
-            pen.ribbon(view, "Get Ready!", vec2(view.w / 2.0, view.h * 0.2 + bob), g.t);
+            pen.ribbon(
+                view,
+                "Get Ready!",
+                vec2(view.w / 2.0, view.h * 0.2 + bob),
+                g.t,
+            );
             let pulse = 1.0 + (g.t * 5.0).sin() * 0.05;
             pen.hint("Tap to flap", vec2(view.w / 2.0, view.h * 0.74), pulse);
             pen.text_shadow(&g.ready_line(), view.w / 2.0, view.h * 0.84, 32.0, WHITE);
@@ -246,7 +288,10 @@ mod tests {
             top = top.min(-q[1]);
             bot = bot.max(-q[1]);
         }
-        assert!(lo <= f.x + 0.01 && hi >= f.x + f.w, "sky {lo}..{hi} vs {f:?}");
+        assert!(
+            lo <= f.x + 0.01 && hi >= f.x + f.w,
+            "sky {lo}..{hi} vs {f:?}"
+        );
         assert!(top <= f.y + 0.5 && bot >= f.y + f.h - 0.5);
     }
 

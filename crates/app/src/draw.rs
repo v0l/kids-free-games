@@ -63,7 +63,11 @@ impl Pen {
 
     pub fn gradient(&mut self, r: Rect, top: Color, bottom: Color) {
         let h = Vec2::splat(0.5);
-        let v = |p: Vec2, c: Color| Vert { pos: p, uv: h, color: c };
+        let v = |p: Vec2, c: Color| Vert {
+            pos: p,
+            uv: h,
+            color: c,
+        };
         self.mesh(
             Tex::White,
             &[
@@ -96,7 +100,11 @@ impl Pen {
         let h = Vec2::splat(0.5);
         let (s, k) = rot.sin_cos();
         let mut verts = Vec::with_capacity(segs + 2);
-        verts.push(Vert { pos: c, uv: h, color: col });
+        verts.push(Vert {
+            pos: c,
+            uv: h,
+            color: col,
+        });
         for i in 0..=segs {
             let a = from + (to - from) * i as f32 / segs as f32;
             let (px, py) = (rx * a.cos(), ry * a.sin());
@@ -125,8 +133,16 @@ impl Pen {
         for i in 0..=n {
             let a = TAU * i as f32 / n as f32;
             let d = vec2(a.cos(), a.sin());
-            verts.push(Vert { pos: c + d * (r - width / 2.0), uv: h, color: col });
-            verts.push(Vert { pos: c + d * (r + width / 2.0), uv: h, color: col });
+            verts.push(Vert {
+                pos: c + d * (r - width / 2.0),
+                uv: h,
+                color: col,
+            });
+            verts.push(Vert {
+                pos: c + d * (r + width / 2.0),
+                uv: h,
+                color: col,
+            });
         }
         let idx: Vec<u32> = (0..n as u32)
             .flat_map(|i| {
@@ -157,7 +173,11 @@ impl Pen {
             (vec2(r.x + rad, r.y + rad), PI),
             (vec2(r.x + r.w - rad, r.y + rad), PI * 1.5),
         ];
-        let mut verts = vec![Vert { pos: r.center(), uv: h, color: col }];
+        let mut verts = vec![Vert {
+            pos: r.center(),
+            uv: h,
+            color: col,
+        }];
         for (c, start) in corners {
             for k in 0..=segs {
                 let a = start + FRAC_PI_2 * k as f32 / segs as f32;
@@ -191,7 +211,13 @@ impl Pen {
     pub fn soft_shadow(&mut self, c: Vec2, rx: f32, ry: f32, alpha: f32) {
         for i in 0..4 {
             let k = 1.0 - i as f32 * 0.18;
-            self.ellipse(c, rx * k, ry * k, 0.0, Color::new(0.0, 0.0, 0.0, alpha * 0.3));
+            self.ellipse(
+                c,
+                rx * k,
+                ry * k,
+                0.0,
+                Color::new(0.0, 0.0, 0.0, alpha * 0.3),
+            );
         }
     }
 
@@ -211,7 +237,10 @@ impl Pen {
         let a = x.max(r.x);
         let b = (x + r.w * 0.18).min(r.x + r.w);
         if b > a {
-            self.rect(Rect::new(a, r.y, b - a, r.h), Color::new(1.0, 1.0, 1.0, 0.18));
+            self.rect(
+                Rect::new(a, r.y, b - a, r.h),
+                Color::new(1.0, 1.0, 1.0, 0.18),
+            );
         }
     }
 
@@ -235,8 +264,16 @@ impl Pen {
         let h = Vec2::splat(0.5);
         let mut verts = vec![];
         for k in 0..4 {
-            verts.push(Vert { pos: outer[k], uv: h, color: edge });
-            verts.push(Vert { pos: inner[k], uv: h, color: clear });
+            verts.push(Vert {
+                pos: outer[k],
+                uv: h,
+                color: edge,
+            });
+            verts.push(Vert {
+                pos: inner[k],
+                uv: h,
+                color: clear,
+            });
         }
         let mut idx = vec![];
         for k in 0..4u32 {
@@ -279,19 +316,44 @@ impl Pen {
         );
     }
 
-    pub fn sprite_at(&mut self, sheet: &'static str, name: &str, center: Vec2, height: f32, d: Draw) {
+    pub fn sprite_at(
+        &mut self,
+        sheet: &'static str,
+        name: &str,
+        center: Vec2,
+        height: f32,
+        d: Draw,
+    ) {
         let s = crate::art::size(sheet, name);
         let w = height * s.x / s.y.max(1.0);
-        self.sprite(sheet, name, Rect::new(center.x - w / 2.0, center.y - height / 2.0, w, height), d);
+        self.sprite(
+            sheet,
+            name,
+            Rect::new(center.x - w / 2.0, center.y - height / 2.0, w, height),
+            d,
+        );
     }
 
     pub fn sprite_w(&mut self, sheet: &'static str, name: &str, center: Vec2, width: f32, d: Draw) {
         let s = crate::art::size(sheet, name);
         let h = width * s.y / s.x.max(1.0);
-        self.sprite(sheet, name, Rect::new(center.x - width / 2.0, center.y - h / 2.0, width, h), d);
+        self.sprite(
+            sheet,
+            name,
+            Rect::new(center.x - width / 2.0, center.y - h / 2.0, width, h),
+            d,
+        );
     }
 
-    pub fn nine(&mut self, sheet: &'static str, name: &str, dest: Rect, border: f32, scale: f32, tint: Color) {
+    pub fn nine(
+        &mut self,
+        sheet: &'static str,
+        name: &str,
+        dest: Rect,
+        border: f32,
+        scale: f32,
+        tint: Color,
+    ) {
         let Some(f) = crate::art::frame(sheet, name) else {
             self.rect(dest, kg_core::geom::MAGENTA);
             return;
@@ -308,7 +370,12 @@ impl Pen {
                 let (u0, v0, u1, v1) = (sx / pw, sy / ph, (sx + sw) / pw, (sy + sh) / ph);
                 self.quad(
                     tex,
-                    [vec2(dx, dy), vec2(dx + dw, dy), vec2(dx + dw, dy + dh), vec2(dx, dy + dh)],
+                    [
+                        vec2(dx, dy),
+                        vec2(dx + dw, dy),
+                        vec2(dx + dw, dy + dh),
+                        vec2(dx, dy + dh),
+                    ],
                     [vec2(u0, v0), vec2(u1, v0), vec2(u1, v1), vec2(u0, v1)],
                     tint,
                 );
@@ -316,7 +383,15 @@ impl Pen {
         }
     }
 
-    pub fn glyphs(&mut self, s: &str, at: Vec2, size: f32, fill: Color, edge: Color, shadow: Color) {
+    pub fn glyphs(
+        &mut self,
+        s: &str,
+        at: Vec2,
+        size: f32,
+        fill: Color,
+        edge: Color,
+        shadow: Color,
+    ) {
         let (px, k) = font_params(size);
         let Some(crate::text::Line {
             glyphs: placed,
@@ -342,10 +417,20 @@ impl Pen {
                 let y = base_y + g.top * k + off;
                 let (w, h) = (g.w * k, g.h * k);
                 let a = atlas as f32;
-                let (u0, v0, u1, v1) = (src.x / a, src.y / a, (src.x + src.w) / a, (src.y + src.h) / a);
+                let (u0, v0, u1, v1) = (
+                    src.x / a,
+                    src.y / a,
+                    (src.x + src.w) / a,
+                    (src.y + src.h) / a,
+                );
                 self.quad(
                     Tex::Glyphs,
-                    [vec2(x, y), vec2(x + w, y), vec2(x + w, y + h), vec2(x, y + h)],
+                    [
+                        vec2(x, y),
+                        vec2(x + w, y),
+                        vec2(x + w, y + h),
+                        vec2(x, y + h),
+                    ],
                     [vec2(u0, v0), vec2(u1, v0), vec2(u1, v1), vec2(u0, v1)],
                     col,
                 );
@@ -353,13 +438,33 @@ impl Pen {
         }
     }
 
-    pub fn text_outline(&mut self, s: &str, cx: f32, cy: f32, size: f32, fill: Color, outline: Color) {
-        let shadow = Color::new(outline.r * 0.6, outline.g * 0.6, outline.b * 0.6, outline.a * 0.55);
+    pub fn text_outline(
+        &mut self,
+        s: &str,
+        cx: f32,
+        cy: f32,
+        size: f32,
+        fill: Color,
+        outline: Color,
+    ) {
+        let shadow = Color::new(
+            outline.r * 0.6,
+            outline.g * 0.6,
+            outline.b * 0.6,
+            outline.a * 0.55,
+        );
         self.glyphs(s, vec2(cx, cy), size, fill, outline, shadow);
     }
 
     pub fn text_center(&mut self, s: &str, cx: f32, cy: f32, size: f32, col: Color) {
-        self.glyphs(s, vec2(cx, cy), size, col, Color::new(0.0, 0.0, 0.0, 0.0), Color::new(0.0, 0.0, 0.0, 0.0));
+        self.glyphs(
+            s,
+            vec2(cx, cy),
+            size,
+            col,
+            Color::new(0.0, 0.0, 0.0, 0.0),
+            Color::new(0.0, 0.0, 0.0, 0.0),
+        );
     }
 
     pub fn text_left(&mut self, s: &str, x: f32, cy: f32, size: f32, col: Color) {
@@ -383,7 +488,14 @@ impl Pen {
 
     pub fn big_score(&mut self, view: &View, value: &str, y: f32, bump: f32) {
         let k = kg_core::fx::bump_scale(bump, 0.3);
-        self.text_outline(value, view.w / 2.0, y, 88.0 * k, WHITE, Color::from_rgba(50, 20, 70, 255));
+        self.text_outline(
+            value,
+            view.w / 2.0,
+            y,
+            88.0 * k,
+            WHITE,
+            Color::from_rgba(50, 20, 70, 255),
+        );
     }
 }
 
@@ -428,15 +540,28 @@ mod tests {
     #[test]
     fn a_missing_sprite_shows_magenta_instead_of_vanishing() {
         let mut p = pen();
-        p.sprite("ui", "no_such_sprite", Rect::new(0.0, 0.0, 10.0, 10.0), Draw::default());
+        p.sprite(
+            "ui",
+            "no_such_sprite",
+            Rect::new(0.0, 0.0, 10.0, 10.0),
+            Draw::default(),
+        );
         assert_eq!(p.used()[0].tex, Some(Tex::White));
-        assert_eq!(p.used()[0].color[0], crate::paint::linear(kg_core::geom::MAGENTA));
+        assert_eq!(
+            p.used()[0].color[0],
+            crate::paint::linear(kg_core::geom::MAGENTA)
+        );
     }
 
     #[test]
     fn a_sprite_maps_its_frame_into_page_uvs() {
         let mut p = pen();
-        p.sprite("ui", "p_panel", Rect::new(0.0, 0.0, 10.0, 10.0), Draw::default());
+        p.sprite(
+            "ui",
+            "p_panel",
+            Rect::new(0.0, 0.0, 10.0, 10.0),
+            Draw::default(),
+        );
         let b = &p.used()[0];
         assert!(matches!(b.tex, Some(Tex::Page("ui", _))));
         for uv in &b.uv {
@@ -461,7 +586,9 @@ mod tests {
         let mut p = pen();
         p.text_center("Kids", 300.0, 200.0, 40.0, WHITE);
         let xs: Vec<f32> = p.used()[0].pos.iter().map(|v| v[0]).collect();
-        let (lo, hi) = xs.iter().fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
+        let (lo, hi) = xs
+            .iter()
+            .fold((f32::MAX, f32::MIN), |(a, b), x| (a.min(*x), b.max(*x)));
         assert!(((lo + hi) / 2.0 - 300.0).abs() < 6.0, "{lo} {hi}");
     }
 }

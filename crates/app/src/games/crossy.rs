@@ -52,6 +52,10 @@ impl Play for CrossyPlay {
         self.g.score
     }
 
+    fn over(&self) -> bool {
+        self.g.state == kg_core::games::crossy::State::Dead
+    }
+
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
     }
@@ -120,7 +124,9 @@ fn draw_lane(g: &Crossy, pen: &mut Pen, i: usize, f: Rect, top: f32, ox: f32) {
         Lane::River { .. } => {
             tiled_offset(pen, "water", f, top, ROW_PX, WHITE, i);
             for k in 0..((f.w / 50.0) as i32 + 2) {
-                let wx = (k as f32 * 50.0 + g.t * 20.0 + i as f32 * 13.0).rem_euclid(f.w + 50.0) - 25.0 + f.x;
+                let wx = (k as f32 * 50.0 + g.t * 20.0 + i as f32 * 13.0).rem_euclid(f.w + 50.0)
+                    - 25.0
+                    + f.x;
                 pen.rect(
                     Rect::new(wx, top + 20.0 + (k % 3) as f32 * 14.0, 18.0, 3.0),
                     Color::new(1.0, 1.0, 1.0, 0.4),
@@ -130,8 +136,18 @@ fn draw_lane(g: &Crossy, pen: &mut Pen, i: usize, f: Rect, top: f32, ox: f32) {
         Lane::Rail { .. } => {
             tiled(pen, "rail", f, top, ROW_PX, WHITE);
             let lit = r.warning() && (g.t * 8.0).sin() > 0.0;
-            let tint = if lit { RED } else { Color::from_rgba(120, 60, 60, 255) };
-            pen.sprite_at("ui", "round_white", vec2(ox - 30.0, top + 6.0), 30.0, Draw::tint(tint));
+            let tint = if lit {
+                RED
+            } else {
+                Color::from_rgba(120, 60, 60, 255)
+            };
+            pen.sprite_at(
+                "ui",
+                "round_white",
+                vec2(ox - 30.0, top + 6.0),
+                30.0,
+                Draw::tint(tint),
+            );
         }
     }
 }
@@ -145,7 +161,13 @@ fn draw_trees(g: &Crossy, pen: &mut Pen, i: usize, y: f32, cell: f32, ox: f32) {
             1 => ("bush", ROW_PX * 0.95),
             _ => ("rock", ROW_PX * 0.8),
         };
-        pen.sprite_at(SHEET, name, vec2(tx, y + 24.0 - h / 2.0), h, Draw::default());
+        pen.sprite_at(
+            SHEET,
+            name,
+            vec2(tx, y + 24.0 - h / 2.0),
+            h,
+            Draw::default(),
+        );
     }
 }
 
@@ -177,7 +199,14 @@ fn draw_things(g: &Crossy, pen: &mut Pen, i: usize, y: f32, cell: f32, ox: f32) 
                 let x = ox + t * cell;
                 let w = r.len * cell;
                 pen.soft_shadow(vec2(x + w / 2.0, y + 22.0), w * 0.45, 8.0, 0.3);
-                pen.nine(SHEET, "log", Rect::new(x + 3.0, y - 28.0, w - 6.0, 56.0), 46.0, 0.5, WHITE);
+                pen.nine(
+                    SHEET,
+                    "log",
+                    Rect::new(x + 3.0, y - 28.0, w - 6.0, 56.0),
+                    46.0,
+                    0.5,
+                    WHITE,
+                );
             }
         }
         Lane::Rail { .. } => {
@@ -189,7 +218,12 @@ fn draw_things(g: &Crossy, pen: &mut Pen, i: usize, y: f32, cell: f32, ox: f32) 
                     let h = if k == 5 { 118.0 } else { 92.0 };
                     let s = crate::art::size(SHEET, name);
                     let w = (h * s.x / s.y).min(slot + 8.0);
-                    pen.sprite(SHEET, name, Rect::new(x + slot - w, y + 30.0 - h, w, h), Draw::default());
+                    pen.sprite(
+                        SHEET,
+                        name,
+                        Rect::new(x + slot - w, y + 30.0 - h, w, h),
+                        Draw::default(),
+                    );
                 }
             }
         }
@@ -200,19 +234,31 @@ fn draw_things(g: &Crossy, pen: &mut Pen, i: usize, y: f32, cell: f32, ox: f32) 
 fn draw_chicken(g: &Crossy, pen: &mut Pen, view: &View, cell: f32, ox: f32, shake: Vec2) {
     let p = g.player_pos();
     let arc = (g.hop * std::f32::consts::PI).sin() * 22.0;
-    let c = vec2(ox + (p.x + 0.5) * cell, g.screen_y(p.y, view) + shake.y - arc);
+    let c = vec2(
+        ox + (p.x + 0.5) * cell,
+        g.screen_y(p.y, view) + shake.y - arc,
+    );
     let flat = g.state == State::Dead && matches!(g.death, Some(Death::Car) | Some(Death::Train));
     if g.state == State::Dead && g.death == Some(Death::Water) {
         return;
     }
-    pen.soft_shadow(vec2(c.x, c.y + 22.0 + arc), 20.0 * (1.0 - arc / 60.0), 7.0, 0.5);
+    pen.soft_shadow(
+        vec2(c.x, c.y + 22.0 + arc),
+        20.0 * (1.0 - arc / 60.0),
+        7.0,
+        0.5,
+    );
     let (sx, sy) = if flat {
         (1.6, 0.25)
     } else {
         let s = 1.0 - (g.hop * std::f32::consts::PI).sin() * 0.12;
         (s, 2.0 - s)
     };
-    let frame = if arc > 6.0 && !flat { "hopper_air" } else { "hopper" };
+    let frame = if arc > 6.0 && !flat {
+        "hopper_air"
+    } else {
+        "hopper"
+    };
     let h = HOPPER_H * sy;
     let sz = crate::art::size(SHEET, frame);
     let w = HOPPER_H * sz.x / sz.y * sx;
@@ -258,7 +304,11 @@ fn draw_goal(g: &Crossy, pen: &mut Pen, view: &View) {
         pen.round_rect(inner, 7.0, Color::from_rgba(255, 200, 40, 255));
     }
     let flag = vec2(bar.x + bar.w, bar.y + bar.h / 2.0);
-    pen.ui("p_star", Rect::new(flag.x - 20.0, flag.y - 20.0, 40.0, 40.0), Draw::default());
+    pen.ui(
+        "p_star",
+        Rect::new(flag.x - 20.0, flag.y - 20.0, 40.0, 40.0),
+        Draw::default(),
+    );
     pen.text_shadow(
         &format!("Reach checkpoint {}", g.goal_stage()),
         view.w / 2.0,
@@ -272,7 +322,12 @@ fn draw_banner(g: &Crossy, pen: &mut Pen, view: &View) {
     let Some((stage, age)) = g.banner else { return };
     let fade = (1.0 - (age - (BANNER_TIME - 0.5)) / 0.5).clamp(0.0, 1.0);
     let pop = ease_out_back((age / 0.35).min(1.0));
-    pen.ribbon(view, &format!("Checkpoint {stage}"), vec2(view.w / 2.0, view.h * 0.3), g.t);
+    pen.ribbon(
+        view,
+        &format!("Checkpoint {stage}"),
+        vec2(view.w / 2.0, view.h * 0.3),
+        g.t,
+    );
     pen.text_shadow(
         &format!("Next: {}", zone_name(stage)),
         view.w / 2.0,
@@ -308,7 +363,11 @@ pub fn draw(g: &Crossy, pen: &mut Pen, view: &View, results_age: f32) {
     match g.state {
         State::Ready => {
             let pulse = 1.0 + (g.t * 5.0).sin() * 0.05;
-            pen.hint("Tap to hop, swipe to turn", vec2(view.w / 2.0, view.h * 0.3), pulse);
+            pen.hint(
+                "Tap to hop, swipe to turn",
+                vec2(view.w / 2.0, view.h * 0.3),
+                pulse,
+            );
             if let Some(n) = g.checkpoint_offer() {
                 pen.painted_button(
                     g.checkpoint_button(view),

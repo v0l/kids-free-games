@@ -44,8 +44,13 @@ mod imp {
     }
 
     pub fn units_per_mm_px() -> Option<f32> {
-        with_activity(|env, act| env.call_method(act, "pixelsPerMm", "()F", &[]).ok()?.f().ok())
-            .filter(|v| v.is_finite() && *v > 1.0)
+        with_activity(|env, act| {
+            env.call_method(act, "pixelsPerMm", "()F", &[])
+                .ok()?
+                .f()
+                .ok()
+        })
+        .filter(|v| v.is_finite() && *v > 1.0)
     }
 
     pub fn save_dir() -> Option<std::path::PathBuf> {
@@ -139,7 +144,10 @@ mod imp {
             .map(|w| {
                 (
                     w.inner_width().ok().and_then(|v| v.as_f64()).unwrap_or(1.0),
-                    w.inner_height().ok().and_then(|v| v.as_f64()).unwrap_or(1.0),
+                    w.inner_height()
+                        .ok()
+                        .and_then(|v| v.as_f64())
+                        .unwrap_or(1.0),
                 )
             })
             .unwrap_or((1.0, 1.0));

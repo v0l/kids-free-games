@@ -117,7 +117,11 @@ pub fn tick(audio: &mut Audio, now: f64, dt: f32, touched: bool) {
                 "audio: {} Hz, {} frames rendered, device {}",
                 m.out_rate,
                 m.frames_rendered,
-                if audio.stream.is_some() { "open" } else { "missing" }
+                if audio.stream.is_some() {
+                    "open"
+                } else {
+                    "missing"
+                }
             );
         }
         m.control(now, dt);

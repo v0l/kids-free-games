@@ -38,7 +38,13 @@ impl Jev {
     pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32) {
         let Some(player) = &mut self.player else {
             pen.fill_screen(view, Color::new(0.06, 0.03, 0.15, 1.0));
-            pen.text_center("No Yalr key: set YALR_KEY or ?key=", view.w / 2.0, view.h / 2.0, 36.0, WHITE);
+            pen.text_center(
+                "No Yalr key: set YALR_KEY or ?key=",
+                view.w / 2.0,
+                view.h / 2.0,
+                36.0,
+                WHITE,
+            );
             return;
         };
         let dt = dt * player.clock();
@@ -54,7 +60,13 @@ impl Jev {
         let dim = Color::new(0.75, 0.78, 0.9, 1.0);
         for (i, (l, strong)) in lines.iter().enumerate() {
             let shown = fit(l, w - 32.0, 22.0);
-            pen.text_left(&shown, r.x + 16.0, r.y + 27.0 + i as f32 * 26.0, 22.0, if *strong { gold } else { dim });
+            pen.text_left(
+                &shown,
+                r.x + 16.0,
+                r.y + 27.0 + i as f32 * 26.0,
+                22.0,
+                if *strong { gold } else { dim },
+            );
         }
     }
 }

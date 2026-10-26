@@ -174,7 +174,13 @@ impl Link {
         let ry = if view.w > view.h { 56.0 } else { 90.0 };
         pen.ribbon(view, "Link a device", vec2(view.w / 2.0, ry), self.t);
         let (share, join) = Self::tab_rects(view);
-        let tab = |on: bool| if on { (Tone::Green, 1.0) } else { (Tone::Blue, 0.7) };
+        let tab = |on: bool| {
+            if on {
+                (Tone::Green, 1.0)
+            } else {
+                (Tone::Blue, 0.7)
+            }
+        };
         let (t, a) = tab(self.tab == Tab::Share);
         pen.painted_button(share, "Show code", t, 0.0, a);
         let (t, a) = tab(self.tab == Tab::Join);
@@ -199,13 +205,21 @@ impl Link {
             }
             Tab::Join => {
                 let empty = self.typed.is_empty();
-                let shown = if empty { "Type the code".to_string() } else { self.shown_code() };
+                let shown = if empty {
+                    "Type the code".to_string()
+                } else {
+                    self.shown_code()
+                };
                 pen.text_center(
                     &shown,
                     code.center().x - 30.0,
                     code.center().y,
                     if empty { 40.0 } else { 60.0 },
-                    if empty { Color::new(0.4, 0.35, 0.5, 0.6) } else { BODY },
+                    if empty {
+                        Color::new(0.4, 0.35, 0.5, 0.6)
+                    } else {
+                        BODY
+                    },
                 );
                 let del = Self::del_rect(view);
                 pen.round_rect(del, 12.0, Color::from_rgba(255, 190, 120, 255));
@@ -220,8 +234,17 @@ impl Link {
                 };
                 pen.painted_button(action, label, Tone::Green, 0.0, alpha);
                 if let Redeem::Failed(why) = net::redeem_state() {
-                    let y = Self::key_rects(view).first().map(|k| k.1.y - 14.0).unwrap_or(0.0);
-                    pen.text_center(why, view.w / 2.0, y, 26.0, Color::from_rgba(255, 230, 120, 255));
+                    let y = Self::key_rects(view)
+                        .first()
+                        .map(|k| k.1.y - 14.0)
+                        .unwrap_or(0.0);
+                    pen.text_center(
+                        why,
+                        view.w / 2.0,
+                        y,
+                        26.0,
+                        Color::from_rgba(255, 230, 120, 255),
+                    );
                 }
             }
         }
@@ -304,7 +327,14 @@ mod tests {
         let v = View::ipad_landscape();
         let mut l = Link::new();
         tap(&mut l, &v, Link::tab_rects(&v).1.center());
-        l.update(&Input { typed: "k7qm2xpd".chars().collect(), ..Default::default() }, &v, 0.016);
+        l.update(
+            &Input {
+                typed: "k7qm2xpd".chars().collect(),
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
         assert_eq!(l.typed, "K7QM2XPD");
     }
 

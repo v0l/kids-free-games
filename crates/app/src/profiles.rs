@@ -125,7 +125,12 @@ impl Profiles {
             for (i, ch) in row.chars().enumerate() {
                 out.push((
                     ch,
-                    Rect::new(left + i as f32 * (kw + 6.0), top + r as f32 * (kh + 8.0), kw, kh),
+                    Rect::new(
+                        left + i as f32 * (kw + 6.0),
+                        top + r as f32 * (kh + 8.0),
+                        kw,
+                        kh,
+                    ),
                 ));
             }
         }
@@ -281,7 +286,11 @@ impl Profiles {
                     if ch == '<' {
                         name.pop();
                     } else if name.chars().count() < MAX_NAME {
-                        name.push(if name.is_empty() { ch } else { ch.to_ascii_lowercase() });
+                        name.push(if name.is_empty() {
+                            ch
+                        } else {
+                            ch.to_ascii_lowercase()
+                        });
                     }
                 }
             }
@@ -359,7 +368,11 @@ impl Profiles {
                         pen.avatar(p.avatar, c, d * 0.9);
                         pen.text_outline(&p.name, c.x, r.y + r.h - 4.0, 30.0, WHITE, plum);
                         let e = vec2(r.x + r.w - 22.0, r.y + 22.0);
-                        pen.painted_round(Rect::new(e.x - 26.0, e.y - 26.0, 52.0, 52.0), "icon_gear", 0.0);
+                        pen.painted_round(
+                            Rect::new(e.x - 26.0, e.y - 26.0, 52.0, 52.0),
+                            "icon_gear",
+                            0.0,
+                        );
                     } else {
                         pen.circle(c, d * 0.45, Color::new(1.0, 1.0, 1.0, 0.25));
                         pen.text_outline("+", c.x, c.y - 4.0, d * 0.5, WHITE, plum);
@@ -373,7 +386,11 @@ impl Profiles {
                 avatar: sel,
                 confirm_delete,
             } => {
-                let title = if id.is_some() { "Edit player" } else { "New player" };
+                let title = if id.is_some() {
+                    "Edit player"
+                } else {
+                    "New player"
+                };
                 let ry = if view.w > view.h { 66.0 } else { 90.0 };
                 pen.ribbon(view, title, vec2(view.w / 2.0, ry), self.t);
                 pen.text_center(
@@ -385,7 +402,11 @@ impl Profiles {
                 );
                 for (i, r) in Self::avatar_rects(view).iter().enumerate() {
                     let on = i == *sel;
-                    let k = if on { 1.12 + (self.t * 5.0).sin() * 0.03 } else { 0.92 };
+                    let k = if on {
+                        1.12 + (self.t * 5.0).sin() * 0.03
+                    } else {
+                        0.92
+                    };
                     if on {
                         pen.circle(r.center(), r.w * 0.62, Color::new(1.0, 0.9, 0.3, 0.7));
                     }
@@ -396,7 +417,11 @@ impl Profiles {
                 let shown = if name.is_empty() {
                     "Type your name".to_string()
                 } else {
-                    let caret = if (self.t * 2.0).fract() < 0.5 { "|" } else { " " };
+                    let caret = if (self.t * 2.0).fract() < 0.5 {
+                        "|"
+                    } else {
+                        " "
+                    };
                     format!("{name}{caret}")
                 };
                 pen.text_center(
@@ -404,10 +429,18 @@ impl Profiles {
                     nr.center().x,
                     nr.center().y,
                     40.0,
-                    if name.is_empty() { Color::new(0.4, 0.35, 0.5, 0.6) } else { BODY },
+                    if name.is_empty() {
+                        Color::new(0.4, 0.35, 0.5, 0.6)
+                    } else {
+                        BODY
+                    },
                 );
                 for (ch, r) in Self::key_rects(view) {
-                    let label = if ch == '<' { "DEL".to_string() } else { ch.to_string() };
+                    let label = if ch == '<' {
+                        "DEL".to_string()
+                    } else {
+                        ch.to_string()
+                    };
                     pen.key_cap(r, &label, pressed(r));
                 }
                 let (ok, back, delete) = Self::action_rects(view);
@@ -491,7 +524,10 @@ mod tests {
         let av = Profiles::avatar_rects(&v);
         tap(&mut p, &v, av[3].center());
         for want in "MIA".chars() {
-            let (_, r) = Profiles::key_rects(&v).into_iter().find(|(c, _)| *c == want).unwrap();
+            let (_, r) = Profiles::key_rects(&v)
+                .into_iter()
+                .find(|(c, _)| *c == want)
+                .unwrap();
             tap(&mut p, &v, r.center());
         }
         match &p.mode {
@@ -514,9 +550,31 @@ mod tests {
         kg_core::save::reset_for_test();
         let v = View::ipad_landscape();
         let mut p = Profiles::new();
-        p.update(&Input { typed: "leox".chars().collect(), ..Default::default() }, &v, 0.016);
-        p.update(&Input { typed: vec![BACKSPACE], back: true, ..Default::default() }, &v, 0.016);
-        p.update(&Input { action: true, ..Default::default() }, &v, 0.016);
+        p.update(
+            &Input {
+                typed: "leox".chars().collect(),
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
+        p.update(
+            &Input {
+                typed: vec![BACKSPACE],
+                back: true,
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
+        p.update(
+            &Input {
+                action: true,
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
         assert!(p.done);
         assert_eq!(profile::current().unwrap().name, "Leo");
     }
@@ -527,12 +585,42 @@ mod tests {
         profile::create("Mia", 0).unwrap();
         let v = View::ipad_landscape();
         let mut p = Profiles::new();
-        tap(&mut p, &v, *Profiles::card_rects(&v, 1).last().map(|r| r.center()).as_ref().unwrap());
+        tap(
+            &mut p,
+            &v,
+            *Profiles::card_rects(&v, 1)
+                .last()
+                .map(|r| r.center())
+                .as_ref()
+                .unwrap(),
+        );
         assert!(matches!(p.mode, Mode::Edit { id: None, .. }));
-        p.update(&Input { typed: "Leo".chars().collect(), ..Default::default() }, &v, 0.016);
-        p.update(&Input { typed: vec![BACKSPACE], back: true, ..Default::default() }, &v, 0.016);
+        p.update(
+            &Input {
+                typed: "Leo".chars().collect(),
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
+        p.update(
+            &Input {
+                typed: vec![BACKSPACE],
+                back: true,
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
         assert!(matches!(&p.mode, Mode::Edit { name, .. } if name == "Le"));
-        p.update(&Input { back: true, ..Default::default() }, &v, 0.016);
+        p.update(
+            &Input {
+                back: true,
+                ..Default::default()
+            },
+            &v,
+            0.016,
+        );
         assert_eq!(p.mode, Mode::Pick);
     }
 
@@ -581,12 +669,20 @@ mod tests {
 
     #[test]
     fn the_link_button_never_sits_on_a_player_card() {
-        for v in [View::ipad_landscape(), View::ipad_portrait(), View::fit(390.0, 844.0), View::fit(844.0, 390.0)] {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+            View::fit(844.0, 390.0),
+        ] {
             let link = Profiles::link_rect(&v);
             assert!(link.y + link.h <= v.h + 1.0, "{v:?}");
             for n in 0..=MAX_PROFILES {
                 for c in Profiles::card_rects(&v, n) {
-                    assert!(!c.overlaps(&link), "card hits link button with {n} players in {v:?}");
+                    assert!(
+                        !c.overlaps(&link),
+                        "card hits link button with {n} players in {v:?}"
+                    );
                 }
             }
         }
@@ -608,12 +704,20 @@ mod tests {
 
     #[test]
     fn edit_layout_fits_every_screen_without_overlap() {
-        for v in [View::ipad_landscape(), View::ipad_portrait(), View::fit(390.0, 844.0), View::fit(844.0, 390.0)] {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+            View::fit(844.0, 390.0),
+        ] {
             let keys = Profiles::key_rects(&v);
             let (ok, _, _) = Profiles::action_rects(&v);
             let name = Profiles::name_rect(&v);
             let last_av = *Profiles::avatar_rects(&v).last().unwrap();
-            assert!(last_av.y + last_av.h <= name.y, "avatars hit the name box in {v:?}");
+            assert!(
+                last_av.y + last_av.h <= name.y,
+                "avatars hit the name box in {v:?}"
+            );
             for (i, (_, a)) in keys.iter().enumerate() {
                 for (_, b) in &keys[i + 1..] {
                     assert!(!a.overlaps(b), "keys overlap in {v:?}");

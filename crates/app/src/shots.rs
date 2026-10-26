@@ -13,7 +13,9 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
-pub const SCENES: [(u32, &str); 24] = [
+mod snake_scene;
+
+pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
     (1, "menu scrolled to Learn"),
     (2, "menu with the second tile focused"),
@@ -38,6 +40,14 @@ pub const SCENES: [(u32, &str); 24] = [
     (27, "road hopper hurry up"),
     (28, "road hopper game over with the board"),
     (29, "road hopper oops, hopped back"),
+    (30, "snake ready"),
+    (31, "snake first moves with the hint"),
+    (32, "snake mid run"),
+    (33, "snake stage up"),
+    (34, "snake long and fast"),
+    (35, "snake bonk"),
+    (36, "snake game over with the board"),
+    (37, "snake new best"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -46,11 +56,22 @@ pub fn requested() -> Option<u32> {
         .and_then(|s| s.parse().ok())
 }
 
-enum Stage {
+pub enum Stage {
     Menu(Box<App>),
     Profiles(Box<Profiles>),
     Flappy(Box<FlappyPlay>),
-    Crossy(Box<CrossyPlay>),
+    Game(Box<dyn Play>),
+}
+
+#[cfg(test)]
+pub fn game<T: Play + 'static>(s: Stage) -> Box<T> {
+    match s {
+        Stage::Game(p) => match p.into_any().downcast::<T>() {
+            Ok(t) => t,
+            Err(_) => panic!("scene is a different game"),
+        },
+        _ => panic!("scene is not a game"),
+    }
 }
 
 pub struct Shot {
@@ -83,7 +104,11 @@ fn fly(p: &mut FlappyPlay, view: &View, frames: usize) {
             .find(|q| q.x + PIPE_W > bx - flappy::BIRD_R)
             .map(|q| q.gap_y + q.gap * 0.15)
             .unwrap_or(view.h * 0.5);
-        let input = if g.y > target && g.vy > 0.0 { flap() } else { Input::default() };
+        let input = if g.y > target && g.vy > 0.0 {
+            flap()
+        } else {
+            Input::default()
+        };
         p.update(&input, view, DT);
         if p.g.state == State::Dead {
             break;
@@ -93,7 +118,8 @@ fn fly(p: &mut FlappyPlay, view: &View, frames: usize) {
 
 fn crash(p: &mut FlappyPlay, view: &View) {
     p.g.y = 100.0;
-    p.g.pipes.push(Pipe::new(flappy::Flappy::bird_x(view) - 10.0, 450.0));
+    p.g.pipes
+        .push(Pipe::new(flappy::Flappy::bird_x(view) - 10.0, 450.0));
     p.update(&Input::default(), view, DT);
     for _ in 0..90 {
         p.update(&Input::default(), view, DT);
@@ -189,7 +215,10 @@ fn crossy_scene(n: u32, view: &View) -> Stage {
         }
         _ => {
             let mut p = crossy_at(0, 4, view);
-            p.g.rows[5].lane = crossy::Lane::Road { speed: 0.0, gap: 5.0 };
+            p.g.rows[5].lane = crossy::Lane::Road {
+                speed: 0.0,
+                gap: 5.0,
+            };
             p.g.rows[5].things = vec![p.g.x - 0.5];
             p.g.row = 5;
             p.g.from = vec2(p.g.x, 5.0);
@@ -200,7 +229,7 @@ fn crossy_scene(n: u32, view: &View) -> Stage {
     };
     p.update(&Input::default(), view, DT);
     kg_core::sfx::take_cues();
-    Stage::Crossy(Box::new(p))
+    Stage::Game(Box::new(p))
 }
 
 fn setup(n: u32, view: &View) -> Stage {
@@ -249,6 +278,7 @@ fn setup(n: u32, view: &View) -> Stage {
             Stage::Profiles(Box::new(p))
         }
         20..=29 => crossy_scene(n, view),
+        30..=39 => snake_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -323,17 +353,12 @@ impl Shot {
             self.stage = Some(setup(self.n % IDLE, view));
         }
         if self.n >= IDLE {
-            if let Some(Stage::Flappy(p)) = &mut self.stage {
-                if p.g.state != State::Dead {
+            match &mut self.stage {
+                Some(Stage::Flappy(p)) if p.g.state != State::Dead => {
                     p.update(&Input::default(), view, DT);
                 }
-            }
-        }
-        if self.n >= IDLE {
-            if let Some(Stage::Crossy(p)) = &mut self.stage {
-                if p.g.state != crossy::State::Dead {
-                    p.update(&Input::default(), view, DT);
-                }
+                Some(Stage::Game(p)) if !p.over() => p.update(&Input::default(), view, DT),
+                _ => {}
             }
         }
         match self.stage.as_ref().unwrap() {
@@ -343,7 +368,7 @@ impl Shot {
                 pen.fill_screen(view, kg_core::geom::Color::new(0.1, 0.04, 0.25, 0.45));
                 p.draw(pen, view);
             }
-            Stage::Crossy(p) => {
+            Stage::Game(p) => {
                 p.draw(pen, view);
                 home_button(pen);
             }
@@ -375,7 +400,11 @@ fn home_button(pen: &mut Pen) {
 
 fn draw_backdrop(pen: &mut Pen, view: &View) {
     let f = view.full();
-    let name = if f.h > f.w * 1.05 { "bg_tall" } else { "bg_wide" };
+    let name = if f.h > f.w * 1.05 {
+        "bg_tall"
+    } else {
+        "bg_wide"
+    };
     let sz = crate::art::size("menu", name);
     let k = (f.w / sz.x).max(f.h / sz.y) * 1.04;
     let (w, h) = (sz.x * k, sz.y * k);
@@ -394,7 +423,7 @@ mod tests {
     #[test]
     fn every_scene_builds_and_draws_in_both_orientations() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
-            for (n, name) in SCENES {
+            for &(n, name) in SCENES {
                 let mut s = Shot::new(n);
                 let mut pen = Pen::default();
                 pen.begin(v, 1.0);
@@ -402,6 +431,11 @@ mod tests {
                 assert!(pen.vertex_count() > 100, "scene {n} ({name}) drew nothing");
             }
         }
+    }
+
+    #[test]
+    fn snake_scenes_land_in_the_state_they_are_named_for() {
+        snake_scene::check();
     }
 
     #[test]
@@ -425,10 +459,7 @@ mod tests {
     #[test]
     fn road_hopper_scenes_land_in_the_state_they_are_named_for() {
         let v = View::ipad_landscape();
-        let get = |n: u32| match setup(n, &v) {
-            Stage::Crossy(p) => p,
-            _ => panic!(),
-        };
+        let get = |n: u32| game::<CrossyPlay>(setup(n, &v));
         assert_eq!(get(20).g.state, crossy::State::Ready);
         assert_eq!(get(21).g.checkpoint_offer(), Some(2));
         assert!(get(22).g.coach().is_some());

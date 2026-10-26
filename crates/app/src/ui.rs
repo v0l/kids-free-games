@@ -159,7 +159,14 @@ impl Pen {
             r.w * s,
             r.h * s,
         );
-        self.nine("ui", tone.sprite(), r, 60.0, r.h / 150.0, WHITE.with_alpha(alpha));
+        self.nine(
+            "ui",
+            tone.sprite(),
+            r,
+            60.0,
+            r.h / 150.0,
+            WHITE.with_alpha(alpha),
+        );
         self.text_outline(
             label,
             r.center().x,
@@ -174,7 +181,11 @@ impl Pen {
         let s = 1.0 - press * 0.08;
         let c = r.center() + vec2(0.0, press * 2.0);
         let d = r.h.min(r.w) * s;
-        self.ui("p_round", Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d), Draw::default());
+        self.ui(
+            "p_round",
+            Rect::new(c.x - d / 2.0, c.y - d / 2.0, d, d),
+            Draw::default(),
+        );
         let ic = d * 0.48;
         self.ui(
             icon,
@@ -195,7 +206,11 @@ impl Pen {
         let rs = crate::art::size("ui", "p_ribbon");
         let h = w * rs.y / rs.x;
         let wob = (t * 2.5).sin() * 0.015;
-        self.ui("p_ribbon", Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h), Draw::rot(wob));
+        self.ui(
+            "p_ribbon",
+            Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h),
+            Draw::rot(wob),
+        );
         self.text_outline(
             title,
             c.x,
@@ -210,13 +225,21 @@ impl Pen {
         let size = 32.0 * pulse;
         let w = measure(label, size) + 70.0;
         let r = Rect::new(c.x - w / 2.0, c.y - 32.0 * pulse, w, 64.0 * pulse);
-        self.round_rect(r.offset(vec2(0.0, 4.0)), r.h / 2.0, Color::new(0.0, 0.0, 0.0, 0.18));
+        self.round_rect(
+            r.offset(vec2(0.0, 4.0)),
+            r.h / 2.0,
+            Color::new(0.0, 0.0, 0.0, 0.18),
+        );
         self.round_rect(r, r.h / 2.0, Color::new(1.0, 1.0, 1.0, 0.92));
         self.text_center(label, c.x, c.y, size, BODY);
     }
 
     pub fn chip_box(&mut self, r: Rect) {
-        self.round_rect(r.offset(vec2(0.0, 4.0)), r.h / 2.0, Color::new(0.05, 0.02, 0.15, 0.3));
+        self.round_rect(
+            r.offset(vec2(0.0, 4.0)),
+            r.h / 2.0,
+            Color::new(0.05, 0.02, 0.15, 0.3),
+        );
         self.round_rect(r, r.h / 2.0, Color::new(0.2, 0.08, 0.35, 0.72));
         self.round_rect(
             Rect::new(r.x + 3.0, r.y + 3.0, r.w - 6.0, r.h * 0.45),
@@ -232,11 +255,24 @@ impl Pen {
         let mut x = r.x + CHIP_PAD;
         if !label.is_empty() {
             let lw = measure(label, CHIP_LABEL);
-            self.text_center(label, x + lw / 2.0, r.y + r.h / 2.0 + 1.0, CHIP_LABEL, Color::new(1.0, 1.0, 1.0, 0.75));
+            self.text_center(
+                label,
+                x + lw / 2.0,
+                r.y + r.h / 2.0 + 1.0,
+                CHIP_LABEL,
+                Color::new(1.0, 1.0, 1.0, 0.75),
+            );
             x += lw + 10.0;
         }
         let vw = measure(value, CHIP_VALUE);
-        self.text_outline(value, x + vw / 2.0, r.y + r.h / 2.0, CHIP_VALUE * k, GOLD_TEXT, INK);
+        self.text_outline(
+            value,
+            x + vw / 2.0,
+            r.y + r.h / 2.0,
+            CHIP_VALUE * k,
+            GOLD_TEXT,
+            INK,
+        );
         r
     }
 
@@ -263,14 +299,20 @@ impl Pen {
     }
 
     pub fn puff(&mut self, c: Vec2, size: f32, color: Color) {
-        self.ui("puff", Rect::new(c.x - size, c.y - size, size * 2.0, size * 2.0), Draw::tint(color));
+        self.ui(
+            "puff",
+            Rect::new(c.x - size, c.y - size, size * 2.0, size * 2.0),
+            Draw::tint(color),
+        );
     }
 
     pub fn particle(&mut self, p: &Particle) {
         let (a, s) = kg_core::fx::particle_look(p);
         let c = p.color.with_alpha(a);
         match p.shape {
-            Shape::Circle if s > 5.0 && c.r > 0.9 && c.g > 0.9 && c.b > 0.9 => self.puff(p.pos, s * 1.3, c),
+            Shape::Circle if s > 5.0 && c.r > 0.9 && c.g > 0.9 && c.b > 0.9 => {
+                self.puff(p.pos, s * 1.3, c)
+            }
             Shape::Circle => self.circle(p.pos, s, c),
             Shape::Square => {
                 let r = Rect::new(p.pos.x - s, p.pos.y - s, s * 2.0, s * 2.0);
@@ -285,7 +327,12 @@ impl Pen {
                 let h = Vec2::splat(0.5);
                 self.quad(
                     crate::paint::Tex::White,
-                    [rot(vec2(-hw, -hh)), rot(vec2(hw, -hh)), rot(vec2(hw, hh)), rot(vec2(-hw, hh))],
+                    [
+                        rot(vec2(-hw, -hh)),
+                        rot(vec2(hw, -hh)),
+                        rot(vec2(hw, hh)),
+                        rot(vec2(-hw, hh)),
+                    ],
                     [h; 4],
                     c,
                 );
@@ -302,7 +349,14 @@ impl Pen {
     pub fn popups(&mut self, pops: &Popups) {
         for p in &pops.list {
             let (pop, fade) = kg_core::fx::popup_scale(p);
-            self.text_outline(&p.text, p.pos.x, p.pos.y, p.size * pop, p.color.with_alpha(fade), PLUM.with_alpha(fade));
+            self.text_outline(
+                &p.text,
+                p.pos.x,
+                p.pos.y,
+                p.size * pop,
+                p.color.with_alpha(fade),
+                PLUM.with_alpha(fade),
+            );
         }
     }
 
@@ -319,7 +373,13 @@ impl Pen {
         self.painted_panel(p, WHITE);
         self.ribbon(view, r.title, vec2(c.x, p.y + 8.0 * s), age);
         let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
-        self.text_center(r.line, c.x, p.y + 92.0 * s, 34.0 * s, BODY.with_alpha(a(0.12)));
+        self.text_center(
+            r.line,
+            c.x,
+            p.y + 92.0 * s,
+            34.0 * s,
+            BODY.with_alpha(a(0.12)),
+        );
         if r.rank == Some(0) {
             let k = ease_out_back(((age - 0.35) / 0.3).clamp(0.0, 1.0));
             if k > 0.0 {
@@ -346,18 +406,34 @@ impl Pen {
             let la = a(0.2 + i as f32 * 0.05);
             let row = Rect::new(p.x + 40.0 * s, y, p.w - 80.0 * s, (row_h - 6.0) * s);
             if e.mine {
-                self.round_rect(row, row.h / 2.0, Color::from_rgba(255, 214, 90, 255).with_alpha(0.85 * la));
+                self.round_rect(
+                    row,
+                    row.h / 2.0,
+                    Color::from_rgba(255, 214, 90, 255).with_alpha(0.85 * la),
+                );
             } else if i % 2 == 0 {
                 self.round_rect(row, row.h / 2.0, Color::new(0.4, 0.3, 0.6, 0.08 * la));
             }
             let cy = row.center().y;
-            self.text_center(&e.place.to_string(), row.x + 26.0 * s, cy, 26.0 * s, BODY.with_alpha(la));
+            self.text_center(
+                &e.place.to_string(),
+                row.x + 26.0 * s,
+                cy,
+                26.0 * s,
+                BODY.with_alpha(la),
+            );
             if e.place == 1 {
                 self.crown(vec2(row.x + 26.0 * s, cy - 24.0 * s), 26.0 * s);
             }
             self.avatar(e.avatar, vec2(row.x + 72.0 * s, cy), row.h * 0.95);
             let nw = measure(&e.name, 26.0) * s;
-            self.text_center(&e.name, row.x + 104.0 * s + nw / 2.0, cy, 26.0 * s, BODY.with_alpha(la));
+            self.text_center(
+                &e.name,
+                row.x + 104.0 * s + nw / 2.0,
+                cy,
+                26.0 * s,
+                BODY.with_alpha(la),
+            );
             let sc = (r.format)(e.score);
             let sw = measure(&sc, 30.0) * s;
             self.text_outline(
@@ -417,7 +493,13 @@ impl Pen {
         self.circle(c, d / 2.0, Color::from_rgba(255, 240, 210, 255));
         let s = crate::art::size("profiles", &name);
         let k = d * 0.78 / s.x.max(s.y);
-        self.sprite_at("profiles", &name, c + vec2(0.0, d * 0.03), s.y * k, Draw::default());
+        self.sprite_at(
+            "profiles",
+            &name,
+            c + vec2(0.0, d * 0.03),
+            s.y * k,
+            Draw::default(),
+        );
         self.sprite_at("profiles", "avatar_frame", c, d * 1.08, Draw::default());
     }
 
@@ -432,7 +514,11 @@ impl Pen {
     pub fn key_cap(&mut self, r: Rect, label: &str, press: f32) {
         let k = 1.0 - press * 0.08;
         let rr = r.scaled_about_center(k);
-        self.round_rect(rr.offset(vec2(0.0, 5.0)), 12.0, Color::new(0.1, 0.03, 0.25, 0.35));
+        self.round_rect(
+            rr.offset(vec2(0.0, 5.0)),
+            12.0,
+            Color::new(0.1, 0.03, 0.25, 0.35),
+        );
         self.round_rect(rr, 12.0, Color::new(1.0, 1.0, 1.0, 0.95));
         self.text_center(label, rr.center().x, rr.center().y, rr.h * 0.48, BODY);
     }
