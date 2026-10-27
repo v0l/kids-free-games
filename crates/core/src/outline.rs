@@ -106,10 +106,32 @@ pub fn dilate(cov: &[u8], w: usize, h: usize, r: f32, pad: usize) -> (Vec<u8>, u
     (out, ow, oh)
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Region {
+    pub x: usize,
+    pub y: usize,
+    pub w: usize,
+    pub h: usize,
+}
+
+impl Region {
+    fn union(self, o: Region) -> Region {
+        let x = self.x.min(o.x);
+        let y = self.y.min(o.y);
+        Region {
+            x,
+            y,
+            w: (self.x + self.w).max(o.x + o.w) - x,
+            h: (self.y + self.h).max(o.y + o.h) - y,
+        }
+    }
+}
+
 pub struct Atlas {
     pub size: usize,
     pub alpha: Vec<u8>,
     pub generation: u64,
+    dirty: Option<Region>,
     x: usize,
     y: usize,
     row: usize,
@@ -121,6 +143,12 @@ impl Atlas {
             size: ATLAS,
             alpha: vec![0; ATLAS * ATLAS],
             generation: 1,
+            dirty: Some(Region {
+                x: 0,
+                y: 0,
+                w: ATLAS,
+                h: ATLAS,
+            }),
             x: 1,
             y: 1,
             row: 0,
@@ -145,9 +173,15 @@ impl Atlas {
             self.alpha[at..at + w].copy_from_slice(&alpha[row * w..row * w + w]);
         }
         self.generation += 1;
+        let r = Region { x: x0, y: y0, w, h };
+        self.dirty = Some(self.dirty.map_or(r, |d| d.union(r)));
         self.x += w + 2;
         self.row = self.row.max(h);
         Some(Rect::new(x0 as f32, y0 as f32, w as f32, h as f32))
+    }
+
+    pub fn take_dirty(&mut self) -> Option<Region> {
+        self.dirty.take()
     }
 }
 
@@ -317,6 +351,28 @@ mod tests {
         let ms = t.elapsed().as_millis();
         eprintln!("{n} glyphs outlined in {ms}ms");
         assert!(ms < 3000);
+    }
+
+    #[test]
+    fn a_new_glyph_uploads_only_its_own_patch_of_the_atlas() {
+        let mut c = Cache::new(crate::font::FONT_BYTES).unwrap();
+        let chars: String = (32u8..127).map(char::from).collect();
+        c.layout(&chars, 52);
+        assert_eq!(c.atlas.take_dirty().map(|r| r.w), Some(c.atlas.size));
+        assert_eq!(c.atlas.take_dirty(), None, "nothing new, nothing to upload");
+        c.layout("K", 140);
+        let r = c.atlas.take_dirty().expect("the new glyph is uploaded");
+        let bytes = r.w * r.h * 4;
+        assert!(
+            bytes < 512 * 1024,
+            "one 140px glyph re-sends {bytes} bytes; the whole atlas is {}",
+            c.atlas.size * c.atlas.size * 4
+        );
+        let ink = (r.y..r.y + r.h)
+            .flat_map(|y| (r.x..r.x + r.w).map(move |x| (x, y)))
+            .filter(|(x, y)| c.atlas.alpha[y * c.atlas.size + x] > 0)
+            .count();
+        assert!(ink > 500);
     }
 
     #[test]

@@ -175,6 +175,12 @@ impl Plugin for PaintPlugin {
             .init_resource::<Gpu>()
             .add_systems(Startup, spawn_camera)
             .add_systems(PostUpdate, sync);
+        if let Some(render) = app.get_sub_app_mut(bevy::render::RenderApp) {
+            render.add_systems(
+                bevy::render::Render,
+                glyph_uploads::write.in_set(bevy::render::RenderSystems::PrepareResources),
+            );
+        }
     }
 }
 
@@ -240,9 +246,61 @@ fn glyph_image(size: usize, alpha: &[u8]) -> Image {
     for a in alpha {
         px.extend_from_slice(&[255, 255, 255, *a]);
     }
-    let mut img = rgba_image(size as u32, size as u32, vec![px]);
-    img.asset_usage = RenderAssetUsages::RENDER_WORLD | RenderAssetUsages::MAIN_WORLD;
-    img
+    rgba_image(size as u32, size as u32, vec![px])
+}
+
+mod glyph_uploads {
+    use crate::text::Patch;
+    use bevy::prelude::*;
+    use bevy::render::render_asset::RenderAssets;
+    use bevy::render::render_resource::{
+        Extent3d, Origin3d, TexelCopyBufferLayout, TexelCopyTextureInfo, TextureAspect,
+    };
+    use bevy::render::renderer::RenderQueue;
+    use bevy::render::texture::GpuImage;
+    use std::sync::Mutex;
+
+    static PENDING: Mutex<Vec<(AssetId<Image>, Patch)>> = Mutex::new(Vec::new());
+
+    pub fn push(id: AssetId<Image>, p: Patch) {
+        if let Ok(mut q) = PENDING.lock() {
+            q.push((id, p));
+        }
+    }
+
+    pub fn write(queue: Res<RenderQueue>, images: Res<RenderAssets<GpuImage>>) {
+        let Ok(mut q) = PENDING.lock() else { return };
+        q.retain(|(id, p)| {
+            let Some(gpu) = images.get(*id) else {
+                return true;
+            };
+            let r = p.region;
+            queue.write_texture(
+                TexelCopyTextureInfo {
+                    texture: &gpu.texture,
+                    mip_level: 0,
+                    origin: Origin3d {
+                        x: r.x as u32,
+                        y: r.y as u32,
+                        z: 0,
+                    },
+                    aspect: TextureAspect::All,
+                },
+                &p.rgba,
+                TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(r.w as u32 * 4),
+                    rows_per_image: Some(r.h as u32),
+                },
+                Extent3d {
+                    width: r.w as u32,
+                    height: r.h as u32,
+                    depth_or_array_layers: 1,
+                },
+            );
+            false
+        });
+    }
 }
 
 type CameraParts = (&'static mut Projection, &'static mut Transform);
@@ -288,9 +346,10 @@ fn sync(
     let generation = crate::text::atlas_generation();
     if generation != gpu.glyph_generation {
         gpu.glyph_generation = generation;
-        if let Some(h) = gpu.pages.get(&Tex::Glyphs).cloned() {
-            let (size, alpha) = crate::text::atlas_alpha();
-            let _ = images.insert(h.id(), glyph_image(size, &alpha));
+        if let Some(h) = gpu.pages.get(&Tex::Glyphs) {
+            if let Some(p) = crate::text::take_patch() {
+                glyph_uploads::push(h.id(), p);
+            }
         }
     }
     let used = pen.used();
