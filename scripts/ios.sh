@@ -19,6 +19,14 @@ sips -z 167 167 ios/icon-1024.png --out "$APP/AppIcon83.5x83.5@2x~ipad.png" >/de
 sed "s/__BUNDLE_ID__/$BUNDLE_ID/" ios/Info.plist > "$APP/Info.plist"
 echo "APPL????" > "$APP/PkgInfo"
 if [ "$TARGET" = aarch64-apple-ios ]; then
+  if [ -n "${PROVISION:-}" ]; then
+    cp "$PROVISION" "$APP/embedded.mobileprovision"
+    security cms -D -i "$PROVISION" > target/ios/profile.plist
+    plutil -extract Entitlements xml1 -o target/ios/entitlements.plist target/ios/profile.plist
+    team=$(plutil -extract TeamIdentifier.0 raw -o - target/ios/profile.plist)
+    plutil -replace application-identifier -string "$team.$BUNDLE_ID" target/ios/entitlements.plist
+    PROFILE_PLIST=target/ios/entitlements.plist
+  fi
   codesign --force --sign "${SIGN_IDENTITY:?set SIGN_IDENTITY for a device build}" \
     ${PROFILE_PLIST:+--entitlements "$PROFILE_PLIST"} "$APP"
 else
