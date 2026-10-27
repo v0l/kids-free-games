@@ -36,6 +36,10 @@ impl Jev {
     }
 
     pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32) {
+        if !crate::art::ready("flappy") {
+            pen.fill_screen(view, Color::new(0.06, 0.03, 0.15, 1.0));
+            return;
+        }
         let Some(player) = &mut self.player else {
             pen.fill_screen(view, Color::new(0.06, 0.03, 0.15, 1.0));
             pen.text_center(

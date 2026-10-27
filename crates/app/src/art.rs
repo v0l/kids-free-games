@@ -3,7 +3,7 @@ use kg_core::art::{decode_page, page_bytes, parse, Frame, Index};
 use std::cell::RefCell;
 use std::collections::HashMap;
 
-pub static SHEETS: &[(&str, &[u8])] = &[
+pub static EMBEDDED: &[(&str, &[u8])] = &[
     ("ui", include_bytes!("../../../assets/art/ui.kga")),
     ("icons", include_bytes!("../../../assets/art/icons.kga")),
     ("menu", include_bytes!("../../../assets/art/menu.kga")),
@@ -11,26 +11,130 @@ pub static SHEETS: &[(&str, &[u8])] = &[
         "profiles",
         include_bytes!("../../../assets/art/profiles.kga"),
     ),
-    ("flappy", include_bytes!("../../../assets/art/flappy.kga")),
-    ("crossy", include_bytes!("../../../assets/art/crossy.kga")),
-    ("snake", include_bytes!("../../../assets/art/snake.kga")),
-    ("merge", include_bytes!("../../../assets/art/merge.kga")),
-    ("fruit", include_bytes!("../../../assets/art/fruit.kga")),
-    ("stack", include_bytes!("../../../assets/art/stack.kga")),
-    (
-        "breakout",
-        include_bytes!("../../../assets/art/breakout.kga"),
-    ),
-    ("jumper", include_bytes!("../../../assets/art/jumper.kga")),
-    ("blocks", include_bytes!("../../../assets/art/blocks.kga")),
-    ("mathpop", include_bytes!("../../../assets/art/mathpop.kga")),
-    ("count", include_bytes!("../../../assets/art/count.kga")),
-    ("paper", include_bytes!("../../../assets/art/paper.kga")),
-    ("memory", include_bytes!("../../../assets/art/memory.kga")),
-    ("hotel", include_bytes!("../../../assets/art/hotel.kga")),
-    ("helix", include_bytes!("../../../assets/art/helix.kga")),
-    ("spell", include_bytes!("../../../assets/art/spell.kga")),
 ];
+
+pub const LATER: &[&str] = &[
+    "flappy", "crossy", "snake", "merge", "fruit", "stack", "breakout", "jumper", "blocks",
+    "mathpop", "count", "paper", "memory", "hotel", "helix", "spell",
+];
+
+pub fn all_sheets() -> impl Iterator<Item = &'static str> {
+    EMBEDDED.iter().map(|(n, _)| *n).chain(LATER.iter().copied())
+}
+
+type Store = std::sync::Mutex<HashMap<&'static str, &'static [u8]>>;
+
+fn store() -> &'static Store {
+    static S: std::sync::OnceLock<Store> = std::sync::OnceLock::new();
+    S.get_or_init(Default::default)
+}
+
+#[cfg(test)]
+thread_local! {
+    static HELD: RefCell<Vec<&'static str>> = const { RefCell::new(Vec::new()) };
+}
+
+#[cfg(test)]
+pub fn hold_for_test(sheet: &'static str, on: bool) {
+    HELD.with(|h| {
+        let mut h = h.borrow_mut();
+        h.retain(|s| *s != sheet);
+        if on {
+            h.push(sheet);
+        }
+    });
+}
+
+#[cfg(test)]
+pub fn arrive_for_test(sheet: &'static str) {
+    hold_for_test(sheet, false);
+    sheet_bytes(sheet);
+}
+
+pub fn sheet_bytes(sheet: &str) -> Option<&'static [u8]> {
+    if let Some((_, b)) = EMBEDDED.iter().find(|(n, _)| *n == sheet) {
+        return Some(b);
+    }
+    #[cfg(test)]
+    if HELD.with(|h| h.borrow().contains(&sheet)) {
+        return None;
+    }
+    let name = LATER.iter().find(|n| **n == sheet)?;
+    if let Some(b) = store().lock().ok()?.get(name) {
+        return Some(*b);
+    }
+    #[cfg(all(test, not(target_arch = "wasm32")))]
+    {
+        let b = kg_core::assets::leaked(&kg_core::assets::art_file(sheet))?;
+        store().lock().ok()?.insert(name, b);
+        return Some(b);
+    }
+    #[allow(unreachable_code)]
+    None
+}
+
+pub fn ready(sheet: &str) -> bool {
+    sheet_bytes(sheet).is_some()
+}
+
+pub fn all_ready() -> bool {
+    all_sheets().all(ready)
+}
+
+struct Fetch {
+    sheet: &'static str,
+    pending: kg_core::assets::Pending,
+}
+
+thread_local! {
+    static FETCHING: RefCell<Vec<Fetch>> = const { RefCell::new(Vec::new()) };
+}
+
+pub fn begin_loading() {
+    FETCHING.with(|f| {
+        let mut f = f.borrow_mut();
+        if f.is_empty() {
+            for sheet in LATER {
+                f.push(Fetch {
+                    sheet,
+                    pending: kg_core::assets::start(&kg_core::assets::art_file(sheet)),
+                });
+            }
+        }
+    });
+}
+
+pub fn pump() {
+    let arrived: Vec<(&'static str, Option<Vec<u8>>)> = FETCHING.with(|f| {
+        let mut f = f.borrow_mut();
+        let mut out = vec![];
+        f.retain_mut(|x| match x.pending.poll() {
+            Some(bytes) => {
+                out.push((x.sheet, bytes));
+                false
+            }
+            None => true,
+        });
+        out
+    });
+    for (sheet, bytes) in arrived {
+        match bytes {
+            Some(b) => install(sheet, Box::leak(b.into_boxed_slice())),
+            None => bevy::log::warn!("art sheet {sheet} failed to load"),
+        }
+    }
+}
+
+pub fn install(sheet: &'static str, bytes: &'static [u8]) {
+    if parse(bytes).is_none() {
+        bevy::log::warn!("art sheet {sheet} is not a valid pack");
+        return;
+    }
+    if let Ok(mut s) = store().lock() {
+        s.insert(sheet, bytes);
+    }
+    predecode_sheet(sheet, bytes);
+}
 
 struct Sheet {
     bytes: &'static [u8],
@@ -46,7 +150,7 @@ fn with<R>(sheet: &'static str, f: impl FnOnce(&mut Sheet) -> R) -> Option<R> {
     LOADED.with(|l| {
         let mut l = l.borrow_mut();
         if !l.contains_key(sheet) {
-            let bytes = SHEETS.iter().find(|(n, _)| *n == sheet)?.1;
+            let bytes = sheet_bytes(sheet)?;
             let index = parse(bytes)?;
             let n = index.pages.len();
             l.insert(
@@ -130,11 +234,11 @@ pub fn mip_chain(w: u32, h: u32, px: Vec<u8>) -> Vec<Vec<u8>> {
 
 pub type Decoded = (u32, u32, Vec<Vec<u8>>);
 
-type Ready = std::sync::Mutex<HashMap<(&'static str, usize), Decoded>>;
+type Decodes = std::sync::Mutex<HashMap<(&'static str, usize), Decoded>>;
 
-static READY: std::sync::OnceLock<Ready> = std::sync::OnceLock::new();
+static READY: std::sync::OnceLock<Decodes> = std::sync::OnceLock::new();
 
-fn ready() -> &'static Ready {
+fn decoded() -> &'static Decodes {
     READY.get_or_init(Default::default)
 }
 
@@ -146,31 +250,38 @@ fn decode_now(bytes: &'static [u8], sheet: &'static str, page: usize) -> Option<
 }
 
 pub fn predecode() {
+    for (sheet, bytes) in EMBEDDED {
+        predecode_sheet(sheet, bytes);
+    }
+}
+
+fn predecode_sheet(sheet: &'static str, bytes: &'static [u8]) {
     #[cfg(not(target_arch = "wasm32"))]
-    for (sheet, bytes) in SHEETS {
+    {
         let pages = parse(bytes).map_or(0, |i| i.pages.len());
         for page in 0..pages {
             std::thread::spawn(move || {
                 if let Some(d) = decode_now(bytes, sheet, page) {
-                    if let Ok(mut r) = ready().lock() {
+                    if let Ok(mut r) = decoded().lock() {
                         r.insert((sheet, page), d);
                     }
                 }
             });
         }
     }
+    #[cfg(target_arch = "wasm32")]
+    let _ = (sheet, bytes);
 }
 
 pub fn decode(sheet: &'static str, page: usize) -> Option<Decoded> {
-    if let Some(d) = ready()
+    if let Some(d) = decoded()
         .lock()
         .ok()
         .and_then(|mut r| r.remove(&(sheet, page)))
     {
         return Some(d);
     }
-    let bytes = SHEETS.iter().find(|(n, _)| *n == sheet)?.1;
-    decode_now(bytes, sheet, page)
+    decode_now(sheet_bytes(sheet)?, sheet, page)
 }
 
 #[cfg(test)]
@@ -179,7 +290,7 @@ mod tests {
 
     #[test]
     fn every_embedded_sheet_parses_and_page_sizes_match_the_decoded_pixels() {
-        for (name, _) in SHEETS {
+        for name in all_sheets() {
             assert!(!names(name).is_empty(), "{name} is empty");
             let (w, h) = page_size(name, 0);
             let (dw, dh, mips) = decode(name, 0).unwrap();
@@ -192,7 +303,7 @@ mod tests {
     fn pages_decoded_ahead_match_pages_decoded_on_demand() {
         predecode();
         let mut waited = 0;
-        while ready().lock().unwrap().get(&("ui", 0)).is_none() && waited < 200 {
+        while decoded().lock().unwrap().get(&("ui", 0)).is_none() && waited < 200 {
             std::thread::sleep(std::time::Duration::from_millis(50));
             waited += 1;
         }

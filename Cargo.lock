@@ -3287,6 +3287,7 @@ dependencies = [
  "fontdue",
  "glam",
  "image",
+ "js-sys",
  "lewton",
  "serde_json",
  "ureq",

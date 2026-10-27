@@ -1,13 +1,13 @@
 use bevy::prelude::*;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use kg_core::mixer::{effects_bank, Loader, Mixer};
+use kg_core::mixer::{effects_bank, Bank, Loader, Mixer};
 use kg_core::sfx::Mood;
 use std::sync::{Arc, Mutex};
 
 pub struct Audio {
     mixer: Arc<Mutex<Mixer>>,
     stream: Option<cpal::Stream>,
-    loader: Loader,
+    loader: Option<Loader>,
     resumed: bool,
     reported: bool,
 }
@@ -63,7 +63,7 @@ fn open(mixer: Arc<Mutex<Mixer>>) -> Option<(cpal::Stream, u32)> {
 
 impl Audio {
     pub fn new() -> Self {
-        let mixer = Arc::new(Mutex::new(Mixer::new(effects_bank(), 48000)));
+        let mixer = Arc::new(Mutex::new(Mixer::new(Bank::default(), 48000)));
         let opened = open(mixer.clone());
         let stream = opened.map(|(s, rate)| {
             if let Ok(mut m) = mixer.lock() {
@@ -77,7 +77,7 @@ impl Audio {
         Self {
             mixer,
             stream,
-            loader: Loader::new(kg_core::sfx::wanted_music().unwrap_or(Mood::Menu)),
+            loader: None,
             resumed: false,
             reported: false,
         }
@@ -103,8 +103,16 @@ pub fn tick(audio: &mut Audio, now: f64, dt: f32, touched: bool) {
     if touched {
         audio.resume();
     }
-    if !audio.loader.done() {
-        if let Some((what, clip)) = audio.loader.step() {
+    if audio.loader.is_none() && kg_core::sfx::sound_ready() {
+        if let Ok(mut m) = audio.mixer.lock() {
+            m.bank = effects_bank();
+        }
+        audio.loader = Some(Loader::new(
+            kg_core::sfx::wanted_music().unwrap_or(Mood::Menu),
+        ));
+    }
+    if let Some(loader) = audio.loader.as_mut().filter(|l| !l.done()) {
+        if let Some((what, clip)) = loader.step() {
             if let Ok(mut m) = audio.mixer.lock() {
                 Loader::store(&mut m.bank, what, clip);
             }

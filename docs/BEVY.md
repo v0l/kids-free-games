@@ -19,7 +19,8 @@ crates/app    kids_games: the Bevy app, desktop, web, Android and iOS
   paint.rs    Pen: the immediate-mode batcher, turned into Mesh2d layers each frame
   draw.rs     shapes, sprites, nine-slice and outlined text on Pen
   ui.rs       the painted UI kit: panels, buttons, ribbons, chips, hints, results board
-  art.rs      embedded .kga sheets, page decode with mips (ahead of time on a thread)
+  art.rs      ui/icons/menu/profiles sheets embedded, the rest loaded at runtime; page decode with mips
+  packs.rs    background loading of sheets and sound packs, `packs::ready(key)` gates opening a game
   audio.rs    cpal output that runs kg_core::mixer::Mixer
   game3d.rs   the shared 3D world: open/close, camera rig, light, part and material cache
   menu.rs profiles.rs link.rs shots.rs jev.rs platform.rs
@@ -127,9 +128,9 @@ Hotel's furniture and people are primitives built with `hotel::build::Model` (a 
 
 ## Assets
 
-- Art sheets are built by `scripts/assets.py art` from `art/*.txt` into `assets/art/*.kga`, as on `main`. Add the sheet to `SHEETS` in `crates/app/src/art.rs`; pages are embedded, decoded on a background thread at start, and uploaded with a mip chain on first use.
+- Art sheets are built by `scripts/assets.py art` from `art/*.txt` into `assets/art/*.kga`, as on `main`. Add the sheet name to `LATER` in `crates/app/src/art.rs`. Only ui, icons, menu and profiles are compiled in; the others are read at runtime from `assets/` (web: fetched from `assets/`, desktop: next to the exe or the repo, Android: APK assets, iOS: the .app bundle). A game whose pack is missing shows "Loading" on its tile and opens when it arrives.
 - A sprite name that is missing draws magenta. Add a test in the core game file listing the sprites the renderer uses (see `flappy_sprites_all_exist`).
-- Sound is `assets/sound.kgs` from `scripts/assets.py sound`. Effects are decoded at start, music and voice lines one per frame after that.
+- Sound is `assets/sound.kgs` plus `assets/sound_words.kgs` (the Spell It word clips) from `scripts/assets.py sound`, loaded at runtime like the art. Effects are decoded at start, music and voice lines one per frame after that.
 - Text is Fredoka through `kg_core::outline`, the same outlined look as `main`. Sizes snap to `GLYPH_SIZES` so animated text never rasterises new glyphs.
 
 ## Audio and juice

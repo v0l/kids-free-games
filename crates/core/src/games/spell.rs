@@ -940,7 +940,7 @@ mod tests {
 
     #[test]
     fn every_word_is_spoken() {
-        let pack = sfx::packed();
+        let pack = sfx::words();
         for w in words() {
             let key = sfx::Say::Word(w.text).key();
             assert!(

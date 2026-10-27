@@ -56,6 +56,15 @@ mod imp {
     pub fn save_dir() -> Option<std::path::PathBuf> {
         app()?.internal_data_path()
     }
+
+    pub fn read_asset(rel: &str) -> Option<Vec<u8>> {
+        use std::io::Read;
+        let name = std::ffi::CString::new(rel).ok()?;
+        let mut asset = app()?.asset_manager().open(&name)?;
+        let mut out = Vec::with_capacity(asset.length());
+        asset.read_to_end(&mut out).ok()?;
+        Some(out)
+    }
 }
 
 #[cfg(target_os = "ios")]
@@ -201,6 +210,11 @@ mod imp {
 }
 
 pub use imp::{insets_px, save_dir, units_per_mm_px};
+
+pub fn install_asset_reader() {
+    #[cfg(target_os = "android")]
+    kg_core::assets::set_reader(imp::read_asset);
+}
 
 pub fn device() -> &'static str {
     if cfg!(target_arch = "wasm32") {

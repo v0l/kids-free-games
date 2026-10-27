@@ -260,6 +260,15 @@ def music_source(spec):
     return p
 
 
+def write_pack(dst, files):
+    out = bytearray(b"KGS1") + struct.pack("<I", len(files))
+    for f in files:
+        name = f.stem.encode()
+        data = f.read_bytes()
+        out += struct.pack("<I", len(name)) + name + struct.pack("<I", len(data)) + data
+    dst.write_bytes(out)
+
+
 def build_sound():
     import tempfile
     tmp = Path(tempfile.mkdtemp())
@@ -299,13 +308,9 @@ def build_sound():
             count += 1
     SND_OUT = final
     files = sorted(tmp.glob("*.ogg"))
-    out = bytearray(b"KGS1") + struct.pack("<I", len(files))
-    for f in files:
-        name = f.stem.encode()
-        data = f.read_bytes()
-        out += struct.pack("<I", len(name)) + name + struct.pack("<I", len(data)) + data
     final.parent.mkdir(parents=True, exist_ok=True)
-    (final.parent / "sound.kgs").write_bytes(out)
+    write_pack(final.parent / "sound.kgs", [f for f in files if not f.stem.startswith("word_")])
+    write_pack(final.parent / "sound_words.kgs", [f for f in files if f.stem.startswith("word_")])
     return count
 
 
@@ -317,7 +322,9 @@ def main():
             print(f"{dst.relative_to(ROOT)}: {n} sprites, {pages} pages, {size // 1024} KB")
     if "sound" in what:
         n = build_sound()
-        print(f"assets/sound.kgs: {n} sounds, {(ROOT / 'assets/sound.kgs').stat().st_size // 1024} KB")
+        for pack in ["sound.kgs", "sound_words.kgs"]:
+            print(f"assets/{pack}: {(ROOT / 'assets' / pack).stat().st_size // 1024} KB")
+        print(f"{n} sounds")
 
 
 if __name__ == "__main__":
