@@ -23,3 +23,6 @@ opt-level = "z"
 lto = true
 codegen-units = 1
 panic = "abort"
+
+[patch.crates-io]
+wgpu-hal = { path = "vendor/wgpu-hal" }

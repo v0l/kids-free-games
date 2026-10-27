@@ -131,22 +131,20 @@ fn frame(
     if lw < 2.0 || lh < 2.0 {
         return;
     }
+    let state = &mut *state;
     let mut g = Gathered::default();
-    for t in touch_events.read() {
-        let f = match t.phase {
-            TouchPhase::Started => Finger::Started,
-            TouchPhase::Moved => Finger::Held,
-            TouchPhase::Ended | TouchPhase::Canceled => Finger::Ended,
-        };
-        if let Some(slot) = g.touches.iter_mut().find(|x| x.0 == t.id) {
-            if !(slot.1 == Finger::Started && f == Finger::Held) {
-                slot.1 = f;
-            }
-            slot.2 = t.position;
-        } else {
-            g.touches.push((t.id, f, t.position));
-        }
-    }
+    let events: Vec<(u64, Finger, glam::Vec2)> = touch_events
+        .read()
+        .map(|t| {
+            let f = match t.phase {
+                TouchPhase::Started => Finger::Started,
+                TouchPhase::Moved => Finger::Held,
+                TouchPhase::Ended | TouchPhase::Canceled => Finger::Ended,
+            };
+            (t.id, f, t.position)
+        })
+        .collect();
+    g.touches = events;
     for e in key_events.read() {
         if e.state != ButtonState::Pressed {
             continue;
@@ -157,7 +155,6 @@ fn frame(
             g.typed.extend(s.chars().filter(|c| !c.is_control()));
         }
     }
-    let state = &mut *state;
     let px_size = (lw * dpi, lh * dpi);
     if px_size != state.last_size {
         state.last_size = px_size;

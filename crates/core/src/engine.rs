@@ -286,10 +286,41 @@ pub struct PrimaryFinger {
     pending: Option<u64>,
     known: Vec<u64>,
     pos: Vec2,
+    held: Vec<(u64, Vec2)>,
 }
 
 impl PrimaryFinger {
-    pub fn update(&mut self, touches: &[(u64, Finger, Vec2)]) -> Pointer {
+    pub fn update(&mut self, events: &[(u64, Finger, Vec2)]) -> Pointer {
+        let touches = self.with_held(events);
+        self.step(&touches)
+    }
+
+    fn with_held(&mut self, events: &[(u64, Finger, Vec2)]) -> Vec<(u64, Finger, Vec2)> {
+        let mut out: Vec<(u64, Finger, Vec2)> = self
+            .held
+            .iter()
+            .map(|(id, p)| (*id, Finger::Held, *p))
+            .collect();
+        for &(id, f, p) in events {
+            match out.iter_mut().find(|x| x.0 == id) {
+                Some(slot) => {
+                    if !(slot.1 == Finger::Started && f == Finger::Held) {
+                        slot.1 = f;
+                    }
+                    slot.2 = p;
+                }
+                None => out.push((id, f, p)),
+            }
+        }
+        self.held = out
+            .iter()
+            .filter(|t| t.1 != Finger::Ended)
+            .map(|t| (t.0, t.2))
+            .collect();
+        out
+    }
+
+    fn step(&mut self, touches: &[(u64, Finger, Vec2)]) -> Pointer {
         let find = |id: u64| touches.iter().find(|t| t.0 == id).copied();
         let fresh = |known: &[u64], skip: Option<u64>| {
             touches
@@ -358,7 +389,7 @@ impl PrimaryFinger {
     }
 
     pub fn active(&self) -> bool {
-        self.id.is_some() || self.pending.is_some()
+        self.id.is_some() || self.pending.is_some() || !self.held.is_empty()
     }
 }
 
@@ -603,6 +634,38 @@ mod tests {
             ..Default::default()
         };
         assert!(!input.tap_released());
+    }
+
+    #[test]
+    fn a_finger_held_still_between_events_is_one_press() {
+        let mut t = InputTracker::default();
+        let v = View::ipad_landscape();
+        let a = vec2(200.0, 300.0);
+        let frame = |touches: Vec<(u64, Finger, Vec2)>| Raw {
+            touches,
+            screen: vec2(v.w, v.h),
+            ..Default::default()
+        };
+        let mut presses = 0;
+        let mut releases = 0;
+        let script: Vec<Vec<(u64, Finger, Vec2)>> = vec![
+            vec![(7, Finger::Started, a)],
+            vec![],
+            vec![],
+            vec![(7, Finger::Held, a + vec2(1.0, 0.0))],
+            vec![],
+            vec![(7, Finger::Held, a + vec2(1.0, 1.0))],
+            vec![],
+            vec![],
+            vec![(7, Finger::Ended, a + vec2(1.0, 1.0))],
+            vec![],
+        ];
+        for touches in script {
+            let i = t.poll(&frame(touches), &v);
+            presses += i.pressed as u32;
+            releases += i.released as u32;
+        }
+        assert_eq!((presses, releases), (1, 1));
     }
 
     #[test]
