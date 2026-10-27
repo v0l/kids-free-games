@@ -72,8 +72,11 @@ fn open(mixer: Arc<Mutex<Mixer>>) -> Option<(cpal::Stream, u32)> {
         }
         _ => return None,
     };
-    let _ = stream.play();
     Some((stream, rate))
+}
+
+pub fn start_now(web: bool, gesture: bool, started: bool) -> bool {
+    !started && (gesture || !web)
 }
 
 impl Audio {
@@ -89,22 +92,28 @@ impl Audio {
         if stream.is_none() {
             warn!("no audio output device");
         }
-        Self {
+        let mut a = Self {
             mixer,
             stream,
             loader: None,
             resumed: false,
             reported: false,
-        }
+        };
+        a.start(false);
+        a
     }
 
-    pub fn resume(&mut self) {
-        if !self.resumed {
+    fn start(&mut self, gesture: bool) {
+        if start_now(cfg!(target_arch = "wasm32"), gesture, self.resumed) {
             self.resumed = true;
             if let Some(s) = &self.stream {
                 let _ = s.play();
             }
         }
+    }
+
+    pub fn resume(&mut self) {
+        self.start(true);
     }
 }
 
@@ -159,6 +168,23 @@ pub fn tick(audio: &mut Audio, now: f64, dt: f32, touched: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_stream_is_started_exactly_once() {
+        for web in [false, true] {
+            let mut started = false;
+            let mut plays = 0;
+            for gesture in [false, false, true, true, false, true] {
+                if start_now(web, gesture, started) {
+                    started = true;
+                    plays += 1;
+                }
+            }
+            assert_eq!(plays, 1, "web {web}");
+        }
+        assert!(!start_now(true, false, false));
+        assert!(start_now(false, false, false));
+    }
 
     #[test]
     fn web_audio_rides_out_a_long_frame() {
