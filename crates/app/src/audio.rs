@@ -12,6 +12,20 @@ pub struct Audio {
     reported: bool,
 }
 
+pub const WEB_LEAD_SECS: f32 = 0.35;
+
+pub fn web_buffer_frames(rate: u32) -> u32 {
+    ((rate as f32 * WEB_LEAD_SECS) as u32).next_power_of_two()
+}
+
+fn buffer_size(rate: u32) -> cpal::BufferSize {
+    if cfg!(target_arch = "wasm32") {
+        cpal::BufferSize::Fixed(web_buffer_frames(rate))
+    } else {
+        cpal::BufferSize::Default
+    }
+}
+
 fn open(mixer: Arc<Mutex<Mixer>>) -> Option<(cpal::Stream, u32)> {
     let host = cpal::default_host();
     let device = host.default_output_device()?;
@@ -19,7 +33,8 @@ fn open(mixer: Arc<Mutex<Mixer>>) -> Option<(cpal::Stream, u32)> {
     let rate = config.sample_rate();
     let channels = config.channels() as usize;
     let format = config.sample_format();
-    let cfg: cpal::StreamConfig = config.into();
+    let mut cfg: cpal::StreamConfig = config.into();
+    cfg.buffer_size = buffer_size(cfg.sample_rate);
     let err = |e| warn!("audio stream error: {e}");
     let stream = match format {
         cpal::SampleFormat::F32 => device
@@ -137,6 +152,21 @@ pub fn tick(audio: &mut Audio, now: f64, dt: f32, touched: bool) {
         if audio.stream.is_none() {
             let mut sink = vec![0.0; (m.out_rate as f32 * dt) as usize * 2];
             m.render(&mut sink, 2);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn web_audio_rides_out_a_long_frame() {
+        for rate in [44_100, 48_000] {
+            let frames = web_buffer_frames(rate);
+            let secs = frames as f32 / rate as f32;
+            assert!(secs >= 0.3, "{rate} Hz buffers last only {secs} s");
+            assert!(secs <= 0.8, "{rate} Hz buffers add {secs} s of lag");
         }
     }
 }
