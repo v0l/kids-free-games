@@ -21,7 +21,7 @@ crates/app    kids_games: the Bevy app, desktop, web, Android and iOS
   ui.rs       the painted UI kit: panels, buttons, ribbons, chips, hints, results board
   art.rs      ui/icons/menu/profiles sheets embedded, the rest loaded at runtime; page decode with mips
   packs.rs    background loading of sheets and sound packs, `packs::ready(key)` gates opening a game
-  audio.rs    cpal output that runs kg_core::mixer::Mixer
+  audio.rs    output: cpal running kg_core::mixer::Mixer natively, an AudioWorklet on the web
   game3d.rs   the shared 3D world: open/close, camera rig, light, part and material cache
   menu.rs profiles.rs link.rs shots.rs jev.rs platform.rs
   games/      one renderer per game, implementing games::Play
@@ -130,7 +130,7 @@ Hotel's furniture and people are primitives built with `hotel::build::Model` (a 
 
 - Art sheets are built by `scripts/assets.py art` from `art/*.txt` into `assets/art/*.kga`, as on `main`. Add the sheet name to `LATER` in `crates/app/src/art.rs`. Only ui, icons, menu and profiles are compiled in; the others are read at runtime from `assets/` (web: fetched from `assets/`, desktop: next to the exe or the repo, Android: APK assets, iOS: the .app bundle). A game whose pack is missing shows "Loading" on its tile and opens when it arrives.
 - A sprite name that is missing draws magenta. Add a test in the core game file listing the sprites the renderer uses (see `flappy_sprites_all_exist`).
-- Sound is `assets/sound.kgs` plus `assets/sound_words.kgs` (the Spell It word clips) from `scripts/assets.py sound`, loaded at runtime like the art. Effects are decoded at start, music and voice lines one per frame after that.
+- Sound is `assets/sound.kgs` plus `assets/sound_words.kgs` (the Spell It word clips) from `scripts/assets.py sound`, loaded at runtime like the art. Effects are decoded at start, music and voice lines one per frame after that. Spell It calls `sfx::prefetch_words` with each level's deck and the app decodes one word per frame into `Mixer::words`, so speaking a word never decodes; the cache holds the current level only.
 - Text is Fredoka through `kg_core::outline`, the same outlined look as `main`. Sizes snap to `GLYPH_SIZES` so animated text never rasterises new glyphs.
 
 ## Audio and juice
@@ -140,6 +140,12 @@ The game never talks to the audio device. It queues and the mixer picks up the q
 - `sfx::play(Sfx::Pop)`, `sfx::play_step(Sfx::Score, n)` for a rising ladder, `sfx::say(Say::Great)` for a voice line.
 - Music follows the menu's `Kind` mood. Large sounds and voice lines duck the music by `DUCK_DB`; the same effect twice inside `MIN_GAP` plays once; voice takes never repeat the last one.
 - Juice is the same as `main`: `feel::impact(Impact::Large)` for hit-stop and a flash (the menu applies both), `fx.sparkle/puff/confetti`, `shake.add`, `popups.add`, `bump.kick`. Read the `game-feel` and `audio-design` skills and `docs/GAME-DESIGN.md` before changing any of it.
+
+## Web audio
+
+On the web the main thread never renders audio. `Mixer::remote()` keeps all the mixing decisions (buses, ducking, limits, takes, music moods) on the main thread and turns them into `Cmd`s; `audio::worklet` posts those to `web/kg-mixer.js`, an AudioWorklet that holds the decoded clips and mixes them on the audio thread in 128-frame blocks. Each clip is posted once and then started by id. A stalled main thread only delays new sounds; music and sounds already playing carry on, so there is no queue to keep topped up and tap sounds start about one block after the frame that queued them. No `SharedArrayBuffer`, so no COOP/COEP headers, and it runs on Safari and iOS Safari 14.5+. Where `AudioWorklet` is missing (or the page is not a secure context) it falls back to cpal with `web_buffer_frames` (about 350 ms) buffers, started once on the first gesture.
+
+`a_remote_mixer_drives_the_render_side_to_the_same_output` keeps the two paths identical. To count dropouts and tap latency in headless Chrome, tap an AudioWorklet probe onto the destination (`NODE_PATH=/tmp/pw/node_modules node scripts/audio-latency.js http://localhost:PORT/` prints the tap-to-sound times and any skipped render blocks) rather than trusting frame times.
 
 ## Tests
 

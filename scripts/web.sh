@@ -9,7 +9,7 @@ RUSTFLAGS="${RUSTFLAGS:-} --cfg getrandom_backend=\"wasm_js\"" \
   cargo build -p kids_games --lib --profile "$PROFILE" --target wasm32-unknown-unknown
 rm -rf "$OUT"
 mkdir -p "$OUT"
-cp web/index.html web/manifest.json web/icon.png web/_headers "$OUT/"
+cp web/index.html web/manifest.json web/icon.png web/_headers web/kg-mixer.js "$OUT/"
 mkdir -p "$OUT/assets/art"
 cp assets/art/*.kga "$OUT/assets/art/"
 cp assets/sound.kgs assets/sound_words.kgs "$OUT/assets/"
