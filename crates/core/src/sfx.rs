@@ -397,6 +397,7 @@ impl Say {
 thread_local! {
     static PENDING: RefCell<Vec<Cue>> = const { RefCell::new(Vec::new()) };
     static VOICE: RefCell<Option<Say>> = const { RefCell::new(None) };
+    static PREFETCH: RefCell<Option<Vec<&'static str>>> = const { RefCell::new(None) };
     static WANT: std::cell::Cell<Option<Mood>> = const { std::cell::Cell::new(None) };
     static SFX_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     static MUSIC_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
@@ -442,6 +443,14 @@ pub fn say(s: Say) {
 
 pub fn take_voice() -> Option<Say> {
     VOICE.with(|v| v.borrow_mut().take())
+}
+
+pub fn prefetch_words(words: &[&'static str]) {
+    PREFETCH.with(|p| *p.borrow_mut() = Some(words.to_vec()));
+}
+
+pub fn take_prefetch() -> Option<Vec<&'static str>> {
+    PREFETCH.with(|p| p.borrow_mut().take())
 }
 
 pub const VOICE_GAP: f64 = 0.9;

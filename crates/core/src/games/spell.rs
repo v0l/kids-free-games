@@ -406,6 +406,7 @@ impl Spell {
     fn build(level: usize, deck: Vec<&'static str>) -> Self {
         let board = Board::new(deck[0], LEVELS[level].decoys);
         let n = board.tiles.len();
+        sfx::prefetch_words(&deck);
         sfx::say(sfx::Say::Word(deck[0]));
         Self {
             level,
@@ -454,6 +455,7 @@ impl Spell {
         profile::set_level(KEY, self.level as u32);
         self.deck = level_words(self.level, &self.recent);
         self.recent = self.deck.clone();
+        sfx::prefetch_words(&self.deck);
         self.index = 0;
         self.results.clear();
         self.slips = 0;

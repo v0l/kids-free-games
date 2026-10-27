@@ -3,24 +3,36 @@ use crate::sfx::{
     Limiter, Mix, Mood, Pitch, Sfx, SFX_BUS_DB, VOICE_GAP,
 };
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 pub const MAX_VOICES: usize = 24;
 const MUSIC_RAMP_PER_SEC: f32 = 6.0;
 
+static NEXT_CLIP: AtomicU32 = AtomicU32::new(1);
+
 #[derive(Clone, Debug)]
 pub struct Clip {
+    pub id: u32,
     pub rate: u32,
     pub data: Arc<Vec<f32>>,
 }
 
 impl Clip {
+    pub fn new(rate: u32, data: Vec<f32>) -> Clip {
+        Clip {
+            id: NEXT_CLIP.fetch_add(1, Ordering::Relaxed),
+            rate,
+            data: Arc::new(data),
+        }
+    }
+
     pub fn from_ogg(ogg: &[u8]) -> Option<Clip> {
         let (rate, pcm) = decode(ogg)?;
-        Some(Clip {
+        Some(Clip::new(
             rate,
-            data: Arc::new(pcm.iter().map(|s| *s as f32 / 32768.0).collect()),
-        })
+            pcm.iter().map(|s| *s as f32 / 32768.0).collect(),
+        ))
     }
 
     pub fn secs(&self) -> f32 {
@@ -84,6 +96,63 @@ pub fn later_order(pack: &[(&str, &[u8])], first: Mood) -> Vec<(Later, usize)> {
     out
 }
 
+#[derive(Clone, Debug)]
+pub enum Cmd {
+    Start {
+        clip: Clip,
+        gain: f32,
+        music: bool,
+        keep: bool,
+    },
+    StopMusic,
+    MusicGain(f32),
+}
+
+#[derive(Default)]
+pub struct Words {
+    want: Vec<String>,
+    clips: HashMap<String, Clip>,
+    pub decoded: usize,
+}
+
+impl Words {
+    pub fn set(&mut self, keys: Vec<String>) {
+        self.clips.retain(|k, _| keys.contains(k));
+        self.want = keys;
+    }
+
+    pub fn ready(&self, key: &str) -> bool {
+        self.clips.contains_key(key)
+    }
+
+    pub fn missing(&self) -> Option<&str> {
+        self.want
+            .iter()
+            .find(|k| !self.clips.contains_key(*k))
+            .map(|k| k.as_str())
+    }
+
+    pub fn decode(key: &str) -> Option<Clip> {
+        find(sfx::words(), key).and_then(Clip::from_ogg)
+    }
+
+    pub fn insert(&mut self, key: String, clip: Clip) {
+        self.decoded += 1;
+        if !self.want.contains(&key) {
+            self.want.push(key.clone());
+        }
+        self.clips.insert(key, clip);
+    }
+
+    pub fn len(&self) -> usize {
+        self.clips.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.clips.is_empty()
+    }
+}
+
 struct Voice {
     clip: Clip,
     pos: f64,
@@ -104,6 +173,11 @@ pub struct Mixer {
     said_at: f64,
     music_now: f32,
     music_target: f32,
+    music_live: bool,
+    pub words: Words,
+    waiting: Option<String>,
+    pub remote: Option<Vec<Cmd>>,
+    sent_gain: f32,
     pub played: Vec<String>,
     pub frames_rendered: u64,
 }
@@ -122,6 +196,11 @@ impl Mixer {
             said_at: -10.0,
             music_now: 0.0,
             music_target: 0.0,
+            music_live: false,
+            words: Words::default(),
+            waiting: None,
+            remote: None,
+            sent_gain: -1.0,
             played: vec![],
             frames_rendered: 0,
         }
@@ -132,7 +211,50 @@ impl Mixer {
         (self.roll >> 16) as usize
     }
 
-    fn start(&mut self, clip: Clip, gain: f32, music: bool) {
+    pub fn remote() -> Self {
+        let mut m = Self::new(Bank::default(), 48000);
+        m.remote = Some(vec![]);
+        m
+    }
+
+    pub fn take_cmds(&mut self) -> Vec<Cmd> {
+        self.remote.as_mut().map(std::mem::take).unwrap_or_default()
+    }
+
+    pub fn run(&mut self, cmd: Cmd) {
+        match cmd {
+            Cmd::Start {
+                clip,
+                gain,
+                music,
+                keep,
+            } => self.start(clip, gain, music, keep),
+            Cmd::StopMusic => self.stop_music(),
+            Cmd::MusicGain(g) => self.music_target = g,
+        }
+    }
+
+    fn stop_music(&mut self) {
+        self.music_live = false;
+        match &mut self.remote {
+            Some(out) => out.push(Cmd::StopMusic),
+            None => self.voices.retain(|v| !v.music),
+        }
+    }
+
+    fn start(&mut self, clip: Clip, gain: f32, music: bool, keep: bool) {
+        if music {
+            self.music_live = true;
+        }
+        if let Some(out) = &mut self.remote {
+            out.push(Cmd::Start {
+                clip,
+                gain,
+                music,
+                keep,
+            });
+            return;
+        }
         if music {
             self.voices.retain(|v| !v.music);
         } else if self.voices.iter().filter(|v| !v.music).count() >= MAX_VOICES {
@@ -153,6 +275,10 @@ impl Mixer {
     pub fn control(&mut self, now: f64, dt: f32) {
         let cues = sfx::take_cues();
         let voice = sfx::take_voice();
+        if let Some(w) = sfx::take_prefetch() {
+            self.words
+                .set(w.into_iter().map(|w| sfx::Say::Word(w).key()).collect());
+        }
         let sfx_on = !sfx::muted();
         let want = if sfx::music_on() {
             sfx::wanted_music()
@@ -195,7 +321,7 @@ impl Mixer {
                     .cloned()
             });
             if let Some(clip) = clip {
-                self.start(clip, gain, false);
+                self.start(clip, gain, false, true);
                 self.played.push(c.sfx.key().to_string());
                 if c.sfx.tier().ducks_music() {
                     self.mix.ducked();
@@ -204,35 +330,38 @@ impl Mixer {
         }
         if let Some(v) = voice.filter(|_| sfx_on && now - self.said_at > VOICE_GAP) {
             let key = v.key();
-            let last = self.last_voice.get(&key).copied();
-            let roll = self.next_roll();
-            let pick = if key.starts_with("word_") {
-                find(sfx::words(), &key)
-                    .and_then(Clip::from_ogg)
-                    .map(|c| (0, c))
+            if key.starts_with("word_") {
+                self.waiting = Some(key);
+                self.said_at = now;
             } else {
-                self.bank.voices.get(&key).map(|takes| {
+                let last = self.last_voice.get(&key).copied();
+                let roll = self.next_roll();
+                let pick = self.bank.voices.get(&key).map(|takes| {
                     let i = pick_take(takes.len(), last, roll);
                     (i, takes[i].clone())
-                })
-            };
-            if let Some((i, clip)) = pick {
-                self.last_voice.insert(key.clone(), i);
-                self.start(clip, gain, false);
-                self.played.push(format!("{key}.{i}"));
-                self.said_at = now;
-                self.mix.ducked();
+                });
+                if let Some((i, clip)) = pick {
+                    self.waiting = None;
+                    self.last_voice.insert(key.clone(), i);
+                    self.start(clip, gain, false, true);
+                    self.played.push(format!("{key}.{i}"));
+                    self.said_at = now;
+                    self.mix.ducked();
+                }
             }
         }
+        self.speak_waiting(sfx_on);
         self.mix.step(dt);
         let have = |m: Option<Mood>| m.is_some_and(|m| self.bank.music.contains_key(&m));
-        let missing = want.is_some() && !self.voices.iter().any(|v| v.music) && have(want);
+        let missing = want.is_some() && !self.music_live && have(want);
         if self.playing != want || missing {
-            self.voices.retain(|v| !v.music);
+            if self.music_live {
+                self.stop_music();
+            }
             self.playing = want;
             self.mix.fade_in = 0.0;
             if let Some(clip) = want.and_then(|m| self.bank.music.get(&m)).cloned() {
-                self.start(clip, 1.0, true);
+                self.start(clip, 1.0, true, true);
                 self.music_now = 0.0;
             }
         }
@@ -241,10 +370,63 @@ impl Mixer {
         } else {
             0.0
         };
+        if let Some(out) = &mut self.remote {
+            if (self.music_target - self.sent_gain).abs() > 1e-4 {
+                self.sent_gain = self.music_target;
+                out.push(Cmd::MusicGain(self.music_target));
+            }
+        }
+    }
+
+    fn speak_waiting(&mut self, sfx_on: bool) {
+        let Some(key) = self.waiting.take() else {
+            return;
+        };
+        if !sfx_on {
+            return;
+        }
+        match self.words.clips.get(&key).cloned() {
+            Some(clip) => {
+                self.start(clip, db_to_gain(SFX_BUS_DB), false, false);
+                self.played.push(format!("{key}.0"));
+                self.mix.ducked();
+            }
+            None => {
+                if !self.words.want.contains(&key) {
+                    self.words.want.insert(0, key.clone());
+                }
+                self.waiting = Some(key);
+            }
+        }
+    }
+
+    pub fn next_word(&self) -> Option<String> {
+        self.waiting
+            .clone()
+            .filter(|k| !self.words.ready(k))
+            .or_else(|| self.words.missing().map(str::to_string))
+    }
+
+    pub fn word_decoded(&mut self, key: String, clip: Option<Clip>) {
+        match clip {
+            Some(c) => self.words.insert(key, c),
+            None => {
+                self.words.want.retain(|k| *k != key);
+                if self.waiting.as_ref() == Some(&key) {
+                    self.waiting = None;
+                }
+            }
+        }
+        let on = !sfx::muted();
+        self.speak_waiting(on);
+    }
+
+    pub fn word_waiting(&self) -> bool {
+        self.waiting.is_some()
     }
 
     pub fn playing_mood(&self) -> Option<Mood> {
-        self.playing.filter(|_| self.voices.iter().any(|v| v.music))
+        self.playing.filter(|_| self.music_live)
     }
 
     pub fn active_effects(&self) -> usize {
@@ -368,10 +550,7 @@ mod tests {
     use crate::sfx::{Say, DUCK_DB};
 
     fn tone(len: usize, v: f32) -> Clip {
-        Clip {
-            rate: 44100,
-            data: Arc::new(vec![v; len]),
-        }
+        Clip::new(44100, vec![v; len])
     }
 
     fn bank() -> Bank {
@@ -536,6 +715,145 @@ mod tests {
         let mut buf = vec![0.0; 256];
         m.render(&mut buf, 1);
         assert!(buf.iter().all(|s| s.abs() <= 1.0));
+    }
+
+    fn decode_ahead(m: &mut Mixer) {
+        while let Some(key) = m.next_word() {
+            let clip = Words::decode(&key);
+            m.word_decoded(key, clip);
+        }
+    }
+
+    #[test]
+    fn speaking_a_spell_word_never_decodes_on_the_spot() {
+        use crate::games::spell::{self, Spell};
+        let mut m = Mixer::new(bank(), 44100);
+        crate::save::reset_for_test();
+        sfx::take_voice();
+        sfx::take_prefetch();
+        let deck = spell::level_words(1, &[]);
+        let mut g = Spell::with_level_deck(1, deck.clone());
+        m.control(0.0, 0.01);
+        assert_eq!(m.words.decoded, 0);
+        decode_ahead(&mut m);
+        assert_eq!(m.words.decoded, deck.len());
+        assert!(deck.iter().all(|w| m.words.ready(&Say::Word(w).key())));
+        assert_eq!(m.played, vec![format!("{}.0", Say::Word(deck[0]).key())]);
+        for (i, w) in deck.iter().enumerate().skip(1) {
+            m.played.clear();
+            g.index = i;
+            g.say_word();
+            m.control(i as f64 * 2.0, 0.01);
+            assert_eq!(m.played, vec![format!("{}.0", Say::Word(w).key())]);
+            assert_eq!(m.words.decoded, deck.len(), "{w} was decoded when spoken");
+        }
+    }
+
+    #[test]
+    fn a_new_level_keeps_only_its_own_words_decoded() {
+        let mut m = Mixer::new(bank(), 44100);
+        sfx::prefetch_words(&["cat", "dog", "sun"]);
+        m.control(0.0, 0.01);
+        decode_ahead(&mut m);
+        assert_eq!(m.words.len(), 3);
+        sfx::prefetch_words(&["dog", "hat"]);
+        m.control(1.0, 0.01);
+        decode_ahead(&mut m);
+        assert_eq!(m.words.len(), 2);
+        assert!(!m.words.ready("word_cat"));
+        assert!(m.words.ready("word_hat"));
+        assert_eq!(m.words.decoded, 4);
+    }
+
+    #[test]
+    fn a_word_asked_for_before_it_is_decoded_is_spoken_once_it_is() {
+        let mut m = Mixer::new(bank(), 44100);
+        sfx::take_prefetch();
+        m.apply(&[], Some(Say::Word("dog")), None, true, 5.0, 0.01);
+        assert!(m.played.is_empty());
+        assert!(m.word_waiting());
+        assert_eq!(m.next_word().as_deref(), Some("word_dog"));
+        decode_ahead(&mut m);
+        assert_eq!(m.played, vec!["word_dog.0".to_string()]);
+        assert!(!m.word_waiting());
+    }
+
+    fn render_secs(m: &mut Mixer, secs: f32) -> Vec<f32> {
+        let mut all = vec![];
+        let mut buf = vec![0.0; 128 * 2];
+        for _ in 0..(secs * m.out_rate as f32 / 128.0) as usize {
+            m.render(&mut buf, 2);
+            all.extend_from_slice(&buf);
+        }
+        all
+    }
+
+    #[test]
+    fn a_remote_mixer_drives_the_render_side_to_the_same_output() {
+        let mut local = Mixer::new(bank(), 44100);
+        let mut remote = Mixer::remote();
+        remote.out_rate = 44100;
+        remote.bank = bank();
+        let mut render = Mixer::new(Bank::default(), 44100);
+        let script: Vec<(Vec<Cue>, Option<Say>)> = vec![
+            (vec![], None),
+            (vec![cue(Sfx::Pop)], None),
+            (vec![], None),
+            (vec![cue(Sfx::Win)], Some(Say::Great)),
+            (vec![], None),
+        ];
+        let (mut a, mut b) = (vec![], vec![]);
+        for (i, (cues, say)) in script.iter().cycle().take(60).enumerate() {
+            let now = i as f64 * 0.1;
+            local.apply(cues, *say, Some(Mood::Menu), true, now, 0.1);
+            remote.apply(cues, *say, Some(Mood::Menu), true, now, 0.1);
+            for c in remote.take_cmds() {
+                render.run(c);
+            }
+            a.extend(render_secs(&mut local, 0.1));
+            b.extend(render_secs(&mut render, 0.1));
+        }
+        assert_eq!(local.played, remote.played);
+        assert_eq!(a.len(), b.len());
+        assert!(a.iter().zip(&b).all(|(x, y)| (x - y).abs() < 1e-6));
+    }
+
+    #[test]
+    fn the_render_side_keeps_playing_through_a_main_thread_stall() {
+        let mut remote = Mixer::remote();
+        remote.out_rate = 44100;
+        remote.bank = bank();
+        let mut render = Mixer::new(Bank::default(), 44100);
+        for i in 0..100 {
+            remote.apply(&[], None, Some(Mood::Menu), true, i as f64 * 0.01, 0.01);
+            for c in remote.take_cmds() {
+                render.run(c);
+            }
+            render_secs(&mut render, 0.01);
+        }
+        remote.apply(&[cue(Sfx::Pop)], None, Some(Mood::Menu), true, 1.0, 0.01);
+        for c in remote.take_cmds() {
+            render.run(c);
+        }
+        for stall in [0.05, 0.15, 0.6, 3.0] {
+            let out = render_secs(&mut render, stall);
+            assert!(
+                out.chunks(128 * 2).all(|q| q.iter().any(|s| s.abs() > 0.01)),
+                "silent block during a {stall} s stall"
+            );
+        }
+    }
+
+    #[test]
+    fn a_remote_mixer_never_renders_or_decodes_itself() {
+        let mut remote = Mixer::remote();
+        remote.bank = bank();
+        remote.apply(&[cue(Sfx::Pop)], None, Some(Mood::Menu), true, 0.0, 0.01);
+        assert_eq!(remote.active_effects(), 0);
+        let cmds = remote.take_cmds();
+        assert!(matches!(cmds[0], Cmd::Start { music: false, keep: true, .. }));
+        assert!(cmds.iter().any(|c| matches!(c, Cmd::Start { music: true, .. })));
+        assert!(remote.take_cmds().is_empty());
     }
 
     #[test]
