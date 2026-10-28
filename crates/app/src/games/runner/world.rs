@@ -7,7 +7,6 @@ use kg_core::engine::View;
 use kg_core::games::runner::State as Phase;
 use kg_core::games::runner::*;
 use kg_core::geom::{Color as Col, WHITE};
-use std::f32::consts::FRAC_PI_2;
 
 const SKY: Col = Col::new(0.66, 0.88, 0.99, 1.0);
 const SKY_DEPTH: f32 = 140.0;
@@ -28,7 +27,6 @@ const TINTS: [Col; 5] = [
     Col::new(0.82, 1.0, 0.86, 1.0),
     Col::new(0.94, 0.84, 1.0, 1.0),
 ];
-const GOLD: Col = Col::new(1.0, 0.8, 0.1, 1.0);
 
 pub struct RunnerWorld;
 
@@ -181,30 +179,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         for i in 0..TREES * 2 {
             let t = node(w, Role::Tree(i), Transform::default());
             w.commands().entity(t).with_children(|c| {
-                put(
-                    c,
-                    &mut kit,
-                    Shape::Cylinder(8),
-                    matte(Col::new(0.5, 0.33, 0.2, 1.0)),
-                    Vec3::new(0.0, 0.7, 0.0),
-                    Vec3::new(0.3, 1.4, 0.3),
-                );
-                put(
-                    c,
-                    &mut kit,
-                    Shape::Sphere,
-                    gloss(Col::new(0.34, 0.72, 0.28, 1.0)),
-                    Vec3::new(0.0, 2.2, 0.0),
-                    Vec3::new(1.9, 1.7, 1.9),
-                );
-                put(
-                    c,
-                    &mut kit,
-                    Shape::Sphere,
-                    gloss(Col::new(0.45, 0.82, 0.32, 1.0)),
-                    Vec3::new(0.25, 2.8, 0.1),
-                    Vec3::new(1.2, 1.1, 1.2),
-                );
+                prop(c, &mut kit, "prop_tree", 3.6, Vec3::ZERO);
             });
         }
     });
@@ -236,6 +211,9 @@ pub fn hero_frame(g: &Runner) -> &'static str {
     if g.state == Phase::Won && g.end_t > 0.4 {
         return CHEER_FRAMES[(g.end_t * 8.0) as usize % CHEER_FRAMES.len()];
     }
+    if g.sliding() {
+        return "hero_slide_back_5";
+    }
     if g.y > 0.05 {
         return if g.vy > 0.0 {
             "hero_jump_back_4"
@@ -265,162 +243,41 @@ fn kid(p: &mut ChildSpawnerCommands, kit: &mut Kit) {
     });
 }
 
-fn train_colour(row: usize) -> Col {
-    [
-        Col::new(0.25, 0.55, 0.95, 1.0),
-        Col::new(0.2, 0.75, 0.6, 1.0),
-        Col::new(0.7, 0.4, 0.9, 1.0),
-    ][row % 3]
+const TRAIN_BLUE: Col = Col::new(0.25, 0.55, 0.95, 1.0);
+
+fn prop(c: &mut ChildSpawnerCommands, kit: &mut Kit, name: &'static str, h: f32, at: Vec3) {
+    let s = crate::art::size(SHEET, name);
+    put(
+        c,
+        kit,
+        Shape::Quad,
+        Paint::skinned(Finish::Sticker, WHITE, sprite(name)),
+        Vec3::new(at.x, at.y + h / 2.0, at.z),
+        Vec3::new(h * s.x / s.y, h, 1.0),
+    );
 }
 
-fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, kind: Kind, row: usize) {
-    let white = matte(Col::new(0.98, 0.98, 0.96, 1.0));
-    let red = gloss(Col::new(0.93, 0.25, 0.22, 1.0));
-    let orange = gloss(Col::new(1.0, 0.55, 0.12, 1.0));
-    let grey = matte(Col::new(0.45, 0.46, 0.55, 1.0));
+fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, kind: Kind) {
     match kind {
-        Kind::Barrier => {
-            for x in [-0.55, 0.55] {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    grey,
-                    Vec3::new(x, 0.5, 0.0),
-                    Vec3::new(0.14, 1.0, 0.14),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                red,
-                Vec3::new(0.0, 0.8, 0.0),
-                Vec3::new(1.4, 0.5, 0.2),
-            );
-            for k in 0..3 {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    white,
-                    Vec3::new(-0.45 + k as f32 * 0.45, 0.8, 0.0),
-                    Vec3::new(0.2, 0.52, 0.22),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Sphere,
-                Paint::new(Finish::Glow, Col::new(1.0, 0.7, 0.1, 1.0)),
-                Vec3::new(0.0, 1.15, 0.0),
-                Vec3::splat(0.2),
-            );
-        }
-        Kind::Hurdle => {
-            for x in [-0.62, 0.62] {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    grey,
-                    Vec3::new(x, 0.28, 0.0),
-                    Vec3::new(0.12, 0.56, 0.12),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                orange,
-                Vec3::new(0.0, 0.5, 0.0),
-                Vec3::new(1.5, 0.2, 0.16),
-            );
-            for k in 0..3 {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    white,
-                    Vec3::new(-0.45 + k as f32 * 0.45, 0.5, 0.0),
-                    Vec3::new(0.18, 0.22, 0.18),
-                );
-            }
-        }
-        Kind::Overhead => {
-            for x in [-0.72, 0.72] {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    grey,
-                    Vec3::new(x, 1.2, 0.0),
-                    Vec3::new(0.16, 2.4, 0.16),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                gloss(Col::new(0.2, 0.7, 0.45, 1.0)),
-                Vec3::new(0.0, 1.5, 0.0),
-                Vec3::new(1.6, 0.55, 0.26),
-            );
-            for k in 0..4 {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    matte(GOLD),
-                    Vec3::new(-0.6 + k as f32 * 0.4, 1.5, 0.0),
-                    Vec3::new(0.14, 0.58, 0.28),
-                );
-            }
-        }
+        Kind::Barrier => prop(c, kit, "prop_barrier", 1.25, Vec3::ZERO),
+        Kind::Hurdle => prop(c, kit, "prop_hurdle", 0.8, Vec3::ZERO),
+        Kind::Overhead => prop(c, kit, "prop_gate", 2.5, Vec3::ZERO),
         Kind::Train => {
-            let body = train_colour(row);
             put(
                 c,
                 kit,
                 Shape::Cube,
-                gloss(body),
-                Vec3::new(0.0, 1.3, 0.0),
-                Vec3::new(1.45, 2.2, TRAIN_LEN),
+                gloss(TRAIN_BLUE.darker(0.92)),
+                Vec3::new(0.0, 1.2, -0.05),
+                Vec3::new(1.4, 2.4, TRAIN_LEN - 0.1),
             );
-            put(
+            prop(
                 c,
                 kit,
-                Shape::Cube,
-                gloss(body.darker(1.15)),
-                Vec3::new(0.0, 2.45, 0.0),
-                Vec3::new(1.3, 0.2, TRAIN_LEN - 0.4),
+                "prop_train",
+                2.45,
+                Vec3::new(0.0, 0.0, TRAIN_LEN / 2.0 + 0.02),
             );
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                gloss(Col::new(0.75, 0.93, 1.0, 1.0)),
-                Vec3::new(0.0, 1.85, 0.0),
-                Vec3::new(1.47, 0.7, TRAIN_LEN - 1.0),
-            );
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                matte(Col::new(0.2, 0.2, 0.3, 1.0)),
-                Vec3::new(0.0, 0.3, 0.0),
-                Vec3::new(1.2, 0.3, TRAIN_LEN - 0.6),
-            );
-            for x in [-0.4, 0.4] {
-                put(
-                    c,
-                    kit,
-                    Shape::Sphere,
-                    Paint::new(Finish::Glow, Col::new(1.0, 0.95, 0.6, 1.0)),
-                    Vec3::new(x, 0.9, TRAIN_LEN / 2.0 + 0.02),
-                    Vec3::splat(0.3),
-                );
-            }
         }
     }
 }
@@ -469,47 +326,22 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
             let kind = *kind;
             c.commands()
                 .entity(n)
-                .with_children(|o| obstacle(o, kit, kind, i));
+                .with_children(|o| obstacle(o, kit, kind));
         }
     }
     for (i, coin) in g.coins_list.iter().enumerate() {
         c.spawn((
             Role::Coin(i),
             kit.part(
-                Shape::Cylinder(18),
-                Paint::new(Finish::Gloss, GOLD),
+                Shape::Quad,
+                Paint::skinned(Finish::Sticker, WHITE, sprite("prop_coin")),
                 Transform::from_xyz(lane_x(coin.lane as i32 - 1), coin.h, -coin.at)
-                    .with_scale(Vec3::new(0.5, 0.09, 0.5)),
+                    .with_scale(Vec3::new(0.5, 0.55, 1.0)),
             ),
         ));
     }
     let z = -g.length;
-    let post = matte(Col::new(0.95, 0.95, 0.98, 1.0));
-    for x in [-2.9, 2.9] {
-        c.spawn(kit.part(
-            Shape::Cube,
-            post,
-            Transform::from_xyz(x, 2.2, z).with_scale(Vec3::new(0.4, 4.4, 0.4)),
-        ));
-    }
-    for k in 0..12 {
-        for row in 0..2 {
-            let dark = (k + row) % 2 == 0;
-            let col = if dark {
-                Col::new(0.1, 0.1, 0.15, 1.0)
-            } else {
-                WHITE
-            };
-            c.spawn(
-                kit.part(
-                    Shape::Cube,
-                    matte(col),
-                    Transform::from_xyz(-2.75 + k as f32 * 0.5, 4.5 - row as f32 * 0.5, z)
-                        .with_scale(Vec3::new(0.5, 0.5, 0.3)),
-                ),
-            );
-        }
-    }
+    prop(c, kit, "prop_arch", 4.8, Vec3::new(0.0, 0.0, z));
     c.spawn(kit.part(
         Shape::Plane,
         matte(WHITE),
@@ -628,9 +460,7 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                 let sq = g.squash;
                 t.set_if_neq(Transform {
                     translation: Vec3::new(0.0, bob + idle + hop + 0.0 - slide_k * 0.05, 0.0),
-                    rotation: Quat::from_rotation_x(
-                        slide_k * 1.25 - fall * 1.3 + if airborne { -0.12 } else { 0.1 * moving },
-                    ),
+                    rotation: Quat::from_rotation_x(fall * -0.5),
                     scale: Vec3::new(1.0 + sq * 0.14, 1.0 - sq * 0.2, 1.0 + sq * 0.14),
                 });
             }
@@ -736,8 +566,8 @@ fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Par
                         c.h + (g.t * 3.0 + i as f32).sin() * 0.06,
                         -c.at,
                     ),
-                    rotation: Quat::from_rotation_y(spin) * Quat::from_rotation_z(FRAC_PI_2),
-                    scale: Vec3::new(0.5, 0.09, 0.5),
+                    rotation: Quat::IDENTITY,
+                    scale: Vec3::new(0.5 * spin.cos().abs().max(0.25), 0.55, 1.0),
                 });
             }
             Role::Building(i) => {
@@ -774,6 +604,22 @@ mod tests {
     use kg_core::engine::{Dir, Input};
 
     #[test]
+    fn every_runner_prop_exists_in_the_runner_sheet() {
+        let have = crate::art::names(SHEET);
+        for n in [
+            "prop_barrier",
+            "prop_hurdle",
+            "prop_gate",
+            "prop_train",
+            "prop_coin",
+            "prop_tree",
+            "prop_arch",
+        ] {
+            assert!(have.iter().any(|h| h == n), "{n} missing from the runner sheet");
+        }
+    }
+
+    #[test]
     fn every_hero_frame_exists_in_the_runner_sheet() {
         let mut names: Vec<&str> = RUN_FRAMES.iter().chain(CHEER_FRAMES.iter()).copied().collect();
         names.extend([
@@ -781,6 +627,7 @@ mod tests {
             "hero_jump_back_4",
             "hero_jump_back_5",
             "hero_fail_back_5",
+            "hero_slide_back_5",
         ]);
         let have = crate::art::names(SHEET);
         for n in names {

@@ -20,3 +20,11 @@ hero_happy_front_0 | gen:hero_happy_front_0.png | keep crop=114,40,156,282 max=2
 hero_happy_front_2 | gen:hero_happy_front_2.png | keep crop=114,40,156,282 max=256
 hero_happy_front_4 | gen:hero_happy_front_4.png | keep crop=114,40,156,282 max=256
 hero_happy_front_6 | gen:hero_happy_front_6.png | keep crop=114,40,156,282 max=256
+prop_barrier | gen:rp_barrier_b_cut.png | max=256
+prop_hurdle | gen:rp_hurdle_a_cut.png | max=256
+prop_gate | gen:rp_gate_b_cut.png | max=256
+prop_train | gen:rp_train_a_cut.png | max=320
+prop_coin | gen:rp_coin_a_cut.png | max=128
+prop_tree | gen:rp_tree_b_cut.png | max=320
+prop_arch | gen:rp_arch_a_cut.png | max=384
+hero_slide_back_5 | gen:hero_slide_back_5.png | keep crop=114,40,156,282 max=256

@@ -178,7 +178,19 @@ def fail(t):
     return d, -0.05 * k
 
 
+def slide(t):
+    k = min(1.0, t * 4)
+    d = {"hips": (-0.5 * k, 0, 0), "spine": (0.7 * k, 0, 0), "head": (-0.5 * k, 0, 0)}
+    for side, sg in (("L", 1), ("R", -1)):
+        d[f"arm.{side}"] = (0.0, sg * 0.5, sg * 0.5 * k)
+        d[f"forearm.{side}"] = (0, 0, sg * 0.5)
+        d[f"leg.{side}"] = (-1.2 * k, 0, 0)
+        d[f"shin.{side}"] = (0.5 * k, 0, 0)
+    return d, -0.35 * k
+
+
 CLIPS = {
+    "slide": (slide, 12, False),
     "idle": (idle, 48, True),
     "run": (run, 24, True),
     "jump": (jump, 30, False),
@@ -257,6 +269,6 @@ def render_clip(name, views):
             bpy.ops.render.render(write_still=True)
 
 
-for clip in ("run", "idle", "jump", "happy", "fail"):
+for clip in ("run", "idle", "jump", "happy", "fail", "slide"):
     render_clip(clip, (("front", 0), ("back", 180), ("side", 90)))
 print("done")
