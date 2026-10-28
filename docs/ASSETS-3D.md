@@ -17,3 +17,9 @@ Hero steps, all on spark:
 5. Chosen frames are listed in `art/runner.txt` and packed by `python3 scripts/assets.py art`. `hero_frame` in `crates/app/src/games/runner/world.rs` picks the frame from game state.
 
 Tests: `every_hero_frame_exists_in_the_runner_sheet`, `every_runner_prop_exists_in_the_runner_sheet`.
+
+## Seeing a model
+
+`cargo run -p kids_games --example model_sheet -- models/hero.glb --clips run,jump --views game,side --out /tmp/sheet.png`
+
+Renders the glb through Bevy's own glTF and animation path, headless (no window, so it never touches the desktop), and writes one PNG: a row per clip and view, a column per frame. Without `--clips` a model with no animations gets a turntable per view. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. Read the PNG with an image viewer tool to check poses, the real in-game result.
