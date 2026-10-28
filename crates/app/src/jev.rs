@@ -1,13 +1,21 @@
+use crate::games::clash::ClashPlay;
 use crate::games::flappy::FlappyPlay;
 use crate::games::Play;
 use crate::paint::Pen;
+use kg_core::engine::Input;
 use kg_core::engine::View;
+use kg_core::games::clash::{Mode, Screen};
 use kg_core::geom::{Color, Rect, WHITE};
+use kg_core::jev::clash::ClashPlayer;
 use kg_core::jev::{mode_from, yalr_key, Player};
 
 pub struct Jev {
     pub player: Option<Player>,
     pub game: FlappyPlay,
+}
+
+pub fn requested_clash() -> bool {
+    crate::web::query("jev").is_some_and(|g| g == "clash")
 }
 
 pub fn requested() -> bool {
@@ -84,6 +92,113 @@ pub fn fit(s: &str, width: f32, size: f32) -> String {
         out.pop();
     }
     format!("{}...", out.trim_end())
+}
+
+pub struct JevClash {
+    pub player: Option<ClashPlayer>,
+    pub game: ClashPlay,
+    was_playing: bool,
+}
+
+impl JevClash {
+    pub fn new() -> Self {
+        kg_core::save::use_memory_only();
+        if kg_core::profile::current().is_none() {
+            kg_core::profile::create("Jev", 4);
+        }
+        let player = crate::web::query("key")
+            .filter(|k| !k.is_empty())
+            .or_else(yalr_key)
+            .map(ClashPlayer::new);
+        let mut game = ClashPlay::new();
+        game.g.start(Mode::Arena, 1);
+        Self {
+            player,
+            game,
+            was_playing: true,
+        }
+    }
+
+    pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32) {
+        let Some(player) = &mut self.player else {
+            pen.fill_screen(view, Color::new(0.06, 0.03, 0.15, 1.0));
+            pen.text_center(
+                "No Yalr key: set YALR_KEY or ?key=",
+                view.w / 2.0,
+                view.h / 2.0,
+                36.0,
+                WHITE,
+            );
+            return;
+        };
+        let g = &mut self.game.g;
+        let playing = g.screen == Screen::Playing;
+        if playing && g.ending == 0.0 {
+            if let Some(a) = player.drive(&g.world) {
+                g.steer = a;
+            }
+        }
+        if self.was_playing && !playing {
+            player.end_run(g.world.player().level());
+        }
+        self.was_playing = playing;
+        if g.screen == Screen::Over && self.game.results_age > 2.5 {
+            self.game.g.start(Mode::Arena, 1);
+        }
+        let held = Input {
+            mm: 6.0,
+            ..Default::default()
+        };
+        self.game.update(&held, view, dt);
+        self.game.draw(pen, view);
+        pen.offset = glam::Vec2::ZERO;
+        let level = self.game.g.world.player().level();
+        let mut lines = vec![
+            ("JEV 1.13 playing Snake Clash".to_string(), true),
+            (
+                format!("calls {}   avg {:.0} ms", player.calls, player.avg_ms()),
+                false,
+            ),
+            (
+                format!(
+                    "run {}   level {}   best {}",
+                    player.runs + 1,
+                    level,
+                    player.best.max(level)
+                ),
+                false,
+            ),
+        ];
+        if !player.last_seen.is_empty() {
+            lines.push((format!("saw: {}", player.last_seen), false));
+        }
+        lines.extend(player.log.iter().map(|l| (l.clone(), false)));
+        let w = 420.0f32.min(view.w * 0.45);
+        let r = Rect::new(
+            16.0,
+            view.h - 30.0 - lines.len() as f32 * 26.0 - 16.0,
+            w,
+            30.0 + lines.len() as f32 * 26.0,
+        );
+        pen.round_rect(r, 18.0, Color::new(0.06, 0.03, 0.15, 0.78));
+        let gold = Color::from_rgba(255, 210, 70, 255);
+        let dim = Color::new(0.75, 0.78, 0.9, 1.0);
+        for (i, (l, strong)) in lines.iter().enumerate() {
+            pen.text_left(
+                &fit(l, w - 32.0, 22.0),
+                r.x + 16.0,
+                r.y + 27.0 + i as f32 * 26.0,
+                22.0,
+                if *strong { gold } else { dim },
+            );
+        }
+    }
+}
+
+impl Default for JevClash {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Default for Jev {

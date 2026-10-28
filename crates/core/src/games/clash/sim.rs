@@ -356,7 +356,7 @@ impl World {
         i
     }
 
-    fn layout_tail(&mut self, i: usize) {
+    pub fn layout_tail(&mut self, i: usize) {
         let s = &mut self.snakes[i];
         let n = segs_for(s.xp);
         let back = -s.dir() * s.spacing();

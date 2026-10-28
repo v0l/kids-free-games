@@ -28,6 +28,7 @@ pub enum Scene {
     Menu(Box<menu::App>),
     Shot(shots::Shot),
     Jev(Box<jev::Jev>),
+    JevClash(Box<jev::JevClash>),
 }
 
 pub struct Frame {
@@ -58,6 +59,7 @@ impl Frame {
             Scene::Menu(app) => app.current.as_ref().map(|(_, p)| &**p),
             Scene::Shot(s) => s.play(),
             Scene::Jev(_) => None,
+            Scene::JevClash(j) => Some(&j.game),
         }
     }
 
@@ -69,6 +71,7 @@ impl Frame {
                 .map(|(_, p)| &mut **p as &mut dyn games::Play),
             Scene::Shot(s) => s.play_mut(),
             Scene::Jev(_) => None,
+            Scene::JevClash(j) => Some(&mut j.game),
         }
     }
 }
@@ -207,6 +210,7 @@ fn frame(
         }
         Scene::Shot(s) => s.frame(&mut pen, &view, dt),
         Scene::Jev(j) => j.frame(&mut pen, &view, dt),
+        Scene::JevClash(j) => j.frame(&mut pen, &view, dt),
     }
     let touched = input.pressed || input.action || !input.typed.is_empty();
     if let Some(a) = &mut state.audio {
@@ -294,6 +298,7 @@ pub fn run() {
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),
         None if jev::requested() => Scene::Jev(Box::default()),
+        None if jev::requested_clash() => Scene::JevClash(Box::default()),
         None => Scene::Menu(Box::default()),
     };
     let audio = !matches!(scene, Scene::Shot(_));

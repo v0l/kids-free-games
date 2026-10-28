@@ -17,7 +17,7 @@ const SHEET: &str = "clash";
 
 pub struct ClashPlay {
     pub g: Clash,
-    results_age: f32,
+    pub results_age: f32,
 }
 
 impl ClashPlay {
