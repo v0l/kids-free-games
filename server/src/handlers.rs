@@ -35,7 +35,7 @@ pub async fn authenticate(db: &Db, token: Option<&str>, now: i64) -> ApiResult<A
         )
         .await?
         .ok_or_else(ApiError::unauthorized)?;
-    if now - row.last_used > TOKEN_TOUCH_AFTER {
+    if should_touch(row.last_used, now) {
         db.batch(vec![
             db.stmt(
                 "UPDATE tokens SET last_used = ?2 WHERE hash = ?1",
