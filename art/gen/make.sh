@@ -21,7 +21,7 @@ if [ -n "$CUT" ]; then
 import sys
 from PIL import Image
 from rembg import new_session, remove
-s = new_session("birefnet-general")
+s = new_session("birefnet-general", providers=["CPUExecutionProvider"])
 d = sys.argv[1]
 for n in sys.argv[2:]:
     im = remove(Image.open(f"{d}/{n}.png"), session=s)

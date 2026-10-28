@@ -372,6 +372,9 @@ pub enum Say {
     Ready,
     Go,
     Best,
+    Gotcha,
+    Land,
+    Oops,
     Number(u8),
     Word(&'static str),
 }
@@ -388,6 +391,9 @@ impl Say {
             Say::Ready => "say_ready".into(),
             Say::Go => "say_go".into(),
             Say::Best => "say_best".into(),
+            Say::Gotcha => "say_gotcha".into(),
+            Say::Land => "say_land".into(),
+            Say::Oops => "say_oops".into(),
             Say::Number(n) => format!("say_{}", n.clamp(1, 10)),
             Say::Word(w) => format!("word_{w}"),
         }
@@ -610,6 +616,9 @@ mod tests {
             Say::LevelUp,
             Say::Best,
             Say::GameOver,
+            Say::Gotcha,
+            Say::Land,
+            Say::Oops,
         ] {
             let n = p.iter().filter(|(k, _)| voice_line(k) == v.key()).count();
             assert!(n >= 3, "{v:?} has {n} takes");
