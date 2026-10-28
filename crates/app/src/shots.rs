@@ -15,6 +15,7 @@ pub const IDLE: u32 = 1000;
 
 mod blocks_scene;
 mod breakout_scene;
+mod clash_scene;
 mod count_scene;
 mod fruit_scene;
 mod helix_scene;
@@ -172,6 +173,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (177, "hotel city tower built out"),
     (178, "hotel royal palace built out"),
     (179, "hotel pool with swimmers"),
+    (190, "clash title with the skin picker"),
+    (191, "clash locked skin"),
+    (192, "clash tower floor picker"),
+    (193, "clash first run with the hint"),
+    (194, "clash arena at level nine"),
+    (195, "clash level up"),
+    (196, "clash boss floor"),
+    (197, "clash munched with the board"),
+    (198, "clash floor clear"),
+    (199, "clash tower floor twelve"),
     (180, "hotel room upgrade spot"),
     (181, "hotel level up"),
     (182, "hotel moving to the next hotel"),
@@ -430,6 +441,7 @@ fn setup(n: u32, view: &View) -> Stage {
         90..=99 => memory_scene::setup(n, view),
         170..=189 => hotel_scene::setup(n, view),
         160..=169 => spell_scene::setup(n, view),
+        190..=199 => clash_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -623,6 +635,11 @@ mod tests {
                 assert!(parts >= least, "scene {n} ({name}) has {parts} parts");
             }
         }
+    }
+
+    #[test]
+    fn clash_scenes_land_in_the_state_they_are_named_for() {
+        clash_scene::check();
     }
 
     #[test]

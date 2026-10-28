@@ -1,0 +1,3 @@
+# Procedural, art/render_clash.py
+egg  | gen:clash_egg.png | max=192 keep
+tuft | gen:clash_tuft.png | max=128 keep

@@ -4,6 +4,7 @@ use kg_core::games::{Info, CATALOG};
 
 pub mod blocks;
 pub mod breakout;
+pub mod clash;
 pub mod count;
 pub mod crossy;
 pub mod flappy;
@@ -65,6 +66,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         flappy::KEY => Some(|| Box::new(flappy::FlappyPlay::new())),
         crossy::KEY => Some(|| Box::new(crossy::CrossyPlay::new())),
         snake::KEY => Some(|| Box::new(snake::SnakePlay::new())),
+        clash::KEY => Some(|| Box::new(clash::ClashPlay::new())),
         merge::KEY => Some(|| Box::new(merge::MergePlay::new())),
         fruit::KEY => Some(|| Box::new(fruit::FruitPlay::new())),
         stack::KEY => Some(|| Box::new(stack::StackPlay::new())),

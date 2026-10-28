@@ -8,6 +8,7 @@ The games kids actually play on iPads and phones, what they are like in the stor
 | Paper.io 2 | Leave your area, draw a loop, claim land. Ad after every death | Paper Land | Done, 4 bots |
 | My Perfect Hotel, Hotel Empire Tycoon | Walk the bellhop round the hotel: check guests in at the desk, pick up the cash, clean rooms, stand on spots to build rooms and hire staff. Ads plus coin purchases | Happy Hotel | Done |
 | Snake.io, Slither.io | Steer a snake, eat, grow | Snake | Done |
+| Snake Clash! | Io snake battle: level up, eat smaller snakes, Arena and Tower of boss floors, unlockable skins | Snake Clash | Done |
 | 2048 | Swipe to merge tiles | 2048 | Done |
 | Fruit Ninja | Swipe to slice fruit, avoid bombs | Fruit Slice | Done |
 | Stack (Ketchapp) | Tap to drop a sliding block on the tower | Stack Tower | Done |

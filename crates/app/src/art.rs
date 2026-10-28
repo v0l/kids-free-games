@@ -14,12 +14,15 @@ pub static EMBEDDED: &[(&str, &[u8])] = &[
 ];
 
 pub const LATER: &[&str] = &[
-    "flappy", "crossy", "snake", "merge", "fruit", "stack", "breakout", "jumper", "blocks",
-    "mathpop", "count", "paper", "memory", "hotel", "helix", "spell",
+    "flappy", "crossy", "snake", "clash", "merge", "fruit", "stack", "breakout", "jumper",
+    "blocks", "mathpop", "count", "paper", "memory", "hotel", "helix", "spell",
 ];
 
 pub fn all_sheets() -> impl Iterator<Item = &'static str> {
-    EMBEDDED.iter().map(|(n, _)| *n).chain(LATER.iter().copied())
+    EMBEDDED
+        .iter()
+        .map(|(n, _)| *n)
+        .chain(LATER.iter().copied())
 }
 
 type Store = std::sync::Mutex<HashMap<&'static str, &'static [u8]>>;

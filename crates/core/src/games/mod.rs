@@ -1,5 +1,6 @@
 pub mod blocks;
 pub mod breakout;
+pub mod clash;
 pub mod count;
 pub mod crossy;
 pub mod flappy;
@@ -58,7 +59,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 16] = [
+pub const CATALOG: [Info; 17] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -86,6 +87,13 @@ pub const CATALOG: [Info; 16] = [
         Kind::Arcade,
         "Snake.io, Slither.io",
         (90, 170, 70),
+    ),
+    info(
+        "clash",
+        "Snake Clash",
+        Kind::Arcade,
+        "Snake Clash!",
+        (150, 90, 230),
     ),
     info("merge", "2048", Kind::Arcade, "2048", (237, 194, 46)),
     info(
