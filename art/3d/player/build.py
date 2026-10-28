@@ -1,5 +1,5 @@
 import bpy, sys, math, json
-from mathutils import Vector, Quaternion, Matrix
+from mathutils import Vector, Quaternion, Matrix, Euler
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 SRC, OUT, SHEETS = argv[0], argv[1], argv[2]
@@ -63,11 +63,11 @@ JOINTS = {
     "head": ((0, 0, 0.56), (0, 0, 0.98), "spine"),
 }
 for side, sx in (("L", 1), ("R", -1)):
-    JOINTS[f"arm.{side}"] = ((sx * 0.165, 0.04, 0.41), (sx * 0.255, 0.05, 0.355), "spine")
-    JOINTS[f"forearm.{side}"] = ((sx * 0.255, 0.05, 0.355), (sx * 0.34, 0.05, 0.28), f"arm.{side}")
-    JOINTS[f"leg.{side}"] = ((sx * 0.08, 0, 0.26), (sx * 0.08, 0, 0.14), "hips")
-    JOINTS[f"shin.{side}"] = ((sx * 0.08, 0, 0.14), (sx * 0.08, 0, 0.04), f"leg.{side}")
-    JOINTS[f"foot.{side}"] = ((sx * 0.08, 0, 0.04), (sx * 0.08, -0.08, 0.02), f"shin.{side}")
+    JOINTS[f"arm.{side}"] = ((sx * 0.15, 0.04, 0.44), (sx * 0.205, 0.045, 0.402), "spine")
+    JOINTS[f"forearm.{side}"] = ((sx * 0.205, 0.045, 0.402), (sx * 0.32, 0.062, 0.282), f"arm.{side}")
+    JOINTS[f"leg.{side}"] = ((sx * 0.065, 0, 0.25), (sx * 0.065, 0.005, 0.14), "hips")
+    JOINTS[f"shin.{side}"] = ((sx * 0.065, 0.005, 0.14), (sx * 0.07, 0.03, 0.05), f"leg.{side}")
+    JOINTS[f"foot.{side}"] = ((sx * 0.07, 0.03, 0.05), (sx * 0.145, -0.07, 0.02), f"shin.{side}")
 for name, (head, tail, parent) in JOINTS.items():
     b = arm_data.edit_bones.new(name)
     b.head, b.tail = Vector(head), Vector(tail)
@@ -303,41 +303,57 @@ def sample(src, f, yaw):
     return P
 
 
-ARM_OUT = 0.5
+TOE_IN = math.radians(33)
+PALM_IN = math.radians(80)
+FWD = Vector((0, -1, 0))
+UP = Vector((0, 0, 1))
 
 
-def splay(d, sx, least):
-    out = d.x * sx
-    if out >= least:
-        return d
-    rest = Vector((0.0, d.y, d.z))
-    if rest.length < 1e-6:
-        rest = Vector((0.0, 0.0, -1.0))
-    rest = rest.normalized() * math.sqrt(1 - least * least)
-    return Vector((sx * least, rest.y, rest.z))
+def rx(a):
+    return Matrix.Rotation(a, 3, "X")
 
 
-def limb_dirs(P, arm_out):
-    D = {b: (P[c] - P[a]).normalized() for b, (a, c) in LIMBS.items()}
-    for side, sx in (("L", 1), ("R", -1)):
-        upper, lower = D[f"arm.{side}"], D[f"forearm.{side}"]
-        new_upper = splay(upper, sx, arm_out)
-        bend = upper.rotation_difference(new_upper)
-        D[f"arm.{side}"] = new_upper
-        D[f"forearm.{side}"] = splay(bend @ lower, sx, -0.15)
-    return D
+def toward(b, v):
+    return rest_dir(b).rotation_difference(v.normalized()).to_matrix()
 
 
-def pose_world(P, R0, arm_out=ARM_OUT):
+def swing(v):
+    return math.atan2(v.dot(FWD), -v.dot(UP))
+
+
+def pose_world(P, R0, spec, foot0):
+    amp = spec.get("amp", {})
+    k = lambda g: amp.get(g, 1.0)
+    least = math.radians(spec.get("arm_abd", 22))
     W = {}
     for b, (a, c, l, r) in TRUNK.items():
         W[b] = basis(P[c] - P[a], P[l] - P[r]) @ R0[b].inverted()
-    D = limb_dirs(P, arm_out)
-    for b in LIMBS:
-        parent = JOINTS[b][2]
-        pw = W[parent]
-        base = pw @ rest_dir(b)
-        W[b] = base.rotation_difference(D[b]).to_matrix() @ pw
+    for side, sx in (("L", 1), ("R", -1)):
+        S = "Left" if side == "L" else "Right"
+        chest = W["spine"]
+        u = (chest.inverted() @ (P[f"{S}ForeArm"] - P[f"{S}Arm"])).normalized()
+        f = (chest.inverted() @ (P[f"{S}Hand"] - P[f"{S}ForeArm"])).normalized()
+        pitch = swing(u) * k("arm")
+        bend = u.angle(f) * k("forearm")
+        abd = min(max(math.asin(max(-1.0, min(1.0, u.x * sx))), least), 1.45)
+        hang = Vector((sx * math.sin(abd), 0, -math.cos(abd)))
+        fabd = max(abd - 0.12, 0.2)
+        fhang = Vector((sx * math.sin(fabd), 0, -math.cos(fabd)))
+        palm = Matrix.Rotation(sx * PALM_IN, 3, rest_dir(f"forearm.{side}"))
+        W[f"arm.{side}"] = chest @ rx(-pitch) @ toward(f"arm.{side}", hang)
+        W[f"forearm.{side}"] = chest @ rx(-(pitch + bend)) @ toward(f"forearm.{side}", fhang) @ palm
+        hips = W["hips"]
+        t = (hips.inverted() @ (P[f"{S}Shin"] - P[f"{S}Leg"])).normalized()
+        sh = (hips.inverted() @ (P[f"{S}Foot"] - P[f"{S}Shin"])).normalized()
+        ft = (hips.inverted() @ (P[f"{S}ToeEnd"] - P[f"{S}Foot"])).normalized()
+        thigh = swing(t) * k("leg")
+        knee = t.angle(sh) * k("shin")
+        toe = (math.atan2(ft.dot(UP), ft.dot(FWD)) - foot0[side]) * k("foot")
+        twist = Matrix.Rotation(-sx * TOE_IN, 3, "Z")
+        down = Vector((0, 0, -1))
+        W[f"leg.{side}"] = hips @ rx(-thigh) @ toward(f"leg.{side}", down) @ twist
+        W[f"shin.{side}"] = hips @ rx(-(thigh - knee)) @ toward(f"shin.{side}", down) @ twist
+        W[f"foot.{side}"] = hips @ rx(-toe) @ twist
     return W
 
 
@@ -377,12 +393,16 @@ def retarget(name, spec):
     mw = yaw @ src.matrix_world
     RP = {b.name: mw @ b.head_local for b in src.data.bones}
     R0 = {b: basis(RP[c] - RP[a], RP[l] - RP[r]) for b, (a, c, l, r) in TRUNK.items()}
+    foot0 = {}
+    for side, S in (("L", "Left"), ("R", "Right")):
+        ft0 = RP[f"{S}ToeEnd"] - RP[f"{S}Foot"]
+        foot0[side] = math.atan2(ft0.dot(UP), ft0.dot(FWD))
     frames = []
     feet = []
     hips = []
     for f in range(f0, f1 + 1):
         P = sample(src, f, yaw)
-        frames.append((pose_world(P, R0, spec.get("arm_out", ARM_OUT)), (P["Hips"].z - ground - stand_h) * k))
+        frames.append((pose_world(P, R0, spec, foot0), (P["Hips"].z - ground - stand_h) * k))
         feet.append(min(P[j].z for j in ("LeftToeEnd", "RightToeEnd", "LeftFoot", "RightFoot")) - ground)
         hips.append(P["Hips"].z - ground)
     trim = spec.get("trim")
@@ -418,10 +438,11 @@ def retarget(name, spec):
             Ap = W[pname] @ Mp if pname in W else Mp
             Ab = W[b] @ Mb
             q = ((Mp.inverted() @ Mb).inverted() @ Ap.inverted() @ Ab).to_quaternion()
-            amp = spec.get("amp", {}).get(b.split(".")[0], 1.0)
-            if amp != 1.0:
-                axis, ang = q.to_axis_angle()
-                q = Quaternion(axis, ang * amp)
+            if b in TRUNK:
+                lean = spec.get("amp", {}).get(b, 1.0)
+                sway = spec.get("sway", 0.5)
+                e = q.to_euler("XYZ")
+                q = Euler((e.x * lean, e.y * sway, e.z * sway), "XYZ").to_quaternion()
             pb.rotation_quaternion = q
         rig.pose.bones["root"].location = Vector((0, lift if spec.get("lift", True) else 0.0, 0))
         for pb in rig.pose.bones:
