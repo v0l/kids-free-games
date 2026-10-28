@@ -546,6 +546,7 @@ impl World {
             let r = self.snakes[i].radius();
             let reach = r + 8.0;
             let magnet = 55.0 + r * 1.6;
+            let pull_speed = self.snakes[i].speed() * 1.8;
             let mut got = 0;
             let mut k = 0;
             while k < self.eggs.len() {
@@ -562,8 +563,8 @@ impl World {
                     continue;
                 }
                 if len < magnet {
-                    let pull = 420.0 * (1.0 - len / magnet) + 80.0;
-                    self.eggs[k].pos -= d / len * pull.min(len) * dt * 3.0;
+                    let pull = pull_speed + 420.0 * (1.0 - len / magnet);
+                    self.eggs[k].pos -= d / len * (pull * dt).min(len);
                 }
                 k += 1;
             }
@@ -846,6 +847,36 @@ mod tests {
         assert!(w.snakes[0].level() >= 4);
         assert!(w.snakes[0].segs.len() > len);
         assert!(w.events.iter().any(|e| matches!(e, Event::Level { .. })));
+    }
+
+    #[test]
+    fn an_egg_beside_the_head_is_pulled_in_faster_than_the_snake_moves() {
+        for level in [1, 10, 30] {
+            let mut w = World::new(quiet(), "Me", 0);
+            w.snakes[0].xp = xp_for_level(level);
+            w.snakes[0].segs[0] = vec2(1000.0, 1000.0);
+            w.snakes[0].angle = 0.0;
+            w.snakes[0].want = 0.0;
+            w.layout_tail(0);
+            let r = w.snakes[0].radius();
+            for side in [-1.0, 1.0] {
+                w.eggs.push(Egg {
+                    pos: vec2(1000.0 - r, 1000.0 + side * (r + 14.0)),
+                    vel: Vec2::ZERO,
+                    value: 1,
+                    kind: 0,
+                    age: 0.0,
+                });
+            }
+            for _ in 0..30 {
+                w.step(1.0 / 60.0, Some(0.0));
+            }
+            assert!(
+                w.eggs.is_empty(),
+                "level {level}: {} eggs trailing the head",
+                w.eggs.len()
+            );
+        }
     }
 
     #[test]
