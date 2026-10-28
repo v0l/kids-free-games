@@ -84,7 +84,12 @@ impl Row {
     }
 
     pub fn kind(&self) -> Kind {
-        self.lanes.iter().flatten().next().copied().unwrap_or(Kind::Barrier)
+        self.lanes
+            .iter()
+            .flatten()
+            .next()
+            .copied()
+            .unwrap_or(Kind::Barrier)
     }
 
     pub fn needs_action(&self) -> bool {
@@ -336,9 +341,7 @@ pub fn build_rows(
         let len = row.len();
         rows.push(row);
         let next = at + len + spacing;
-        let lane = (0..3)
-            .find(|k| open[*k] && !blocked[*k])
-            .unwrap_or(1);
+        let lane = (0..3).find(|k| open[*k] && !blocked[*k]).unwrap_or(1);
         let n = (((next - at - len) / 2.2) as usize).clamp(0, 6);
         if crate::rng::gen_range(0.0, 1.0) < 0.8 {
             for i in 0..n.saturating_sub(1) {
@@ -543,7 +546,10 @@ impl Runner {
     }
 
     pub fn rows_left(&self) -> usize {
-        self.rows.iter().filter(|r| r.at + r.len() > self.dist).count()
+        self.rows
+            .iter()
+            .filter(|r| r.at + r.len() > self.dist)
+            .count()
     }
 
     pub fn coach(&self) -> Option<Coach> {
@@ -741,8 +747,12 @@ impl Runner {
             self.die();
         } else {
             feel::impact(Impact::Medium);
-            self.pops
-                .add(at + vec2(0.0, -80.0), "Oops!", Color::from_rgba(255, 120, 90, 255), 48.0);
+            self.pops.add(
+                at + vec2(0.0, -80.0),
+                "Oops!",
+                Color::from_rgba(255, 120, 90, 255),
+                48.0,
+            );
         }
     }
 
@@ -782,7 +792,7 @@ impl Runner {
             let at = self.player_screen(view) + vec2(0.0, -30.0);
             self.fx.sparkle(at, Color::from_rgba(255, 220, 60, 255));
         }
-        if got > 0 && self.combo > 0 && self.combo % 10 == 0 {
+        if got > 0 && self.combo > 0 && self.combo.is_multiple_of(10) {
             let at = self.player_screen(view) + vec2(0.0, -110.0);
             self.pops.add(
                 at,
@@ -932,7 +942,12 @@ impl Game for Runner {
                 self.invuln = (self.invuln - dt).max(0.0);
                 if self.state == State::Won {
                     let limit = self.length + FINISH_RUN;
-                    self.speed = approach(self.speed, if self.dist < limit { 6.0 } else { 0.0 }, 3.0, dt);
+                    self.speed = approach(
+                        self.speed,
+                        if self.dist < limit { 6.0 } else { 0.0 },
+                        3.0,
+                        dt,
+                    );
                     self.dist = (self.dist + self.speed * dt).min(limit);
                     for k in 0..self.stars as usize {
                         let at = WIN_DELAY + STAR_START + STAR_GAP * k as f32;
@@ -1054,7 +1069,11 @@ mod tests {
                 let mut prev = [true; 3];
                 for r in &g.rows {
                     assert!(r.blocked() < 3 || r.needs_action(), "level {level}");
-                    let open = if r.needs_action() { [true; 3] } else { r.open() };
+                    let open = if r.needs_action() {
+                        [true; 3]
+                    } else {
+                        r.open()
+                    };
                     assert!(reachable(prev, open), "level {level}");
                     prev = open;
                 }
@@ -1231,9 +1250,24 @@ mod tests {
         g.speed = 8.0;
         g.rows.clear();
         g.coins_list = vec![
-            Coin { at: 1.0, lane: 1, h: 0.8, taken: false },
-            Coin { at: 1.5, lane: 1, h: 0.8, taken: false },
-            Coin { at: 1.5, lane: 0, h: 0.8, taken: false },
+            Coin {
+                at: 1.0,
+                lane: 1,
+                h: 0.8,
+                taken: false,
+            },
+            Coin {
+                at: 1.5,
+                lane: 1,
+                h: 0.8,
+                taken: false,
+            },
+            Coin {
+                at: 1.5,
+                lane: 0,
+                h: 0.8,
+                taken: false,
+            },
         ];
         g.dist = 0.9;
         sfx::take_pending();
@@ -1241,7 +1275,7 @@ mod tests {
             g.update(&Input::default(), &view, 1.0 / 60.0);
         }
         assert_eq!(g.coins, 2);
-        assert!(g.coins_list[2].taken == false);
+        assert!(!g.coins_list[2].taken);
         assert!(g.score >= 2 * COIN_SCORE);
     }
 
@@ -1356,7 +1390,10 @@ mod tests {
                     let p = cam
                         .project(&view, at_world(g.dist + ahead, lane_x(lane), 0.0))
                         .unwrap();
-                    assert!(p.x > f.x + f.w * 0.05 && p.x < f.right() - f.w * 0.05, "{p:?}");
+                    assert!(
+                        p.x > f.x + f.w * 0.05 && p.x < f.right() - f.w * 0.05,
+                        "{p:?}"
+                    );
                     assert!(p.y > f.y && p.y < f.bottom(), "{p:?}");
                 }
                 let me = g.player_screen(&view);
@@ -1369,7 +1406,11 @@ mod tests {
             let right = Cam::new(&g, &view)
                 .project(&view, at_world(0.0, LANE_W * 1.5, 0.0))
                 .unwrap();
-            assert!(left.x > 0.0 && right.x < view.full().right(), "{left:?} {right:?} {:?}", view.full());
+            assert!(
+                left.x > 0.0 && right.x < view.full().right(),
+                "{left:?} {right:?} {:?}",
+                view.full()
+            );
         }
     }
 }

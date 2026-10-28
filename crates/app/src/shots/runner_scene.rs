@@ -110,7 +110,12 @@ pub fn setup(n: u32, view: &View) -> Stage {
         206 => {
             start(&mut p, view);
             run_to(&mut p, view, 70.0);
-            let r = p.g.rows.iter().find(|r| r.at > p.g.dist + 8.0).unwrap().clone();
+            let r =
+                p.g.rows
+                    .iter()
+                    .find(|r| r.at > p.g.dist + 8.0)
+                    .unwrap()
+                    .clone();
             let lane = p.g.lane;
             let at = r.at;
             let row = p.g.rows.iter_mut().find(|x| x.at == at).unwrap();

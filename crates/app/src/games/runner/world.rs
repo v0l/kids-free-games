@@ -71,6 +71,30 @@ pub enum Role {
     Tree(usize),
 }
 
+type Parts<'w, 's> = Query<
+    'w,
+    's,
+    (
+        &'static Role,
+        &'static mut Transform,
+        &'static mut Visibility,
+        &'static mut Part,
+        &'static mut MeshMaterial3d<StandardMaterial>,
+    ),
+    Without<Eye>,
+>;
+type Nodes<'w, 's> = Query<
+    'w,
+    's,
+    (
+        Entity,
+        &'static Role,
+        &'static mut Transform,
+        &'static mut Visibility,
+    ),
+    (Without<Part>, Without<Eye>),
+>;
+
 fn sprite(name: &'static str) -> Skin {
     Skin::Sprite(SHEET, name, WHOLE)
 }
@@ -95,7 +119,11 @@ fn put(
     at: Vec3,
     size: Vec3,
 ) {
-    out.spawn(kit.part(shape, paint, Transform::from_translation(at).with_scale(size)));
+    out.spawn(kit.part(
+        shape,
+        paint,
+        Transform::from_translation(at).with_scale(size),
+    ));
 }
 
 fn node(out: &mut ChildSpawnerCommands, role: Role, at: Transform) -> Entity {
@@ -135,7 +163,9 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
     commands.entity(world.root).with_children(|w| {
         node(w, Role::Course, Transform::default());
         let player = node(w, Role::Player, Transform::default());
-        w.commands().entity(player).with_children(|p| kid(p, &mut kit));
+        w.commands()
+            .entity(player)
+            .with_children(|p| kid(p, &mut kit));
         w.spawn((
             Role::Shade,
             kit.part(
@@ -157,9 +187,30 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         for i in 0..TREES * 2 {
             let t = node(w, Role::Tree(i), Transform::default());
             w.commands().entity(t).with_children(|c| {
-                put(c, &mut kit, Shape::Cylinder(8), matte(Col::new(0.5, 0.33, 0.2, 1.0)), Vec3::new(0.0, 0.7, 0.0), Vec3::new(0.3, 1.4, 0.3));
-                put(c, &mut kit, Shape::Sphere, gloss(Col::new(0.34, 0.72, 0.28, 1.0)), Vec3::new(0.0, 2.2, 0.0), Vec3::new(1.9, 1.7, 1.9));
-                put(c, &mut kit, Shape::Sphere, gloss(Col::new(0.45, 0.82, 0.32, 1.0)), Vec3::new(0.25, 2.8, 0.1), Vec3::new(1.2, 1.1, 1.2));
+                put(
+                    c,
+                    &mut kit,
+                    Shape::Cylinder(8),
+                    matte(Col::new(0.5, 0.33, 0.2, 1.0)),
+                    Vec3::new(0.0, 0.7, 0.0),
+                    Vec3::new(0.3, 1.4, 0.3),
+                );
+                put(
+                    c,
+                    &mut kit,
+                    Shape::Sphere,
+                    gloss(Col::new(0.34, 0.72, 0.28, 1.0)),
+                    Vec3::new(0.0, 2.2, 0.0),
+                    Vec3::new(1.9, 1.7, 1.9),
+                );
+                put(
+                    c,
+                    &mut kit,
+                    Shape::Sphere,
+                    gloss(Col::new(0.45, 0.82, 0.32, 1.0)),
+                    Vec3::new(0.25, 2.8, 0.1),
+                    Vec3::new(1.2, 1.1, 1.2),
+                );
             });
         }
     });
@@ -168,22 +219,85 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
 fn kid(p: &mut ChildSpawnerCommands, kit: &mut Kit) {
     let body = node(p, Role::Body, Transform::default());
     p.commands().entity(body).with_children(|b| {
-        put(b, kit, Shape::Sphere, gloss(JACKET), Vec3::new(0.0, 0.88, 0.0), Vec3::new(0.62, 0.7, 0.5));
-        put(b, kit, Shape::Cube, matte(PACK), Vec3::new(0.0, 0.92, 0.3), Vec3::new(0.44, 0.5, 0.2));
-        put(b, kit, Shape::Sphere, gloss(SKIN), Vec3::new(0.0, 1.4, 0.0), Vec3::splat(0.6));
-        put(b, kit, Shape::Sphere, gloss(CAP), Vec3::new(0.0, 1.52, 0.02), Vec3::new(0.66, 0.42, 0.66));
-        put(b, kit, Shape::Cube, matte(CAP.darker(0.8)), Vec3::new(0.0, 1.45, -0.36), Vec3::new(0.46, 0.06, 0.3));
+        put(
+            b,
+            kit,
+            Shape::Sphere,
+            gloss(JACKET),
+            Vec3::new(0.0, 0.88, 0.0),
+            Vec3::new(0.62, 0.7, 0.5),
+        );
+        put(
+            b,
+            kit,
+            Shape::Cube,
+            matte(PACK),
+            Vec3::new(0.0, 0.92, 0.3),
+            Vec3::new(0.44, 0.5, 0.2),
+        );
+        put(
+            b,
+            kit,
+            Shape::Sphere,
+            gloss(SKIN),
+            Vec3::new(0.0, 1.4, 0.0),
+            Vec3::splat(0.6),
+        );
+        put(
+            b,
+            kit,
+            Shape::Sphere,
+            gloss(CAP),
+            Vec3::new(0.0, 1.52, 0.02),
+            Vec3::new(0.66, 0.42, 0.66),
+        );
+        put(
+            b,
+            kit,
+            Shape::Cube,
+            matte(CAP.darker(0.8)),
+            Vec3::new(0.0, 1.45, -0.36),
+            Vec3::new(0.46, 0.06, 0.3),
+        );
         for s in 0..2 {
             let side = if s == 0 { -1.0 } else { 1.0 };
             let leg = node(b, Role::Leg(s), Transform::from_xyz(side * 0.17, 0.55, 0.0));
             b.commands().entity(leg).with_children(|l| {
-                put(l, kit, Shape::Cylinder(10), matte(JEANS), Vec3::new(0.0, -0.22, 0.0), Vec3::new(0.2, 0.46, 0.2));
-                put(l, kit, Shape::Cube, matte(CAP), Vec3::new(0.0, -0.5, -0.05), Vec3::new(0.22, 0.12, 0.34));
+                put(
+                    l,
+                    kit,
+                    Shape::Cylinder(10),
+                    matte(JEANS),
+                    Vec3::new(0.0, -0.22, 0.0),
+                    Vec3::new(0.2, 0.46, 0.2),
+                );
+                put(
+                    l,
+                    kit,
+                    Shape::Cube,
+                    matte(CAP),
+                    Vec3::new(0.0, -0.5, -0.05),
+                    Vec3::new(0.22, 0.12, 0.34),
+                );
             });
             let arm = node(b, Role::Arm(s), Transform::from_xyz(side * 0.38, 1.05, 0.0));
             b.commands().entity(arm).with_children(|a| {
-                put(a, kit, Shape::Cylinder(10), gloss(JACKET), Vec3::new(0.0, -0.2, 0.0), Vec3::new(0.16, 0.42, 0.16));
-                put(a, kit, Shape::Sphere, gloss(SKIN), Vec3::new(0.0, -0.44, 0.0), Vec3::splat(0.17));
+                put(
+                    a,
+                    kit,
+                    Shape::Cylinder(10),
+                    gloss(JACKET),
+                    Vec3::new(0.0, -0.2, 0.0),
+                    Vec3::new(0.16, 0.42, 0.16),
+                );
+                put(
+                    a,
+                    kit,
+                    Shape::Sphere,
+                    gloss(SKIN),
+                    Vec3::new(0.0, -0.44, 0.0),
+                    Vec3::splat(0.17),
+                );
             });
         }
     });
@@ -205,40 +319,145 @@ fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, kind: Kind, row: usize)
     match kind {
         Kind::Barrier => {
             for x in [-0.55, 0.55] {
-                put(c, kit, Shape::Cube, grey, Vec3::new(x, 0.5, 0.0), Vec3::new(0.14, 1.0, 0.14));
+                put(
+                    c,
+                    kit,
+                    Shape::Cube,
+                    grey,
+                    Vec3::new(x, 0.5, 0.0),
+                    Vec3::new(0.14, 1.0, 0.14),
+                );
             }
-            put(c, kit, Shape::Cube, red, Vec3::new(0.0, 0.8, 0.0), Vec3::new(1.4, 0.5, 0.2));
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                red,
+                Vec3::new(0.0, 0.8, 0.0),
+                Vec3::new(1.4, 0.5, 0.2),
+            );
             for k in 0..3 {
-                put(c, kit, Shape::Cube, white, Vec3::new(-0.45 + k as f32 * 0.45, 0.8, 0.0), Vec3::new(0.2, 0.52, 0.22));
+                put(
+                    c,
+                    kit,
+                    Shape::Cube,
+                    white,
+                    Vec3::new(-0.45 + k as f32 * 0.45, 0.8, 0.0),
+                    Vec3::new(0.2, 0.52, 0.22),
+                );
             }
-            put(c, kit, Shape::Sphere, Paint::new(Finish::Glow, Col::new(1.0, 0.7, 0.1, 1.0)), Vec3::new(0.0, 1.15, 0.0), Vec3::splat(0.2));
+            put(
+                c,
+                kit,
+                Shape::Sphere,
+                Paint::new(Finish::Glow, Col::new(1.0, 0.7, 0.1, 1.0)),
+                Vec3::new(0.0, 1.15, 0.0),
+                Vec3::splat(0.2),
+            );
         }
         Kind::Hurdle => {
             for x in [-0.62, 0.62] {
-                put(c, kit, Shape::Cube, grey, Vec3::new(x, 0.28, 0.0), Vec3::new(0.12, 0.56, 0.12));
+                put(
+                    c,
+                    kit,
+                    Shape::Cube,
+                    grey,
+                    Vec3::new(x, 0.28, 0.0),
+                    Vec3::new(0.12, 0.56, 0.12),
+                );
             }
-            put(c, kit, Shape::Cube, orange, Vec3::new(0.0, 0.5, 0.0), Vec3::new(1.5, 0.2, 0.16));
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                orange,
+                Vec3::new(0.0, 0.5, 0.0),
+                Vec3::new(1.5, 0.2, 0.16),
+            );
             for k in 0..3 {
-                put(c, kit, Shape::Cube, white, Vec3::new(-0.45 + k as f32 * 0.45, 0.5, 0.0), Vec3::new(0.18, 0.22, 0.18));
+                put(
+                    c,
+                    kit,
+                    Shape::Cube,
+                    white,
+                    Vec3::new(-0.45 + k as f32 * 0.45, 0.5, 0.0),
+                    Vec3::new(0.18, 0.22, 0.18),
+                );
             }
         }
         Kind::Overhead => {
             for x in [-0.72, 0.72] {
-                put(c, kit, Shape::Cube, grey, Vec3::new(x, 1.2, 0.0), Vec3::new(0.16, 2.4, 0.16));
+                put(
+                    c,
+                    kit,
+                    Shape::Cube,
+                    grey,
+                    Vec3::new(x, 1.2, 0.0),
+                    Vec3::new(0.16, 2.4, 0.16),
+                );
             }
-            put(c, kit, Shape::Cube, gloss(Col::new(0.2, 0.7, 0.45, 1.0)), Vec3::new(0.0, 1.5, 0.0), Vec3::new(1.6, 0.55, 0.26));
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                gloss(Col::new(0.2, 0.7, 0.45, 1.0)),
+                Vec3::new(0.0, 1.5, 0.0),
+                Vec3::new(1.6, 0.55, 0.26),
+            );
             for k in 0..4 {
-                put(c, kit, Shape::Cube, matte(GOLD), Vec3::new(-0.6 + k as f32 * 0.4, 1.5, 0.0), Vec3::new(0.14, 0.58, 0.28));
+                put(
+                    c,
+                    kit,
+                    Shape::Cube,
+                    matte(GOLD),
+                    Vec3::new(-0.6 + k as f32 * 0.4, 1.5, 0.0),
+                    Vec3::new(0.14, 0.58, 0.28),
+                );
             }
         }
         Kind::Train => {
             let body = train_colour(row);
-            put(c, kit, Shape::Cube, gloss(body), Vec3::new(0.0, 1.3, 0.0), Vec3::new(1.45, 2.2, TRAIN_LEN));
-            put(c, kit, Shape::Cube, gloss(body.darker(1.15)), Vec3::new(0.0, 2.45, 0.0), Vec3::new(1.3, 0.2, TRAIN_LEN - 0.4));
-            put(c, kit, Shape::Cube, gloss(Col::new(0.75, 0.93, 1.0, 1.0)), Vec3::new(0.0, 1.85, 0.0), Vec3::new(1.47, 0.7, TRAIN_LEN - 1.0));
-            put(c, kit, Shape::Cube, matte(Col::new(0.2, 0.2, 0.3, 1.0)), Vec3::new(0.0, 0.3, 0.0), Vec3::new(1.2, 0.3, TRAIN_LEN - 0.6));
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                gloss(body),
+                Vec3::new(0.0, 1.3, 0.0),
+                Vec3::new(1.45, 2.2, TRAIN_LEN),
+            );
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                gloss(body.darker(1.15)),
+                Vec3::new(0.0, 2.45, 0.0),
+                Vec3::new(1.3, 0.2, TRAIN_LEN - 0.4),
+            );
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                gloss(Col::new(0.75, 0.93, 1.0, 1.0)),
+                Vec3::new(0.0, 1.85, 0.0),
+                Vec3::new(1.47, 0.7, TRAIN_LEN - 1.0),
+            );
+            put(
+                c,
+                kit,
+                Shape::Cube,
+                matte(Col::new(0.2, 0.2, 0.3, 1.0)),
+                Vec3::new(0.0, 0.3, 0.0),
+                Vec3::new(1.2, 0.3, TRAIN_LEN - 0.6),
+            );
             for x in [-0.4, 0.4] {
-                put(c, kit, Shape::Sphere, Paint::new(Finish::Glow, Col::new(1.0, 0.95, 0.6, 1.0)), Vec3::new(x, 0.9, TRAIN_LEN / 2.0 + 0.02), Vec3::splat(0.3));
+                put(
+                    c,
+                    kit,
+                    Shape::Sphere,
+                    Paint::new(Finish::Glow, Col::new(1.0, 0.95, 0.6, 1.0)),
+                    Vec3::new(x, 0.9, TRAIN_LEN / 2.0 + 0.02),
+                    Vec3::splat(0.3),
+                );
             }
         }
     }
@@ -255,14 +474,22 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
     ));
     c.spawn(kit.part(
         Shape::Plane,
-        Paint::skinned(Finish::Floor, WHITE, tile("road", Vec2::new(1.0, len / ROAD_TILE))),
+        Paint::skinned(
+            Finish::Floor,
+            WHITE,
+            tile("road", Vec2::new(1.0, len / ROAD_TILE)),
+        ),
         Transform::from_xyz(0.0, 0.0, mid).with_scale(Vec3::new(ROAD_W, 1.0, len)),
     ));
     for side in [-1.0, 1.0] {
         let x = side * (ROAD_W / 2.0 + WALK_W / 2.0);
         c.spawn(kit.part(
             Shape::Plane,
-            Paint::skinned(Finish::Floor, WHITE, tile("walk", Vec2::new(WALK_W / 2.0, len / 2.0))),
+            Paint::skinned(
+                Finish::Floor,
+                WHITE,
+                tile("walk", Vec2::new(WALK_W / 2.0, len / 2.0)),
+            ),
             Transform::from_xyz(x, 0.03, mid).with_scale(Vec3::new(WALK_W, 1.0, len)),
         ));
     }
@@ -297,18 +524,28 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
     let z = -g.length;
     let post = matte(Col::new(0.95, 0.95, 0.98, 1.0));
     for x in [-2.9, 2.9] {
-        c.spawn(kit.part(Shape::Cube, post, Transform::from_xyz(x, 2.2, z).with_scale(Vec3::new(0.4, 4.4, 0.4))));
+        c.spawn(kit.part(
+            Shape::Cube,
+            post,
+            Transform::from_xyz(x, 2.2, z).with_scale(Vec3::new(0.4, 4.4, 0.4)),
+        ));
     }
     for k in 0..12 {
         for row in 0..2 {
             let dark = (k + row) % 2 == 0;
-            let col = if dark { Col::new(0.1, 0.1, 0.15, 1.0) } else { WHITE };
-            c.spawn(kit.part(
-                Shape::Cube,
-                matte(col),
-                Transform::from_xyz(-2.75 + k as f32 * 0.5, 4.5 - row as f32 * 0.5, z)
-                    .with_scale(Vec3::new(0.5, 0.5, 0.3)),
-            ));
+            let col = if dark {
+                Col::new(0.1, 0.1, 0.15, 1.0)
+            } else {
+                WHITE
+            };
+            c.spawn(
+                kit.part(
+                    Shape::Cube,
+                    matte(col),
+                    Transform::from_xyz(-2.75 + k as f32 * 0.5, 4.5 - row as f32 * 0.5, z)
+                        .with_scale(Vec3::new(0.5, 0.5, 0.3)),
+                ),
+            );
         }
     }
     c.spawn(kit.part(
@@ -326,17 +563,8 @@ fn sync(
     mut kit: Kit,
     mut root: Query<&mut Root>,
     mut eye: Lens,
-    mut nodes: Query<(Entity, &Role, &mut Transform, &mut Visibility), (Without<Part>, Without<Eye>)>,
-    mut parts: Query<
-        (
-            &Role,
-            &mut Transform,
-            &mut Visibility,
-            &mut Part,
-            &mut MeshMaterial3d<StandardMaterial>,
-        ),
-        Without<Eye>,
-    >,
+    mut nodes: Nodes<'_, '_>,
+    mut parts: Parts<'_, '_>,
 ) {
     let Some(p) = playing::<RunnerPlay>(&frame) else {
         return;
@@ -391,10 +619,7 @@ pub fn stride(dist: f32) -> f32 {
     dist * 1.9
 }
 
-fn pose_nodes(
-    g: &Runner,
-    nodes: &mut Query<(Entity, &Role, &mut Transform, &mut Visibility), (Without<Part>, Without<Eye>)>,
-) {
+fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
     let airborne = g.y > 0.05;
     let phase = stride(g.dist);
     let moving = (g.speed / 8.0).clamp(0.0, 1.0);
@@ -428,8 +653,16 @@ fn pose_nodes(
                 } else {
                     0.0
                 };
-                let hop = if cheer { (g.end_t * 7.0).sin().abs() * 0.35 } else { 0.0 };
-                let fall = if g.state == Phase::Dead { (g.end_t * 3.0).min(1.0) } else { 0.0 };
+                let hop = if cheer {
+                    (g.end_t * 7.0).sin().abs() * 0.35
+                } else {
+                    0.0
+                };
+                let fall = if g.state == Phase::Dead {
+                    (g.end_t * 3.0).min(1.0)
+                } else {
+                    0.0
+                };
                 let sq = g.squash;
                 t.set_if_neq(Transform {
                     translation: Vec3::new(0.0, bob + idle + hop + 0.0 - slide_k * 0.05, 0.0),
@@ -476,7 +709,8 @@ fn pose_nodes(
                     continue;
                 };
                 let kind = r.lanes[k].unwrap_or(Kind::Barrier);
-                let base = Transform::from_xyz(lane_x(k as i32 - 1), 0.0, -(r.at + kind.len() / 2.0));
+                let base =
+                    Transform::from_xyz(lane_x(k as i32 - 1), 0.0, -(r.at + kind.len() / 2.0));
                 if r.hit && r.hit_lanes[k] && kind != Kind::Train {
                     let age = (g.t - r.hit_t).max(0.0);
                     let f = flight(age, k);
@@ -524,22 +758,7 @@ fn hash(n: i64) -> usize {
     (x.wrapping_mul(0xBF58476D1CE4E5B9) >> 33) as usize
 }
 
-fn pose_parts(
-    g: &Runner,
-    view: &View,
-    cam: &Cam,
-    kit: &mut Kit,
-    parts: &mut Query<
-        (
-            &Role,
-            &mut Transform,
-            &mut Visibility,
-            &mut Part,
-            &mut MeshMaterial3d<StandardMaterial>,
-        ),
-        Without<Eye>,
-    >,
-) {
+fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Parts<'_, '_>) {
     for (role, mut t, mut v, mut part, mut mat) in parts.iter_mut() {
         match *role {
             Role::Sky => {
@@ -552,12 +771,20 @@ fn pose_parts(
                 let pitch = (-fwd.y).asin();
                 let horizon = SKY_DEPTH * pitch.tan();
                 let (w, h) = (s.x * k, s.y * k);
-                t.set_if_neq(Transform::from_xyz(0.0, horizon + h * 0.15, -SKY_DEPTH)
-                    .with_scale(Vec3::new(w, h, 1.0)));
+                t.set_if_neq(
+                    Transform::from_xyz(0.0, horizon + h * 0.15, -SKY_DEPTH)
+                        .with_scale(Vec3::new(w, h, 1.0)),
+                );
             }
             Role::Shade => {
                 let k = (1.0 - g.y * 0.25).max(0.3);
-                t.set_if_neq(Transform::from_xyz(g.x, 0.045, -g.dist).with_scale(Vec3::new(0.9 * k, 1.0, 0.9 * k)));
+                t.set_if_neq(
+                    Transform::from_xyz(g.x, 0.045, -g.dist).with_scale(Vec3::new(
+                        0.9 * k,
+                        1.0,
+                        0.9 * k,
+                    )),
+                );
                 v.set_if_neq(shown(g.state != Phase::Select));
             }
             Role::Coin(i) => {
@@ -567,7 +794,11 @@ fn pose_parts(
                 v.set_if_neq(shown(!c.taken));
                 let spin = g.t * 4.0 + i as f32 * 0.7;
                 t.set_if_neq(Transform {
-                    translation: Vec3::new(lane_x(c.lane as i32 - 1), c.h + (g.t * 3.0 + i as f32).sin() * 0.06, -c.at),
+                    translation: Vec3::new(
+                        lane_x(c.lane as i32 - 1),
+                        c.h + (g.t * 3.0 + i as f32).sin() * 0.06,
+                        -c.at,
+                    ),
                     rotation: Quat::from_rotation_y(spin) * Quat::from_rotation_z(FRAC_PI_2),
                     scale: Vec3::new(0.5, 0.09, 0.5),
                 });
@@ -582,7 +813,10 @@ fn pose_parts(
                 let depth = SLOT - 1.4;
                 let off = ROAD_W / 2.0 + WALK_W + 2.6;
                 v.set_if_neq(shown(z < g.length + FINISH_RUN + 20.0));
-                t.set_if_neq(Transform::from_xyz(side * off, h / 2.0, -z).with_scale(Vec3::new(5.2, h, depth)));
+                t.set_if_neq(
+                    Transform::from_xyz(side * off, h / 2.0, -z)
+                        .with_scale(Vec3::new(5.2, h, depth)),
+                );
                 let paint = Paint::skinned(
                     Finish::Matte,
                     tint,
@@ -651,7 +885,10 @@ mod tests {
         let g = &runner(&mut app).g;
         let blocked: usize = g.rows.iter().map(|r| r.blocked()).sum();
         let coins = g.coins_list.len();
-        assert_eq!(roles(&mut app, |r| matches!(r, Role::Obstacle(..))), blocked);
+        assert_eq!(
+            roles(&mut app, |r| matches!(r, Role::Obstacle(..))),
+            blocked
+        );
         assert_eq!(roles(&mut app, |r| matches!(r, Role::Coin(_))), coins);
         assert_eq!(roles(&mut app, |r| *r == Role::Player), 1);
     }
@@ -731,7 +968,10 @@ mod tests {
             let g = &runner(&mut app).g;
             let blocked: usize = g.rows.iter().map(|r| r.blocked()).sum();
             let coins = g.coins_list.len();
-            assert_eq!(roles(&mut app, |r| matches!(r, Role::Obstacle(..))), blocked);
+            assert_eq!(
+                roles(&mut app, |r| matches!(r, Role::Obstacle(..))),
+                blocked
+            );
             assert_eq!(roles(&mut app, |r| matches!(r, Role::Coin(_))), coins);
             assert_eq!(roles(&mut app, |r| *r == Role::Course), 1);
         }
@@ -751,7 +991,9 @@ mod tests {
                 .filter(|(r, _)| matches!(r, Role::Building(_)))
                 .map(|(_, t)| -t.translation.z)
                 .collect();
-            assert!(zs.iter().all(|z| *z > d - BEHIND - SLOT && *z < d + SLOTS as f32 * SLOT + 1.0));
+            assert!(zs
+                .iter()
+                .all(|z| *z > d - BEHIND - SLOT && *z < d + SLOTS as f32 * SLOT + 1.0));
             assert!(zs.iter().filter(|z| **z > d + 40.0).count() >= 6);
         }
     }
@@ -760,7 +1002,11 @@ mod tests {
     fn a_minute_of_autopilot_keeps_the_world_in_step() {
         let mut app = open(fresh(5));
         let view = View::ipad_portrait();
-        runner(&mut app).update(&Input::press_at(glam::vec2(500.0, 500.0)), &view, 1.0 / 60.0);
+        runner(&mut app).update(
+            &Input::press_at(glam::vec2(500.0, 500.0)),
+            &view,
+            1.0 / 60.0,
+        );
         let count = testing::count(&mut app);
         for _ in 0..1800 {
             let i = runner(&mut app).g.autopilot(1.0);

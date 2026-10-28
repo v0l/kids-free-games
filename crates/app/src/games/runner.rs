@@ -220,7 +220,6 @@ fn draw_win(g: &Runner, pen: &mut Pen, view: &View) {
     );
 }
 
-
 fn draw_hearts(g: &Runner, pen: &mut Pen, view: &View) {
     for k in 0..HEARTS {
         let on = k < g.hearts;
@@ -245,7 +244,11 @@ fn draw_hearts(g: &Runner, pen: &mut Pen, view: &View) {
             c + vec2(0.0, r * 1.15),
             col,
         );
-        pen.circle(c + vec2(-r * 0.55, -r * 0.4), r * 0.18, with_alpha(tint, 0.6));
+        pen.circle(
+            c + vec2(-r * 0.55, -r * 0.4),
+            r * 0.18,
+            with_alpha(tint, 0.6),
+        );
     }
 }
 
@@ -261,7 +264,11 @@ fn draw_coach(g: &Runner, pen: &mut Pen, view: &View) {
         Coach::Jump => (vec2(0.0, -k * 120.0), "Swipe up to jump!"),
         Coach::Slide => (vec2(0.0, k * 120.0), "Swipe down to slide!"),
     };
-    pen.hint(label, base + vec2(0.0, 90.0), 1.0 + (g.t * 3.0).sin() * 0.03);
+    pen.hint(
+        label,
+        base + vec2(0.0, 90.0),
+        1.0 + (g.t * 3.0).sin() * 0.03,
+    );
     let a = (1.0 - t).clamp(0.0, 1.0).min(t * 6.0);
     let hand = base + off;
     pen.circle(hand, 34.0, Color::new(1.0, 1.0, 1.0, 0.85 * a));
@@ -282,7 +289,11 @@ fn draw_progress(g: &Runner, pen: &mut Pen, view: &View) {
         WHITE,
     );
     let runner_x = bar.x + (bar.w - bar.h) * progress + bar.h / 2.0;
-    pen.circle(vec2(runner_x, bar.y + 13.0), 9.0, Color::from_rgba(240, 90, 80, 255));
+    pen.circle(
+        vec2(runner_x, bar.y + 13.0),
+        9.0,
+        Color::from_rgba(240, 90, 80, 255),
+    );
     for (k, x) in [(g.level, bar.x - 26.0), (g.level + 1, bar.x + bar.w + 26.0)] {
         let done = x < view.w / 2.0 || progress >= 1.0;
         pen.sprite_at(

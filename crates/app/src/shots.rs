@@ -19,13 +19,13 @@ mod clash_scene;
 mod count_scene;
 mod fruit_scene;
 mod helix_scene;
-mod runner_scene;
 mod hotel_scene;
 mod jumper_scene;
 mod mathpop_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
+mod runner_scene;
 mod snake_scene;
 mod spell_scene;
 mod stack_scene;
@@ -630,10 +630,9 @@ mod tests {
     #[test]
     fn every_3d_scene_spawns_its_world() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
-            for &(n, name) in SCENES
-                .iter()
-                .filter(|(n, _)| (110..=119).contains(n) || (170..=189).contains(n) || (200..=209).contains(n))
-            {
+            for &(n, name) in SCENES.iter().filter(|(n, _)| {
+                (110..=119).contains(n) || (170..=189).contains(n) || (200..=209).contains(n)
+            }) {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
