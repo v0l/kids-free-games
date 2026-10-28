@@ -1,80 +1,93 @@
-pub const MAX_LEVEL: u32 = 12;
+pub const PLAYER_SPEED: f32 = 6.5;
+pub const FULL_SKILL_AT: i64 = 250;
+pub const CALM_SECS: f32 = 12.0;
+
+pub const NAMES: [&str; 40] = [
+    "Zippy", "Bloop", "Mango", "Pip", "Noodle", "Biscuit", "Pickle", "Waffle", "Bubbles", "Sprout",
+    "Gizmo", "Peanut", "Jelly", "Tofu", "Muffin", "Pebble", "Doodle", "Sunny", "Cocoa", "Ziggy",
+    "Button", "Nibbles", "Taco", "Popcorn", "Fizz", "Bean", "Maple", "Olive", "Rocket", "Squish",
+    "Wiggles", "Pogo", "Kiwi", "Pudding", "Marble", "Comet", "Dumpling", "Tumble", "Banjo", "Coco",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Arena {
-    pub level: u32,
-    pub target: f32,
-    pub bots: usize,
-    pub pace: f32,
-    pub tempo: f32,
+pub struct Persona {
+    pub speed: f32,
+    pub greed: f32,
     pub aggro: f32,
+    pub caution: f32,
 }
 
-impl Arena {
-    pub fn for_level(level: u32, fails: u32) -> Self {
-        let level = level.clamp(1, MAX_LEVEL);
-        let steps = (level - 1) as f32;
-        let mut target = (8.0 + 3.0 * steps).min(40.0);
-        let mut bots = (1 + (level as usize - 1) / 2).min(4);
-        let mut pace = (0.4 + 0.075 * steps).min(1.0);
-        let mut tempo = (0.75 + 0.0625 * steps).min(1.0);
-        let mut aggro = if level < 2 {
-            0.0
-        } else {
-            (0.06 * (steps - 1.0)).clamp(0.0, 0.6)
-        };
-        if fails >= 2 {
-            target *= 0.8;
-            bots = bots.saturating_sub(1).max(1);
-            pace *= 0.85;
-            tempo *= 0.92;
-            aggro *= 0.5;
-        }
-        if fails >= 4 {
-            target *= 0.8;
-            bots = 1;
-            pace *= 0.85;
-            tempo *= 0.92;
-            aggro = 0.0;
-        }
-        Self {
-            level,
-            target: target.round().max(6.0) / 100.0,
-            bots,
-            pace,
-            tempo,
-            aggro,
-        }
-    }
+pub const PERSONAS: [Persona; 5] = [
+    Persona {
+        speed: 0.94,
+        greed: 0.45,
+        aggro: 0.1,
+        caution: 1.0,
+    },
+    Persona {
+        speed: 1.0,
+        greed: 1.0,
+        aggro: 0.25,
+        caution: 0.75,
+    },
+    Persona {
+        speed: 1.0,
+        greed: 0.55,
+        aggro: 1.0,
+        caution: 0.6,
+    },
+    Persona {
+        speed: 0.97,
+        greed: 1.5,
+        aggro: 0.3,
+        caution: 0.45,
+    },
+    Persona {
+        speed: 0.9,
+        greed: 0.7,
+        aggro: 0.05,
+        caution: 0.3,
+    },
+];
 
-    pub fn par(&self) -> (f32, f32) {
-        let pct = self.target * 100.0;
-        (15.0 + pct * 2.5, 30.0 + pct * 5.0)
-    }
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Tuning {
+    pub speed: f32,
+    pub reach: usize,
+    pub hunt: f32,
+    pub caution: f32,
+}
 
-    pub fn stars(&self, secs: f32) -> u8 {
-        let (fast, slow) = self.par();
-        if secs <= fast {
-            3
-        } else if secs <= slow {
-            2
-        } else {
-            1
-        }
+pub fn skill(best_tenths: i64) -> f32 {
+    (best_tenths.max(0) as f32 / FULL_SKILL_AT as f32)
+        .clamp(0.0, 1.0)
+        .sqrt()
+}
+
+pub fn bots_for(skill: f32) -> usize {
+    8 + (skill.clamp(0.0, 1.0) * 3.0).round() as usize
+}
+
+pub fn tuning(p: Persona, skill: f32) -> Tuning {
+    let s = skill.clamp(0.0, 1.0);
+    Tuning {
+        speed: (PLAYER_SPEED * (0.64 + 0.32 * s) * p.speed).min(PLAYER_SPEED * 0.97),
+        reach: (8.0 + p.greed * (8.0 + 26.0 * s)) as usize,
+        hunt: p.aggro * (0.04 + 0.96 * s),
+        caution: p.caution * (0.35 + 0.65 * s),
     }
 }
 
-pub fn score(level: u32, share: f32, won: bool) -> i64 {
-    let cleared = if won { level } else { level.saturating_sub(1) };
-    cleared as i64 * 100 + ((share * 100.0).floor() as i64).clamp(0, 99)
+pub fn hunts_player(skill: f32, player_age: f32) -> bool {
+    skill >= 0.2 && player_age >= CALM_SECS
+}
+
+pub fn score(share: f32) -> i64 {
+    (share * 1000.0).floor().max(0.0) as i64
 }
 
 pub fn score_label(s: i64) -> String {
-    format!("{} won  {}%", s / 100, s % 100)
-}
-
-pub fn next_level(level: u32) -> u32 {
-    (level + 1).min(MAX_LEVEL)
+    format!("{}.{}%", s / 10, s % 10)
 }
 
 pub fn clock_label(secs: f32) -> String {
@@ -82,79 +95,87 @@ pub fn clock_label(secs: f32) -> String {
     format!("{}:{:02}", s / 60, s % 60)
 }
 
+pub const MILESTONES: [i64; 11] = [10, 20, 50, 100, 150, 200, 300, 400, 500, 750, 1000];
+
+pub fn next_milestone(tenths: i64) -> Option<i64> {
+    MILESTONES.iter().copied().find(|m| *m > tenths)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn arenas_get_harder_with_level() {
-        let all: Vec<Arena> = (1..=MAX_LEVEL).map(|l| Arena::for_level(l, 0)).collect();
-        for w in all.windows(2) {
-            assert!(w[1].target >= w[0].target);
-            assert!(w[1].bots >= w[0].bots);
-            assert!(w[1].pace >= w[0].pace);
-            assert!(w[1].tempo >= w[0].tempo);
-            assert!(w[1].aggro >= w[0].aggro);
+    fn bots_start_slow_and_ramp_with_your_best_but_never_outrun_you() {
+        let steps: Vec<f32> = (0..=12).map(|k| skill(k * 25)).collect();
+        for w in steps.windows(2) {
+            assert!(w[1] >= w[0]);
         }
-        let (first, last) = (all[0], all[all.len() - 1]);
-        assert!(last.target > first.target * 3.0);
-        assert!(first.bots == 1 && last.bots == 4);
-        assert!(first.pace < 0.5 && last.pace >= 1.0);
-        assert!(first.tempo < 0.8 && last.tempo >= 1.0);
-        assert_eq!(first.aggro, 0.0);
-        assert!(last.aggro > 0.3);
-    }
-
-    #[test]
-    fn the_first_arena_is_small_and_slow() {
-        let a = Arena::for_level(1, 0);
-        assert!(a.target <= 0.1);
-        assert_eq!(a.bots, 1);
-        assert!(a.pace <= 0.4);
-    }
-
-    #[test]
-    fn struggling_makes_an_arena_easier() {
-        for level in 2..=MAX_LEVEL {
-            let base = Arena::for_level(level, 0);
-            let help = Arena::for_level(level, 2);
-            let more = Arena::for_level(level, 4);
-            assert_eq!(Arena::for_level(level, 1), base);
-            assert!(help.target <= base.target && more.target <= help.target);
-            assert!(help.pace < base.pace && more.pace < help.pace);
-            assert!(help.tempo < base.tempo && more.tempo < help.tempo);
-            assert!(help.aggro <= base.aggro && more.aggro == 0.0);
-            assert!(more.bots == 1);
+        assert_eq!(skill(0), 0.0);
+        assert_eq!(skill(10_000), 1.0);
+        for p in PERSONAS {
+            let easy = tuning(p, 0.0);
+            let hard = tuning(p, 1.0);
+            assert!(easy.speed < hard.speed);
+            assert!(easy.speed <= PLAYER_SPEED * 0.7);
+            assert!(hard.speed < PLAYER_SPEED);
+            assert!(easy.reach < hard.reach);
+            assert!(easy.hunt < hard.hunt);
+            assert!(easy.caution < hard.caution);
         }
-        assert!(Arena::for_level(1, 2).target < Arena::for_level(1, 0).target);
     }
 
     #[test]
-    fn faster_wins_earn_more_stars() {
-        let a = Arena::for_level(3, 0);
-        let (fast, slow) = a.par();
-        assert!(fast < slow);
-        assert_eq!(a.stars(fast - 1.0), 3);
-        assert_eq!(a.stars(slow - 1.0), 2);
-        assert_eq!(a.stars(slow + 500.0), 1);
+    fn the_map_is_at_least_a_hundred_cells_square() {
+        assert!(super::super::world::GW.min(super::super::world::GH) >= 100);
     }
 
     #[test]
-    fn score_orders_by_arenas_won_then_land() {
-        assert!(score(3, 0.14, true) > score(3, 0.39, false));
-        assert!(score(3, 0.30, false) > score(2, 0.14, true));
-        assert!(score(3, 0.14, false) > score(2, 0.20, false));
-        assert_eq!(score_label(score(3, 0.14, true)), "3 won  14%");
+    fn more_bots_join_as_you_get_better() {
+        assert_eq!(bots_for(0.0), 8);
+        assert_eq!(bots_for(1.0), 11);
+        assert!(bots_for(0.5) >= 9);
     }
 
     #[test]
-    fn the_last_arena_repeats() {
-        assert_eq!(next_level(1), 2);
-        assert_eq!(next_level(MAX_LEVEL), MAX_LEVEL);
+    fn nobody_hunts_a_beginner_or_a_fresh_spawn() {
+        assert!(!hunts_player(0.0, 100.0));
+        assert!(!hunts_player(1.0, 3.0));
+        assert!(hunts_player(0.6, 30.0));
     }
 
     #[test]
-    fn clock_reads_minutes_and_seconds() {
+    fn personas_differ() {
+        for (i, a) in PERSONAS.iter().enumerate() {
+            for b in &PERSONAS[i + 1..] {
+                assert_ne!(a, b);
+            }
+        }
+        let hunter = PERSONAS.iter().map(|p| p.aggro).fold(0.0, f32::max);
+        let timid = PERSONAS.iter().map(|p| p.aggro).fold(1.0, f32::min);
+        assert!(hunter > timid * 5.0);
+    }
+
+    #[test]
+    fn names_are_unique() {
+        let mut n = NAMES.to_vec();
+        n.sort();
+        n.dedup();
+        assert_eq!(n.len(), NAMES.len());
+    }
+
+    #[test]
+    fn scores_read_as_percent() {
+        assert_eq!(score(0.1234), 123);
+        assert_eq!(score_label(123), "12.3%");
+        assert_eq!(score_label(5), "0.5%");
         assert_eq!(clock_label(65.4), "1:05");
+    }
+
+    #[test]
+    fn milestones_lead_on() {
+        assert_eq!(next_milestone(0), Some(10));
+        assert_eq!(next_milestone(10), Some(20));
+        assert_eq!(next_milestone(1000), None);
     }
 }
