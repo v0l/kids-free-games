@@ -549,10 +549,7 @@ fn the_map_is_big_and_the_camera_zooms_out_as_you_grow() {
     for y in 30 * RES..70 * RES {
         for x in 30 * RES..70 * RES {
             let i = idx(glam::ivec2(x, y));
-            if g.w.owner[i] != Some(0) {
-                g.w.owner[i] = Some(0);
-                g.w.counts[0] += 1;
-            }
+            g.w.claim(i, Some(0));
         }
     }
     assert!(g.target_zoom() > small * 1.5);
@@ -699,8 +696,7 @@ fn the_leaderboard_ranks_by_land() {
     for c in 0..400 * (RES * RES) {
         let i = idx(glam::ivec2(c % (20 * RES), c / (20 * RES)));
         if g.w.owner[i].is_none() {
-            g.w.owner[i] = Some(0);
-            g.w.counts[0] += 1;
+            g.w.claim(i, Some(0));
         }
     }
     assert_eq!(g.w.ranking()[0], 0);
@@ -787,4 +783,28 @@ fn a_low_effort_brain_never_gets_stuck() {
         let (_, stuck, _) = bots_only(0.0, seed, 90);
         assert!(stuck <= 1, "seed {seed}: a bot sat still {stuck}s");
     }
+}
+
+#[test]
+fn block_counts_track_the_land_and_trail_grids_through_a_busy_game() {
+    rand::srand(9);
+    let mut g = Paper::with_best(200);
+    g.state = State::Playing;
+    for _ in 0..60 * 40 {
+        g.w.advance(1.0 / 60.0);
+        g.w.respawn_bots(1.0 / 60.0);
+    }
+    let mut owners = vec![[0u16; MAX_PLAYERS]; BLOCKS * BLOCKS];
+    let mut trails = vec![0u16; BLOCKS * BLOCKS];
+    for i in 0..g.w.owner.len() {
+        if let Some(o) = g.w.owner[i] {
+            owners[block_of(i)][o as usize] += 1;
+        }
+        if g.w.trail[i].is_some() {
+            trails[block_of(i)] += 1;
+        }
+    }
+    assert_eq!(owners, g.w.block_owner);
+    assert_eq!(trails, g.w.block_trail);
+    assert!(trails.iter().any(|t| *t > 0) || owners.iter().any(|o| o[1] > 0));
 }

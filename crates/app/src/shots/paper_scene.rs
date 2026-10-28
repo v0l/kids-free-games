@@ -55,8 +55,7 @@ fn grow_blob(p: &mut PaperPlay, r: f32) {
                 && p.g.w.owner[idx(c)].is_none()
                 && p.g.w.trail[idx(c)].is_none()
             {
-                p.g.w.owner[idx(c)] = Some(0);
-                p.g.w.counts[0] += 1;
+                p.g.w.claim(idx(c), Some(0));
             }
         }
     }

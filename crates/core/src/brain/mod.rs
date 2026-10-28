@@ -1,3 +1,4 @@
+pub mod conv;
 pub mod train;
 
 use crate::rng as rand;

@@ -94,3 +94,94 @@ fn full_effort_always_takes_the_top_score() {
         assert_eq!(pick_soft(&scores, Effort::BEST), 1);
     }
 }
+
+mod conv_tests {
+    use super::super::conv::*;
+    use super::super::Effort;
+
+    fn tiny() -> Policy {
+        Policy {
+            grid: 3,
+            channels: 1,
+            scalars: 1,
+            actions: 2,
+            trunk: vec![
+                Layer::Conv {
+                    cin: 1,
+                    cout: 1,
+                    k: 2,
+                    stride: 1,
+                    pad: 0,
+                    w: vec![1.0, 0.0, 0.0, -1.0],
+                    b: vec![0.5],
+                },
+                Layer::Relu,
+            ],
+            head: vec![Layer::Dense {
+                n_in: 5,
+                n_out: 2,
+                w: vec![1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0],
+                b: vec![0.0, 0.25],
+            }],
+        }
+    }
+
+    #[test]
+    fn a_hand_built_conv_policy_gives_the_hand_worked_logits() {
+        let p = tiny();
+        let obs = Obs {
+            grid: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0],
+            scalars: vec![3.0],
+        };
+        let l = p.logits(&obs);
+        assert!((l[0] - 0.0).abs() < 1e-6, "{l:?}");
+        assert!((l[1] - 3.25).abs() < 1e-6, "{l:?}");
+        assert_eq!(p.choose(&obs, Effort::BEST), 1);
+        assert_eq!(p.param_count(), 5 + 12);
+    }
+
+    #[test]
+    fn a_policy_round_trips_and_bad_files_are_refused() {
+        let p = tiny();
+        let bytes = p.to_bytes();
+        assert_eq!(Policy::from_bytes(&bytes), Some(p.clone()));
+        assert!(Policy::from_bytes(&bytes[..bytes.len() - 4]).is_none());
+        let mut wrong = p.clone();
+        wrong.actions = 3;
+        assert!(Policy::from_bytes(&wrong.to_bytes()).is_none());
+        assert!(Policy::from_bytes(b"KGB1").is_none());
+    }
+
+    #[test]
+    fn padding_and_stride_shrink_the_grid_like_pytorch() {
+        let p = Policy {
+            grid: 5,
+            channels: 1,
+            scalars: 0,
+            actions: 9,
+            trunk: vec![Layer::Conv {
+                cin: 1,
+                cout: 1,
+                k: 3,
+                stride: 2,
+                pad: 1,
+                w: vec![0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0],
+                b: vec![0.0],
+            }],
+            head: vec![Layer::Dense {
+                n_in: 9,
+                n_out: 9,
+                w: (0..81)
+                    .map(|i| if i % 10 == 0 { 1.0 } else { 0.0 })
+                    .collect(),
+                b: vec![0.0; 9],
+            }],
+        };
+        let grid: Vec<f32> = (0..25).map(|v| v as f32).collect();
+        let l = p.logits(&Obs {
+            grid,
+            scalars: vec![],
+        });
+        assert_eq!(l, vec![0.0, 2.0, 4.0, 10.0, 12.0, 14.0, 20.0, 22.0, 24.0]);
+    }
+}

@@ -1,6 +1,7 @@
 pub mod arena;
 pub mod learn;
 pub mod pilot;
+pub mod rl;
 pub mod world;
 
 use crate::engine::*;

@@ -203,6 +203,7 @@ pub const MAX_SPEED: f32 = 32.0;
 
 pub struct BrainPaper {
     pub brain: Option<kg_core::brain::Brain>,
+    pub rl: bool,
     pub game: crate::games::paper::PaperPlay,
     pub effort: f32,
     pub speed: f32,
@@ -224,8 +225,11 @@ impl BrainPaper {
             .unwrap_or(1.0);
         let brain = kg_core::games::paper::world::shipped_net()
             .map(|n| kg_core::brain::Brain::new(n.clone(), kg_core::brain::Effort::new(effort)));
+        let rl = crate::web::query("model").is_some_and(|m| m == "rl")
+            && kg_core::games::paper::rl::shipped().is_some();
         Self {
             brain,
+            rl,
             game: crate::games::paper::PaperPlay::new(),
             effort,
             speed: crate::web::query("speed")
@@ -259,7 +263,20 @@ impl BrainPaper {
             }
             State::Playing => {
                 self.since += dt;
-                if let Some(b) = &mut self.brain {
+                if self.rl {
+                    let effort = kg_core::brain::Effort::new(self.effort);
+                    if self.since >= effort.think_every(kg_core::games::paper::rl::DECIDE) {
+                        self.since = 0.0;
+                        if let Some(net) = kg_core::games::paper::rl::shipped() {
+                            use kg_core::games::paper::rl;
+                            let coarse = rl::Coarse::of(&g.w);
+                            let a = net.choose(&rl::observe(&g.w, 0, &coarse), effort);
+                            let me = g.me();
+                            let want = me.angle + rl::TURNS[a];
+                            g.aim(kg_core::games::paper::world::wrap_angle(want));
+                        }
+                    }
+                } else if let Some(b) = &mut self.brain {
                     if self.since >= b.effort.think_every(0.16) {
                         self.since = 0.0;
                         let (aims, feats) = g.w.options(0);
@@ -308,13 +325,17 @@ impl BrainPaper {
                 false,
             ),
             (
-                match &self.brain {
-                    Some(b) => format!(
+                match (&self.brain, self.rl) {
+                    (_, true) => format!(
+                        "{} weights, conv net on a 32x32 view",
+                        kg_core::games::paper::rl::shipped().map_or(0, |p| p.param_count())
+                    ),
+                    (Some(b), _) => format!(
                         "{} weights, thinks every {:.2} s",
                         b.net.weights.len(),
                         b.effort.think_every(0.16)
                     ),
-                    None => "no brain file".into(),
+                    (None, _) => "no brain file".into(),
                 },
                 false,
             ),
