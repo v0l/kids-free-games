@@ -1,8 +1,25 @@
 use super::arena::{self, Tuning, NAMES, PERSONAS};
+use crate::brain::{Brain, Effort, Net};
 use crate::rng as rand;
 use glam::{ivec2, vec2, IVec2, Vec2};
 use std::collections::VecDeque;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
+use std::sync::OnceLock;
+
+mod sense;
+pub use sense::FEATURES;
+
+static SHIPPED: &[u8] = include_bytes!("../../../../../assets/brains/paper.kgb");
+
+fn shipped_net() -> Option<&'static Net> {
+    static NET: OnceLock<Option<Net>> = OnceLock::new();
+    NET.get_or_init(|| Net::from_bytes(SHIPPED).filter(|n| n.inputs() == FEATURES))
+        .as_ref()
+}
+
+pub type Lesson = (Vec<Vec<f32>>, usize);
+
+pub type Policy<'a> = &'a mut dyn FnMut(usize, &[Vec<f32>]) -> Option<usize>;
 
 pub const SIZE: f32 = 110.0;
 pub const RES: i32 = 4;
@@ -124,6 +141,7 @@ pub struct Player {
     pub peak: f32,
     think: f32,
     plan: Plan,
+    pub brain: Option<Brain>,
 }
 
 impl Player {
@@ -156,6 +174,7 @@ impl Player {
             peak: 0.0,
             think: rand::gen_range(0.0, THINK),
             plan: Plan::Home,
+            brain: None,
         }
     }
 
@@ -193,6 +212,9 @@ pub struct World {
     pub claims: Vec<Claim>,
     pub clock: f32,
     pub skill: f32,
+    pub brains: bool,
+    pub effort: Option<f32>,
+    pub lessons: Option<Vec<Lesson>>,
     acc: f32,
     name_turn: usize,
 }
@@ -218,6 +240,9 @@ impl World {
             claims: vec![],
             clock: 0.0,
             skill,
+            brains: true,
+            effort: None,
+            lessons: None,
             acc: 0.0,
             name_turn: rand::gen_range(0, NAMES.len()),
         }
@@ -268,10 +293,19 @@ impl World {
         let persona = id % PERSONAS.len();
         let name = if bot { self.fresh_name() } else { "You" };
         let tune = arena::tuning(PERSONAS[persona], self.skill);
-        self.players
-            .push(Player::new(name, bot, persona, tune, at, angle));
+        let mut p = Player::new(name, bot, persona, tune, at, angle);
+        p.brain = self.brain_for(bot, tune);
+        self.players.push(p);
         self.stake(id, at);
         id
+    }
+
+    fn brain_for(&self, bot: bool, tune: Tuning) -> Option<Brain> {
+        if !bot || !self.brains {
+            return None;
+        }
+        shipped_net()
+            .map(|n| Brain::new(n.clone(), Effort::new(self.effort.unwrap_or(tune.effort))))
     }
 
     pub fn fresh_name(&mut self) -> &'static str {
@@ -339,7 +373,9 @@ impl World {
             persona
         };
         let tune = arena::tuning(PERSONAS[persona], self.skill);
-        self.players[id] = Player::new(name, bot, persona, tune, at, angle);
+        let mut p = Player::new(name, bot, persona, tune, at, angle);
+        p.brain = self.brain_for(bot, tune);
+        self.players[id] = p;
         self.stake(id, at);
     }
 
@@ -497,7 +533,19 @@ impl World {
         }
     }
 
+    pub fn advance_with(&mut self, dt: f32, policy: Policy) {
+        self.acc += dt;
+        while self.acc >= SUB {
+            self.acc -= SUB;
+            self.step_with(policy);
+        }
+    }
+
     pub fn substep(&mut self) {
+        self.step_with(&mut |_, _| None);
+    }
+
+    pub fn step_with(&mut self, policy: Policy) {
         self.clock += SUB;
         for id in 0..self.players.len() {
             if !self.players[id].alive {
@@ -506,8 +554,12 @@ impl World {
             if self.players[id].bot {
                 self.players[id].think -= SUB;
                 if self.players[id].think <= 0.0 {
-                    self.players[id].think += THINK;
-                    self.bot_think(id);
+                    let every = self.players[id]
+                        .brain
+                        .as_ref()
+                        .map_or(THINK, |b| b.effort.think_every(THINK));
+                    self.players[id].think += every;
+                    self.bot_think(id, policy);
                 }
             }
             self.move_player(id);
@@ -867,7 +919,36 @@ impl World {
             .unwrap_or(a)
     }
 
-    fn bot_think(&mut self, id: usize) {
+    fn bot_think(&mut self, id: usize, policy: Policy) {
+        let (aims, feats) = self.options(id);
+        let picked = match policy(id, &feats) {
+            Some(k) => Some(k),
+            None => self.players[id].brain.as_mut().map(|b| b.choose(&feats)),
+        };
+        let Some(k) = picked else {
+            self.plan_think(id);
+            if self.lessons.is_some() {
+                let want = self.players[id].want;
+                let k = (0..aims.len())
+                    .min_by(|a, b| {
+                        let d = |k: usize| wrap_angle(aims[k] - want).abs();
+                        d(*a).total_cmp(&d(*b))
+                    })
+                    .unwrap_or(0);
+                if let Some(l) = self.lessons.as_mut() {
+                    l.push((feats, k));
+                }
+            }
+            return;
+        };
+        let mut aim = aims[k.min(aims.len() - 1)];
+        if self.hits_gentle(id, aim) {
+            aim = self.safe_aim(id, aim, false);
+        }
+        self.players[id].want = aim;
+    }
+
+    fn plan_think(&mut self, id: usize) {
         let me = Some(id as u8);
         let p = &self.players[id];
         let out = p.out();
@@ -904,12 +985,12 @@ impl World {
             let home_dist = home.map_or(99.0, |(_, d)| d);
             let threat = self.nearest_head(id, pos);
             if plan != Plan::Home {
-                let flee = threat <= home_dist + 4.0 && rand::gen_range(0.0, 1.0) < tune.caution;
+                let flee = threat <= home_dist + 4.0 && rand::gen_range(0.0, 1.0) < tune.effort;
                 if len >= tune.reach as f32 || home.is_none() || flee {
                     plan = Plan::Home;
                 } else if plan != Plan::Hunt
                     && len * 2.0 < tune.reach as f32
-                    && rand::gen_range(0.0, 1.0) < tune.hunt * 0.3
+                    && rand::gen_range(0.0, 1.0) < tune.effort * 0.15
                     && self.prey(id).is_some()
                 {
                     plan = Plan::Hunt;
@@ -956,7 +1037,7 @@ impl World {
             }
         }
         let hunting = plan == Plan::Hunt;
-        let avoid = !hunting && rand::gen_range(0.0, 1.0) < tune.caution;
+        let avoid = !hunting && rand::gen_range(0.0, 1.0) < tune.effort;
         let want = self.safe_aim(id, want, avoid);
         let p = &mut self.players[id];
         p.plan = plan;

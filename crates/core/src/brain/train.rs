@@ -130,7 +130,11 @@ pub fn train<E: Env, F: Fn() -> E + Sync>(make: F, features: usize, cfg: &Config
     let mut sizes = vec![features];
     sizes.extend(&cfg.hidden);
     sizes.push(1);
-    let mut net = Net::random(&sizes, 1.0);
+    train_from(make, Net::random(&sizes, 1.0), cfg)
+}
+
+pub fn train_from<E: Env, F: Fn() -> E + Sync>(make: F, start: Net, cfg: &Config) -> Report {
+    let mut net = start;
     let n = net.weights.len();
     let (mut m, mut v) = (vec![0.0f32; n], vec![0.0f32; n]);
     let mut history = vec![];

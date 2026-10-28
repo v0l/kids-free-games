@@ -1,3 +1,4 @@
+use super::world::World;
 use super::world::{dir_of, wrap_angle};
 use super::Paper;
 use glam::Vec2;
@@ -25,7 +26,11 @@ impl Pilot {
     }
 
     pub fn decide(&mut self, g: &Paper) -> Option<f32> {
-        let p = g.me();
+        self.decide_in(&g.w)
+    }
+
+    pub fn decide_in(&mut self, w: &World) -> Option<f32> {
+        let p = &w.players[0];
         if !p.alive {
             return None;
         }
@@ -34,7 +39,7 @@ impl Pilot {
             self.turns = 0;
             let best = (-3..=3)
                 .map(|k| wrap_angle(p.angle + k as f32 * 0.45))
-                .max_by_key(|a| g.w.open_ahead(0, *a))
+                .max_by_key(|a| w.open_ahead(0, *a))
                 .unwrap_or(p.angle);
             return Some(best);
         }
@@ -43,8 +48,8 @@ impl Pilot {
             self.from = p.pos;
             self.heading = p.angle;
         }
-        let home = g.w.way_home(0).map(|(a, _)| a);
-        let danger = self.wary && g.w.nearest_head(0, p.pos) < 7.0;
+        let home = w.way_home(0).map(|(a, _)| a);
+        let danger = self.wary && w.nearest_head(0, p.pos) < 7.0;
         if self.turns >= 3 || danger {
             return home.or(Some(p.want));
         }

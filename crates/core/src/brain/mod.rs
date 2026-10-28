@@ -146,6 +146,7 @@ impl Effort {
     }
 }
 
+#[derive(Clone, Debug)]
 pub struct Brain {
     pub net: Net,
     pub effort: Effort,

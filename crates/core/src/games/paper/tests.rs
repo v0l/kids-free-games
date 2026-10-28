@@ -687,7 +687,7 @@ fn eliminating_a_bot_lands_in_the_feed() {
     for _ in 0..(FEED_LIFE * 60.0) as usize + 5 {
         g.update(&Input::default(), &v, 1.0 / 60.0);
     }
-    assert!(g.feed.is_empty());
+    assert!(g.feed.iter().all(|f| !f.mine));
 }
 
 #[test]
@@ -734,4 +734,57 @@ fn grazing_your_own_edge_makes_no_popup() {
     });
     g.update(&Input::default(), &v, 1.0 / 60.0);
     assert!(g.popups.list.is_empty());
+}
+
+fn contest(brains: bool, effort: Option<f32>, secs: f32) -> f32 {
+    let env = learn::PaperEnv {
+        secs,
+        ..Default::default()
+    };
+    let setup = learn::Setup {
+        lessons: false,
+        skill: 1.0,
+        brains,
+        effort,
+    };
+    env.fitness(&setup, &[101, 102, 103, 104, 105, 106])
+}
+
+#[test]
+fn the_shipped_brain_loads_and_matches_the_features() {
+    let net =
+        crate::brain::Net::from_bytes(include_bytes!("../../../../../assets/brains/paper.kgb"))
+            .expect("paper.kgb");
+    assert_eq!(net.inputs(), learn::FEATURES);
+    let mut w = World::new(1.0);
+    w.add_player(vec2(30.0, 30.0), RIGHT, true);
+    assert!(w.players[0].brain.is_some());
+    let (aims, feats) = w.options(0);
+    assert_eq!(aims.len(), feats.len());
+    assert!(feats
+        .iter()
+        .all(|f| f.len() == learn::FEATURES && f.iter().all(|x| (-2.01..=2.01).contains(x))));
+}
+
+#[test]
+fn at_full_effort_the_brain_grows_more_land_than_the_old_bot() {
+    let old = contest(false, None, 60.0);
+    let new = contest(true, Some(1.0), 60.0);
+    assert!(new > old, "brain {new:.3} vs old bot {old:.3}");
+}
+
+#[test]
+fn bot_fitness_rises_with_effort() {
+    let lazy = contest(true, Some(0.0), 60.0);
+    let mid = contest(true, Some(0.5), 60.0);
+    let best = contest(true, Some(1.0), 60.0);
+    assert!(lazy < mid && mid < best, "{lazy:.3} {mid:.3} {best:.3}");
+}
+
+#[test]
+fn a_low_effort_brain_never_gets_stuck() {
+    for seed in 0..3 {
+        let (_, stuck, _) = bots_only(0.0, seed, 90);
+        assert!(stuck <= 1, "seed {seed}: a bot sat still {stuck}s");
+    }
 }
