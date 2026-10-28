@@ -20,6 +20,7 @@ pub enum World3d {
     Flat,
     Hotel,
     Helix,
+    Runner,
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -52,6 +53,7 @@ impl Plugin for Game3dPlugin {
             .add_plugins((
                 crate::games::helix::world::HelixWorld,
                 crate::games::hotel::world::HotelWorld,
+                crate::games::runner::world::RunnerWorld,
             ));
     }
 }
@@ -461,6 +463,7 @@ impl Kit<'_> {
             }
             Finish::Backdrop => {
                 m.unlit = true;
+                m.fog_enabled = false;
                 m.cull_mode = None;
             }
         }
