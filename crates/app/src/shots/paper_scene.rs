@@ -2,17 +2,10 @@ use super::{Stage, DT};
 use crate::games::paper::PaperPlay;
 use crate::games::Play;
 use kg_core::engine::{Dir, Input, View};
-use kg_core::games::paper;
+use kg_core::games::paper::pilot::Pilot;
+use kg_core::games::paper::world::Cause;
+use kg_core::games::paper::{self, idx, State};
 use kg_core::profile;
-
-fn walk(p: &mut PaperPlay, view: &View, moves: &[(Dir, usize)]) {
-    for (d, ticks) in moves {
-        p.update(&Input::key(*d), view, DT);
-        for _ in 0..(*ticks as f32 * paper::STEP / DT) as usize {
-            p.update(&Input::default(), view, DT);
-        }
-    }
-}
 
 fn board(scores: &[(&str, usize, i64)]) {
     let me = profile::current_id();
@@ -26,113 +19,171 @@ fn board(scores: &[(&str, usize, i64)]) {
     }
 }
 
+fn idle(p: &mut PaperPlay, view: &View, frames: usize) {
+    for _ in 0..frames {
+        p.update(&Input::default(), view, DT);
+    }
+}
+
+fn fly(p: &mut PaperPlay, view: &View, pilot: &mut Pilot, secs: f32) {
+    for _ in 0..(secs / DT) as usize {
+        if p.g.state != State::Playing {
+            break;
+        }
+        let input = Input {
+            key_dir: pilot.decide(&p.g),
+            ..Default::default()
+        };
+        p.update(&input, view, DT);
+    }
+}
+
+fn go(p: &mut PaperPlay, view: &View) {
+    p.update(&Input::key(Dir::Right), view, DT);
+}
+
+fn grow_square(p: &mut PaperPlay, half: i32) {
+    let at = p.g.me().cell;
+    for y in at.y - half..=at.y + half {
+        for x in at.x - half..=at.x + half {
+            let c = glam::ivec2(x, y);
+            if paper::in_bounds(c) && p.g.w.owner[idx(c)].is_none() && p.g.w.trail[idx(c)].is_none()
+            {
+                p.g.w.owner[idx(c)] = Some(0);
+                p.g.w.counts[0] += 1;
+            }
+        }
+    }
+    p.g.zoom = p.g.target_zoom();
+}
+
 pub fn setup(n: u32, view: &View) -> Stage {
     kg_core::save::reset_for_test();
+    kg_core::rng::srand(n as u64 * 7 + 1);
     let mia = profile::create("Mia", 2).unwrap();
     profile::select(&mia.id);
-    let level = match n {
-        154 => 5,
-        155 => 12,
-        157 => 3,
-        159 => 12,
-        _ => 1,
+    let best = match n {
+        150..=154 | 158 => 0,
+        156 | 157 => 80,
+        _ => 400,
     };
-    if level > 1 {
-        profile::unlock(paper::GAME, level);
-        profile::set_level(paper::GAME, level);
-    }
-    if n == 156 {
-        board(&[("Leo", 5, 4012), ("Ava", 9, 2008), ("Sam", 3, 1004)]);
+    if best > 0 {
+        board(&[("Leo", 3, best), ("Ava", 5, best / 2)]);
+        profile::select(&mia.id);
+        kg_core::save::player_set(&format!("{}.best", paper::GAME), best);
     }
     let mut p = PaperPlay::new();
-    let lap = [
-        (Dir::Right, 6),
-        (Dir::Down, 6),
-        (Dir::Left, 6),
-        (Dir::Up, 6),
-    ];
     match n {
-        150 => {
-            for _ in 0..40 {
-                p.update(&Input::default(), view, DT);
-            }
-        }
+        150 => idle(&mut p, view, 60),
         151 => {
-            p.update(&Input::key(Dir::Right), view, DT);
-            walk(&mut p, view, &[(Dir::Right, 1)]);
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(5, false), 2.4);
         }
         152 => {
-            p.update(&Input::key(Dir::Right), view, DT);
-            walk(&mut p, view, &[(Dir::Right, 5), (Dir::Down, 4)]);
-        }
-        153 => {
-            p.update(&Input::key(Dir::Right), view, DT);
-            walk(&mut p, view, &lap);
-            for _ in 0..8 {
-                p.update(&Input::default(), view, DT);
-            }
-        }
-        155 => {
-            p.update(&Input::key(Dir::Right), view, DT);
-            walk(&mut p, view, &[(Dir::Right, 3), (Dir::Down, 2)]);
-        }
-        154 => {
-            p.update(&Input::key(Dir::Right), view, DT);
-            walk(&mut p, view, &lap);
-            walk(
-                &mut p,
-                view,
-                &[(Dir::Right, 3), (Dir::Down, 10), (Dir::Right, 9)],
-            );
-        }
-        156 => {
-            p.update(&Input::key(Dir::Right), view, DT);
-            p.g.players[0].alive = false;
-            for _ in 0..90 {
-                p.update(&Input::default(), view, DT);
-            }
-        }
-        157 | 159 => {
-            if n == 159 {
-                p.g = paper::Paper::with_arena(paper::arena::MAX_LEVEL, 0);
-            }
-            p.update(&Input::key(Dir::Right), view, DT);
-            for i in 0..p.g.owner.len() {
-                if i % 7 != 0 {
-                    p.g.owner[i] = Some(0);
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(6, true), 14.0);
+            let mut pilot = Pilot::new(6, true);
+            let claims = p.g.popups.list.len();
+            for _ in 0..600 {
+                fly(&mut p, view, &mut pilot, DT);
+                if p.g.popups.list.len() > claims
+                    && p.g.popups.list.iter().any(|q| q.text.starts_with('+'))
+                {
+                    break;
                 }
             }
-            p.g.elapsed = 40.0;
-            for _ in 0..70 {
-                p.update(&Input::default(), view, DT);
+            idle(&mut p, view, 8);
+        }
+        153 => {
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(6, true), 8.0);
+            p.g.w.kill(3, Some(0), Cause::Trail);
+            p.g.w.kill(5, Some(2), Cause::Trail);
+            idle(&mut p, view, 4);
+            p.g.w.kill(4, Some(0), Cause::Trail);
+            idle(&mut p, view, 16);
+        }
+        154 => {
+            go(&mut p, view);
+            grow_square(&mut p, 14);
+            fly(&mut p, view, &mut Pilot::new(9, true), 6.0);
+        }
+        155 => {
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(8, true), 20.0);
+        }
+        156 => {
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(7, true), 18.0);
+            p.g.w.players[0].kills = 2;
+            p.g.w.kill(0, Some(1), Cause::Trail);
+            idle(&mut p, view, 80);
+        }
+        157 => {
+            go(&mut p, view);
+            grow_square(&mut p, 22);
+            fly(&mut p, view, &mut Pilot::new(9, true), 3.0);
+            p.g.w.players[0].kills = 5;
+            p.g.w.kill(0, Some(2), Cause::HeadOn);
+            idle(&mut p, view, 80);
+        }
+        158 => {
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(6, true), 4.0);
+            let me = p.g.me().cell;
+            for (k, off) in [(1usize, glam::ivec2(15, -4)), (2, glam::ivec2(-14, 9))] {
+                let b = &mut p.g.w.players[k];
+                b.cell =
+                    (me + off).clamp(glam::ivec2(1, 1), glam::ivec2(paper::GW - 2, paper::GH - 2));
+                b.progress = 0.0;
             }
+            idle(&mut p, view, 2);
         }
         _ => {
-            p.g.open_select();
-            for _ in 0..40 {
-                p.update(&Input::default(), view, DT);
-            }
+            go(&mut p, view);
+            fly(&mut p, view, &mut Pilot::new(6, true), 6.0);
+            p.g.w.kill(0, Some(1), Cause::Trail);
+            idle(&mut p, view, 70);
+            p.update(
+                &Input::press_at(paper::play_again_button(view).center()),
+                view,
+                DT,
+            );
+            idle(&mut p, view, 20);
         }
     }
     kg_core::sfx::take_cues();
+    kg_core::feel::take();
     Stage::Game(Box::new(p))
 }
 
 #[cfg(test)]
 pub fn check() {
-    use paper::State as S;
     for v in [View::ipad_landscape(), View::ipad_portrait()] {
         let get = |n: u32| super::game::<PaperPlay>(setup(n, &v));
-        assert!(!get(150).g.started);
-        let t = get(151);
-        assert!(t.g.started && t.g.training && t.g.players[0].trail.is_empty());
-        assert!(!get(152).g.players[0].trail.is_empty());
-        assert!(get(153).g.grabbed);
-        assert_eq!(get(154).g.arena.level, 5);
-        assert_eq!(get(155).g.players.len(), 5);
-        assert_eq!(get(156).g.state, S::Lost);
-        assert_eq!(get(157).g.state, S::Won);
-        assert_eq!(get(158).g.state, S::Select);
-        assert_eq!(get(159).g.state, S::Won);
+        assert_eq!(get(150).g.state, State::Ready);
+        let first = get(151);
+        assert!(first.g.state == State::Playing && !first.g.me().trail.is_empty());
+        assert!(get(152)
+            .g
+            .popups
+            .list
+            .iter()
+            .any(|q| q.text.starts_with('+')));
+        let feed = get(153);
+        assert!(feed
+            .g
+            .feed
+            .iter()
+            .any(|f| f.text.starts_with("You eliminated")));
+        assert!(get(154).g.share(0) > 0.05);
+        assert!(get(155).g.w.players.len() >= 11);
+        let dead = get(156);
+        assert!(dead.g.state == State::Dead && !dead.g.new_best);
+        let best = get(157);
+        assert!(best.g.state == State::Dead && best.g.new_best);
+        assert!(!get(158).g.threats(&v).is_empty());
+        let again = get(159);
+        assert!(again.g.state == State::Playing && again.g.lives == 1);
     }
 }
