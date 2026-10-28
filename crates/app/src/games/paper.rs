@@ -8,13 +8,13 @@ use kg_core::fx::{ease_out_back, ease_out_cubic, popup_scale, Particle};
 use kg_core::games::paper::arena::{clock_label, score, score_label};
 use kg_core::games::paper::*;
 use kg_core::geom::{Color, Rect, WHITE};
-use std::f32::consts::{FRAC_PI_2, PI};
+use std::f32::consts::FRAC_PI_2;
 
 pub const KEY: &str = GAME;
 const SHEET: &str = "paper";
 const LAWN_CELLS: f32 = 10.0;
 const LIP: f32 = 0.2;
-const ROUND: f32 = 0.42;
+const FRESH: f32 = 0.4;
 const TRAIL_W: f32 = 0.58;
 const HEAD: f32 = 1.55;
 const MAP_PX: f32 = 168.0;
@@ -87,33 +87,41 @@ impl Cam {
         let cell = g.cell_px(view);
         let origin = g.origin(view);
         let f = view.full();
+        let fine = |v: f32| (v / cell * RES as f32).floor() as i32;
         Self {
             cell,
             origin,
-            x0: (((f.x - origin.x) / cell).floor() as i32 - 1).max(0),
-            y0: (((f.y - origin.y) / cell).floor() as i32 - 1).max(0),
-            x1: (((f.x + f.w - origin.x) / cell).ceil() as i32 + 1).min(GW),
-            y1: (((f.y + f.h - origin.y) / cell).ceil() as i32 + 2).min(GH),
+            x0: (fine(f.x - origin.x) - 2).max(-1),
+            y0: (fine(f.y - origin.y) - 2).max(-1),
+            x1: (fine(f.x + f.w - origin.x) + 2).min(N),
+            y1: (fine(f.y + f.h - origin.y) + 3).min(N),
         }
     }
 
     fn at(&self, w: Vec2) -> Vec2 {
         self.origin + w * self.cell
     }
+
+    fn lawn(&self) -> (i32, i32, i32, i32) {
+        let u = |c: i32| c.max(0) as f32 / RES as f32;
+        (
+            (u(self.x0) / LAWN_CELLS).floor() as i32,
+            (u(self.y0) / LAWN_CELLS).floor() as i32,
+            (u(self.x1) / LAWN_CELLS).ceil() as i32,
+            (u(self.y1) / LAWN_CELLS).ceil() as i32,
+        )
+    }
 }
 
 fn draw_ground(pen: &mut Pen, view: &View, cam: &Cam) {
     pen.rect(view.full(), outside_ground());
-    let board = vec2(GW as f32, GH as f32) * cam.cell;
+    let board = Vec2::splat(SIZE) * cam.cell;
     pen.rect(
         Rect::new(cam.origin.x + 6.0, cam.origin.y + 10.0, board.x, board.y),
         Color::new(0.05, 0.2, 0.05, 0.3),
     );
     let tile = LAWN_CELLS * cam.cell;
-    let tx0 = (cam.x0 as f32 / LAWN_CELLS).floor() as i32;
-    let ty0 = (cam.y0 as f32 / LAWN_CELLS).floor() as i32;
-    let tx1 = (cam.x1 as f32 / LAWN_CELLS).ceil() as i32;
-    let ty1 = (cam.y1 as f32 / LAWN_CELLS).ceil() as i32;
+    let (tx0, ty0, tx1, ty1) = cam.lawn();
     for ty in ty0..ty1 {
         for tx in tx0..tx1 {
             let at = cam.at(vec2(tx as f32, ty as f32) * LAWN_CELLS);
@@ -138,7 +146,7 @@ fn draw_ground(pen: &mut Pen, view: &View, cam: &Cam) {
 }
 
 fn draw_fence(pen: &mut Pen, view: &View, cam: &Cam) {
-    let board = vec2(GW as f32, GH as f32) * cam.cell;
+    let board = Vec2::splat(SIZE) * cam.cell;
     let ph = cam.cell * 2.0;
     let fs = crate::art::size(SHEET, "fence");
     let pw = fs.x * ph / fs.y.max(1.0);
@@ -176,145 +184,202 @@ fn draw_fence(pen: &mut Pen, view: &View, cam: &Cam) {
 }
 
 fn shown_at(g: &Paper, x: i32, y: i32) -> Option<u8> {
-    if x < 0 || y < 0 || x >= GW || y >= GH {
+    if x < 0 || y < 0 || x >= N || y >= N {
         None
     } else {
         g.w.shown(idx(glam::ivec2(x, y)))
     }
 }
 
-fn cell_shape(pen: &mut Pen, r: Rect, convex: [bool; 4], rad: f32, col: Color) {
-    let h = Vec2::splat(0.5);
-    let corners = [
-        (vec2(r.x + r.w, r.y + r.h), vec2(-1.0, -1.0), 0.0),
-        (vec2(r.x, r.y + r.h), vec2(1.0, -1.0), FRAC_PI_2),
-        (vec2(r.x, r.y), vec2(1.0, 1.0), PI),
-        (vec2(r.x + r.w, r.y), vec2(-1.0, 1.0), PI * 1.5),
-    ];
-    let mut verts = vec![Vert {
-        pos: r.center(),
-        uv: h,
-        color: col,
-    }];
-    for (k, (p, inward, start)) in corners.into_iter().enumerate() {
-        if convex[k] {
-            let c = p + inward * rad;
-            for s in 0..=5 {
-                let a = start + FRAC_PI_2 * s as f32 / 5.0;
-                verts.push(Vert {
-                    pos: c + vec2(a.cos(), a.sin()) * rad,
-                    uv: h,
-                    color: col,
-                });
-            }
-        } else {
-            verts.push(Vert {
-                pos: p,
-                uv: h,
-                color: col,
-            });
-        }
+fn fresh_at(g: &Paper, x: i32, y: i32) -> f32 {
+    if x < 0 || y < 0 || x >= N || y >= N {
+        return 0.0;
     }
-    let n = verts.len() as u32 - 1;
-    let idx: Vec<u32> = (0..n).flat_map(|i| [0, i + 1, (i + 1) % n + 1]).collect();
-    pen.mesh(Tex::White, &verts, &idx);
+    let age = g.w.age(idx(glam::ivec2(x, y)));
+    if (0.0..FRESH).contains(&age) {
+        1.0 - age / FRESH
+    } else {
+        0.0
+    }
 }
 
-fn corners_of(g: &Paper, x: i32, y: i32, o: u8) -> [bool; 4] {
-    let same = |dx: i32, dy: i32| shown_at(g, x + dx, y + dy) == Some(o);
-    let (l, r, u, d) = (same(-1, 0), same(1, 0), same(0, -1), same(0, 1));
-    [!r && !d, !l && !d, !l && !u, !r && !u]
+#[derive(Default)]
+struct Fill {
+    verts: Vec<Vert>,
+    idx: Vec<u32>,
+}
+
+impl Fill {
+    fn poly(&mut self, pts: &[Vec2], col: Color) {
+        let base = self.verts.len() as u32;
+        let h = Vec2::splat(0.5);
+        self.verts.extend(pts.iter().map(|p| Vert {
+            pos: *p,
+            uv: h,
+            color: col,
+        }));
+        for k in 1..pts.len() as u32 - 1 {
+            self.idx.extend([base, base + k, base + k + 1]);
+        }
+    }
+
+    fn rect(&mut self, a: Vec2, b: Vec2, col: Color) {
+        self.poly(&[a, vec2(b.x, a.y), b, vec2(a.x, b.y)], col);
+    }
+
+    fn flush(&mut self, pen: &mut Pen) {
+        if !self.idx.is_empty() {
+            pen.mesh(Tex::White, &self.verts, &self.idx);
+        }
+        self.verts.clear();
+        self.idx.clear();
+    }
+}
+
+struct Owners {
+    x0: i32,
+    y0: i32,
+    w: i32,
+    h: i32,
+    cells: Vec<Option<u8>>,
+}
+
+impl Owners {
+    fn new(g: &Paper, cam: &Cam) -> Self {
+        let (x0, y0) = (cam.x0 - 2, cam.y0 - 2);
+        let (w, h) = (cam.x1 - cam.x0 + 5, cam.y1 - cam.y0 + 5);
+        let mut cells = Vec::with_capacity((w * h) as usize);
+        for y in 0..h {
+            for x in 0..w {
+                cells.push(shown_at(g, x0 + x, y0 + y));
+            }
+        }
+        Self {
+            x0,
+            y0,
+            w,
+            h,
+            cells,
+        }
+    }
+
+    fn get(&self, x: i32, y: i32) -> Option<u8> {
+        let (lx, ly) = (x - self.x0, y - self.y0);
+        if lx < 0 || ly < 0 || lx >= self.w || ly >= self.h {
+            return None;
+        }
+        self.cells[(ly * self.w + lx) as usize]
+    }
+
+    fn density(&self, o: u8, x: i32, y: i32) -> f32 {
+        const W: [f32; 3] = [1.0, 2.0, 1.0];
+        let mut sum = 0.0;
+        for (j, wy) in W.iter().enumerate() {
+            for (i, wx) in W.iter().enumerate() {
+                if self.get(x + i as i32 - 1, y + j as i32 - 1) == Some(o) {
+                    sum += wx * wy;
+                }
+            }
+        }
+        sum / 16.0
+    }
+}
+
+fn contour(corner: [Vec2; 4], f: [f32; 4]) -> Vec<Vec2> {
+    let mut pts = Vec::with_capacity(8);
+    for k in 0..4 {
+        let n = (k + 1) % 4;
+        let (a, b) = (f[k] >= 0.5, f[n] >= 0.5);
+        if a {
+            pts.push(corner[k]);
+        }
+        if a != b {
+            let t = ((0.5 - f[k]) / (f[n] - f[k])).clamp(0.0, 1.0);
+            pts.push(corner[k].lerp(corner[n], t));
+        }
+    }
+    pts
+}
+
+fn land_pass(g: &Paper, cam: &Cam, own: &Owners, fill: &mut Fill, shift: Vec2, lip: bool) {
+    let corner = |x: i32, y: i32| cam.at(cell_center(glam::ivec2(x, y))) + shift;
+    for y in cam.y0..cam.y1 {
+        let mut x = cam.x0;
+        while x < cam.x1 {
+            let k = [
+                own.get(x, y),
+                own.get(x + 1, y),
+                own.get(x + 1, y + 1),
+                own.get(x, y + 1),
+            ];
+            let tint = |o: u8, x: i32| {
+                let base = color(o as usize);
+                if lip {
+                    return base.darker(0.68);
+                }
+                let f = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)]
+                    .iter()
+                    .zip(k)
+                    .filter(|(_, c)| *c == Some(o))
+                    .map(|((cx, cy), _)| fresh_at(g, *cx, *cy))
+                    .fold(0.0, f32::max);
+                lighter(base, 0.45 * f)
+            };
+            let solid = |o: u8, x: i32| {
+                (-1..=2).all(|dy| (-1..=2).all(|dx| own.get(x + dx, y + dy) == Some(o)))
+            };
+            if let Some(o) = k[0].filter(|o| solid(*o, x)) {
+                let col = tint(o, x);
+                let start = x;
+                x += 1;
+                while x < cam.x1 && solid(o, x) && tint(o, x) == col {
+                    x += 1;
+                }
+                fill.rect(corner(start, y), corner(x, y + 1), col);
+                continue;
+            }
+            let cs = [
+                corner(x, y),
+                corner(x + 1, y),
+                corner(x + 1, y + 1),
+                corner(x, y + 1),
+            ];
+            let near: Vec<u8> = (-1..=2)
+                .flat_map(|dy| (-1..=2).map(move |dx| (dx, dy)))
+                .filter_map(|(dx, dy)| own.get(x + dx, y + dy))
+                .fold(vec![], |mut v, o| {
+                    if !v.contains(&o) {
+                        v.push(o);
+                    }
+                    v
+                });
+            for o in near {
+                let f = [
+                    own.density(o, x, y),
+                    own.density(o, x + 1, y),
+                    own.density(o, x + 1, y + 1),
+                    own.density(o, x, y + 1),
+                ];
+                if f.iter().all(|v| *v < 0.5) {
+                    continue;
+                }
+                let pts = contour(cs, f);
+                if pts.len() >= 3 {
+                    fill.poly(&pts, tint(o, x));
+                }
+            }
+            x += 1;
+        }
+    }
 }
 
 fn draw_land(g: &Paper, pen: &mut Pen, cam: &Cam) {
-    let c = cam.cell;
-    let rad = c * ROUND;
-    for pass in 0..2 {
-        for y in cam.y0..cam.y1 {
-            let mut x = cam.x0;
-            while x < cam.x1 {
-                let Some(o) = shown_at(g, x, y) else {
-                    x += 1;
-                    continue;
-                };
-                let base = color(o as usize);
-                let i = idx(glam::ivec2(x, y));
-                let age = g.w.age(i);
-                let fresh = (0.0..0.4).contains(&age);
-                let corners = corners_of(g, x, y, o);
-                let lip_here = shown_at(g, x, y + 1) != Some(o);
-                if pass == 0 {
-                    if lip_here {
-                        let at = cam.at(vec2(x as f32, y as f32 + LIP));
-                        cell_shape(
-                            pen,
-                            Rect::new(at.x, at.y, c + 0.5, c),
-                            [corners[0], corners[1], false, false],
-                            rad,
-                            base.darker(0.68),
-                        );
-                    }
-                    x += 1;
-                    continue;
-                }
-                if fresh || corners.iter().any(|k| *k) {
-                    let k = if fresh {
-                        0.55 + 0.45 * ease_out_back((age / 0.3).min(1.0))
-                    } else {
-                        1.0
-                    };
-                    let at = cam.at(vec2(x as f32 + 0.5, y as f32 + 0.5));
-                    let s = (c + 0.5) * k;
-                    let col = if fresh {
-                        lighter(base, 0.45 * (1.0 - age / 0.4))
-                    } else {
-                        base
-                    };
-                    cell_shape(
-                        pen,
-                        Rect::new(at.x - s / 2.0, at.y - s / 2.0, s, s),
-                        corners,
-                        rad * k,
-                        col,
-                    );
-                    x += 1;
-                    continue;
-                }
-                let start = x;
-                while x < cam.x1 {
-                    let Some(n) = shown_at(g, x, y) else { break };
-                    let j = idx(glam::ivec2(x, y));
-                    if n != o
-                        || (0.0..0.4).contains(&g.w.age(j))
-                        || corners_of(g, x, y, o).iter().any(|k| *k)
-                    {
-                        break;
-                    }
-                    x += 1;
-                }
-                let at = cam.at(vec2(start as f32, y as f32));
-                pen.rect(
-                    Rect::new(at.x, at.y, (x - start) as f32 * c + 0.5, c + 0.5),
-                    base,
-                );
-            }
-        }
-    }
-    for y in cam.y0..cam.y1 {
-        for x in cam.x0..cam.x1 {
-            let Some(o) = shown_at(g, x, y) else { continue };
-            if shown_at(g, x, y - 1) != Some(o) {
-                let at = cam.at(vec2(x as f32, y as f32));
-                let corners = corners_of(g, x, y, o);
-                let inset = if corners[2] { c * ROUND } else { 0.0 };
-                let out = if corners[3] { c * ROUND } else { 0.0 };
-                pen.rect(
-                    Rect::new(at.x + inset, at.y + c * 0.06, c - inset - out, c * 0.1),
-                    lighter(color(o as usize), 0.3),
-                );
-            }
-        }
-    }
+    let mut fill = Fill::default();
+    let own = Owners::new(g, cam);
+    land_pass(g, cam, &own, &mut fill, vec2(0.0, LIP * cam.cell), true);
+    fill.flush(pen);
+    land_pass(g, cam, &own, &mut fill, Vec2::ZERO, false);
+    fill.flush(pen);
 }
 
 fn polyline(pen: &mut Pen, pts: &[Vec2], width: impl Fn(usize) -> f32, col: Color) {
@@ -386,12 +451,7 @@ fn draw_heads(g: &Paper, pen: &mut Pen, cam: &Cam) {
         let p = &g.w.players[id];
         let at = cam.at(p.look());
         let s = c * HEAD;
-        let since_turn = g.w.clock - p.turned_at;
-        let squash = if since_turn < 0.25 {
-            (since_turn / 0.25 * PI).sin() * 0.14
-        } else {
-            0.0
-        };
+        let squash = (p.spin.abs() / p.turn.max(0.1)).min(1.0) * 0.12;
         let spawn = ease_out_back((p.age / 0.4).min(1.0)).max(0.05);
         let bob = (g.clock * 10.0 + id as f32).sin() * c * 0.05;
         let head = p.heading();
@@ -583,15 +643,16 @@ fn draw_minimap(g: &Paper, pen: &mut Pen, view: &View) {
     );
     pen.round_rect(frame, 18.0, Color::new(1.0, 1.0, 1.0, 0.85));
     pen.rect(r, Color::from_rgba(200, 225, 190, 255));
-    let step = 2;
-    let k = r.w / GW as f32;
-    for y in (0..GH).step_by(step) {
+    let step = RES * 2;
+    let k = r.w / N as f32;
+    let at = |x: i32, y: i32| g.w.owner[idx(glam::ivec2(x + step / 2, y + step / 2))];
+    for y in (0..N).step_by(step as usize) {
         let mut x = 0;
-        while x < GW {
-            let o = g.w.owner[idx(glam::ivec2(x, y))];
+        while x < N {
+            let o = at(x, y);
             let start = x;
-            while x < GW && g.w.owner[idx(glam::ivec2(x, y))] == o {
-                x += step as i32;
+            while x < N && at(x, y) == o {
+                x += step;
             }
             if let Some(o) = o {
                 pen.rect(
@@ -615,10 +676,11 @@ fn draw_minimap(g: &Paper, pen: &mut Pen, view: &View) {
         f.w / cell,
         f.h / cell,
     );
-    let vx0 = seen.x.clamp(0.0, GW as f32);
-    let vy0 = seen.y.clamp(0.0, GH as f32);
-    let vx1 = (seen.x + seen.w).clamp(0.0, GW as f32);
-    let vy1 = (seen.y + seen.h).clamp(0.0, GH as f32);
+    let k = r.w / SIZE;
+    let vx0 = seen.x.clamp(0.0, SIZE);
+    let vy0 = seen.y.clamp(0.0, SIZE);
+    let vx1 = (seen.x + seen.w).clamp(0.0, SIZE);
+    let vy1 = (seen.y + seen.h).clamp(0.0, SIZE);
     let box_r = Rect::new(
         r.x + vx0 * k,
         r.y + vy0 * k,
@@ -693,7 +755,7 @@ fn draw_ready(g: &Paper, pen: &mut Pen, view: &View) {
         pen.text_outline(&best, c.x, c.y + 136.0, 30.0, GOLD_TEXT, ink());
     }
     let pulse = 1.0 + (g.clock * 4.0).sin() * 0.04;
-    pen.hint("Swipe to start", vec2(view.w / 2.0, view.h - 70.0), pulse);
+    pen.hint("Touch to start", vec2(view.w / 2.0, view.h - 70.0), pulse);
 }
 
 pub fn cause_line(g: &Paper) -> String {

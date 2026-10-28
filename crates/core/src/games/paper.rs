@@ -8,9 +8,10 @@ use crate::fx::*;
 use crate::geom::*;
 use crate::profile::{self, Better};
 use crate::sfx::{self, Say, Sfx};
-use glam::{vec2, IVec2, Vec2};
+use glam::{vec2, Vec2};
 pub use world::{
-    center, idx, in_bounds, Cause, Death, Player, World, GH, GW, MAX_PLAYERS, START_R,
+    cell_at, cell_center, cell_of, idx, in_grid, Cause, Death, Player, World, CELL, MAX_PLAYERS, N,
+    RES, SIZE, START_R,
 };
 
 pub const GAME: &str = "paper";
@@ -21,6 +22,8 @@ pub const FEED_MAX: usize = 3;
 const MIN_CELLS: f32 = 17.0;
 const MAX_CELLS: f32 = 46.0;
 const THREAT_RANGE: f32 = 26.0;
+const STEER_DEAD_MM: f32 = 2.5;
+const MIN_CLAIM_PCT: f32 = 0.05;
 
 pub const COLORS: [(u8, u8, u8); 12] = [
     (40, 170, 230),
@@ -90,8 +93,7 @@ pub struct Paper {
     pub lives: u32,
     pub skill: f32,
     pub milestone: Option<i64>,
-    pub steer: Option<Dir>,
-    drag_from: Option<Vec2>,
+    pub steer: Option<f32>,
     last_claim_say: f32,
 }
 
@@ -106,12 +108,13 @@ impl Paper {
         let mut w = World::new(skill);
         let n = arena::bots_for(skill);
         let spots = world::spread_spots(n + 1);
-        w.add_player(spots[0], Dir::Right, false);
+        w.add_player(spots[0], 0.0, false);
         for s in &spots[1..] {
-            w.add_player(*s, Dir::ALL[crate::rng::gen_range(0, 4)], true);
+            let a = crate::rng::gen_range(-std::f32::consts::PI, std::f32::consts::PI);
+            w.add_player(*s, a, true);
         }
         w.players[0].speed = 0.0;
-        let start = w.players[0].pos();
+        let start = w.players[0].pos;
         let mut g = Self {
             w,
             state: State::Ready,
@@ -138,7 +141,6 @@ impl Paper {
             skill,
             milestone: arena::next_milestone(best.max(0)),
             steer: None,
-            drag_from: None,
             last_claim_say: -10.0,
         };
         g.zoom = g.target_zoom();
@@ -201,31 +203,32 @@ impl Paper {
             .collect()
     }
 
-    fn read_input(&mut self, input: &Input) -> Option<Dir> {
-        if let Some(d) = input.key_dir {
-            return Some(d);
+    fn read_input(&self, input: &Input, view: &View) -> Option<f32> {
+        let keys = vec2(
+            (input.right as i32 - input.left as i32) as f32,
+            (input.down_key as i32 - input.up as i32) as f32,
+        );
+        let keys = if keys == Vec2::ZERO {
+            input.key_dir.map_or(Vec2::ZERO, |d| d.delta().as_vec2())
+        } else {
+            keys
+        };
+        if keys != Vec2::ZERO {
+            return Some(world::angle_of(keys));
         }
-        if input.pressed {
-            self.drag_from = Some(input.pos);
+        if input.down {
+            let head = self.to_screen(view, self.me().pos);
+            let d = input.pos - head;
+            if d.length() > STEER_DEAD_MM * input.mm() {
+                return Some(world::angle_of(d));
+            }
         }
-        if !input.down {
-            self.drag_from = None;
-            return input.swipe;
-        }
-        let from = self.drag_from?;
-        let delta = input.pos - from;
-        let step = SWIPE_MM * input.mm() * 0.8;
-        if delta.length() < step {
-            return None;
-        }
-        let d = Dir::from_vec(delta);
-        let along = delta.dot(d.delta().as_vec2());
-        let across = delta.length_squared() - along * along;
-        if along * along < across * 1.5 {
-            return None;
-        }
-        self.drag_from = Some(input.pos);
-        Some(d)
+        input.swipe.map(|d| world::angle_of(d.delta().as_vec2()))
+    }
+
+    pub fn aim(&mut self, angle: f32) {
+        self.steer = Some(angle);
+        self.w.players[0].want = angle;
     }
 
     fn begin(&mut self) {
@@ -241,9 +244,10 @@ impl Paper {
             .w
             .free_spot(200)
             .or_else(|| self.w.free_spot(400))
-            .unwrap_or(IVec2::new(GW / 2, GH / 2));
+            .unwrap_or(Vec2::splat(SIZE / 2.0));
         self.w.respawn(0, at);
-        self.cam = self.w.players[0].pos();
+        self.steer = None;
+        self.cam = self.w.players[0].pos;
         self.zoom = self.target_zoom();
         self.state = State::Playing;
         self.since = 0.0;
@@ -348,6 +352,9 @@ impl Paper {
                 continue;
             }
             let pct = c.cells as f32 / self.w.total() as f32 * 100.0;
+            if pct < MIN_CLAIM_PCT {
+                continue;
+            }
             self.popups.add(
                 c.at - vec2(0.0, 2.4),
                 format!("+{pct:.1}%"),
@@ -404,10 +411,9 @@ impl Paper {
         }
     }
 
-    fn tick(&mut self, input: &Input, dt: f32) {
-        if let Some(d) = self.read_input(input) {
-            self.steer = Some(d);
-            self.w.players[0].wants(d);
+    fn tick(&mut self, input: &Input, view: &View, dt: f32) {
+        if let Some(a) = self.read_input(input, view) {
+            self.aim(a);
         }
         self.run.time += dt;
         self.w.advance(dt);
@@ -455,9 +461,9 @@ impl Game for Paper {
         self.feed.retain(|f| f.age < FEED_LIFE);
         match self.state {
             State::Ready => {
-                if let Some(d) = self.read_input(input).or(input.dir()) {
+                if let Some(a) = self.read_input(input, view) {
                     self.begin();
-                    self.w.players[0].wants(d);
+                    self.aim(a);
                 } else if input.tap() {
                     self.begin();
                 } else {
@@ -465,7 +471,7 @@ impl Game for Paper {
                     self.w.respawn_bots(dt);
                 }
             }
-            State::Playing => self.tick(input, dt),
+            State::Playing => self.tick(input, view, dt),
             State::Dead => {
                 self.w.advance(dt);
                 self.w.respawn_bots(dt);

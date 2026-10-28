@@ -126,8 +126,8 @@ mod tests {
     }
 
     #[test]
-    fn the_map_is_at_least_a_hundred_cells_square() {
-        assert!(super::super::world::GW.min(super::super::world::GH) >= 100);
+    fn the_map_is_at_least_a_hundred_units_square() {
+        const { assert!(super::super::world::SIZE >= 100.0) };
     }
 
     #[test]
