@@ -20,6 +20,7 @@ pub enum World3d {
     Flat,
     Hotel,
     Helix,
+    BallSort,
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -52,6 +53,7 @@ impl Plugin for Game3dPlugin {
             .add_plugins((
                 crate::games::helix::world::HelixWorld,
                 crate::games::hotel::world::HotelWorld,
+                crate::games::ballsort::world::BallSortWorld,
             ));
     }
 }
@@ -246,6 +248,8 @@ pub enum Shape {
     Sphere,
     Ball,
     Cylinder(u8),
+    Tube(u8),
+    Torus,
     Cone(u8),
     Disc,
     Ring,
@@ -270,6 +274,7 @@ pub enum Finish {
     Satin,
     Sticker,
     Backdrop,
+    Glass,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -463,6 +468,13 @@ impl Kit<'_> {
                 m.unlit = true;
                 m.cull_mode = None;
             }
+            Finish::Glass => {
+                m.alpha_mode = AlphaMode::Blend;
+                m.perceptual_roughness = 0.06;
+                m.reflectance = 0.9;
+                m.cull_mode = None;
+                m.double_sided = true;
+            }
         }
         match p.skin {
             Some(Skin::Tile(sheet, name, repeat)) => {
@@ -573,6 +585,23 @@ pub fn ring_mesh(inner: f32, segments: u32) -> Mesh {
     quads(pos, nor, uv, idx)
 }
 
+pub fn tube_mesh(segments: u32) -> Mesh {
+    let (mut pos, mut nor, mut uv, mut idx) = (vec![], vec![], vec![], vec![]);
+    for i in 0..=segments {
+        let k = i as f32 / segments as f32;
+        let (s, c) = (k * TAU).sin_cos();
+        pos.push([c * 0.5, -0.5, s * 0.5]);
+        pos.push([c * 0.5, 0.5, s * 0.5]);
+        nor.extend([[c, 0.0, s]; 2]);
+        uv.extend([[k, 1.0], [k, 0.0]]);
+        if i < segments {
+            let b = i * 2;
+            idx.extend([b, b + 1, b + 2, b + 1, b + 3, b + 2]);
+        }
+    }
+    quads(pos, nor, uv, idx)
+}
+
 pub fn sector_mesh(outer: f32, inner: f32, thick: f32, span: f32, steps: usize) -> Mesh {
     let (mut pos, mut nor, mut uv, mut idx) = (vec![], vec![], vec![], vec![]);
     let mut quad = |p: [[f32; 3]; 4], n: [f32; 3], t: [[f32; 2]; 4]| {
@@ -644,6 +673,12 @@ pub fn build_mesh(shape: Shape) -> Mesh {
         Shape::Sphere => Sphere::new(0.5).mesh().uv(20, 12),
         Shape::Ball => Sphere::new(0.5).mesh().uv(32, 18),
         Shape::Cylinder(n) => Cylinder::new(0.5, 1.0).mesh().resolution(n as u32).build(),
+        Shape::Tube(n) => tube_mesh(n as u32),
+        Shape::Torus => Torus::new(0.46, 0.54)
+            .mesh()
+            .minor_resolution(10)
+            .major_resolution(40)
+            .build(),
         Shape::Cone(n) => Cone::new(0.5, 1.0).mesh().resolution(n as u32).build(),
         Shape::Disc => Circle::new(0.5)
             .mesh()
@@ -767,6 +802,8 @@ mod tests {
             Shape::Sphere,
             Shape::Ball,
             Shape::Cylinder(10),
+            Shape::Tube(24),
+            Shape::Torus,
             Shape::Cone(10),
             Shape::Disc,
             Shape::Ring,

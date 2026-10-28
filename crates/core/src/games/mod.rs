@@ -1,3 +1,4 @@
+pub mod ballsort;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -59,7 +60,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 17] = [
+pub const CATALOG: [Info; 18] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -144,6 +145,13 @@ pub const CATALOG: [Info; 17] = [
         Kind::Arcade,
         "Helix Jump",
         (255, 130, 70),
+    ),
+    info(
+        "ballsort",
+        "Ball Sort",
+        Kind::Arcade,
+        "Color Bump, ball sort puzzles",
+        (40, 190, 180),
     ),
     info(
         "blocks",
