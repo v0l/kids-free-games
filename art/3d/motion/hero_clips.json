@@ -1,0 +1,54 @@
+{
+ "run": {
+  "file": "art/3d/motion/bvh/sprint_13.bvh",
+  "loop": true,
+  "amp": {
+   "leg": 1.5,
+   "shin": 1.3,
+   "arm": 1.7,
+   "forearm": 1.2,
+   "spine": 1.2
+  }
+ },
+ "jump": {
+  "file": "art/3d/motion/bvh/hop_11.bvh",
+  "trim": "air",
+  "pad": 5,
+  "amp": {
+   "leg": 1.3,
+   "shin": 1.2,
+   "arm": 1.5
+  }
+ },
+ "slide": {
+  "file": "art/3d/motion/bvh/duck_11.bvh",
+  "trim": "low",
+  "pad": 4,
+  "amp": {
+   "leg": 1.2,
+   "arm": 1.3
+  }
+ },
+ "idle": {
+  "file": "art/3d/motion/bvh/idle_1.bvh",
+  "loop": true,
+  "lift": false,
+  "amp": {
+   "arm": 1.2,
+   "hips": 0.3,
+   "spine": 0.3,
+   "head": 0.3
+  }
+ },
+ "happy": {
+  "file": "art/3d/motion/bvh/cheer_12.bvh",
+  "amp": {
+   "arm": 1.5,
+   "forearm": 1.2,
+   "leg": 1.2
+  }
+ },
+ "fail": {
+  "file": "art/3d/motion/bvh/fail_1.bvh"
+ }
+}

@@ -3,6 +3,7 @@ from mathutils import Vector, Quaternion, Matrix
 
 argv = sys.argv[sys.argv.index("--") + 1:]
 SRC, OUT, SHEETS = argv[0], argv[1], argv[2]
+MOTION = argv[3] if len(argv) > 3 else None
 TRIS = 5000
 FPS = 24
 
@@ -252,29 +253,197 @@ CLIPS = {
     "fail": (fail, 36, False),
 }
 
-for name, (fn, n, loop) in CLIPS.items():
+LIMBS = {
+    "arm.L": ("LeftArm", "LeftForeArm"),
+    "forearm.L": ("LeftForeArm", "LeftHand"),
+    "arm.R": ("RightArm", "RightForeArm"),
+    "forearm.R": ("RightForeArm", "RightHand"),
+    "leg.L": ("LeftLeg", "LeftShin"),
+    "shin.L": ("LeftShin", "LeftFoot"),
+    "foot.L": ("LeftFoot", "LeftToeEnd"),
+    "leg.R": ("RightLeg", "RightShin"),
+    "shin.R": ("RightShin", "RightFoot"),
+    "foot.R": ("RightFoot", "RightToeEnd"),
+}
+TRUNK = {
+    "hips": ("Hips", "Chest", "LeftLeg", "RightLeg"),
+    "spine": ("Chest", "Neck1", "LeftArm", "RightArm"),
+    "head": ("Head", "HeadEnd", "LeftEye", "RightEye"),
+}
+ORDER = ["hips", "spine", "head", "arm.L", "forearm.L", "arm.R", "forearm.R",
+         "leg.L", "shin.L", "foot.L", "leg.R", "shin.R", "foot.R"]
+HIP_H = JOINTS["hips"][0][2]
+
+
+def rest_dir(b):
+    h, t = JOINTS[b][0], JOINTS[b][1]
+    return (Vector(t) - Vector(h)).normalized()
+
+
+def basis(up, side):
+    z = up.normalized()
+    x = (side - z * side.dot(z)).normalized()
+    y = z.cross(x)
+    return Matrix((x, y, z)).transposed()
+
+
+def import_bvh(path):
+    before = set(bpy.data.objects)
+    acts = set(bpy.data.actions)
+    bpy.ops.import_anim.bvh(filepath=path, axis_forward="-Z", axis_up="Y", global_scale=0.01,
+                            use_fps_scale=False, update_scene_fps=False, rotate_mode="NATIVE")
+    src = [o for o in bpy.data.objects if o not in before][0]
+    return src, [a for a in bpy.data.actions if a not in acts]
+
+
+def sample(src, f, yaw):
+    bpy.context.scene.frame_set(f)
+    mw = src.matrix_world
+    P = {pb.name: yaw @ (mw @ pb.head) for pb in src.pose.bones}
+    return P
+
+
+def pose_world(P, R0):
+    W = {}
+    for b, (a, c, l, r) in TRUNK.items():
+        W[b] = basis(P[c] - P[a], P[l] - P[r]) @ R0[b].inverted()
+    for b, (a, c) in LIMBS.items():
+        parent = JOINTS[b][2]
+        pw = W[parent]
+        base = pw @ rest_dir(b)
+        W[b] = base.rotation_difference((P[c] - P[a]).normalized()).to_matrix() @ pw
+    return W
+
+
+def features(W):
+    out = []
+    for b in LIMBS:
+        out.extend(W[b] @ rest_dir(b))
+    return out
+
+
+def best_loop(feats, lo, hi):
+    n = len(feats)
+    best = None
+    for i in range(int(n * 0.1), int(n * 0.6)):
+        for p in range(lo, hi + 1):
+            j = i + p
+            if j >= n:
+                break
+            d = sum((x - y) ** 2 for x, y in zip(feats[i], feats[j]))
+            if best is None or d < best[0]:
+                best = (d, i, j)
+    return best
+
+
+def retarget(name, spec):
+    src, made = import_bvh(spec["file"])
+    f0, f1 = map(int, made[0].frame_range)
+    P0 = sample(src, f0, Matrix.Identity(4))
+    side = P0["LeftLeg"] - P0["RightLeg"]
+    yaw_ang = math.atan2(side.y, side.x)
+    yaw = Matrix.Rotation(-yaw_ang + math.radians(spec.get("yaw", 0)), 4, "Z")
+    up = P0["Head"] - P0["Hips"]
+    print(name, "src up", tuple(round(v, 2) for v in up.normalized()))
+    stand_h = (P0["Hips"].z - min(P0["LeftToeEnd"].z, P0["RightToeEnd"].z))
+    k = HIP_H / max(stand_h, 1e-3)
+    ground = min(P0["LeftToeEnd"].z, P0["RightToeEnd"].z)
+    mw = yaw @ src.matrix_world
+    RP = {b.name: mw @ b.head_local for b in src.data.bones}
+    R0 = {b: basis(RP[c] - RP[a], RP[l] - RP[r]) for b, (a, c, l, r) in TRUNK.items()}
+    frames = []
+    feet = []
+    hips = []
+    for f in range(f0, f1 + 1):
+        P = sample(src, f, yaw)
+        frames.append((pose_world(P, R0), (P["Hips"].z - ground - stand_h) * k))
+        feet.append(min(P[j].z for j in ("LeftToeEnd", "RightToeEnd", "LeftFoot", "RightFoot")) - ground)
+        hips.append(P["Hips"].z - ground)
+    trim = spec.get("trim")
+    if trim:
+        if trim == "air":
+            on = [i for i, h in enumerate(feet) if h > 0.06]
+        else:
+            low = min(hips)
+            on = [i for i, h in enumerate(hips) if h < low + 0.35 * (stand_h - low)]
+        if on:
+            pad = spec.get("pad", 4)
+            a, b = max(0, on[0] - pad), min(len(frames), on[-1] + pad + 1)
+            print(name, "trim", trim, a, b, "of", len(frames))
+            frames = frames[a:b]
+    lo, hi = int(spec.get("from", 0) * len(frames)), int(spec.get("to", 1) * len(frames))
+    if spec.get("loop"):
+        d, i, j = best_loop([features(w) for w, _ in frames], 12, 34)
+        print(name, "loop", i, j, round(d, 3))
+        frames = frames[i:j] + [frames[i]]
+    else:
+        frames = frames[lo:hi]
     act = bpy.data.actions.new(name)
     rig.animation_data_create()
     rig.animation_data.action = act
-    count = n + 1
-    for i in range(count):
-        d, z = fn(i / n)
+    for t, (W, lift) in enumerate(frames):
         for pb in rig.pose.bones:
             pb.rotation_quaternion = Quaternion((1, 0, 0, 0))
             pb.location = (0, 0, 0)
-        for bone, (rx, ry, rz) in d.items():
-            rig.pose.bones[bone].rotation_quaternion = euler_q(bone, rx, ry, rz, d)
-        rig.pose.bones["root"].location = Vector((0, z, 0))
+        for b in ORDER:
+            pb = rig.pose.bones[b]
+            pname = pb.parent.name
+            Mp, Mb = REST[pname], REST[b]
+            Ap = W[pname] @ Mp if pname in W else Mp
+            Ab = W[b] @ Mb
+            q = ((Mp.inverted() @ Mb).inverted() @ Ap.inverted() @ Ab).to_quaternion()
+            amp = spec.get("amp", {}).get(b.split(".")[0], 1.0)
+            if amp != 1.0:
+                axis, ang = q.to_axis_angle()
+                q = Quaternion(axis, ang * amp)
+            pb.rotation_quaternion = q
+        rig.pose.bones["root"].location = Vector((0, lift if spec.get("lift", True) else 0.0, 0))
         for pb in rig.pose.bones:
-            pb.keyframe_insert("rotation_quaternion", frame=i + 1)
+            pb.keyframe_insert("rotation_quaternion", frame=t + 1)
             if pb.name == "root":
-                pb.keyframe_insert("location", frame=i + 1)
-    if hasattr(act, "use_cyclic"):
-        pass
-    track = rig.animation_data.nla_tracks.new()
-    track.name = name
-    strip = track.strips.new(name, 1, act)
-    strip.name = name
+                pb.keyframe_insert("location", frame=t + 1)
+    bpy.data.objects.remove(src)
+    for a in made:
+        bpy.data.actions.remove(a)
+    act.name = name
+    bpy.context.view_layer.objects.active = rig
+    return len(frames)
+
+
+if MOTION:
+    specs = json.load(open(MOTION))
+    CLIPS = {n: (None, s.get("frames", 8), s.get("loop", False)) for n, s in specs.items()}
+    for name, spec in specs.items():
+        n = retarget(name, spec)
+        CLIPS[name] = (None, n - 1, spec.get("loop", False))
+        track = rig.animation_data.nla_tracks.new()
+        track.name = name
+        strip = track.strips.new(name, 1, bpy.data.actions[name])
+        strip.name = name
+else:
+    for name, (fn, n, loop) in CLIPS.items():
+        act = bpy.data.actions.new(name)
+        rig.animation_data_create()
+        rig.animation_data.action = act
+        count = n + 1
+        for i in range(count):
+            d, z = fn(i / n)
+            for pb in rig.pose.bones:
+                pb.rotation_quaternion = Quaternion((1, 0, 0, 0))
+                pb.location = (0, 0, 0)
+            for bone, (rx, ry, rz) in d.items():
+                rig.pose.bones[bone].rotation_quaternion = euler_q(bone, rx, ry, rz, d)
+            rig.pose.bones["root"].location = Vector((0, z, 0))
+            for pb in rig.pose.bones:
+                pb.keyframe_insert("rotation_quaternion", frame=i + 1)
+                if pb.name == "root":
+                    pb.keyframe_insert("location", frame=i + 1)
+        if hasattr(act, "use_cyclic"):
+            pass
+        track = rig.animation_data.nla_tracks.new()
+        track.name = name
+        strip = track.strips.new(name, 1, act)
+        strip.name = name
 rig.animation_data.action = None
 bpy.ops.object.mode_set(mode="OBJECT")
 
@@ -284,6 +453,7 @@ for img in bpy.data.images:
 mat_ok = [m.name for m in body.data.materials]
 print("materials", mat_ok, "tris", len(body.data.polygons), "bones", len(rig.pose.bones))
 
+bpy.context.scene.render.fps = 30 if MOTION else FPS
 bpy.ops.object.select_all(action="DESELECT")
 body.select_set(True)
 rig.select_set(True)
@@ -294,7 +464,6 @@ bpy.ops.export_scene.gltf(
 )
 
 sc = bpy.context.scene
-sc.render.fps = FPS
 sc.render.engine = "BLENDER_WORKBENCH"
 sc.display.shading.light = "FLAT"
 sc.display.shading.color_type = "TEXTURE"
@@ -328,6 +497,6 @@ def render_clip(name, views):
             bpy.ops.render.render(write_still=True)
 
 
-for clip in ("run", "idle", "jump", "happy", "fail", "slide"):
+for clip in [c for c in ("run", "idle", "jump", "happy", "fail", "slide") if c in bpy.data.actions]:
     render_clip(clip, (("game", 180), ("back", 180), ("side", 90)))
 print("done")

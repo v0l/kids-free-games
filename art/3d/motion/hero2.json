@@ -1,0 +1,6 @@
+[
+ {"name": "sprint", "secs": 3.0, "seeds": [11, 12, 13, 14], "prompt": "A person sprints forward at full speed with long strides and high knees, arms pumping hard with bent elbows."},
+ {"name": "duck", "secs": 1.6, "seeds": [11, 12, 13], "prompt": "A person running forward ducks down into a low crouch to pass under a bar, then stands back up and keeps running."},
+ {"name": "cheer", "secs": 2.5, "seeds": [11, 12, 13], "prompt": "A child celebrates, jumping on the spot with both fists raised high above the head."},
+ {"name": "hop", "secs": 1.6, "seeds": [11, 12, 13], "prompt": "A person running forward leaps over a hurdle with both knees tucked up, then lands running."}
+]

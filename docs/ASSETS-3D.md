@@ -23,3 +23,13 @@ Tests: `every_hero_frame_exists_in_the_runner_sheet`, `every_runner_prop_exists_
 `cargo run -p kids_games --example model_sheet -- models/hero.glb --clips run,jump --views game,side --out /tmp/sheet.png`
 
 Renders the glb through Bevy's own glTF and animation path, headless (no window, so it never touches the desktop), and writes one PNG: a row per clip and view, a column per frame. Without `--clips` a model with no animations gets a turntable per view. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. Read the PNG with an image viewer tool to check poses, the real in-game result.
+
+## Hero motion (Kimodo)
+
+Clips are motion capture quality motion from NVIDIA Kimodo (text to motion, SOMA skeleton, BVH), retargeted onto the 14 bone hero rig.
+
+1. Kimodo lives on spark: repo `/tmp/kimodo`, venv `/tmp/kmv` (needs HF access to `meta-llama/Meta-Llama-3-8B-Instruct`). Its `MotionCorrection` package builds on ARM with x86 intrinsics mapped by SIMDe (`#include <simde/x86/avx2.h>` in `src/cpp/Math/SIMD.h`, `-msse4.1 -mavx` removed from CMakeLists).
+2. `TEXT_ENCODER_MODE=local PYTHONPATH=/tmp/kimodo /tmp/kmv/bin/python art/3d/motion/kimodo_batch.py art/3d/motion/hero.json out/` renders several seeds per prompt (encoder load is about 8 minutes, then seconds per clip).
+3. `art/3d/motion/hero_clips.json` picks one take per game clip and how to cut it: `loop` finds the closest matching pose pair for a seamless cycle, `trim: air|low` keeps the airborne or crouched span, `amp` scales a bone group's rotation (cartoon exaggeration), `lift: false` pins the hips.
+4. `blender -b -P art/3d/player/build.py -- tex.glb assets/models/hero.glb sheets/ art/3d/motion/hero_clips.json` retargets by bone directions (limbs) and trunk frames (hips, chest, head) measured against the BVH rest pose, then exports at 30 fps.
+5. Check with `model_sheet`. The runner scales jump and slide playback to the game's air time and slide time, and the run to ground speed.

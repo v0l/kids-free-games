@@ -201,7 +201,7 @@ fn spawn(
 }
 
 const HERO_H: f32 = 1.8;
-const JUMP_CLIP_SECS: f32 = 1.0;
+const STRIDE_METRES: f32 = 6.0;
 const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
 const PROPS: [&str; 7] = [
     "barrier", "hurdle", "gate", "train", "coin", "tree", "arch",
@@ -304,13 +304,34 @@ fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, kind: 
     }
 }
 
+fn clip_secs(
+    graphs: &Assets<AnimationGraph>,
+    clips: &Assets<AnimationClip>,
+    graph: &Handle<AnimationGraph>,
+    node: AnimationNodeIndex,
+) -> f32 {
+    graphs
+        .get(graph)
+        .and_then(|g| g.get(node))
+        .and_then(|n| match &n.node_type {
+            bevy::animation::graph::AnimationNodeType::Clip(c) => clips.get(c),
+            _ => None,
+        })
+        .map_or(1.0, |c| c.duration())
+}
+
 fn animate_hero(
     mut commands: Commands,
     frame: NonSend<crate::Frame>,
     models: Res<Models>,
     fresh: Query<Entity, (With<AnimationPlayer>, Without<AnimationGraphHandle>)>,
     mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
+    clips: Option<Res<Assets<AnimationClip>>>,
+    graphs: Option<Res<Assets<AnimationGraph>>>,
 ) {
+    let (Some(clips), Some(graphs)) = (clips, graphs) else {
+        return;
+    };
     let Some(graph) = models.graph.clone() else {
         return;
     };
@@ -335,15 +356,22 @@ fn animate_hero(
                 "run" | "idle" => {
                     a.repeat();
                 }
-                "jump" => {
-                    a.set_speed(JUMP_CLIP_SECS / (2.0 * JUMP_V / GRAVITY));
+                "jump" | "slide" => {
+                    let secs = clip_secs(&graphs, &clips, &graph, node);
+                    let wanted = if want == "jump" {
+                        2.0 * JUMP_V / GRAVITY
+                    } else {
+                        SLIDE_TIME
+                    };
+                    a.set_speed(secs / wanted);
                 }
                 _ => {}
             }
         }
         if want == "run" {
             if let Some(a) = player.animation_mut(node) {
-                a.set_speed((g.speed / 3.3).clamp(0.6, 4.0));
+                let secs = clip_secs(&graphs, &clips, &graph, node);
+                a.set_speed((secs * g.speed / STRIDE_METRES).clamp(0.6, 3.0));
             }
         }
     }
