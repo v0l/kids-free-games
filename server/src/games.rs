@@ -58,7 +58,7 @@ mod tests {
     use super::*;
 
     fn client_game_keys() -> Vec<String> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/games");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/core/src/games");
         let mut keys = vec![];
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();

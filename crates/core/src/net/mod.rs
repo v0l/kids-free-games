@@ -771,8 +771,12 @@ thread_local! {
     static NET: RefCell<Option<Net>> = const { RefCell::new(None) };
 }
 
+pub fn sync_enabled() -> bool {
+    !(cfg!(test) || crate::save::in_memory())
+}
+
 fn with<R>(f: impl FnOnce(&mut Net) -> R) -> Option<R> {
-    if cfg!(test) {
+    if !sync_enabled() {
         return None;
     }
     NET.with(|n| {

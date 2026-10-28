@@ -688,6 +688,14 @@ mod tests {
     }
 
     #[test]
+    fn tests_never_sync_to_the_live_server() {
+        let _ = menu();
+        assert!(!kg_core::net::sync_enabled());
+        kg_core::net::update(1.0, true);
+        assert!(!kg_core::net::is_online());
+    }
+
+    #[test]
     fn title_tagline_and_tiles_do_not_overlap() {
         for v in [
             View::ipad_landscape(),
