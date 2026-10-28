@@ -3,7 +3,7 @@ main = "build/worker/shim.mjs"
 compatibility_date = "2025-06-01"
 
 [build]
-command = "worker-build --release"
+command = "./admin/build.sh && worker-build --release"
 
 [[d1_databases]]
 binding = "DB"

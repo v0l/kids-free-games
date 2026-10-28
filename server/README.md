@@ -57,7 +57,7 @@ The app generates a random `id` (8 to 64 of `A-Za-z0-9_-`) when a game starts an
 
 ## Admin dashboard
 
-`GET /admin` serves a single-page dashboard (overview, players, saves, scores, per-game boards) that manages data through `/v1/admin/*`. Those routes take one shared key as the bearer token, set with `wrangler secret put ADMIN_KEY` (locally, `ADMIN_KEY=...` in `.dev.vars`). With no key set they return 404. The page keeps the key in the browser's localStorage after sign-in.
+`GET /admin` serves a Preact single-page dashboard (source in `admin/`, built with bun and Vite into `src/admin.html`, which is committed so `cargo test` needs no bun; `wrangler deploy` rebuilds it, or run `admin/build.sh`; `cd admin && bun run dev` proxies to a local `wrangler dev`). It shows an overview, players, saves, scores and per-game boards, and manages them through `/v1/admin/*`. Those routes take one shared key as the bearer token, set with `wrangler secret put ADMIN_KEY` (locally, `ADMIN_KEY=...` in `.dev.vars`). With no key set they return 404. The page keeps the key in the browser's localStorage after sign-in.
 
 | Method and path | Purpose |
 |---|---|
