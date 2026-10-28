@@ -261,6 +261,21 @@ pub fn window() -> Window {
     }
 }
 
+fn sync_on_close(
+    mut closing: MessageReader<bevy::window::WindowCloseRequested>,
+    mut life: MessageReader<bevy::window::AppLifecycle>,
+) {
+    if life
+        .read()
+        .any(|l| *l == bevy::window::AppLifecycle::WillSuspend)
+    {
+        kg_core::net::going_to_background();
+    }
+    if closing.read().count() > 0 {
+        kg_core::net::flush_before_exit();
+    }
+}
+
 pub fn build(scene: Scene, with_audio: bool) -> App {
     let mut app = App::new();
     app.add_plugins(
@@ -278,6 +293,10 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     .add_plugins(paint::PaintPlugin)
     .insert_non_send(Frame::new(scene))
     .add_systems(Update, frame.in_set(game3d::Step))
+    .add_systems(
+        Last,
+        sync_on_close.before(bevy::window::close_when_requested),
+    )
     .add_plugins(game3d::Game3dPlugin);
     if with_audio {
         app.add_systems(Startup, |mut f: NonSendMut<Frame>| {

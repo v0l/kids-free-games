@@ -4,6 +4,7 @@ pub const MAX_SESSION: f64 = 4.0 * 3600.0;
 pub const MAX_PER_UPLOAD: usize = 50;
 const DUMP_EVERY: f32 = 20.0;
 const KEEP: usize = 200;
+pub const HOLD_FOR: f32 = 600.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Session {
@@ -29,6 +30,8 @@ impl Session {
 #[derive(Default)]
 pub struct Tracker {
     sessions: Vec<Session>,
+    held: Vec<(String, f32)>,
+    single_until: f32,
     idle: f32,
     since_dump: f32,
     dirty: bool,
@@ -135,13 +138,47 @@ impl Tracker {
         }
     }
 
-    pub fn pending(&self, player: &str, include_open: bool) -> Vec<(String, String, i64, i64)> {
-        self.sessions
+    pub fn reject<'a>(&mut self, ids: impl Iterator<Item = &'a str>, clock: f32) {
+        let ids: Vec<&str> = ids.collect();
+        self.single_until = clock + HOLD_FOR;
+        if let [one] = ids[..] {
+            self.held.retain(|(h, _)| h != one);
+            self.held.push((one.to_string(), clock + HOLD_FOR));
+        }
+    }
+
+    pub fn pending(
+        &self,
+        player: &str,
+        include_open: bool,
+        clock: f32,
+    ) -> Vec<(String, String, i64, i64)> {
+        let held = |id: &str| self.held.iter().any(|(h, until)| h == id && clock < *until);
+        let single = clock < self.single_until;
+        let picked = self
+            .sessions
             .iter()
             .filter(|s| s.player == player && (include_open || !s.open) && s.worth_sending())
-            .take(MAX_PER_UPLOAD)
+            .filter(|s| !held(&s.id));
+        let size = if single { 1 } else { MAX_PER_UPLOAD };
+        picked
+            .take(size)
             .map(|s| (s.id.clone(), s.game.clone(), s.started, s.whole()))
             .collect()
+    }
+
+    pub fn lookup<'a>(
+        &self,
+        player: &str,
+        ids: impl Iterator<Item = &'a str>,
+    ) -> Vec<(String, String, i64, i64)> {
+        ids.filter_map(|id| {
+            self.sessions
+                .iter()
+                .find(|s| s.id == id && s.player == player)
+                .map(|s| (s.id.clone(), s.game.clone(), s.started, s.whole()))
+        })
+        .collect()
     }
 
     pub fn mark_sent(&mut self, id: &str, seconds: i64) {
@@ -186,13 +223,13 @@ mod tests {
     fn counts_only_while_a_game_is_open() {
         let mut t = Tracker::default();
         run(&mut t, 30, true);
-        assert!(t.pending(P, true).is_empty());
+        assert!(t.pending(P, true, 0.0).is_empty());
         t.begin(P, "snake", "abcdef01".into(), 1000);
         run(&mut t, 30, true);
         t.end();
         run(&mut t, 30, true);
         assert_eq!(
-            t.pending(P, true),
+            t.pending(P, true, 0.0),
             vec![("abcdef01".into(), "snake".into(), 1000, 30)]
         );
     }
@@ -204,7 +241,7 @@ mod tests {
         run(&mut t, 20, true);
         run(&mut t, 600, false);
         t.end();
-        assert_eq!(t.pending(P, true)[0].3, 20 + IDLE_AFTER as i64);
+        assert_eq!(t.pending(P, true, 0.0)[0].3, 20 + IDLE_AFTER as i64);
     }
 
     #[test]
@@ -212,9 +249,9 @@ mod tests {
         let mut t = Tracker::default();
         t.begin(P, "snake", "abcdef01".into(), 0);
         run(&mut t, 200, false);
-        let before = t.pending(P, true)[0].3;
+        let before = t.pending(P, true, 0.0)[0].3;
         run(&mut t, 10, true);
-        assert_eq!(t.pending(P, true)[0].3, before + 10);
+        assert_eq!(t.pending(P, true, 0.0)[0].3, before + 10);
     }
 
     #[test]
@@ -223,7 +260,7 @@ mod tests {
         t.begin(P, "snake", "abcdef01".into(), 0);
         run(&mut t, 2, true);
         t.end();
-        assert!(t.pending(P, true).is_empty());
+        assert!(t.pending(P, true, 0.0).is_empty());
         assert_eq!(t.dump(), "");
     }
 
@@ -234,7 +271,7 @@ mod tests {
         run(&mut t, 10, true);
         t.begin(P, "hotel", "bbbbbbbb".into(), 10);
         run(&mut t, 5, true);
-        let p = t.pending(P, true);
+        let p = t.pending(P, true, 0.0);
         assert_eq!(p.len(), 2);
         assert_eq!((p[0].1.as_str(), p[0].3), ("snake", 10));
         assert_eq!((p[1].1.as_str(), p[1].3), ("hotel", 5));
@@ -246,12 +283,12 @@ mod tests {
         t.begin(P, "snake", "aaaaaaaa".into(), 0);
         run(&mut t, 10, true);
         t.mark_sent("aaaaaaaa", 10);
-        assert!(t.pending(P, true).is_empty());
+        assert!(t.pending(P, true, 0.0).is_empty());
         run(&mut t, 5, true);
-        assert_eq!(t.pending(P, true)[0].3, 15);
+        assert_eq!(t.pending(P, true, 0.0)[0].3, 15);
         t.end();
         t.mark_sent("aaaaaaaa", 15);
-        assert!(t.pending(P, true).is_empty());
+        assert!(t.pending(P, true, 0.0).is_empty());
         assert_eq!(t.dump(), "");
     }
 
@@ -263,7 +300,7 @@ mod tests {
         let saved = t.dump();
         let back = Tracker::load(&saved);
         assert!(!back.is_open());
-        assert_eq!(back.pending(P, true), t.pending(P, true));
+        assert_eq!(back.pending(P, true, 0.0), t.pending(P, true, 0.0));
         assert_eq!(back.total_unsent(), 40);
     }
 
@@ -272,7 +309,7 @@ mod tests {
         let t = Tracker::load(
             "junk;;a,b;,x,snake,1,2,3;ok123456,11111111-2222-4333-8444-555555555555,snake,5,30.0,0",
         );
-        assert_eq!(t.pending(P, true).len(), 1);
+        assert_eq!(t.pending(P, true, 0.0).len(), 1);
     }
 
     #[test]
@@ -281,9 +318,9 @@ mod tests {
         t.begin(P, "snake", "aaaaaaaa".into(), 0);
         run(&mut t, 10, true);
         t.end();
-        assert!(t.pending("someone-else", true).is_empty());
+        assert!(t.pending("someone-else", true, 0.0).is_empty());
         t.forget(P);
-        assert!(t.pending(P, true).is_empty());
+        assert!(t.pending(P, true, 0.0).is_empty());
     }
 
     #[test]
@@ -291,10 +328,10 @@ mod tests {
         let mut t = Tracker::default();
         t.begin(P, "snake", "aaaaaaaa".into(), 0);
         run(&mut t, 10, true);
-        assert!(t.pending(P, false).is_empty());
-        assert_eq!(t.pending(P, true).len(), 1);
+        assert!(t.pending(P, false, 0.0).is_empty());
+        assert_eq!(t.pending(P, true, 0.0).len(), 1);
         t.end();
-        assert_eq!(t.pending(P, false).len(), 1);
+        assert_eq!(t.pending(P, false, 0.0).len(), 1);
     }
 
     #[test]
@@ -304,7 +341,7 @@ mod tests {
         for _ in 0..200 {
             t.tick(100.0, true);
         }
-        assert_eq!(t.pending(P, true)[0].3, MAX_SESSION as i64);
+        assert_eq!(t.pending(P, true, 0.0)[0].3, MAX_SESSION as i64);
     }
 
     #[test]
@@ -315,6 +352,6 @@ mod tests {
             run(&mut t, 5, true);
         }
         t.end();
-        assert_eq!(t.pending(P, true).len(), MAX_PER_UPLOAD);
+        assert_eq!(t.pending(P, true, 0.0).len(), MAX_PER_UPLOAD);
     }
 }
