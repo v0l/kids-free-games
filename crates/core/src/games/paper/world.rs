@@ -4,7 +4,11 @@ use crate::rng as rand;
 use glam::{ivec2, vec2, IVec2, Vec2};
 use std::collections::VecDeque;
 use std::f32::consts::{FRAC_PI_2, PI, TAU};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
+
+static NEXT_UID: AtomicU64 = AtomicU64::new(1);
+pub const FRESH_FLASH: f32 = 0.4;
 
 mod sense;
 pub use sense::FEATURES;
@@ -217,6 +221,9 @@ pub struct World {
     pub trail: Vec<Option<u8>>,
     pub block_owner: Vec<[u16; MAX_PLAYERS]>,
     pub block_trail: Vec<u16>,
+    pub block_serial: Vec<u32>,
+    pub block_until: Vec<f32>,
+    pub uid: u64,
     pub laid: Vec<f32>,
     pub prev: Vec<Option<u8>>,
     pub changed: Vec<f32>,
@@ -247,6 +254,9 @@ impl World {
             trail: vec![None; n],
             block_owner: vec![[0; MAX_PLAYERS]; BLOCKS * BLOCKS],
             block_trail: vec![0; BLOCKS * BLOCKS],
+            block_serial: vec![0; BLOCKS * BLOCKS],
+            block_until: vec![0.0; BLOCKS * BLOCKS],
+            uid: NEXT_UID.fetch_add(1, Ordering::Relaxed),
             laid: vec![0.0; n],
             prev: vec![None; n],
             changed: vec![-10.0; n],
@@ -296,6 +306,8 @@ impl World {
         self.prev[i] = self.shown(i);
         self.changed[i] = self.clock + delay;
         let b = block_of(i);
+        self.block_serial[b] = self.block_serial[b].wrapping_add(1);
+        self.block_until[b] = self.block_until[b].max(self.changed[i] + FRESH_FLASH);
         if let Some(w) = was {
             self.counts[w as usize] -= 1;
             self.block_owner[b][w as usize] -= 1;

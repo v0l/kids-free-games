@@ -1,23 +1,22 @@
+pub mod land;
+pub mod world;
+
 use super::Play;
-use crate::draw::{measure, Draw};
-use crate::paint::{Pen, Tex, Vert};
+use crate::draw::measure;
+use crate::game3d::World3d;
+use crate::paint::Pen;
 use crate::ui::{Tone, BODY, GOLD_TEXT, INK};
-use glam::{vec2, Vec2};
+use glam::{vec2, vec3, Vec2};
 use kg_core::engine::{Game, Input, View, HUD_LEFT};
 use kg_core::fx::{ease_out_back, ease_out_cubic, popup_scale, Particle};
 use kg_core::games::paper::arena::{clock_label, score, score_label};
+use kg_core::games::paper::camera;
 use kg_core::games::paper::*;
 use kg_core::geom::{Color, Rect, WHITE};
-use std::f32::consts::FRAC_PI_2;
 
 pub const KEY: &str = GAME;
-const SHEET: &str = "paper";
-const LAWN_CELLS: f32 = 10.0;
-const LIP: f32 = 0.2;
-const FRESH: f32 = 0.4;
-const TRAIL_W: f32 = 0.58;
-const HEAD: f32 = 1.55;
-const MAP_PX: f32 = 168.0;
+pub const SLAB: f32 = kg_core::games::paper::camera::SLAB;
+const MAP_PX: f32 = 176.0;
 
 pub struct PaperPlay {
     pub g: Paper,
@@ -39,7 +38,9 @@ impl Play for PaperPlay {
     fn update(&mut self, input: &Input, view: &View, dt: f32) {
         let before = self.g.state;
         self.g.update(input, view, dt);
-        if self.g.state == State::Dead && before != State::Dead {
+        if matches!(self.g.state, State::Dead | State::Won)
+            && !matches!(before, State::Dead | State::Won)
+        {
             kg_core::net::request_board(GAME);
         }
     }
@@ -53,7 +54,11 @@ impl Play for PaperPlay {
     }
 
     fn over(&self) -> bool {
-        self.g.state == State::Dead
+        matches!(self.g.state, State::Dead | State::Won)
+    }
+
+    fn world(&self) -> World3d {
+        World3d::Paper
     }
 
     fn as_any(&mut self) -> &mut dyn std::any::Any {
@@ -65,379 +70,21 @@ fn ink() -> Color {
     Color::from_rgba(30, 60, 40, 255)
 }
 
-fn lighter(c: Color, k: f32) -> Color {
-    c.lerp(WHITE, k)
+fn navy() -> Color {
+    Color::from_rgba(20, 28, 72, 255)
 }
 
-fn outside_ground() -> Color {
-    Color::from_rgba(96, 160, 84, 255)
+fn at(g: &Paper, view: &View, p: glam::Vec2, h: f32) -> Vec2 {
+    g.eye(view).project(view, vec3(p.x, camera::SLAB + h, p.y))
 }
 
-struct Cam {
-    cell: f32,
-    origin: Vec2,
-    x0: i32,
-    y0: i32,
-    x1: i32,
-    y1: i32,
+fn px_per_unit(g: &Paper, view: &View, p: glam::Vec2) -> f32 {
+    let a = at(g, view, p, 0.0);
+    let b = at(g, view, p + glam::Vec2::X, 0.0);
+    a.distance(b)
 }
 
-impl Cam {
-    fn new(g: &Paper, view: &View) -> Self {
-        let cell = g.cell_px(view);
-        let origin = g.origin(view);
-        let f = view.full();
-        let fine = |v: f32| (v / cell * RES as f32).floor() as i32;
-        Self {
-            cell,
-            origin,
-            x0: (fine(f.x - origin.x) - 2).max(-1),
-            y0: (fine(f.y - origin.y) - 2).max(-1),
-            x1: (fine(f.x + f.w - origin.x) + 2).min(N),
-            y1: (fine(f.y + f.h - origin.y) + 3).min(N),
-        }
-    }
-
-    fn at(&self, w: Vec2) -> Vec2 {
-        self.origin + w * self.cell
-    }
-
-    fn lawn(&self) -> (i32, i32, i32, i32) {
-        let u = |c: i32| c.max(0) as f32 / RES as f32;
-        (
-            (u(self.x0) / LAWN_CELLS).floor() as i32,
-            (u(self.y0) / LAWN_CELLS).floor() as i32,
-            (u(self.x1) / LAWN_CELLS).ceil() as i32,
-            (u(self.y1) / LAWN_CELLS).ceil() as i32,
-        )
-    }
-}
-
-fn draw_ground(pen: &mut Pen, view: &View, cam: &Cam) {
-    pen.rect(view.full(), outside_ground());
-    let board = Vec2::splat(SIZE) * cam.cell;
-    pen.rect(
-        Rect::new(cam.origin.x + 6.0, cam.origin.y + 10.0, board.x, board.y),
-        Color::new(0.05, 0.2, 0.05, 0.3),
-    );
-    let tile = LAWN_CELLS * cam.cell;
-    let (tx0, ty0, tx1, ty1) = cam.lawn();
-    for ty in ty0..ty1 {
-        for tx in tx0..tx1 {
-            let at = cam.at(vec2(tx as f32, ty as f32) * LAWN_CELLS);
-            let w = tile.min(board.x - (at.x - cam.origin.x));
-            let h = tile.min(board.y - (at.y - cam.origin.y));
-            if w <= 0.0 || h <= 0.0 {
-                continue;
-            }
-            pen.sprite(
-                SHEET,
-                "grass",
-                Rect::new(at.x, at.y, w + 0.5, h + 0.5),
-                Draw {
-                    flip_x: tx % 2 == 1,
-                    flip_y: ty % 2 == 1,
-                    tint: Color::new(1.0, 1.0, 1.0, 1.0),
-                    ..Default::default()
-                },
-            );
-        }
-    }
-}
-
-fn draw_fence(pen: &mut Pen, view: &View, cam: &Cam) {
-    let board = Vec2::splat(SIZE) * cam.cell;
-    let ph = cam.cell * 2.0;
-    let fs = crate::art::size(SHEET, "fence");
-    let pw = fs.x * ph / fs.y.max(1.0);
-    let f = view.full();
-    let seen = Rect::new(f.x - pw, f.y - pw, f.w + pw * 2.0, f.h + pw * 2.0);
-    let o = cam.origin;
-    let n = (board.x / pw).ceil() as usize;
-    for k in 0..n {
-        let x = o.x + k as f32 * pw + pw / 2.0;
-        for y in [o.y - ph * 0.35, o.y + board.y + ph * 0.05] {
-            if seen.contains(vec2(x, y)) {
-                pen.sprite(
-                    SHEET,
-                    "fence",
-                    Rect::new(x - pw / 2.0, y - ph / 2.0, pw + 1.0, ph),
-                    Draw::default(),
-                );
-            }
-        }
-    }
-    let m = (board.y / pw).ceil() as usize;
-    for k in 0..m {
-        let y = o.y + k as f32 * pw + pw / 2.0;
-        for x in [o.x - ph * 0.35, o.x + board.x + ph * 0.35] {
-            if seen.contains(vec2(x, y)) {
-                pen.sprite(
-                    SHEET,
-                    "fence",
-                    Rect::new(x - pw / 2.0, y - ph / 2.0, pw + 1.0, ph),
-                    Draw::rot(FRAC_PI_2),
-                );
-            }
-        }
-    }
-}
-
-fn shown_at(g: &Paper, x: i32, y: i32) -> Option<u8> {
-    if x < 0 || y < 0 || x >= N || y >= N {
-        None
-    } else {
-        g.w.shown(idx(glam::ivec2(x, y)))
-    }
-}
-
-fn fresh_at(g: &Paper, x: i32, y: i32) -> f32 {
-    if x < 0 || y < 0 || x >= N || y >= N {
-        return 0.0;
-    }
-    let age = g.w.age(idx(glam::ivec2(x, y)));
-    if (0.0..FRESH).contains(&age) {
-        1.0 - age / FRESH
-    } else {
-        0.0
-    }
-}
-
-#[derive(Default)]
-struct Fill {
-    verts: Vec<Vert>,
-    idx: Vec<u32>,
-}
-
-impl Fill {
-    fn poly(&mut self, pts: &[Vec2], col: Color) {
-        let base = self.verts.len() as u32;
-        let h = Vec2::splat(0.5);
-        self.verts.extend(pts.iter().map(|p| Vert {
-            pos: *p,
-            uv: h,
-            color: col,
-        }));
-        for k in 1..pts.len() as u32 - 1 {
-            self.idx.extend([base, base + k, base + k + 1]);
-        }
-    }
-
-    fn rect(&mut self, a: Vec2, b: Vec2, col: Color) {
-        self.poly(&[a, vec2(b.x, a.y), b, vec2(a.x, b.y)], col);
-    }
-
-    fn flush(&mut self, pen: &mut Pen) {
-        if !self.idx.is_empty() {
-            pen.mesh(Tex::White, &self.verts, &self.idx);
-        }
-        self.verts.clear();
-        self.idx.clear();
-    }
-}
-
-struct Owners {
-    x0: i32,
-    y0: i32,
-    w: i32,
-    h: i32,
-    cells: Vec<Option<u8>>,
-}
-
-impl Owners {
-    fn new(g: &Paper, cam: &Cam) -> Self {
-        let (x0, y0) = (cam.x0 - 2, cam.y0 - 2);
-        let (w, h) = (cam.x1 - cam.x0 + 5, cam.y1 - cam.y0 + 5);
-        let mut cells = Vec::with_capacity((w * h) as usize);
-        for y in 0..h {
-            for x in 0..w {
-                cells.push(shown_at(g, x0 + x, y0 + y));
-            }
-        }
-        Self {
-            x0,
-            y0,
-            w,
-            h,
-            cells,
-        }
-    }
-
-    fn get(&self, x: i32, y: i32) -> Option<u8> {
-        let (lx, ly) = (x - self.x0, y - self.y0);
-        if lx < 0 || ly < 0 || lx >= self.w || ly >= self.h {
-            return None;
-        }
-        self.cells[(ly * self.w + lx) as usize]
-    }
-
-    fn density(&self, o: u8, x: i32, y: i32) -> f32 {
-        const W: [f32; 3] = [1.0, 2.0, 1.0];
-        let mut sum = 0.0;
-        for (j, wy) in W.iter().enumerate() {
-            for (i, wx) in W.iter().enumerate() {
-                if self.get(x + i as i32 - 1, y + j as i32 - 1) == Some(o) {
-                    sum += wx * wy;
-                }
-            }
-        }
-        sum / 16.0
-    }
-}
-
-fn contour(corner: [Vec2; 4], f: [f32; 4]) -> Vec<Vec2> {
-    let mut pts = Vec::with_capacity(8);
-    for k in 0..4 {
-        let n = (k + 1) % 4;
-        let (a, b) = (f[k] >= 0.5, f[n] >= 0.5);
-        if a {
-            pts.push(corner[k]);
-        }
-        if a != b {
-            let t = ((0.5 - f[k]) / (f[n] - f[k])).clamp(0.0, 1.0);
-            pts.push(corner[k].lerp(corner[n], t));
-        }
-    }
-    pts
-}
-
-fn land_pass(g: &Paper, cam: &Cam, own: &Owners, fill: &mut Fill, shift: Vec2, lip: bool) {
-    let corner = |x: i32, y: i32| cam.at(cell_center(glam::ivec2(x, y))) + shift;
-    for y in cam.y0..cam.y1 {
-        let mut x = cam.x0;
-        while x < cam.x1 {
-            let k = [
-                own.get(x, y),
-                own.get(x + 1, y),
-                own.get(x + 1, y + 1),
-                own.get(x, y + 1),
-            ];
-            let tint = |o: u8, x: i32| {
-                let base = color(o as usize);
-                if lip {
-                    return base.darker(0.68);
-                }
-                let f = [(x, y), (x + 1, y), (x + 1, y + 1), (x, y + 1)]
-                    .iter()
-                    .zip(k)
-                    .filter(|(_, c)| *c == Some(o))
-                    .map(|((cx, cy), _)| fresh_at(g, *cx, *cy))
-                    .fold(0.0, f32::max);
-                lighter(base, 0.45 * f)
-            };
-            let solid = |o: u8, x: i32| {
-                (-1..=2).all(|dy| (-1..=2).all(|dx| own.get(x + dx, y + dy) == Some(o)))
-            };
-            if let Some(o) = k[0].filter(|o| solid(*o, x)) {
-                let col = tint(o, x);
-                let start = x;
-                x += 1;
-                while x < cam.x1 && solid(o, x) && tint(o, x) == col {
-                    x += 1;
-                }
-                fill.rect(corner(start, y), corner(x, y + 1), col);
-                continue;
-            }
-            let cs = [
-                corner(x, y),
-                corner(x + 1, y),
-                corner(x + 1, y + 1),
-                corner(x, y + 1),
-            ];
-            let near: Vec<u8> = (-1..=2)
-                .flat_map(|dy| (-1..=2).map(move |dx| (dx, dy)))
-                .filter_map(|(dx, dy)| own.get(x + dx, y + dy))
-                .fold(vec![], |mut v, o| {
-                    if !v.contains(&o) {
-                        v.push(o);
-                    }
-                    v
-                });
-            for o in near {
-                let f = [
-                    own.density(o, x, y),
-                    own.density(o, x + 1, y),
-                    own.density(o, x + 1, y + 1),
-                    own.density(o, x, y + 1),
-                ];
-                if f.iter().all(|v| *v < 0.5) {
-                    continue;
-                }
-                let pts = contour(cs, f);
-                if pts.len() >= 3 {
-                    fill.poly(&pts, tint(o, x));
-                }
-            }
-            x += 1;
-        }
-    }
-}
-
-fn draw_land(g: &Paper, pen: &mut Pen, cam: &Cam) {
-    let mut fill = Fill::default();
-    let own = Owners::new(g, cam);
-    land_pass(g, cam, &own, &mut fill, vec2(0.0, LIP * cam.cell), true);
-    fill.flush(pen);
-    land_pass(g, cam, &own, &mut fill, Vec2::ZERO, false);
-    fill.flush(pen);
-}
-
-fn polyline(pen: &mut Pen, pts: &[Vec2], width: impl Fn(usize) -> f32, col: Color) {
-    if pts.len() < 2 {
-        return;
-    }
-    let h = Vec2::splat(0.5);
-    let mut verts = Vec::with_capacity(pts.len() * 2);
-    for k in 0..pts.len() {
-        let prev = pts[k.saturating_sub(1)];
-        let next = pts[(k + 1).min(pts.len() - 1)];
-        let n = (next - prev).normalize_or(Vec2::X).perp();
-        let w = width(k) / 2.0;
-        verts.push(Vert {
-            pos: pts[k] + n * w,
-            uv: h,
-            color: col,
-        });
-        verts.push(Vert {
-            pos: pts[k] - n * w,
-            uv: h,
-            color: col,
-        });
-    }
-    let idx: Vec<u32> = (0..pts.len() as u32 - 1)
-        .flat_map(|i| {
-            let a = i * 2;
-            [a, a + 1, a + 3, a, a + 3, a + 2]
-        })
-        .collect();
-    pen.mesh(Tex::White, &verts, &idx);
-    pen.circle(pts[0], width(0) / 2.0, col);
-}
-
-fn draw_trails(g: &Paper, pen: &mut Pen, cam: &Cam) {
-    let c = cam.cell;
-    for (id, p) in g.w.players.iter().enumerate() {
-        if !p.alive || p.trail.is_empty() {
-            continue;
-        }
-        let pts: Vec<Vec2> = p.trail_points().into_iter().map(|q| cam.at(q)).collect();
-        let n = pts.len();
-        let clock = g.clock;
-        let w = |k: usize| {
-            let from_tail = (n - 1 - k) as f32;
-            let wave = (clock * 9.0 - from_tail * 0.35).sin();
-            c * TRAIL_W * (1.0 + 0.1 * wave)
-        };
-        let base = color(id);
-        let shadow: Vec<Vec2> = pts.iter().map(|q| *q + vec2(0.0, c * 0.14)).collect();
-        polyline(pen, &shadow, w, base.darker(0.45).with_alpha(0.45));
-        polyline(pen, &pts, w, lighter(base, 0.32));
-        polyline(pen, &pts, |k| w(k) * 0.42, lighter(base, 0.62));
-    }
-}
-
-fn draw_heads(g: &Paper, pen: &mut Pen, cam: &Cam) {
-    let c = cam.cell;
+fn draw_labels(g: &Paper, pen: &mut Pen, view: &View) {
     let mut order: Vec<usize> = (0..g.w.players.len())
         .filter(|i| g.w.players[*i].alive)
         .collect();
@@ -449,62 +96,37 @@ fn draw_heads(g: &Paper, pen: &mut Pen, cam: &Cam) {
     });
     for id in order {
         let p = &g.w.players[id];
-        let at = cam.at(p.look());
-        let s = c * HEAD;
-        let squash = (p.spin.abs() / p.turn.max(0.1)).min(1.0) * 0.12;
-        let spawn = ease_out_back((p.age / 0.4).min(1.0)).max(0.05);
-        let bob = (g.clock * 10.0 + id as f32).sin() * c * 0.05;
-        let head = p.heading();
-        pen.soft_shadow(at + vec2(0.0, s * 0.42), s * 0.42, s * 0.16, 0.7);
-        let w = s * (1.0 + squash) * spawn;
-        let h = s * (1.0 - squash) * spawn;
-        let fs = crate::art::size(SHEET, HEADS[id % HEADS.len()]);
-        let w = w * fs.x / fs.y.max(1.0);
-        let centre = at + vec2(0.0, bob - s * 0.18);
-        pen.sprite(
-            SHEET,
-            HEADS[id % HEADS.len()],
-            Rect::new(centre.x - w / 2.0, centre.y - h / 2.0, w, h),
-            Draw {
-                rotation: head.x * 0.2,
-                flip_x: head.x < -0.3,
-                ..Default::default()
-            },
-        );
+        let s = px_per_unit(g, view, p.look());
+        let c = at(g, view, p.look(), 1.1);
         let (tag, size, fill) = if id == 0 {
             ("You", 26.0, GOLD_TEXT)
         } else {
             (p.name, 21.0, WHITE)
         };
-        pen.text_outline(
-            tag,
-            centre.x,
-            centre.y - h * 0.62,
-            size,
-            fill,
-            color(id).darker(0.45),
-        );
+        pen.text_outline(tag, c.x, c.y - s * 0.9, size, fill, color(id).darker(0.45));
     }
 }
 
-fn draw_world_fx(g: &Paper, pen: &mut Pen, cam: &Cam) {
+fn draw_world_fx(g: &Paper, pen: &mut Pen, view: &View) {
     for p in &g.particles.list {
+        let k = px_per_unit(g, view, p.pos);
         let q = Particle {
-            pos: cam.at(p.pos),
-            size: p.size * cam.cell,
+            pos: at(g, view, p.pos, 0.6),
+            size: p.size * k,
             ..*p
         };
         pen.particle(&q);
     }
     for p in &g.popups.list {
         let (pop, fade) = popup_scale(p);
-        let rise = ease_out_cubic((p.age / p.life).min(1.0)) * 1.4;
-        let at = cam.at(p.pos - vec2(0.0, rise));
-        let size = (p.size * cam.cell * pop).clamp(20.0, 90.0);
+        let rise = ease_out_cubic((p.age / p.life).min(1.0)) * 1.8;
+        let k = px_per_unit(g, view, p.pos);
+        let c = at(g, view, p.pos, 1.8 + rise);
+        let size = (p.size * k * 0.8 * pop).clamp(24.0, 90.0);
         pen.text_outline(
             &p.text,
-            at.x,
-            at.y,
+            c.x,
+            c.y - k * 0.0,
             size,
             p.color.with_alpha(fade),
             INK.with_alpha(fade),
@@ -516,43 +138,71 @@ fn pill(pen: &mut Pen, r: Rect, col: Color) {
     pen.round_rect(
         r.offset(vec2(0.0, 4.0)),
         r.h / 2.0,
-        Color::new(0.0, 0.0, 0.0, 0.2),
+        Color::new(0.0, 0.0, 0.0, 0.18),
     );
     pen.round_rect(r, r.h / 2.0, col);
 }
 
+fn skull(pen: &mut Pen, c: Vec2, r: f32, col: Color) {
+    pen.circle(c - vec2(0.0, r * 0.1), r * 0.82, col);
+    pen.round_rect(
+        Rect::new(c.x - r * 0.45, c.y + r * 0.2, r * 0.9, r * 0.7),
+        r * 0.2,
+        col,
+    );
+    for s in [-1.0, 1.0] {
+        pen.circle(c + vec2(s * r * 0.34, -r * 0.1), r * 0.22, navy());
+    }
+}
+
 fn draw_share(g: &Paper, pen: &mut Pen) {
     let pct = g.share(0) * 100.0;
-    let k = g.bump.scale(0.15);
-    let r = Rect::new(HUD_LEFT, 10.0, 200.0, 60.0);
-    pill(pen, r, Color::new(0.08, 0.1, 0.2, 0.55));
-    pen.circle(vec2(r.x + 30.0, r.center().y), 18.0, color(0));
-    pen.circle(
-        vec2(r.x + 30.0, r.center().y),
-        18.0 * 0.45,
-        lighter(color(0), 0.6),
+    let k = g.bump.scale(0.12);
+    let r = Rect::new(HUD_LEFT, 12.0, 250.0, 46.0);
+    pill(pen, r, navy());
+    let fill = (g.share(0) / 0.5).clamp(0.0, 1.0);
+    let w = (r.w * fill).max(r.h * 0.9).min(r.w);
+    pen.round_rect(
+        Rect::new(r.x, r.y, w, r.h),
+        r.h / 2.0,
+        Color::from_rgba(255, 200, 30, 255),
+    );
+    pen.round_rect(
+        Rect::new(r.x + 4.0, r.y + 4.0, w - 8.0, r.h * 0.34),
+        r.h * 0.17,
+        Color::new(1.0, 1.0, 1.0, 0.3),
     );
     let label = if pct < 10.0 {
-        format!("{pct:.2}%")
+        format!("{pct:.2} %")
     } else {
-        format!("{pct:.1}%")
+        format!("{pct:.1} %")
     };
-    pen.text_outline(&label, r.x + 118.0, r.center().y, 38.0 * k, WHITE, INK);
-    let best = format!("Best {}", score_label(g.best.max(score(g.run.peak))));
-    pen.text_outline(
-        &best,
-        r.x + r.w / 2.0,
-        r.y + r.h + 22.0,
-        22.0,
-        GOLD_TEXT,
-        INK,
+    pen.text_outline(&label, r.x + r.w / 2.0, r.center().y, 30.0 * k, WHITE, INK);
+    let kills = Rect::new(HUD_LEFT, r.y + r.h + 10.0, 118.0, 40.0);
+    pill(pen, kills, Color::new(1.0, 1.0, 1.0, 0.92));
+    skull(pen, vec2(kills.x + 24.0, kills.center().y), 14.0, navy());
+    pen.text_left(
+        &format!("x{}", g.me().kills),
+        kills.x + 48.0,
+        kills.center().y,
+        28.0,
+        navy(),
     );
+    let left = Rect::new(HUD_LEFT, kills.y + kills.h + 10.0, 196.0, 36.0);
+    pill(pen, left, Color::new(0.08, 0.1, 0.2, 0.55));
+    let n = g.snakes_left();
+    let label = if n == 1 {
+        "1 snake left".to_string()
+    } else {
+        format!("{n} snakes left")
+    };
+    pen.text_outline(&label, left.center().x, left.center().y, 22.0, WHITE, INK);
     if let Some(m) = g.milestone.filter(|_| g.state == State::Playing) {
         let goal = format!("Next: {}%", m / 10);
         pen.text_outline(
             &goal,
-            r.x + r.w / 2.0,
-            r.y + r.h + 50.0,
+            left.center().x,
+            left.y + left.h + 22.0,
             20.0,
             WHITE.with_alpha(0.85),
             INK,
@@ -562,8 +212,8 @@ fn draw_share(g: &Paper, pen: &mut Pen) {
 
 pub fn board_rows(g: &Paper) -> Vec<(usize, usize)> {
     let ranks = g.w.ranking();
-    let mut rows: Vec<(usize, usize)> = ranks.iter().take(5).copied().enumerate().collect();
-    if let Some(me) = ranks.iter().position(|i| *i == 0).filter(|r| *r >= 5) {
+    let mut rows: Vec<(usize, usize)> = ranks.iter().take(3).copied().enumerate().collect();
+    if let Some(me) = ranks.iter().position(|i| *i == 0).filter(|r| *r >= 3) {
         rows.push((me, 0));
     }
     rows
@@ -571,32 +221,33 @@ pub fn board_rows(g: &Paper) -> Vec<(usize, usize)> {
 
 fn draw_board(g: &Paper, pen: &mut Pen, view: &View) {
     let rows = board_rows(g);
-    let w = 236.0;
-    let row_h = 34.0;
-    let x = view.w - w - 14.0;
+    let w = 262.0;
+    let row_h = 46.0;
+    let x = view.w - w - 12.0;
     let y = 12.0;
-    let panel = Rect::new(x, y, w, rows.len() as f32 * row_h + 14.0);
-    pen.round_rect(panel, 16.0, Color::new(0.08, 0.1, 0.2, 0.45));
     for (k, (rank, id)) in rows.iter().enumerate() {
-        let cy = y + 7.0 + row_h * (k as f32 + 0.5);
+        let r = Rect::new(x + 26.0, y + k as f32 * (row_h + 8.0), w - 26.0, row_h);
+        let cy = r.center().y;
         let mine = *id == 0;
-        if mine {
-            pen.round_rect(
-                Rect::new(x + 4.0, cy - row_h / 2.0 + 2.0, w - 8.0, row_h - 4.0),
-                12.0,
-                color(0).with_alpha(0.75),
-            );
-        }
+        let base = if mine {
+            Color::from_rgba(76, 214, 120, 255)
+        } else {
+            color(*id).lerp(Color::from_rgba(120, 120, 130, 255), 0.35)
+        };
+        pill(pen, r, base.with_alpha(0.88));
         let p = &g.w.players[*id];
         let pct = g.share(*id) * 100.0;
-        let fill = if mine { WHITE } else { WHITE.with_alpha(0.92) };
-        pen.text_outline(&format!("{}", rank + 1), x + 20.0, cy, 20.0, fill, INK);
-        pen.circle(vec2(x + 44.0, cy), 9.0, color(*id));
+        pen.text_outline(&format!("{}", rank + 1), x + 10.0, cy, 22.0, WHITE, INK);
+        let chip = Rect::new(r.x + 6.0, cy - 15.0, 84.0, 30.0);
+        pen.round_rect(chip, 15.0, Color::new(1.0, 1.0, 1.0, 0.35));
+        pen.text_center(&format!("{pct:.2}%"), chip.center().x, cy, 19.0, navy());
         let name = if mine { "You" } else { p.name };
-        pen.text_left(name, x + 60.0, cy, 21.0, fill);
-        let s = format!("{pct:.1}%");
-        let sw = measure(&s, 21.0);
-        pen.text_left(&s, x + w - 14.0 - sw, cy, 21.0, fill);
+        let size = if measure(name, 22.0) > r.w - 108.0 {
+            17.0
+        } else {
+            22.0
+        };
+        pen.text_left(name, r.x + 98.0, cy, size, navy());
     }
 }
 
@@ -607,7 +258,7 @@ fn draw_feed(g: &Paper, pen: &mut Pen, view: &View) {
         let pop = ease_out_back((f.age / 0.3).min(1.0)).max(0.1);
         let size = if f.mine { 30.0 } else { 22.0 } * if k == 0 { pop } else { 1.0 };
         let w = measure(&f.text, size) + 48.0;
-        let top = if view.w < view.h { 240.0 } else { 150.0 };
+        let top = if view.w < view.h { 300.0 } else { 120.0 };
         let cy = top + k as f32 * 46.0;
         let r = Rect::new(view.w / 2.0 - w / 2.0, cy - size * 0.8, w, size * 1.6);
         pen.round_rect(r, r.h / 2.0, Color::new(0.08, 0.1, 0.2, 0.5 * a));
@@ -625,33 +276,31 @@ fn draw_feed(g: &Paper, pen: &mut Pen, view: &View) {
 }
 
 pub fn minimap_rect(view: &View) -> Rect {
-    Rect::new(
-        view.w - MAP_PX - 16.0,
-        view.h - MAP_PX - 16.0,
-        MAP_PX,
-        MAP_PX,
-    )
+    Rect::new(16.0, view.h - MAP_PX - 16.0, MAP_PX, MAP_PX)
 }
 
 fn draw_minimap(g: &Paper, pen: &mut Pen, view: &View) {
-    let r = minimap_rect(view);
-    let frame = Rect::new(r.x - 6.0, r.y - 6.0, r.w + 12.0, r.h + 12.0);
-    pen.round_rect(
-        frame.offset(vec2(0.0, 4.0)),
-        18.0,
+    let disc = minimap_rect(view);
+    let c = disc.center();
+    pen.circle(
+        c + vec2(0.0, 5.0),
+        disc.w / 2.0 + 8.0,
         Color::new(0.0, 0.0, 0.0, 0.2),
     );
-    pen.round_rect(frame, 18.0, Color::new(1.0, 1.0, 1.0, 0.85));
-    pen.rect(r, Color::from_rgba(200, 225, 190, 255));
+    pen.circle(c, disc.w / 2.0 + 8.0, Color::from_rgba(26, 158, 86, 255));
+    pen.circle(c, disc.w / 2.0, Color::from_rgba(198, 198, 200, 255));
+    let side = disc.w * 0.74;
+    let r = Rect::new(c.x - side / 2.0, c.y - side / 2.0, side, side);
+    pen.rect(r, Color::from_rgba(232, 252, 244, 255));
     let step = RES * 2;
     let k = r.w / N as f32;
-    let at = |x: i32, y: i32| g.w.owner[idx(glam::ivec2(x + step / 2, y + step / 2))];
+    let at_cell = |x: i32, y: i32| g.w.owner[idx(glam::ivec2(x + step / 2, y + step / 2))];
     for y in (0..N).step_by(step as usize) {
         let mut x = 0;
         while x < N {
-            let o = at(x, y);
+            let o = at_cell(x, y);
             let start = x;
-            while x < N && at(x, y) == o {
+            while x < N && at_cell(x, y) == o {
                 x += step;
             }
             if let Some(o) = o {
@@ -667,52 +316,19 @@ fn draw_minimap(g: &Paper, pen: &mut Pen, view: &View) {
             }
         }
     }
-    let f = view.full();
-    let cell = g.cell_px(view);
-    let o = g.origin(view);
-    let seen = Rect::new(
-        (f.x - o.x) / cell,
-        (f.y - o.y) / cell,
-        f.w / cell,
-        f.h / cell,
-    );
     let k = r.w / SIZE;
-    let vx0 = seen.x.clamp(0.0, SIZE);
-    let vy0 = seen.y.clamp(0.0, SIZE);
-    let vx1 = (seen.x + seen.w).clamp(0.0, SIZE);
-    let vy1 = (seen.y + seen.h).clamp(0.0, SIZE);
-    let box_r = Rect::new(
-        r.x + vx0 * k,
-        r.y + vy0 * k,
-        (vx1 - vx0) * k,
-        (vy1 - vy0) * k,
-    );
-    for (a, b) in [
-        (vec2(box_r.x, box_r.y), vec2(box_r.x + box_r.w, box_r.y)),
-        (
-            vec2(box_r.x, box_r.y + box_r.h),
-            vec2(box_r.x + box_r.w, box_r.y + box_r.h),
-        ),
-        (vec2(box_r.x, box_r.y), vec2(box_r.x, box_r.y + box_r.h)),
-        (
-            vec2(box_r.x + box_r.w, box_r.y),
-            vec2(box_r.x + box_r.w, box_r.y + box_r.h),
-        ),
-    ] {
-        pen.line(a, b, 2.0, Color::new(1.0, 1.0, 1.0, 0.8));
-    }
     for (id, p) in g.w.players.iter().enumerate().rev() {
         if !p.alive {
             continue;
         }
-        let at = vec2(r.x, r.y) + p.look() * k;
+        let q = vec2(r.x, r.y) + p.look() * k;
         if id == 0 {
             let pulse = 1.0 + 0.25 * (g.clock * 6.0).sin();
-            pen.circle(at, 7.0 * pulse, WHITE);
-            pen.circle(at, 5.0, color(0));
+            pen.circle(q, 7.0 * pulse, WHITE);
+            pen.circle(q, 5.0, color(0));
         } else {
-            pen.circle(at, 4.5, color(id).darker(0.6));
-            pen.circle(at, 3.2, color(id));
+            pen.circle(q, 4.5, color(id).darker(0.6));
+            pen.circle(q, 3.2, color(id));
         }
     }
 }
@@ -721,20 +337,21 @@ fn draw_arrows(g: &Paper, pen: &mut Pen, view: &View) {
     if !g.me().alive {
         return;
     }
-    let c = vec2(view.w / 2.0, (view.h + TOP * 0.5) / 2.0);
-    let half = vec2(view.w / 2.0 - 48.0, (view.h - TOP * 0.5) / 2.0 - 48.0);
+    let f = view.full();
+    let c = f.center();
+    let half = vec2(f.w / 2.0 - 48.0, f.h / 2.0 - 48.0);
     for (id, dir, dist) in g.threats(view) {
         let t = (half.x / dir.x.abs().max(1e-3)).min(half.y / dir.y.abs().max(1e-3));
-        let at = c + dir * t;
+        let pos = c + dir * t;
         let near = (1.0 - dist / 26.0).clamp(0.0, 1.0);
         let pulse = 1.0 + 0.12 * (g.clock * 8.0).sin() * near;
         let size = (22.0 + 14.0 * near) * pulse;
         let col = color(id);
-        let tip = at + dir * size;
+        let tip = pos + dir * size;
         let side = dir.perp() * size * 0.75;
-        pen.circle(at, size * 0.95, Color::new(1.0, 1.0, 1.0, 0.85));
-        pen.tri(tip, at + side, at - side, col);
-        pen.circle(at, size * 0.55, col);
+        pen.circle(pos, size * 0.95, Color::new(1.0, 1.0, 1.0, 0.85));
+        pen.tri(tip, pos + side, pos - side, col);
+        pen.circle(pos, size * 0.55, col);
     }
 }
 
@@ -743,7 +360,7 @@ fn draw_ready(g: &Paper, pen: &mut Pen, view: &View) {
     let c = vec2(view.w / 2.0, view.h * 0.32);
     pen.ribbon(view, "Paper Land", c, g.clock);
     pen.text_outline(
-        "Grab land, dodge trails!",
+        "Be the last snake standing!",
         c.x,
         c.y + 86.0,
         36.0,
@@ -782,9 +399,21 @@ fn draw_dead(g: &Paper, pen: &mut Pen, view: &View) {
     let c = r.center();
     let pr = Rect::new(c.x - r.w * s / 2.0, c.y - r.h * s / 2.0, r.w * s, r.h * s);
     pen.painted_panel(pr, WHITE);
-    let title = if g.new_best { "New best!" } else { "Oh no!" };
+    let won = g.state == State::Won;
+    let title = if won {
+        "Last snake!"
+    } else if g.new_best {
+        "New best!"
+    } else {
+        "Oh no!"
+    };
     pen.ribbon(view, title, vec2(c.x, pr.y + 8.0 * s), age);
-    pen.text_center(&cause_line(g), c.x, pr.y + 96.0 * s, 28.0 * s, BODY);
+    let line = if won {
+        "Every other snake is gone".to_string()
+    } else {
+        cause_line(g)
+    };
+    pen.text_center(&line, c.x, pr.y + 96.0 * s, 28.0 * s, BODY);
     let row = pr.y + pr.h * 0.5;
     let gap = pr.w / 3.0;
     let stats = [
@@ -842,14 +471,9 @@ fn draw_dead(g: &Paper, pen: &mut Pen, view: &View) {
 }
 
 pub fn draw(g: &Paper, pen: &mut Pen, view: &View) {
-    let cam = Cam::new(g, view);
     pen.offset = g.shake.offset();
-    draw_ground(pen, view, &cam);
-    draw_land(g, pen, &cam);
-    draw_fence(pen, view, &cam);
-    draw_trails(g, pen, &cam);
-    draw_heads(g, pen, &cam);
-    draw_world_fx(g, pen, &cam);
+    draw_labels(g, pen, view);
+    draw_world_fx(g, pen, view);
     pen.offset = Vec2::ZERO;
     match g.state {
         State::Ready => {
@@ -863,7 +487,7 @@ pub fn draw(g: &Paper, pen: &mut Pen, view: &View) {
             draw_minimap(g, pen, view);
             draw_feed(g, pen, view);
         }
-        State::Dead => {
+        State::Dead | State::Won => {
             draw_board(g, pen, view);
             draw_feed(g, pen, view);
             draw_dead(g, pen, view);
@@ -874,6 +498,7 @@ pub fn draw(g: &Paper, pen: &mut Pen, view: &View) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::paint::Tex;
     use kg_core::games::paper::world::Cause;
 
     fn fresh() -> PaperPlay {
@@ -889,67 +514,52 @@ mod tests {
         pen
     }
 
-    fn pages(pen: &Pen, sheet: &str) -> bool {
-        pen.used()
-            .iter()
-            .filter_map(|b| b.tex)
-            .any(|t| matches!(t, Tex::Page(s, _) if s == sheet))
-    }
-
     #[test]
-    fn the_start_screen_draws_the_lawn_players_and_text() {
+    fn the_start_screen_draws_the_title_and_text() {
         let v = View::ipad_landscape();
         let p = fresh();
         let pen = drawn(&p, &v);
-        assert!(pages(&pen, "paper") && pages(&pen, "ui"));
-        assert!(pen.used().iter().any(|b| b.tex == Some(Tex::Glyphs)));
+        assert!(pen
+            .used()
+            .iter()
+            .any(|b| b.tex == Some(Tex::Page("ui", 0)) || b.tex == Some(Tex::Glyphs)));
+        assert!(pen.vertex_count() > 100);
     }
 
     #[test]
     fn every_state_draws_in_both_orientations() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
             let mut p = fresh();
-            assert!(drawn(&p, &v).vertex_count() > 300);
+            assert!(drawn(&p, &v).vertex_count() > 100);
             p.update(&Input::key(kg_core::engine::Dir::Up), &v, 1.0 / 60.0);
             assert_eq!(p.g.state, State::Playing);
             for _ in 0..30 {
                 p.update(&Input::default(), &v, 1.0 / 60.0);
             }
-            assert!(drawn(&p, &v).vertex_count() > 300);
+            assert!(drawn(&p, &v).vertex_count() > 100);
             p.g.w.kill(0, Some(1), Cause::Trail);
             for _ in 0..90 {
                 p.update(&Input::default(), &v, 1.0 / 60.0);
             }
             assert_eq!(p.g.state, State::Dead);
-            assert!(drawn(&p, &v).vertex_count() > 300);
+            assert!(drawn(&p, &v).vertex_count() > 100);
         }
     }
 
     #[test]
-    fn the_ground_covers_the_screen_past_the_safe_area() {
-        let v = View::fit_safe(
-            2400.0,
-            1080.0,
-            kg_core::safe::Insets {
-                left: 120.0,
-                bottom: 40.0,
-                ..Default::default()
-            },
-        );
-        let p = fresh();
-        let pen = drawn(&p, &v);
-        let f = v.full();
-        let bg = &pen.used()[0];
-        let (mut lo, mut hi) = (f32::MAX, f32::MIN);
-        let (mut top, mut bot) = (f32::MAX, f32::MIN);
-        for q in &bg.pos {
-            lo = lo.min(q[0]);
-            hi = hi.max(q[0]);
-            top = top.min(-q[1]);
-            bot = bot.max(-q[1]);
+    fn winning_draws_the_results_panel() {
+        let v = View::ipad_landscape();
+        let mut p = fresh();
+        p.update(&Input::key(kg_core::engine::Dir::Up), &v, 1.0 / 60.0);
+        for id in 1..p.g.w.players.len() {
+            p.g.w.kill(id, Some(0), Cause::Trail);
         }
-        assert!(lo <= f.x + 0.01 && hi >= f.x + f.w, "{lo}..{hi} vs {f:?}");
-        assert!(top <= f.y + 0.5 && bot >= f.y + f.h - 0.5);
+        for _ in 0..10 {
+            p.update(&Input::default(), &v, 1.0 / 60.0);
+        }
+        assert_eq!(p.g.state, State::Won);
+        assert!(p.over());
+        assert!(drawn(&p, &v).vertex_count() > 100);
     }
 
     #[test]
@@ -966,11 +576,11 @@ mod tests {
     }
 
     #[test]
-    fn the_board_shows_the_top_five_and_your_place() {
+    fn the_board_shows_the_top_three_and_your_place() {
         let p = fresh();
         let rows = board_rows(&p.g);
-        assert!(rows.len() == 5 || rows.len() == 6);
-        assert!(rows.iter().any(|(_, id)| *id == 0));
+        assert!(rows.len() == 3 || rows.len() == 4);
+        assert!(rows.iter().any(|(_, id)| *id == 0) || p.g.my_rank() <= 3);
     }
 
     #[test]
@@ -983,7 +593,7 @@ mod tests {
     }
 
     #[test]
-    fn the_play_screen_stays_under_the_vertex_budget() {
+    fn the_hud_screen_stays_under_the_vertex_budget() {
         let v = View::ipad_landscape();
         let mut p = fresh();
         p.update(&Input::key(kg_core::engine::Dir::Up), &v, 1.0 / 60.0);
@@ -994,6 +604,6 @@ mod tests {
             }
         }
         let n = drawn(&p, &v).vertex_count();
-        assert!(n < 120_000, "{n} vertices");
+        assert!(n < 20_000, "{n} vertices");
     }
 }

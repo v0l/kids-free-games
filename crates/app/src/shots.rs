@@ -660,12 +660,15 @@ mod tests {
                     || (170..=189).contains(n)
                     || (200..=229).contains(n)
                     || (250..=259).contains(n)
+                    || (150..=159).contains(n)
             }) {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
                 let parts = crate::game3d::testing::parts(&mut app).len();
-                let (want, least) = if n >= 250 {
+                let (want, least) = if (150..=159).contains(&n) {
+                    (crate::game3d::World3d::Paper, 10)
+                } else if n >= 250 {
                     (crate::game3d::World3d::BallSort, 40)
                 } else if n >= 220 {
                     (crate::game3d::World3d::Trains, 150)
