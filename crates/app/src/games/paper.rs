@@ -289,9 +289,8 @@ fn draw_minimap(g: &Paper, pen: &mut Pen, view: &View) {
     );
     pen.circle(c, disc.w / 2.0 + 8.0, Color::from_rgba(26, 158, 86, 255));
     pen.circle(c, disc.w / 2.0, Color::from_rgba(198, 198, 200, 255));
-    let side = disc.w * 0.74;
+    let side = disc.w * 0.68;
     let r = Rect::new(c.x - side / 2.0, c.y - side / 2.0, side, side);
-    pen.rect(r, Color::from_rgba(232, 252, 244, 255));
     let step = RES * 2;
     let k = r.w / N as f32;
     let at_cell = |x: i32, y: i32| g.w.owner[idx(glam::ivec2(x + step / 2, y + step / 2))];
