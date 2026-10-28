@@ -16,6 +16,7 @@ pub mod snake;
 pub mod spell;
 pub mod spell_words;
 pub mod stack;
+pub mod trains;
 
 use crate::geom::Color;
 
@@ -59,7 +60,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 17] = [
+pub const CATALOG: [Info; 18] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -172,6 +173,13 @@ pub const CATALOG: [Info; 17] = [
         Kind::Learn,
         "Spelling games",
         (250, 150, 80),
+    ),
+    info(
+        "trains",
+        "Take Away Trains",
+        Kind::Learn,
+        "Subtraction games for kids",
+        (225, 70, 60),
     ),
 ];
 

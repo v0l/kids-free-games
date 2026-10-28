@@ -979,7 +979,7 @@ mod tests {
     fn every_game_on_the_menu_is_ported_and_opens() {
         let v = View::ipad_landscape();
         let all = crate::games::all();
-        assert_eq!(all.len(), 17);
+        assert_eq!(all.len(), 18);
         for (i, e) in all.iter().enumerate() {
             assert!(e.ready(), "{} has no Bevy port", e.info.name);
             let mut app = menu();

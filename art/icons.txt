@@ -15,3 +15,4 @@ icon_mathpop | gen:iconr_mathpop.png | max=256
 icon_count | gen:iconr_count.png | max=256
 icon_spell | gen:iconr_spell.png | max=256
 icon_clash | gen:iconr_clash.png | max=256
+icon_trains | gen:iconr_trains.png | max=256
