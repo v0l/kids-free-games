@@ -670,7 +670,7 @@ mod tests {
                 } else if n >= 220 {
                     (crate::game3d::World3d::Trains, 150)
                 } else if n >= 200 {
-                    (crate::game3d::World3d::Runner, 40)
+                    (crate::game3d::World3d::Runner, 25)
                 } else if n >= 170 {
                     (crate::game3d::World3d::Hotel, 150)
                 } else {

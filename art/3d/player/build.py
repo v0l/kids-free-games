@@ -147,11 +147,7 @@ def jump(t):
         d[f"shin.{side}"] = (1.0 * k + 1.1 * air * (0.5 if side == "L" else 1.0), 0, 0)
         d[f"arm.{side}"] = (0.5 * k - 0.4 * air, sg * (0.7 - 1.1 * air), 0)
         d[f"forearm.{side}"] = (-0.3, 0, 0)
-    z = -0.07 * k + 0.0
-    if air:
-        u = (t - 0.24) / 0.56
-        z = 0.35 * 4 * u * (1 - u)
-    return d, z
+    return d, -0.07 * k
 
 
 def happy(t):
@@ -202,7 +198,7 @@ for name, (fn, n, loop) in CLIPS.items():
     act = bpy.data.actions.new(name)
     rig.animation_data_create()
     rig.animation_data.action = act
-    count = n if loop else n + 1
+    count = n + 1
     for i in range(count):
         d, z = fn(i / n)
         for pb in rig.pose.bones:
@@ -224,6 +220,9 @@ for name, (fn, n, loop) in CLIPS.items():
 rig.animation_data.action = None
 bpy.ops.object.mode_set(mode="OBJECT")
 
+for img in bpy.data.images:
+    if img.size[0] > 512:
+        img.scale(512, 512)
 mat_ok = [m.name for m in body.data.materials]
 print("materials", mat_ok, "tris", len(body.data.polygons), "bones", len(rig.pose.bones))
 
@@ -233,6 +232,7 @@ rig.select_set(True)
 bpy.ops.export_scene.gltf(
     filepath=OUT, export_format="GLB", use_selection=True, export_animations=True,
     export_nla_strips=True, export_force_sampling=True, export_apply=False, export_yup=True,
+    export_image_format="JPEG", export_jpeg_quality=88,
 )
 
 sc = bpy.context.scene

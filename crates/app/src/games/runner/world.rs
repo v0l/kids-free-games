@@ -1,7 +1,12 @@
 use super::{RunnerPlay, SHEET};
 use crate::game3d::*;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
+use bevy::animation::graph::AnimationGraphHandle;
+use bevy::animation::transition::AnimationTransitions;
+use bevy::gltf::GltfAssetLabel;
 use bevy::pbr::{DistanceFog, FogFalloff};
+use std::collections::HashMap;
+use std::time::Duration;
 use bevy::prelude::*;
 use kg_core::engine::View;
 use kg_core::games::runner::State as Phase;
@@ -32,11 +37,12 @@ pub struct RunnerWorld;
 
 impl Plugin for RunnerWorld {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<Models>().add_systems(
             Update,
             (
                 spawn.run_if(opened(World3d::Runner)),
                 sync.run_if(is_open(World3d::Runner)),
+                animate_hero.run_if(is_open(World3d::Runner)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -55,7 +61,6 @@ pub enum Role {
     Course,
     Player,
     Body,
-    Hero,
     Shade,
     Obstacle(usize, usize),
     Coin(usize),
@@ -122,7 +127,17 @@ fn node(out: &mut ChildSpawnerCommands, role: Role, at: Transform) -> Entity {
     out.spawn((role, at, Visibility::default())).id()
 }
 
-fn spawn(mut commands: Commands, mut kit: Kit) {
+fn spawn(
+    mut commands: Commands,
+    mut kit: Kit,
+    assets: Option<Res<AssetServer>>,
+    graphs: Option<ResMut<Assets<AnimationGraph>>>,
+) {
+    let models = match (assets, graphs) {
+        (Some(a), Some(mut g)) => Models::load(&a, &mut g),
+        _ => Models::default(),
+    };
+    commands.insert_resource(models.clone());
     let world = spawn_world(
         &mut commands,
         Root { serial: 0 },
@@ -157,7 +172,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         let player = node(w, Role::Player, Transform::default());
         w.commands()
             .entity(player)
-            .with_children(|p| kid(p, &mut kit));
+            .with_children(|p| kid(p, &models));
         w.spawn((
             Role::Shade,
             kit.part(
@@ -179,110 +194,161 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         for i in 0..TREES * 2 {
             let t = node(w, Role::Tree(i), Transform::default());
             w.commands().entity(t).with_children(|c| {
-                prop(c, &mut kit, "prop_tree", 3.6, Vec3::ZERO);
+                prop(c, &models, "tree", 3.6, Vec3::ZERO);
             });
         }
     });
 }
 
 const HERO_H: f32 = 1.8;
-const HERO_ASPECT: f32 = 156.0 / 282.0;
-const RUN_FRAMES: [&str; 8] = [
-    "hero_run_back_0",
-    "hero_run_back_1",
-    "hero_run_back_2",
-    "hero_run_back_3",
-    "hero_run_back_4",
-    "hero_run_back_5",
-    "hero_run_back_6",
-    "hero_run_back_7",
-];
-const CHEER_FRAMES: [&str; 4] = [
-    "hero_happy_front_0",
-    "hero_happy_front_2",
-    "hero_happy_front_4",
-    "hero_happy_front_6",
+const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
+const PROPS: [&str; 7] = [
+    "barrier", "hurdle", "gate", "train", "coin", "tree", "arch",
 ];
 
-pub fn hero_frame(g: &Runner) -> &'static str {
-    if g.state == Phase::Dead {
-        return "hero_fail_back_5";
-    }
-    if g.state == Phase::Won && g.end_t > 0.4 {
-        return CHEER_FRAMES[(g.end_t * 8.0) as usize % CHEER_FRAMES.len()];
-    }
-    if g.sliding() {
-        return "hero_slide_back_5";
-    }
-    if g.y > 0.05 {
-        return if g.vy > 0.0 {
-            "hero_jump_back_4"
-        } else {
-            "hero_jump_back_5"
-        };
-    }
-    if g.state == Phase::Ready || g.speed < 0.5 {
-        return "hero_idle_back_0";
-    }
-    let cycle = stride(g.dist) / std::f32::consts::TAU;
-    RUN_FRAMES[(cycle.rem_euclid(1.0) * RUN_FRAMES.len() as f32) as usize % RUN_FRAMES.len()]
+#[derive(Resource, Default, Clone)]
+pub struct Models {
+    scenes: HashMap<&'static str, Handle<WorldAsset>>,
+    graph: Option<Handle<AnimationGraph>>,
+    clips: Vec<AnimationNodeIndex>,
 }
 
-fn kid(p: &mut ChildSpawnerCommands, kit: &mut Kit) {
+impl Models {
+    fn load(assets: &AssetServer, graphs: &mut Assets<AnimationGraph>) -> Self {
+        let scene = |file: &str| {
+            assets.load(GltfAssetLabel::Scene(0).from_asset(format!("models/{file}.glb")))
+        };
+        let mut scenes = HashMap::new();
+        scenes.insert("hero", scene("hero"));
+        for name in PROPS {
+            scenes.insert(name, scene(&format!("prop_{name}")));
+        }
+        let clips = (0..HERO_CLIPS.len())
+            .map(|i| assets.load(GltfAssetLabel::Animation(i).from_asset("models/hero.glb")));
+        let (graph, clips) = AnimationGraph::from_clips(clips);
+        Self {
+            scenes,
+            graph: Some(graphs.add(graph)),
+            clips,
+        }
+    }
+}
+
+pub fn hero_clip(g: &Runner) -> &'static str {
+    if g.state == Phase::Dead {
+        "fail"
+    } else if g.state == Phase::Won && g.end_t > 0.4 {
+        "happy"
+    } else if g.sliding() {
+        "slide"
+    } else if g.y > 0.05 {
+        "jump"
+    } else if g.state == Phase::Ready || g.speed < 0.5 {
+        "idle"
+    } else {
+        "run"
+    }
+}
+
+fn model(c: &mut ChildSpawnerCommands, models: &Models, name: &'static str, at: Transform) {
+    if let Some(scene) = models.scenes.get(name) {
+        c.spawn((WorldAssetRoot(scene.clone()), at));
+    }
+}
+
+fn kid(p: &mut ChildSpawnerCommands, models: &Models) {
     let body = node(p, Role::Body, Transform::default());
     p.commands().entity(body).with_children(|b| {
-        b.spawn((
-            Role::Hero,
-            kit.part(
-                Shape::Quad,
-                Paint::skinned(Finish::Sticker, WHITE, sprite("hero_idle_back_0")),
-                Transform::from_xyz(0.0, HERO_H / 2.0, 0.0)
-                    .with_scale(Vec3::new(HERO_H * HERO_ASPECT, HERO_H, 1.0)),
-            ),
-        ));
+        model(
+            b,
+            models,
+            "hero",
+            Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+                .with_scale(Vec3::splat(HERO_H)),
+        );
     });
 }
 
-const TRAIN_BLUE: Col = Col::new(0.25, 0.55, 0.95, 1.0);
-
-fn prop(c: &mut ChildSpawnerCommands, kit: &mut Kit, name: &'static str, h: f32, at: Vec3) {
-    let s = crate::art::size(SHEET, name);
-    put(
+fn prop(c: &mut ChildSpawnerCommands, models: &Models, name: &'static str, h: f32, at: Vec3) {
+    model(
         c,
-        kit,
-        Shape::Quad,
-        Paint::skinned(Finish::Sticker, WHITE, sprite(name)),
-        Vec3::new(at.x, at.y + h / 2.0, at.z),
-        Vec3::new(h * s.x / s.y, h, 1.0),
+        models,
+        name,
+        Transform::from_translation(at).with_scale(Vec3::splat(h)),
     );
 }
 
-fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, kind: Kind) {
+fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, kind: Kind) {
     match kind {
-        Kind::Barrier => prop(c, kit, "prop_barrier", 1.25, Vec3::ZERO),
-        Kind::Hurdle => prop(c, kit, "prop_hurdle", 0.8, Vec3::ZERO),
-        Kind::Overhead => prop(c, kit, "prop_gate", 2.5, Vec3::ZERO),
+        Kind::Barrier => prop(c, models, "barrier", 1.25, Vec3::ZERO),
+        Kind::Hurdle => prop(c, models, "hurdle", 0.8, Vec3::ZERO),
+        Kind::Overhead => prop(c, models, "gate", 2.5, Vec3::ZERO),
         Kind::Train => {
             put(
                 c,
                 kit,
                 Shape::Cube,
-                gloss(TRAIN_BLUE.darker(0.92)),
-                Vec3::new(0.0, 1.2, -0.05),
-                Vec3::new(1.4, 2.4, TRAIN_LEN - 0.1),
+                gloss(Col::new(0.23, 0.5, 0.88, 1.0)),
+                Vec3::new(0.0, 0.95, -0.05),
+                Vec3::new(1.3, 1.9, TRAIN_LEN - 0.1),
             );
             prop(
                 c,
-                kit,
-                "prop_train",
-                2.45,
+                models,
+                "train",
+                2.0,
                 Vec3::new(0.0, 0.0, TRAIN_LEN / 2.0 + 0.02),
             );
         }
     }
 }
 
-fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
+fn animate_hero(
+    mut commands: Commands,
+    frame: NonSend<crate::Frame>,
+    models: Res<Models>,
+    fresh: Query<Entity, (With<AnimationPlayer>, Without<AnimationGraphHandle>)>,
+    mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
+) {
+    let Some(graph) = models.graph.clone() else {
+        return;
+    };
+    for e in &fresh {
+        commands
+            .entity(e)
+            .insert((AnimationGraphHandle(graph.clone()), AnimationTransitions::new()));
+    }
+    let Some(p) = playing::<RunnerPlay>(&frame) else {
+        return;
+    };
+    let g = &p.g;
+    let want = hero_clip(g);
+    let Some(at) = HERO_CLIPS.iter().position(|c| *c == want) else {
+        return;
+    };
+    let node = models.clips[at];
+    for (mut player, mut tr) in &mut players {
+        if tr.get_main_animation() != Some(node) {
+            let a = tr.play(&mut player, node, Duration::from_millis(120));
+            match want {
+                "run" | "idle" => {
+                    a.repeat();
+                }
+                "jump" => {
+                    a.set_speed(2.0);
+                }
+                _ => {}
+            }
+        }
+        if want == "run" {
+            if let Some(a) = player.animation_mut(node) {
+                a.set_speed((g.speed / 3.3).clamp(0.6, 4.0));
+            }
+        }
+    }
+}
+
+fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, g: &Runner) {
     let end = g.length + FINISH_RUN + 130.0;
     let len = end + 20.0;
     let mid = (20.0 - end) / 2.0;
@@ -326,22 +392,21 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
             let kind = *kind;
             c.commands()
                 .entity(n)
-                .with_children(|o| obstacle(o, kit, kind));
+                .with_children(|o| obstacle(o, kit, models, kind));
         }
     }
     for (i, coin) in g.coins_list.iter().enumerate() {
-        c.spawn((
+        let n = node(
+            c,
             Role::Coin(i),
-            kit.part(
-                Shape::Quad,
-                Paint::skinned(Finish::Sticker, WHITE, sprite("prop_coin")),
-                Transform::from_xyz(lane_x(coin.lane as i32 - 1), coin.h, -coin.at)
-                    .with_scale(Vec3::new(0.5, 0.55, 1.0)),
-            ),
-        ));
+            Transform::from_xyz(lane_x(coin.lane as i32 - 1), coin.h, -coin.at),
+        );
+        c.commands().entity(n).with_children(|k| {
+            prop(k, models, "coin", 0.55, Vec3::new(0.0, -0.275, 0.0));
+        });
     }
     let z = -g.length;
-    prop(c, kit, "prop_arch", 4.8, Vec3::new(0.0, 0.0, z));
+    prop(c, models, "arch", 4.8, Vec3::new(0.0, 0.0, z));
     c.spawn(kit.part(
         Shape::Plane,
         matte(WHITE),
@@ -355,6 +420,7 @@ fn sync(
     frame: NonSend<crate::Frame>,
     pen: Res<crate::paint::Pen>,
     mut kit: Kit,
+    models: Res<Models>,
     mut root: Query<&mut Root>,
     mut eye: Lens,
     mut nodes: Nodes<'_, '_>,
@@ -383,7 +449,7 @@ fn sync(
         if let Some((e, ..)) = nodes.iter().find(|(_, r, ..)| **r == Role::Course) {
             let mut c = commands.entity(e);
             c.despawn_children();
-            c.with_children(|c| course(c, &mut kit, g));
+            c.with_children(|c| course(c, &mut kit, &models, g));
         }
         return;
     }
@@ -464,6 +530,22 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                     scale: Vec3::new(1.0 + sq * 0.14, 1.0 - sq * 0.2, 1.0 + sq * 0.14),
                 });
             }
+            Role::Coin(i) => {
+                let Some(c) = g.coins_list.get(i) else {
+                    continue;
+                };
+                v.set_if_neq(shown(!c.taken));
+                let spin = g.t * 4.0 + i as f32 * 0.7;
+                t.set_if_neq(Transform {
+                    translation: Vec3::new(
+                        lane_x(c.lane as i32 - 1),
+                        c.h + (g.t * 3.0 + i as f32).sin() * 0.06,
+                        -c.at,
+                    ),
+                    rotation: Quat::from_rotation_y(spin),
+                    scale: Vec3::ONE,
+                });
+            }
             Role::Obstacle(i, k) => {
                 let Some(r) = g.rows.get(i) else {
                     continue;
@@ -536,13 +618,6 @@ fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Par
                         .with_scale(Vec3::new(w, h, 1.0)),
                 );
             }
-            Role::Hero => {
-                kit.repaint(
-                    &mut part,
-                    &mut mat,
-                    Paint::skinned(Finish::Sticker, WHITE, sprite(hero_frame(g))),
-                );
-            }
             Role::Shade => {
                 let k = (1.0 - g.y * 0.25).max(0.3);
                 t.set_if_neq(
@@ -553,22 +628,6 @@ fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Par
                     )),
                 );
                 v.set_if_neq(shown(g.state != Phase::Select));
-            }
-            Role::Coin(i) => {
-                let Some(c) = g.coins_list.get(i) else {
-                    continue;
-                };
-                v.set_if_neq(shown(!c.taken));
-                let spin = g.t * 4.0 + i as f32 * 0.7;
-                t.set_if_neq(Transform {
-                    translation: Vec3::new(
-                        lane_x(c.lane as i32 - 1),
-                        c.h + (g.t * 3.0 + i as f32).sin() * 0.06,
-                        -c.at,
-                    ),
-                    rotation: Quat::IDENTITY,
-                    scale: Vec3::new(0.5 * spin.cos().abs().max(0.25), 0.55, 1.0),
-                });
             }
             Role::Building(i) => {
                 let side = if i % 2 == 0 { -1.0 } else { 1.0 };
@@ -604,35 +663,31 @@ mod tests {
     use kg_core::engine::{Dir, Input};
 
     #[test]
-    fn every_runner_prop_exists_in_the_runner_sheet() {
-        let have = crate::art::names(SHEET);
-        for n in [
-            "prop_barrier",
-            "prop_hurdle",
-            "prop_gate",
-            "prop_train",
-            "prop_coin",
-            "prop_tree",
-            "prop_arch",
-        ] {
-            assert!(have.iter().any(|h| h == n), "{n} missing from the runner sheet");
+    fn every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips() {
+        for name in PROPS.iter().map(|p| format!("prop_{p}")).chain(["hero".to_string()]) {
+            let bytes = kg_core::assets::read(&format!("models/{name}.glb"))
+                .unwrap_or_else(|| panic!("models/{name}.glb missing"));
+            assert_eq!(&bytes[..4], b"glTF", "{name} is not a glb");
+        }
+        let hero = kg_core::assets::read("models/hero.glb").unwrap();
+        let json = String::from_utf8_lossy(&hero);
+        for clip in HERO_CLIPS {
+            assert!(json.contains(&format!("\"name\":\"{clip}\"")), "hero has no {clip} clip");
         }
     }
 
     #[test]
-    fn every_hero_frame_exists_in_the_runner_sheet() {
-        let mut names: Vec<&str> = RUN_FRAMES.iter().chain(CHEER_FRAMES.iter()).copied().collect();
-        names.extend([
-            "hero_idle_back_0",
-            "hero_jump_back_4",
-            "hero_jump_back_5",
-            "hero_fail_back_5",
-            "hero_slide_back_5",
-        ]);
-        let have = crate::art::names(SHEET);
-        for n in names {
-            assert!(have.iter().any(|h| h == n), "{n} missing from the runner sheet");
-        }
+    fn the_hero_clip_follows_the_game_state() {
+        let mut g = Runner::with_level(1);
+        g.state = Phase::Ready;
+        assert_eq!(hero_clip(&g), "idle");
+        g.state = Phase::Playing;
+        g.speed = 6.0;
+        assert_eq!(hero_clip(&g), "run");
+        g.y = 1.0;
+        assert_eq!(hero_clip(&g), "jump");
+        g.state = Phase::Dead;
+        assert_eq!(hero_clip(&g), "fail");
     }
 
     fn open(play: RunnerPlay) -> App {
