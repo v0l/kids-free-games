@@ -114,70 +114,75 @@ def sin(p, k=1, off=0):
     return math.sin(k * p + off)
 
 
+def cos(p):
+    return math.cos(p)
+
+
+def smooth(x):
+    x = max(0.0, min(1.0, x))
+    return x * x * (3 - 2 * x)
+
+
+SIDES = (("L", 1, 0.0), ("R", -1, math.pi))
+
+
 def idle(t):
     p = 2 * math.pi * t
-    d = {"spine": (0.03 * sin(p), 0, 0), "head": (-0.02 * sin(p, 1, 0.8), 0.03 * sin(p), 0)}
-    for side, sg in (("L", 1), ("R", -1)):
-        d[f"arm.{side}"] = (0.04 * sin(p, 1, 0.5), sg * (0.75 + 0.03 * sin(p)), 0)
-        d[f"forearm.{side}"] = (-0.15, sg * 0.1, 0)
-    return d, 0.006 * sin(p, 2)
+    d = {
+        "hips": (0, 0.03 * sin(p), 0),
+        "spine": (0.05 + 0.03 * sin(p), -0.02 * sin(p), 0.04 * sin(p)),
+        "head": (-0.03 * sin(p, 1, 0.8), 0, 0.12 * sin(p, 1, 0.6)),
+    }
+    for side, sg, ph in SIDES:
+        d[f"arm.{side}"] = (0, sg * (0.9 + 0.05 * sin(p, 1, 0.4)), sg * 0.06 * sin(p, 1, 0.9))
+        d[f"forearm.{side}"] = (0, 0, -sg * 0.18)
+    return d, 0.012 * sin(p)
 
 
 def run(t):
     p = 2 * math.pi * t
-    d = {"spine": (0.18, 0.1 * sin(p), 0), "head": (-0.1, -0.06 * sin(p), 0), "hips": (0, 0.1 * sin(p), 0)}
-    for side, sg, ph in (("L", 1, 0.0), ("R", -1, math.pi)):
+    d = {
+        "hips": (0.0, 0.07 * sin(p), 0.22 * sin(p)),
+        "spine": (0.32, -0.05 * sin(p), -0.3 * sin(p)),
+        "head": (-0.24, 0.04 * sin(p), 0.1 * sin(p)),
+    }
+    for side, sg, ph in SIDES:
         q = p + ph
-        d[f"leg.{side}"] = (0.75 * sin(q), 0, 0)
-        d[f"shin.{side}"] = (0.2 + 0.95 * max(0.0, sin(q, 1, 1.9)), 0, 0)
-        d[f"foot.{side}"] = (-0.2 * sin(q), 0, 0)
-        d[f"arm.{side}"] = (0, sg * 0.85, sg * 0.9 * sin(q))
-        d[f"forearm.{side}"] = (0, sg * 0.1, sg * (0.7 + 0.5 * sin(q)))
-    return d, 0.035 * math.cos(2 * p) - 0.01
+        d[f"leg.{side}"] = (0.95 * sin(q), sg * 0.05, 0)
+        d[f"shin.{side}"] = (0.15 + 1.45 * max(0.0, -cos(q)), 0, 0)
+        d[f"foot.{side}"] = (0.35 * sin(q), 0, 0)
+        d[f"arm.{side}"] = (0, sg * 0.95, sg * -1.15 * sin(q))
+        d[f"forearm.{side}"] = (0, 0, -sg * 1.3)
+    return d, 0.055 * sin(p) ** 2
 
 
 def jump(t):
-    crouch = max(0.0, 1 - abs(t - 0.12) / 0.12) if t < 0.24 else 0.0
-    land = max(0.0, 1 - abs(t - 0.9) / 0.1) if t > 0.8 else 0.0
-    air = 1.0 if 0.24 <= t <= 0.8 else 0.0
-    k = crouch + land * 0.8
-    d = {"spine": (0.25 * k - 0.05 * air, 0, 0), "head": (-0.1 * k, 0, 0)}
-    for side, sg in (("L", 1), ("R", -1)):
-        d[f"leg.{side}"] = (-0.6 * k - 0.7 * air * (0.5 if side == "L" else 1.0), 0, 0)
-        d[f"shin.{side}"] = (1.0 * k + 1.1 * air * (0.5 if side == "L" else 1.0), 0, 0)
-        d[f"arm.{side}"] = (0.5 * k - 0.4 * air, sg * (0.7 - 1.1 * air), 0)
-        d[f"forearm.{side}"] = (-0.3, 0, 0)
-    return d, -0.07 * k
-
-
-def happy(t):
-    p = 2 * math.pi * t
-    h = abs(math.sin(p))
-    d = {"spine": (-0.05, 0.06 * sin(p), 0), "head": (-0.12, 0.1 * sin(p), 0)}
-    for side, sg in (("L", 1), ("R", -1)):
-        d[f"arm.{side}"] = (-0.1 * sin(p), sg * (-0.9 + 0.2 * sin(p, 2)), 0)
-        d[f"forearm.{side}"] = (0, sg * -0.25, 0)
-        d[f"leg.{side}"] = (-0.25 * h, 0, 0)
-        d[f"shin.{side}"] = (0.5 * h, 0, 0)
-    return d, 0.2 * h
-
-
-def fail(t):
-    k = min(1.0, t * 3)
-    wob = 0.04 * math.sin(t * 20) * (1 - t)
-    d = {"spine": (-0.35 * k, wob, 0), "head": (0.3 * k, wob * 2, 0), "hips": (-0.1 * k, 0, 0)}
-    for side, sg in (("L", 1), ("R", -1)):
-        d[f"arm.{side}"] = (0.2 * k, sg * (-0.5 * k + 0.75 * (1 - k)), 0)
-        d[f"forearm.{side}"] = (-0.3, 0, 0)
-        d[f"leg.{side}"] = (-0.3 * k, 0, 0)
-        d[f"shin.{side}"] = (0.4 * k, 0, 0)
-    return d, -0.05 * k
+    u = t
+    s = math.sin(math.pi * u)
+    out = smooth((u - 0.6) / 0.4)
+    reach = smooth(min(1.0, u * 2.5))
+    d = {
+        "hips": (0, 0, 0),
+        "spine": (0.3 * (1 - u) - 0.05 * s, 0, 0),
+        "head": (-0.2 * (1 - u), 0, 0),
+        "leg.L": (0.6 - 1.7 * reach + 0.7 * out, 0, 0),
+        "shin.L": (0.15 + 1.25 * s, 0, 0),
+        "foot.L": (0.3 * (1 - u), 0, 0),
+        "leg.R": (0.35 - 1.0 * smooth(min(1.0, u * 2.2)) + 0.5 * out, 0, 0),
+        "shin.R": (0.3 + 1.0 * s, 0, 0),
+        "foot.R": (0.3 * (1 - u), 0, 0),
+    }
+    a = smooth(min(1.0, u * 3)) * (1 - 0.5 * out)
+    for side, sg, ph in SIDES:
+        d[f"arm.{side}"] = (0, sg * (0.9 - 2.3 * a), sg * -0.5 * a)
+        d[f"forearm.{side}"] = (0, 0, -sg * (0.3 + 0.3 * s))
+    return d, 0.0
 
 
 def slide(t):
-    k = min(1.0, t * 4)
+    k = smooth(t * 4)
     d = {"hips": (-0.5 * k, 0, 0), "spine": (0.7 * k, 0, 0), "head": (-0.5 * k, 0, 0)}
-    for side, sg in (("L", 1), ("R", -1)):
+    for side, sg, ph in SIDES:
         d[f"arm.{side}"] = (0.0, sg * 0.5, sg * 0.5 * k)
         d[f"forearm.{side}"] = (0, 0, sg * 0.5)
         d[f"leg.{side}"] = (-1.2 * k, 0, 0)
@@ -185,11 +190,43 @@ def slide(t):
     return d, -0.35 * k
 
 
+def happy(t):
+    p = 2 * math.pi * t
+    beat = (1 - cos(2 * p)) / 2
+    d = {
+        "hips": (0, 0.05 * sin(p), 0.1 * sin(p)),
+        "spine": (-0.1, 0, -0.12 * sin(p)),
+        "head": (-0.12, 0.08 * sin(p), 0.15 * sin(p)),
+    }
+    for side, sg, ph in SIDES:
+        d[f"arm.{side}"] = (0, sg * -1.3, sg * 0.35 * sin(2 * p, 1, ph))
+        d[f"forearm.{side}"] = (0, 0, sg * 0.5 * sin(2 * p, 1, ph + 1.0))
+        d[f"leg.{side}"] = (-0.3 * beat, 0, 0)
+        d[f"shin.{side}"] = (0.2 + 0.7 * beat, 0, 0)
+    return d, 0.0
+
+
+def fail(t):
+    k = smooth(t * 3)
+    wob = 0.06 * math.sin(t * 22) * (1 - t)
+    d = {
+        "spine": (-0.4 * k, wob, wob),
+        "head": (0.35 * k, wob * 2, 0),
+        "hips": (-0.12 * k, 0, 0),
+    }
+    for side, sg, ph in SIDES:
+        d[f"arm.{side}"] = (0, sg * (0.9 - 1.9 * k), sg * 0.4 * k)
+        d[f"forearm.{side}"] = (0, 0, -sg * 0.3)
+        d[f"leg.{side}"] = (-0.35 * k, 0, 0)
+        d[f"shin.{side}"] = (0.5 * k, 0, 0)
+    return d, -0.06 * k
+
+
 CLIPS = {
     "slide": (slide, 12, False),
     "idle": (idle, 48, True),
     "run": (run, 24, True),
-    "jump": (jump, 30, False),
+    "jump": (jump, 24, False),
     "happy": (happy, 36, False),
     "fail": (fail, 36, False),
 }
@@ -261,7 +298,8 @@ def render_clip(name, views):
     frames = [1 + int(i * n / 8) for i in range(8)]
     for vname, ang in views:
         a = math.radians(ang)
-        cam.location = Vector((math.sin(a) * 4, -math.cos(a) * 4, 0.6))
+        elev = 1.6 if vname == "game" else 0.6
+        cam.location = Vector((math.sin(a) * 4, -math.cos(a) * 4, elev))
         cam.rotation_euler = Vector(Vector((0, 0, 0.6)) - cam.location).to_track_quat("-Z", "Y").to_euler()
         for k, f in enumerate(frames):
             sc.frame_set(f)
@@ -270,5 +308,5 @@ def render_clip(name, views):
 
 
 for clip in ("run", "idle", "jump", "happy", "fail", "slide"):
-    render_clip(clip, (("front", 0), ("back", 180), ("side", 90)))
+    render_clip(clip, (("game", 180), ("back", 180), ("side", 90)))
 print("done")

@@ -201,6 +201,7 @@ fn spawn(
 }
 
 const HERO_H: f32 = 1.8;
+const JUMP_CLIP_SECS: f32 = 1.0;
 const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
 const PROPS: [&str; 7] = [
     "barrier", "hurdle", "gate", "train", "coin", "tree", "arch",
@@ -335,7 +336,7 @@ fn animate_hero(
                     a.repeat();
                 }
                 "jump" => {
-                    a.set_speed(2.0);
+                    a.set_speed(JUMP_CLIP_SECS / (2.0 * JUMP_V / GRAVITY));
                 }
                 _ => {}
             }
