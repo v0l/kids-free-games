@@ -1,4 +1,5 @@
 pub mod arena;
+pub mod learn;
 pub mod pilot;
 pub mod world;
 

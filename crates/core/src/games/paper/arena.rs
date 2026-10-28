@@ -54,8 +54,7 @@ pub const PERSONAS: [Persona; 5] = [
 pub struct Tuning {
     pub speed: f32,
     pub reach: usize,
-    pub hunt: f32,
-    pub caution: f32,
+    pub effort: f32,
 }
 
 pub fn skill(best_tenths: i64) -> f32 {
@@ -73,8 +72,7 @@ pub fn tuning(p: Persona, skill: f32) -> Tuning {
     Tuning {
         speed: (PLAYER_SPEED * (0.64 + 0.32 * s) * p.speed).min(PLAYER_SPEED * 0.97),
         reach: (8.0 + p.greed * (8.0 + 26.0 * s)) as usize,
-        hunt: p.aggro * (0.04 + 0.96 * s),
-        caution: p.caution * (0.35 + 0.65 * s),
+        effort: 0.1 + 0.9 * s,
     }
 }
 
@@ -120,8 +118,7 @@ mod tests {
             assert!(easy.speed <= PLAYER_SPEED * 0.7);
             assert!(hard.speed < PLAYER_SPEED);
             assert!(easy.reach < hard.reach);
-            assert!(easy.hunt < hard.hunt);
-            assert!(easy.caution < hard.caution);
+            assert!(easy.effort < hard.effort);
         }
     }
 
