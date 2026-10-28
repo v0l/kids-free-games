@@ -14,6 +14,10 @@ pub struct Jev {
     pub game: FlappyPlay,
 }
 
+pub fn requested_brain() -> bool {
+    crate::web::query("brain").is_some_and(|g| g == "paper")
+}
+
 pub fn requested_clash() -> bool {
     crate::web::query("jev").is_some_and(|g| g == "clash")
 }
@@ -192,6 +196,131 @@ impl JevClash {
                 if *strong { gold } else { dim },
             );
         }
+    }
+}
+
+pub struct BrainPaper {
+    pub brain: Option<kg_core::brain::Brain>,
+    pub game: crate::games::paper::PaperPlay,
+    pub effort: f32,
+    since: f32,
+    runs: u32,
+    best: f32,
+    was_dead: bool,
+}
+
+impl BrainPaper {
+    pub fn new() -> Self {
+        kg_core::save::use_memory_only();
+        if kg_core::profile::current().is_none() {
+            kg_core::profile::create("Brain", 5);
+        }
+        let effort = crate::web::query("effort")
+            .and_then(|e| e.parse().ok())
+            .unwrap_or(1.0);
+        let brain = kg_core::games::paper::world::shipped_net()
+            .map(|n| kg_core::brain::Brain::new(n.clone(), kg_core::brain::Effort::new(effort)));
+        Self {
+            brain,
+            game: crate::games::paper::PaperPlay::new(),
+            effort,
+            since: 0.0,
+            runs: 0,
+            best: 0.0,
+            was_dead: false,
+        }
+    }
+
+    pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32) {
+        use kg_core::games::paper::State;
+        let g = &mut self.game.g;
+        let mut input = Input::default();
+        match g.state {
+            State::Ready => input.action = true,
+            State::Dead => {
+                if !self.was_dead {
+                    self.runs += 1;
+                }
+                if self.since > 2.0 {
+                    input =
+                        Input::press_at(kg_core::games::paper::play_again_button(view).center());
+                }
+            }
+            State::Playing => {
+                self.since += dt;
+                if let Some(b) = &mut self.brain {
+                    let every = b.effort.think_every(0.16);
+                    if self.since >= every {
+                        self.since = 0.0;
+                        let (aims, feats) = g.w.options(0);
+                        let k = b.choose(&feats);
+                        if let Some(a) = aims.get(k) {
+                            g.aim(*a);
+                        }
+                    }
+                }
+            }
+        }
+        if g.state != State::Dead {
+            if self.was_dead {
+                self.since = 0.0;
+            }
+        } else if !self.was_dead {
+            self.since = 0.0;
+        }
+        self.was_dead = g.state == State::Dead;
+        self.best = self.best.max(g.run.peak.max(g.share(0)));
+        self.game.update(&input, view, dt);
+        self.game.draw(pen, view);
+        pen.offset = glam::Vec2::ZERO;
+        let lines = [
+            (format!("Brain playing, effort {:.2}", self.effort), true),
+            (
+                format!(
+                    "run {}   land {:.1}%   best {:.1}%",
+                    self.runs + 1,
+                    self.game.g.share(0) * 100.0,
+                    self.best * 100.0
+                ),
+                false,
+            ),
+            (
+                match &self.brain {
+                    Some(b) => format!(
+                        "{} weights, thinks every {:.2} s",
+                        b.net.weights.len(),
+                        b.effort.think_every(0.16)
+                    ),
+                    None => "no brain file".into(),
+                },
+                false,
+            ),
+        ];
+        let w = 470.0f32.min(view.w * 0.5);
+        let r = Rect::new(
+            16.0,
+            view.h - 30.0 - lines.len() as f32 * 26.0 - 200.0,
+            w,
+            30.0 + lines.len() as f32 * 26.0,
+        );
+        pen.round_rect(r, 18.0, Color::new(0.06, 0.03, 0.15, 0.78));
+        let gold = Color::from_rgba(255, 210, 70, 255);
+        let dim = Color::new(0.75, 0.78, 0.9, 1.0);
+        for (i, (l, strong)) in lines.iter().enumerate() {
+            pen.text_left(
+                &fit(l, w - 32.0, 22.0),
+                r.x + 16.0,
+                r.y + 27.0 + i as f32 * 26.0,
+                22.0,
+                if *strong { gold } else { dim },
+            );
+        }
+    }
+}
+
+impl Default for BrainPaper {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

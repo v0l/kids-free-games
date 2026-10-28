@@ -29,6 +29,7 @@ pub enum Scene {
     Shot(shots::Shot),
     Jev(Box<jev::Jev>),
     JevClash(Box<jev::JevClash>),
+    BrainPaper(Box<jev::BrainPaper>),
 }
 
 pub struct Frame {
@@ -60,6 +61,7 @@ impl Frame {
             Scene::Shot(s) => s.play(),
             Scene::Jev(_) => None,
             Scene::JevClash(j) => Some(&j.game),
+            Scene::BrainPaper(j) => Some(&j.game),
         }
     }
 
@@ -72,6 +74,7 @@ impl Frame {
             Scene::Shot(s) => s.play_mut(),
             Scene::Jev(_) => None,
             Scene::JevClash(j) => Some(&mut j.game),
+            Scene::BrainPaper(j) => Some(&mut j.game),
         }
     }
 }
@@ -211,6 +214,7 @@ fn frame(
         Scene::Shot(s) => s.frame(&mut pen, &view, dt),
         Scene::Jev(j) => j.frame(&mut pen, &view, dt),
         Scene::JevClash(j) => j.frame(&mut pen, &view, dt),
+        Scene::BrainPaper(j) => j.frame(&mut pen, &view, dt),
     }
     let touched = input.pressed || input.action || !input.typed.is_empty();
     if let Some(a) = &mut state.audio {
@@ -318,6 +322,7 @@ pub fn run() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),
         None if jev::requested() => Scene::Jev(Box::default()),
         None if jev::requested_clash() => Scene::JevClash(Box::default()),
+        None if jev::requested_brain() => Scene::BrainPaper(Box::default()),
         None => Scene::Menu(Box::default()),
     };
     let audio = !matches!(scene, Scene::Shot(_));

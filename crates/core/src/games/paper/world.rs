@@ -11,7 +11,7 @@ pub use sense::FEATURES;
 
 static SHIPPED: &[u8] = include_bytes!("../../../../../assets/brains/paper.kgb");
 
-fn shipped_net() -> Option<&'static Net> {
+pub fn shipped_net() -> Option<&'static Net> {
     static NET: OnceLock<Option<Net>> = OnceLock::new();
     NET.get_or_init(|| Net::from_bytes(SHIPPED).filter(|n| n.inputs() == FEATURES))
         .as_ref()
