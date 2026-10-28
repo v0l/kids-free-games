@@ -131,8 +131,8 @@ def run(t):
         d[f"leg.{side}"] = (0.75 * sin(q), 0, 0)
         d[f"shin.{side}"] = (0.2 + 0.95 * max(0.0, sin(q, 1, 1.9)), 0, 0)
         d[f"foot.{side}"] = (-0.2 * sin(q), 0, 0)
-        d[f"arm.{side}"] = (-0.9 * sin(q), sg * 0.85, 0)
-        d[f"forearm.{side}"] = (-1.1 - 0.3 * sin(q), sg * 0.1, 0)
+        d[f"arm.{side}"] = (0, sg * 0.85, sg * 0.9 * sin(q))
+        d[f"forearm.{side}"] = (0, sg * 0.1, sg * (0.7 + 0.5 * sin(q)))
     return d, 0.035 * math.cos(2 * p) - 0.01
 
 
@@ -230,7 +230,7 @@ sc.display.shading.light = "FLAT"
 sc.display.shading.color_type = "TEXTURE"
 sc.view_settings.view_transform = "Standard"
 sc.render.film_transparent = True
-sc.render.resolution_x = sc.render.resolution_y = 256
+sc.render.resolution_x = sc.render.resolution_y = 384
 cam = bpy.data.objects.new("c", bpy.data.cameras.new("c"))
 sc.collection.objects.link(cam)
 sc.camera = cam
@@ -258,5 +258,5 @@ def render_clip(name, views):
 
 
 for clip in ("run", "idle", "jump", "happy", "fail"):
-    render_clip(clip, (("front", 0), ("side", 90)))
+    render_clip(clip, (("front", 0), ("back", 180), ("side", 90)))
 print("done")

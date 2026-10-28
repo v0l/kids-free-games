@@ -28,11 +28,6 @@ const TINTS: [Col; 5] = [
     Col::new(0.82, 1.0, 0.86, 1.0),
     Col::new(0.94, 0.84, 1.0, 1.0),
 ];
-const SKIN: Col = Col::new(1.0, 0.78, 0.62, 1.0);
-const JACKET: Col = Col::new(1.0, 0.76, 0.1, 1.0);
-const JEANS: Col = Col::new(0.2, 0.36, 0.7, 1.0);
-const CAP: Col = Col::new(0.95, 0.2, 0.2, 1.0);
-const PACK: Col = Col::new(0.55, 0.12, 0.25, 1.0);
 const GOLD: Col = Col::new(1.0, 0.8, 0.1, 1.0);
 
 pub struct RunnerWorld;
@@ -62,8 +57,7 @@ pub enum Role {
     Course,
     Player,
     Body,
-    Leg(usize),
-    Arm(usize),
+    Hero,
     Shade,
     Obstacle(usize, usize),
     Coin(usize),
@@ -216,90 +210,58 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
     });
 }
 
+const HERO_H: f32 = 1.8;
+const HERO_ASPECT: f32 = 156.0 / 282.0;
+const RUN_FRAMES: [&str; 8] = [
+    "hero_run_back_0",
+    "hero_run_back_1",
+    "hero_run_back_2",
+    "hero_run_back_3",
+    "hero_run_back_4",
+    "hero_run_back_5",
+    "hero_run_back_6",
+    "hero_run_back_7",
+];
+const CHEER_FRAMES: [&str; 4] = [
+    "hero_happy_front_0",
+    "hero_happy_front_2",
+    "hero_happy_front_4",
+    "hero_happy_front_6",
+];
+
+pub fn hero_frame(g: &Runner) -> &'static str {
+    if g.state == Phase::Dead {
+        return "hero_fail_back_5";
+    }
+    if g.state == Phase::Won && g.end_t > 0.4 {
+        return CHEER_FRAMES[(g.end_t * 8.0) as usize % CHEER_FRAMES.len()];
+    }
+    if g.y > 0.05 {
+        return if g.vy > 0.0 {
+            "hero_jump_back_4"
+        } else {
+            "hero_jump_back_5"
+        };
+    }
+    if g.state == Phase::Ready || g.speed < 0.5 {
+        return "hero_idle_back_0";
+    }
+    let cycle = stride(g.dist) / std::f32::consts::TAU;
+    RUN_FRAMES[(cycle.rem_euclid(1.0) * RUN_FRAMES.len() as f32) as usize % RUN_FRAMES.len()]
+}
+
 fn kid(p: &mut ChildSpawnerCommands, kit: &mut Kit) {
     let body = node(p, Role::Body, Transform::default());
     p.commands().entity(body).with_children(|b| {
-        put(
-            b,
-            kit,
-            Shape::Sphere,
-            gloss(JACKET),
-            Vec3::new(0.0, 0.88, 0.0),
-            Vec3::new(0.62, 0.7, 0.5),
-        );
-        put(
-            b,
-            kit,
-            Shape::Cube,
-            matte(PACK),
-            Vec3::new(0.0, 0.92, 0.3),
-            Vec3::new(0.44, 0.5, 0.2),
-        );
-        put(
-            b,
-            kit,
-            Shape::Sphere,
-            gloss(SKIN),
-            Vec3::new(0.0, 1.4, 0.0),
-            Vec3::splat(0.6),
-        );
-        put(
-            b,
-            kit,
-            Shape::Sphere,
-            gloss(CAP),
-            Vec3::new(0.0, 1.52, 0.02),
-            Vec3::new(0.66, 0.42, 0.66),
-        );
-        put(
-            b,
-            kit,
-            Shape::Cube,
-            matte(CAP.darker(0.8)),
-            Vec3::new(0.0, 1.45, -0.36),
-            Vec3::new(0.46, 0.06, 0.3),
-        );
-        for s in 0..2 {
-            let side = if s == 0 { -1.0 } else { 1.0 };
-            let leg = node(b, Role::Leg(s), Transform::from_xyz(side * 0.17, 0.55, 0.0));
-            b.commands().entity(leg).with_children(|l| {
-                put(
-                    l,
-                    kit,
-                    Shape::Cylinder(10),
-                    matte(JEANS),
-                    Vec3::new(0.0, -0.22, 0.0),
-                    Vec3::new(0.2, 0.46, 0.2),
-                );
-                put(
-                    l,
-                    kit,
-                    Shape::Cube,
-                    matte(CAP),
-                    Vec3::new(0.0, -0.5, -0.05),
-                    Vec3::new(0.22, 0.12, 0.34),
-                );
-            });
-            let arm = node(b, Role::Arm(s), Transform::from_xyz(side * 0.38, 1.05, 0.0));
-            b.commands().entity(arm).with_children(|a| {
-                put(
-                    a,
-                    kit,
-                    Shape::Cylinder(10),
-                    gloss(JACKET),
-                    Vec3::new(0.0, -0.2, 0.0),
-                    Vec3::new(0.16, 0.42, 0.16),
-                );
-                put(
-                    a,
-                    kit,
-                    Shape::Sphere,
-                    gloss(SKIN),
-                    Vec3::new(0.0, -0.44, 0.0),
-                    Vec3::splat(0.17),
-                );
-            });
-        }
+        b.spawn((
+            Role::Hero,
+            kit.part(
+                Shape::Quad,
+                Paint::skinned(Finish::Sticker, WHITE, sprite("hero_idle_back_0")),
+                Transform::from_xyz(0.0, HERO_H / 2.0, 0.0)
+                    .with_scale(Vec3::new(HERO_H * HERO_ASPECT, HERO_H, 1.0)),
+            ),
+        ));
     });
 }
 
@@ -672,38 +634,6 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                     scale: Vec3::new(1.0 + sq * 0.14, 1.0 - sq * 0.2, 1.0 + sq * 0.14),
                 });
             }
-            Role::Leg(s) => {
-                let sgn = if s == 0 { 1.0 } else { -1.0 };
-                let swing = if g.sliding() {
-                    -1.2
-                } else if airborne {
-                    sgn * 0.7 - 0.3
-                } else {
-                    (phase).sin() * sgn * 0.95 * moving
-                };
-                t.set_if_neq(Transform {
-                    translation: Vec3::new(if s == 0 { -0.17 } else { 0.17 }, 0.55, 0.0),
-                    rotation: Quat::from_rotation_x(swing),
-                    scale: Vec3::ONE,
-                });
-            }
-            Role::Arm(s) => {
-                let sgn = if s == 0 { -1.0 } else { 1.0 };
-                let swing = if cheer {
-                    2.8 + (g.end_t * 14.0).sin() * 0.3
-                } else if airborne {
-                    2.4
-                } else if g.sliding() {
-                    0.8
-                } else {
-                    (phase).sin() * sgn * 0.9 * moving
-                };
-                t.set_if_neq(Transform {
-                    translation: Vec3::new(sgn * 0.38, 1.05, 0.0),
-                    rotation: Quat::from_rotation_x(swing) * Quat::from_rotation_z(sgn * 0.12),
-                    scale: Vec3::ONE,
-                });
-            }
             Role::Obstacle(i, k) => {
                 let Some(r) = g.rows.get(i) else {
                     continue;
@@ -776,6 +706,13 @@ fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Par
                         .with_scale(Vec3::new(w, h, 1.0)),
                 );
             }
+            Role::Hero => {
+                kit.repaint(
+                    &mut part,
+                    &mut mat,
+                    Paint::skinned(Finish::Sticker, WHITE, sprite(hero_frame(g))),
+                );
+            }
             Role::Shade => {
                 let k = (1.0 - g.y * 0.25).max(0.3);
                 t.set_if_neq(
@@ -835,6 +772,21 @@ mod tests {
     use crate::game3d::testing;
     use crate::games::Play;
     use kg_core::engine::{Dir, Input};
+
+    #[test]
+    fn every_hero_frame_exists_in_the_runner_sheet() {
+        let mut names: Vec<&str> = RUN_FRAMES.iter().chain(CHEER_FRAMES.iter()).copied().collect();
+        names.extend([
+            "hero_idle_back_0",
+            "hero_jump_back_4",
+            "hero_jump_back_5",
+            "hero_fail_back_5",
+        ]);
+        let have = crate::art::names(SHEET);
+        for n in names {
+            assert!(have.iter().any(|h| h == n), "{n} missing from the runner sheet");
+        }
+    }
 
     fn open(play: RunnerPlay) -> App {
         let mut app = testing::with_game(Box::new(play), View::ipad_portrait());

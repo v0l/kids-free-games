@@ -3,3 +3,20 @@ bg   | gen:runner_bg.png | solo jpg max=1344 keep
 wall | gen:runner_wall.png | max=128
 walk | gen:runner_walk.png | max=128
 road | gen:runner_road_tile.png | max=320
+hero_run_back_0 | gen:hero_run_back_0.png | keep crop=114,40,156,282 max=256
+hero_run_back_1 | gen:hero_run_back_1.png | keep crop=114,40,156,282 max=256
+hero_run_back_2 | gen:hero_run_back_2.png | keep crop=114,40,156,282 max=256
+hero_run_back_3 | gen:hero_run_back_3.png | keep crop=114,40,156,282 max=256
+hero_run_back_4 | gen:hero_run_back_4.png | keep crop=114,40,156,282 max=256
+hero_run_back_5 | gen:hero_run_back_5.png | keep crop=114,40,156,282 max=256
+hero_run_back_6 | gen:hero_run_back_6.png | keep crop=114,40,156,282 max=256
+hero_run_back_7 | gen:hero_run_back_7.png | keep crop=114,40,156,282 max=256
+hero_idle_back_0 | gen:hero_idle_back_0.png | keep crop=114,40,156,282 max=256
+hero_idle_front_0 | gen:hero_idle_front_0.png | keep crop=114,40,156,282 max=256
+hero_jump_back_4 | gen:hero_jump_back_4.png | keep crop=114,40,156,282 max=256
+hero_jump_back_5 | gen:hero_jump_back_5.png | keep crop=114,40,156,282 max=256
+hero_fail_back_5 | gen:hero_fail_back_5.png | keep crop=114,40,156,282 max=256
+hero_happy_front_0 | gen:hero_happy_front_0.png | keep crop=114,40,156,282 max=256
+hero_happy_front_2 | gen:hero_happy_front_2.png | keep crop=114,40,156,282 max=256
+hero_happy_front_4 | gen:hero_happy_front_4.png | keep crop=114,40,156,282 max=256
+hero_happy_front_6 | gen:hero_happy_front_6.png | keep crop=114,40,156,282 max=256
