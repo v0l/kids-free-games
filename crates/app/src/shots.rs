@@ -208,6 +208,7 @@ pub const SCENES: &[(u32, &str)] = &[
     (207, "runner slide under a gate"),
     (208, "runner out of hearts with the board"),
     (209, "runner level clear, three stars"),
+    (210, "runner jumping through a coin arc"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -445,7 +446,7 @@ fn setup(n: u32, view: &View) -> Stage {
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
         110..=119 => helix_scene::setup(n, view),
-        200..=209 => runner_scene::setup(n, view),
+        200..=219 => runner_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -631,7 +632,7 @@ mod tests {
     fn every_3d_scene_spawns_its_world() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
             for &(n, name) in SCENES.iter().filter(|(n, _)| {
-                (110..=119).contains(n) || (170..=189).contains(n) || (200..=209).contains(n)
+                (110..=119).contains(n) || (170..=189).contains(n) || (200..=219).contains(n)
             }) {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);

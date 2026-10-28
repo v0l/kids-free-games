@@ -63,6 +63,7 @@ pub fn setup(n: u32, view: &View) -> Stage {
         207 => 6,
         208 => 12,
         209 => 30,
+        210 => 22,
         _ => 1,
     };
     profile::unlock(GAME, if n == 200 { 9 } else { level.max(8) });
@@ -146,6 +147,39 @@ pub fn setup(n: u32, view: &View) -> Stage {
             run_to(&mut p, view, end + 1.0);
             settle(&mut p, view, 60 * 3);
         }
+        210 => {
+            start(&mut p, view);
+            settle(&mut p, view, 200);
+            let at = p.g.dist + 12.0;
+            p.g.rows
+                .retain(|r| r.at + r.len() < p.g.dist - 1.0 || r.at > at + 12.0);
+            p.g.coins_list
+                .retain(|c| c.at < p.g.dist - 1.0 || c.at > at + 12.0);
+            let mut lanes = [None; 3];
+            lanes[1] = Some(Kind::Hurdle);
+            p.g.rows.push(Row {
+                at,
+                lanes,
+                hit: false,
+                hit_t: 0.0,
+                hit_lanes: [false; 3],
+            });
+            for (c, h) in jump_arc(at + ROW_LEN / 2.0, p.g.speed) {
+                p.g.coins_list.push(Coin {
+                    at: c,
+                    lane: 1,
+                    h,
+                    taken: false,
+                });
+            }
+            p.g.rows.sort_by(|a, b| a.at.total_cmp(&b.at));
+            p.g.coins_list.sort_by(|a, b| a.at.total_cmp(&b.at));
+            let air = 2.0 * JUMP_V / GRAVITY;
+            let takeoff = at + ROW_LEN / 2.0 - p.g.speed * air / 2.0;
+            while p.g.dist < takeoff - 3.0 {
+                settle(&mut p, view, 1);
+            }
+        }
         _ => {}
     }
     kg_core::sfx::take_cues();
@@ -170,5 +204,20 @@ pub fn check() {
         let won = get(209);
         assert_eq!(won.g.state, State::Won);
         assert_eq!(won.g.stars, 3);
+        let mut arc = get(210);
+        let ahead = |g: &Runner| {
+            g.coins_list
+                .iter()
+                .filter(|c| !c.taken && c.at > g.dist)
+                .count()
+        };
+        assert!(ahead(&arc.g) >= 3);
+        let before = arc.g.coins;
+        arc.update(&Input::key(kg_core::engine::Dir::Up), &v, DT);
+        for _ in 0..120 {
+            arc.update(&Input::default(), &v, DT);
+        }
+        assert_eq!(arc.g.hits, 0);
+        assert!(arc.g.coins >= before + 3, "{} -> {}", before, arc.g.coins);
     }
 }

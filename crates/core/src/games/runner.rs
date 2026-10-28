@@ -279,6 +279,18 @@ fn pick_kind(level: u32) -> Kind {
     kinds[crate::rng::gen_range(0, kinds.len())]
 }
 
+pub fn jump_arc(centre: f32, speed: f32) -> [(f32, f32); 3] {
+    let air = 2.0 * JUMP_V / GRAVITY;
+    let peak = JUMP_V * JUMP_V / (2.0 * GRAVITY);
+    let height = |t: f32| (JUMP_V * t - GRAVITY * t * t / 2.0).max(0.0);
+    let side = air * 0.3;
+    [
+        (centre - side * speed, height(air / 2.0 - side) + 0.35),
+        (centre, peak + 0.35),
+        (centre + side * speed, height(air / 2.0 + side) + 0.35),
+    ]
+}
+
 pub fn build_rows(
     level: u32,
     fails: u32,
@@ -328,9 +340,10 @@ pub fn build_rows(
         let open = if forced { [true; 3] } else { row.open() };
         if kind == Kind::Hurdle && !forced {
             if let Some(k) = (0..3).find(|k| blocked[*k]) {
-                for (i, h) in [1.0, 1.7, 1.0].into_iter().enumerate() {
+                let speed = speed_of(level, fails);
+                for (at, h) in jump_arc(at + ROW_LEN / 2.0, speed) {
                     coins.push(Coin {
-                        at: at - 1.6 + i as f32 * 2.0,
+                        at,
                         lane: k,
                         h,
                         taken: false,
@@ -1185,6 +1198,69 @@ mod tests {
         g.dist = g.rows[1].at - 0.1;
         g.update(&Input::default(), &view, 0.05);
         assert_eq!(g.hearts, HEARTS - 1);
+    }
+
+    fn jumps_over(level: u32, hurdle: f32, lane: usize) -> Vec<(usize, bool)> {
+        let view = View::ipad_landscape();
+        let mut out = vec![];
+        for k in 0..80 {
+            let takeoff = hurdle - 6.0 + k as f32 * 0.1;
+            setup();
+            let mut g = Runner::with_level(level);
+            g.state = State::Playing;
+            g.run_t = 10.0;
+            g.speed = g.target_speed();
+            g.lane = lane as i32 - 1;
+            g.x = lane_x(g.lane);
+            let mut lanes = [None; 3];
+            lanes[lane] = Some(Kind::Hurdle);
+            g.rows = vec![Row {
+                at: hurdle,
+                lanes,
+                hit: false,
+                hit_t: 0.0,
+                hit_lanes: [false; 3],
+            }];
+            g.coins_list = jump_arc(hurdle + ROW_LEN / 2.0, g.speed)
+                .into_iter()
+                .map(|(at, h)| Coin {
+                    at,
+                    lane,
+                    h,
+                    taken: false,
+                })
+                .collect();
+            g.dist = takeoff - 0.5;
+            let mut jumped = false;
+            for _ in 0..240 {
+                let input = if !jumped && g.dist >= takeoff {
+                    jumped = true;
+                    Input::key(Dir::Up)
+                } else {
+                    Input::default()
+                };
+                g.update(&input, &view, 1.0 / 120.0);
+            }
+            let got = g.coins_list.iter().filter(|c| c.taken).count();
+            out.push((got, g.hits == 0));
+        }
+        out
+    }
+
+    #[test]
+    fn one_jump_over_a_coin_hurdle_collects_every_coin() {
+        for level in [1, 5, 10, 15, 20, 25, 30] {
+            let window = jumps_over(level, 60.0, 1);
+            let full = window
+                .iter()
+                .filter(|(got, clean)| *got == 3 && *clean)
+                .count();
+            assert!(
+                full >= 30,
+                "level {level}: only {full} of {} takeoff points collect all 3 coins",
+                window.len()
+            );
+        }
     }
 
     #[test]
