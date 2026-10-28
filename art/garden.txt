@@ -1,0 +1,13 @@
+# Painted with FLUX.1-dev (art/gen/prompts/garden.json, garden2.json)
+soil      | gen:garden_soil.png | solo jpg max=512 keep
+red       | gen:garden_flower_red_cut.png | max=256
+yellow    | gen:garden_flower_yellow_cut.png | max=256
+pink      | gen:garden_flower_pink_cut.png | max=256
+blue      | gen:garden_flower_blue_cut.png | max=256
+purple    | gen:garden_flower_purple_cut.png | max=256
+orange    | gen:garden_flower_orange_cut.png | max=256
+sprout    | gen:garden_sprout_cut.png | max=256
+butterfly | gen:garden_butterfly_cut.png | max=192
+bee       | gen:garden_bee_cut.png | max=192
+can       | gen:garden_can_cut.png | max=192
+seed      | gen:garden_seed_cut.png | max=256

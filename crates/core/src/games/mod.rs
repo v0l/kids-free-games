@@ -4,6 +4,7 @@ pub mod clash;
 pub mod count;
 pub mod crossy;
 pub mod flappy;
+pub mod garden;
 pub mod fruit;
 pub mod helix;
 pub mod hotel;
@@ -59,7 +60,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 17] = [
+pub const CATALOG: [Info; 18] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -172,6 +173,13 @@ pub const CATALOG: [Info; 17] = [
         Kind::Learn,
         "Spelling games",
         (250, 150, 80),
+    ),
+    info(
+        "garden",
+        "Times Table Garden",
+        Kind::Learn,
+        "Multiplication games for kids",
+        (90, 190, 90),
     ),
 ];
 

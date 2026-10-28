@@ -377,6 +377,17 @@ pub enum Say {
     Oops,
     Number(u8),
     Word(&'static str),
+    Times(Line, u8, u8),
+    GardenIntro,
+    Bloom,
+    Steady,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Line {
+    Ask,
+    Answer,
+    Missing,
 }
 
 impl Say {
@@ -396,6 +407,17 @@ impl Say {
             Say::Oops => "say_oops".into(),
             Say::Number(n) => format!("say_{}", n.clamp(1, 10)),
             Say::Word(w) => format!("word_{w}"),
+            Say::Times(line, a, b) => {
+                let c = match line {
+                    Line::Ask => 'q',
+                    Line::Answer => 'a',
+                    Line::Missing => 'm',
+                };
+                format!("word_t{c}{a}x{b}")
+            }
+            Say::GardenIntro => "say_garden_intro".into(),
+            Say::Bloom => "say_garden_bloom".into(),
+            Say::Steady => "say_garden_steady".into(),
         }
     }
 }
@@ -403,7 +425,7 @@ impl Say {
 thread_local! {
     static PENDING: RefCell<Vec<Cue>> = const { RefCell::new(Vec::new()) };
     static VOICE: RefCell<Option<Say>> = const { RefCell::new(None) };
-    static PREFETCH: RefCell<Option<Vec<&'static str>>> = const { RefCell::new(None) };
+    static PREFETCH: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
     static WANT: std::cell::Cell<Option<Mood>> = const { std::cell::Cell::new(None) };
     static SFX_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
     static MUSIC_ON: std::cell::Cell<bool> = const { std::cell::Cell::new(true) };
@@ -452,10 +474,16 @@ pub fn take_voice() -> Option<Say> {
 }
 
 pub fn prefetch_words(words: &[&'static str]) {
-    PREFETCH.with(|p| *p.borrow_mut() = Some(words.to_vec()));
+    PREFETCH.with(|p| {
+        *p.borrow_mut() = Some(words.iter().map(|w| Say::Word(w).key()).collect())
+    });
 }
 
-pub fn take_prefetch() -> Option<Vec<&'static str>> {
+pub fn prefetch_say(lines: &[Say]) {
+    PREFETCH.with(|p| *p.borrow_mut() = Some(lines.iter().map(|s| s.key()).collect()));
+}
+
+pub fn take_prefetch() -> Option<Vec<String>> {
     PREFETCH.with(|p| p.borrow_mut().take())
 }
 
@@ -656,6 +684,7 @@ mod tests {
             Say::Best,
         ];
         lines.extend((1..=10).map(Say::Number));
+        lines.extend([Say::GardenIntro, Say::Bloom, Say::Steady]);
         for v in lines {
             let takes: Vec<_> = p.iter().filter(|(k, _)| voice_line(k) == v.key()).collect();
             assert!(!takes.is_empty(), "{v:?} missing");

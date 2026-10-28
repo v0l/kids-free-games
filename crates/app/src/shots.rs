@@ -18,6 +18,7 @@ mod breakout_scene;
 mod clash_scene;
 mod count_scene;
 mod fruit_scene;
+mod garden_scene;
 mod helix_scene;
 mod hotel_scene;
 mod jumper_scene;
@@ -187,6 +188,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (181, "hotel level up"),
     (182, "hotel moving to the next hotel"),
     (183, "hotel boss finale"),
+    (200, "garden first launch with the hint"),
+    (201, "garden sprouting a three by four array"),
+    (202, "garden four times six bed"),
+    (203, "garden right answer, watering can"),
+    (204, "garden remember stage, flowers fading"),
+    (205, "garden numbers only, wrong pick wilts"),
+    (206, "garden bed picker overview"),
+    (207, "garden every bed in bloom, board"),
+    (208, "garden bed bloom"),
+    (209, "garden round report"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -434,6 +445,7 @@ fn setup(n: u32, view: &View) -> Stage {
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
         110..=119 => helix_scene::setup(n, view),
+        200..=209 => garden_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -690,6 +702,11 @@ mod tests {
     #[test]
     fn breakout_scenes_land_in_the_state_they_are_named_for() {
         breakout_scene::check();
+    }
+
+    #[test]
+    fn garden_scenes_land_in_the_state_they_are_named_for() {
+        garden_scene::check();
     }
 
     #[test]

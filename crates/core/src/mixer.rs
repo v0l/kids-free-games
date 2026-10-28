@@ -276,8 +276,7 @@ impl Mixer {
         let cues = sfx::take_cues();
         let voice = sfx::take_voice();
         if let Some(w) = sfx::take_prefetch() {
-            self.words
-                .set(w.into_iter().map(|w| sfx::Say::Word(w).key()).collect());
+            self.words.set(w);
         }
         let sfx_on = !sfx::muted();
         let want = if sfx::music_on() {

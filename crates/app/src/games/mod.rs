@@ -8,6 +8,7 @@ pub mod clash;
 pub mod count;
 pub mod crossy;
 pub mod flappy;
+pub mod garden;
 pub mod fruit;
 pub mod helix;
 pub mod hotel;
@@ -80,6 +81,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
+        garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
         _ => None,
     }
 }

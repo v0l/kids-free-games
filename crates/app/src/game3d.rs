@@ -20,6 +20,7 @@ pub enum World3d {
     Flat,
     Hotel,
     Helix,
+    Garden,
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -52,6 +53,7 @@ impl Plugin for Game3dPlugin {
             .add_plugins((
                 crate::games::helix::world::HelixWorld,
                 crate::games::hotel::world::HotelWorld,
+                crate::games::garden::world::GardenWorld,
             ));
     }
 }
