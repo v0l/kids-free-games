@@ -376,7 +376,49 @@ pub enum Say {
     Land,
     Oops,
     Number(u8),
+    Big(u8),
+    Line(Line),
     Word(&'static str),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Line {
+    TakeAway,
+    Left,
+    Missing,
+    Aboard,
+    Choo,
+    Tap,
+}
+
+impl Line {
+    pub const ALL: [Line; 6] = [
+        Line::TakeAway,
+        Line::Left,
+        Line::Missing,
+        Line::Aboard,
+        Line::Choo,
+        Line::Tap,
+    ];
+
+    pub fn key(self) -> &'static str {
+        match self {
+            Line::TakeAway => "say_tr_takeaway",
+            Line::Left => "say_tr_left",
+            Line::Missing => "say_tr_missing",
+            Line::Aboard => "say_tr_aboard",
+            Line::Choo => "say_tr_choo",
+            Line::Tap => "say_tr_tap",
+        }
+    }
+}
+
+pub fn number(n: i32) -> Say {
+    if (1..=10).contains(&n) {
+        Say::Number(n as u8)
+    } else {
+        Say::Big(n.clamp(0, 99) as u8)
+    }
 }
 
 impl Say {
@@ -395,6 +437,8 @@ impl Say {
             Say::Land => "say_land".into(),
             Say::Oops => "say_oops".into(),
             Say::Number(n) => format!("say_{}", n.clamp(1, 10)),
+            Say::Big(n) => format!("say_n{}", n.min(99)),
+            Say::Line(l) => l.key().into(),
             Say::Word(w) => format!("word_{w}"),
         }
     }
@@ -656,6 +700,8 @@ mod tests {
             Say::Best,
         ];
         lines.extend((1..=10).map(Say::Number));
+        lines.extend((1..=99).map(number));
+        lines.extend(Line::ALL.iter().map(|l| Say::Line(*l)));
         for v in lines {
             let takes: Vec<_> = p.iter().filter(|(k, _)| voice_line(k) == v.key()).collect();
             assert!(!takes.is_empty(), "{v:?} missing");

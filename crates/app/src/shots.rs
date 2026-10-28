@@ -29,6 +29,7 @@ mod runner_scene;
 mod snake_scene;
 mod spell_scene;
 mod stack_scene;
+mod trains_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
@@ -209,6 +210,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (208, "runner out of hearts with the board"),
     (209, "runner level clear, three stars"),
     (210, "runner jumping through a coin arc"),
+    (220, "trains first ride with the hint"),
+    (221, "trains riders hopping off"),
+    (222, "trains pick how many are left"),
+    (223, "trains riders hidden after a second"),
+    (224, "trains numbers only within 20"),
+    (225, "trains missing number"),
+    (226, "trains borrowing, one slip"),
+    (227, "trains right answer, train leaving"),
+    (228, "trains level picker"),
+    (229, "trains finished with the board"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -455,6 +466,7 @@ fn setup(n: u32, view: &View) -> Stage {
         170..=189 => hotel_scene::setup(n, view),
         160..=169 => spell_scene::setup(n, view),
         190..=199 => clash_scene::setup(n, view),
+        220..=229 => trains_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -632,13 +644,15 @@ mod tests {
     fn every_3d_scene_spawns_its_world() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
             for &(n, name) in SCENES.iter().filter(|(n, _)| {
-                (110..=119).contains(n) || (170..=189).contains(n) || (200..=219).contains(n)
+                (110..=119).contains(n) || (170..=189).contains(n) || (200..=229).contains(n)
             }) {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
                 let parts = crate::game3d::testing::parts(&mut app).len();
-                let (want, least) = if n >= 200 {
+                let (want, least) = if n >= 220 {
+                    (crate::game3d::World3d::Trains, 150)
+                } else if n >= 200 {
                     (crate::game3d::World3d::Runner, 40)
                 } else if n >= 170 {
                     (crate::game3d::World3d::Hotel, 150)
@@ -709,6 +723,11 @@ mod tests {
     #[test]
     fn runner_scenes_land_in_the_state_they_are_named_for() {
         runner_scene::check();
+    }
+
+    #[test]
+    fn trains_scenes_land_in_the_state_they_are_named_for() {
+        trains_scene::check();
     }
 
     #[test]

@@ -20,6 +20,7 @@ pub mod runner;
 pub mod snake;
 pub mod spell;
 pub mod stack;
+pub mod trains;
 
 pub trait IntoAny {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
@@ -82,6 +83,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         runner::KEY => Some(|| Box::new(runner::RunnerPlay::new())),
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
+        trains::KEY => Some(|| Box::new(trains::TrainsPlay::new())),
         _ => None,
     }
 }

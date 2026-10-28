@@ -1,0 +1,42 @@
+[
+ {
+  "name": "trains_bg",
+  "w": 768,
+  "h": 1344,
+  "seed": 1901,
+  "cut": false,
+  "prompt": "Mobile game portrait background: a bright sunny sky with soft puffy clouds, distant green rolling hills and a tiny faraway village with a church, a few windmills, empty lower middle, no characters, no text. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "trains_grass",
+  "w": 512,
+  "h": 512,
+  "seed": 1902,
+  "cut": false,
+  "prompt": "Seamless flat top-down texture swatch filling the whole frame: lush bright green cartoon grass with tiny daisies, soft and even, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "trains_platform",
+  "w": 512,
+  "h": 512,
+  "seed": 1903,
+  "cut": false,
+  "prompt": "Seamless flat top-down texture swatch filling the whole frame: warm cream and sand coloured stone paving slabs of a train station platform, soft and even, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "trains_gravel",
+  "w": 512,
+  "h": 512,
+  "seed": 1904,
+  "cut": false,
+  "prompt": "Seamless flat top-down texture swatch filling the whole frame: grey brown gravel ballast stones, soft and even, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "iconr_trains",
+  "w": 1024,
+  "h": 1024,
+  "seed": 1905,
+  "cut": false,
+  "prompt": "Square mobile game app icon: a cute chunky red steam train toy with a big smiling face on the front, three happy cartoon passengers waving from its windows, a bright sunny station behind, rounded chunky shapes, fills the whole square edge to edge. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, sharp focus"
+ }
+]

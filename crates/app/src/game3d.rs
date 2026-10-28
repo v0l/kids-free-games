@@ -21,6 +21,7 @@ pub enum World3d {
     Hotel,
     Helix,
     Runner,
+    Trains,
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -54,6 +55,7 @@ impl Plugin for Game3dPlugin {
                 crate::games::helix::world::HelixWorld,
                 crate::games::hotel::world::HotelWorld,
                 crate::games::runner::world::RunnerWorld,
+                crate::games::trains::world::TrainsWorld,
             ));
     }
 }
