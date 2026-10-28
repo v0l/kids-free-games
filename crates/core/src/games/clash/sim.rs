@@ -893,6 +893,55 @@ mod tests {
     }
 
     #[test]
+    fn bots_far_from_the_player_travel_instead_of_circling() {
+        for training in [true, false] {
+            let mut loops = 0;
+            let mut straightness = vec![];
+            for seed in 1..6 {
+                crate::rng::srand(seed);
+                let mut w = World::new(Spec::arena(1, training), "Me", 0);
+                let mut hist: std::collections::HashMap<u32, Vec<(Option<f32>, Vec2)>> =
+                    Default::default();
+                for f in 0..30 * 90 {
+                    let a = w.autopilot();
+                    w.step(1.0 / 30.0, Some(a));
+                    w.events.clear();
+                    let p = w.snakes[0].head();
+                    for s in w.snakes.iter().filter(|s| !s.player && s.alive) {
+                        let h = hist.entry(s.id).or_default();
+                        h.push(((s.stun <= 0.0).then_some(s.angle), s.head()));
+                        if h.len() < 90 || f % 30 != 0 || (s.head() - p).length() < 700.0 {
+                            continue;
+                        }
+                        let span = &h[h.len() - 90..];
+                        let turned: f32 = span
+                            .windows(2)
+                            .filter_map(|x| Some(wrap_angle(x[1].0? - x[0].0?)))
+                            .sum();
+                        let path: f32 = span.windows(2).map(|x| (x[1].1 - x[0].1).length()).sum();
+                        if turned.abs() > TAU {
+                            loops += 1;
+                        }
+                        straightness.push((span[89].1 - span[0].1).length() / path.max(1.0));
+                    }
+                }
+            }
+            straightness.sort_by(f32::total_cmp);
+            let median = straightness[straightness.len() / 2];
+            let rate = loops as f32 / straightness.len() as f32;
+            assert!(
+                rate < 0.005,
+                "training {training}: {loops}/{} windows looped",
+                straightness.len()
+            );
+            assert!(
+                median > 0.8,
+                "training {training}: median straightness {median:.2}"
+            );
+        }
+    }
+
+    #[test]
     fn bots_wander_far_and_never_sit_stuck_for_two_minutes() {
         crate::rng::srand(7);
         let mut w = World::new(Spec::arena(1, false), "Me", 0);
@@ -978,11 +1027,13 @@ mod tests {
         crate::rng::srand(2);
         let mut w = World::new(Spec::arena(1, false), "Me", 0);
         let want = w.bots().count();
+        let first: Vec<u32> = w.snakes.iter().map(|s| s.id).collect();
         let victim = w.snakes.iter().position(|s| !s.player).unwrap();
         w.kill(victim, Some(0));
         for _ in 0..30 * 6 {
             w.step(1.0 / 30.0, Some(w.snakes[0].angle));
         }
-        assert!(w.bots().count() >= want);
+        assert!(w.bots().any(|s| !first.contains(&s.id)));
+        assert!(w.bots().count() + w.respawns.len() >= want);
     }
 }

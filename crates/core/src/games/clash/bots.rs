@@ -1,4 +1,4 @@
-use super::sim::World;
+use super::sim::{turn_for, World};
 use crate::rng as rand;
 use glam::{vec2, Vec2};
 
@@ -7,10 +7,11 @@ pub struct Brain {
     pub skill: f32,
     pub aggression: f32,
     pub timer: f32,
-    pub wander: f32,
     pub target_egg: Option<Vec2>,
     pub retarget: f32,
     pub hunting: bool,
+    pub roam: Option<Vec2>,
+    pub roam_t: f32,
 }
 
 impl Default for Brain {
@@ -25,10 +26,11 @@ impl Brain {
             skill,
             aggression,
             timer: rand::gen_range(0.0, 0.2),
-            wander: rand::gen_range(-3.0, 3.0),
             target_egg: None,
             retarget: 0.0,
             hunting: rand::gen_range(0.0, 1.0) < aggression,
+            roam: None,
+            roam_t: 0.0,
         }
     }
 }
@@ -47,6 +49,10 @@ impl World {
         let mut steer = Vec2::ZERO;
 
         let sight = 150.0 + 260.0 * brain.skill + radius * 3.0;
+        let margin = 170.0 + radius * 2.0;
+        let inside = |p: Vec2| {
+            p.x > margin && p.y > margin && p.x < self.size - margin && p.y < self.size - margin
+        };
         let mut danger = false;
         for other in self.snakes.iter().filter(|o| o.alive && o.id != me.id) {
             let lvl = other.level();
@@ -86,7 +92,10 @@ impl World {
             }
         }
 
-        if !danger {
+        if danger {
+            steer += heading * 1.2;
+        } else {
+            let mut chasing = false;
             if brain.hunting {
                 let prey = self
                     .snakes
@@ -102,35 +111,76 @@ impl World {
                         * (1.0 - brain.skill);
                     let aim = (o.head() + lead - head).normalize_or_zero() + cut;
                     steer += aim.normalize_or_zero() * 2.6;
+                    chasing = true;
                 }
             }
             brain.retarget -= 0.15;
+            brain.roam_t -= 0.15;
+            let edge = 260.0 + radius * 2.0;
+            let roam_done = brain
+                .roam
+                .is_none_or(|p| (p - head).length() < 200.0 || brain.roam_t <= 0.0);
+            if roam_done {
+                brain.roam_t = rand::gen_range(6.0, 12.0);
+                let pick = || {
+                    vec2(
+                        rand::gen_range(edge, self.size - edge),
+                        rand::gen_range(edge, self.size - edge),
+                    )
+                };
+                let mut best = pick();
+                for _ in 0..4 {
+                    let p = pick();
+                    if (p - head).normalize_or_zero().dot(heading)
+                        > (best - head).normalize_or_zero().dot(heading)
+                    {
+                        best = p;
+                    }
+                }
+                brain.roam = Some(best);
+            }
+            let roam = brain.roam.unwrap_or(head);
+            let to_roam = (roam - head).normalize_or_zero();
+            let turn_r = me.speed() / turn_for(level);
+            let left = vec2(-heading.y, heading.x);
+            let grab = radius + 8.0 + 55.0 + radius * 1.6;
+            let reachable = |p: Vec2| {
+                (p - (head + left * turn_r)).length() > turn_r * 1.15
+                    && (p - (head - left * turn_r)).length() > turn_r * 1.15
+            };
             let stale = brain.target_egg.is_none_or(|p| {
-                (p - head).length() < radius || !self.eggs.iter().any(|e| e.pos == p)
+                (p - head).length() < grab || !reachable(p) || !self.eggs.iter().any(|e| e.pos == p)
             });
             if stale || brain.retarget <= 0.0 {
-                brain.retarget = 2.0;
+                brain.retarget = 1.5;
                 brain.target_egg = self
                     .eggs
                     .iter()
                     .filter(|e| {
-                        let a = (e.pos - head).normalize_or_zero();
-                        a.dot(heading) > -0.2 || (e.pos - head).length() < 160.0
+                        let v = e.pos - head;
+                        let len = v.length();
+                        len > grab
+                            && len < 420.0
+                            && v.normalize_or_zero().dot(heading) > 0.35
+                            && reachable(e.pos)
+                            && inside(e.pos)
                     })
-                    .map(|e| (e.pos, (e.pos - head).length() / e.value as f32))
+                    .map(|e| {
+                        let v = e.pos - head;
+                        let off = 1.6 - v.normalize_or_zero().dot(to_roam);
+                        (e.pos, v.length() * off / e.value as f32)
+                    })
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                     .map(|(p, _)| p);
             }
-            match brain.target_egg {
-                Some(p) => steer += (p - head).normalize_or_zero() * 1.6,
-                None => {
-                    brain.wander += rand::gen_range(-0.4, 0.4);
-                    steer += vec2(brain.wander.cos(), brain.wander.sin());
+            if !chasing {
+                steer += to_roam * 0.7;
+                if let Some(p) = brain.target_egg {
+                    steer += (p - head).normalize_or_zero() * 1.6;
                 }
             }
         }
 
-        let margin = 170.0 + radius * 2.0;
         let (lo, hi) = (margin, self.size - margin);
         if head.x < lo {
             steer.x += (lo - head.x) / margin * 6.0;
