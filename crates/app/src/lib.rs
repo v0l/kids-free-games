@@ -214,7 +214,7 @@ fn frame(
         Scene::Shot(s) => s.frame(&mut pen, &view, dt),
         Scene::Jev(j) => j.frame(&mut pen, &view, dt),
         Scene::JevClash(j) => j.frame(&mut pen, &view, dt),
-        Scene::BrainPaper(j) => j.frame(&mut pen, &view, dt),
+        Scene::BrainPaper(j) => j.frame(&mut pen, &view, dt, &input.typed),
     }
     let touched = input.pressed || input.action || !input.typed.is_empty();
     if let Some(a) = &mut state.audio {
