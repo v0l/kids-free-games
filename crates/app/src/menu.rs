@@ -259,7 +259,10 @@ impl App {
         self.curtain = (self.curtain - dt * 5.0).max(0.0);
         self.fx.update(dt);
         if let Some(i) = self.loading {
-            if self.current.is_none() && self.launch.is_none() && crate::packs::ready(self.entries[i].info.key) {
+            if self.current.is_none()
+                && self.launch.is_none()
+                && crate::packs::ready(self.entries[i].info.key)
+            {
                 self.loading = None;
                 self.launch = Some((i, 0.0));
             }
@@ -889,11 +892,15 @@ mod tests {
             app.update(&Input::default(), &v, 1.0 / 60.0);
         }
         app.update(&Input::press_at(tile_center(&app, &v, i)), &v, 1.0 / 60.0);
-        app.update(&Input {
+        app.update(
+            &Input {
                 pos: tile_center(&app, &v, i),
                 released: true,
                 ..Default::default()
-            }, &v, 1.0 / 60.0);
+            },
+            &v,
+            1.0 / 60.0,
+        );
         assert_eq!(app.loading, Some(i));
         assert!(app.launch.is_none() && app.current.is_none());
         for _ in 0..120 {

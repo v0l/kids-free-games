@@ -1,6 +1,6 @@
 use crate::sfx::{
-    self, db_to_gain, decode, find, ladder_of, pick_take, takes_of, voice_line, Cue,
-    Limiter, Mix, Mood, Pitch, Sfx, SFX_BUS_DB, VOICE_GAP,
+    self, db_to_gain, decode, find, ladder_of, pick_take, takes_of, voice_line, Cue, Limiter, Mix,
+    Mood, Pitch, Sfx, SFX_BUS_DB, VOICE_GAP,
 };
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -838,7 +838,8 @@ mod tests {
         for stall in [0.05, 0.15, 0.6, 3.0] {
             let out = render_secs(&mut render, stall);
             assert!(
-                out.chunks(128 * 2).all(|q| q.iter().any(|s| s.abs() > 0.01)),
+                out.chunks(128 * 2)
+                    .all(|q| q.iter().any(|s| s.abs() > 0.01)),
                 "silent block during a {stall} s stall"
             );
         }
@@ -851,8 +852,17 @@ mod tests {
         remote.apply(&[cue(Sfx::Pop)], None, Some(Mood::Menu), true, 0.0, 0.01);
         assert_eq!(remote.active_effects(), 0);
         let cmds = remote.take_cmds();
-        assert!(matches!(cmds[0], Cmd::Start { music: false, keep: true, .. }));
-        assert!(cmds.iter().any(|c| matches!(c, Cmd::Start { music: true, .. })));
+        assert!(matches!(
+            cmds[0],
+            Cmd::Start {
+                music: false,
+                keep: true,
+                ..
+            }
+        ));
+        assert!(cmds
+            .iter()
+            .any(|c| matches!(c, Cmd::Start { music: true, .. })));
         assert!(remote.take_cmds().is_empty());
     }
 

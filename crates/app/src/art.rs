@@ -19,7 +19,10 @@ pub const LATER: &[&str] = &[
 ];
 
 pub fn all_sheets() -> impl Iterator<Item = &'static str> {
-    EMBEDDED.iter().map(|(n, _)| *n).chain(LATER.iter().copied())
+    EMBEDDED
+        .iter()
+        .map(|(n, _)| *n)
+        .chain(LATER.iter().copied())
 }
 
 type Store = std::sync::Mutex<HashMap<&'static str, &'static [u8]>>;

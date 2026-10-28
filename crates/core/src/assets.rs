@@ -14,7 +14,10 @@ mod native {
             out.push(dir);
         }
         out.push(PathBuf::from("assets"));
-        out.push(PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets")));
+        out.push(PathBuf::from(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../assets"
+        )));
         out
     }
 
@@ -30,7 +33,9 @@ mod native {
         if let Some(f) = READER.get() {
             return f(rel);
         }
-        dirs().into_iter().find_map(|d| std::fs::read(d.join(rel)).ok())
+        dirs()
+            .into_iter()
+            .find_map(|d| std::fs::read(d.join(rel)).ok())
     }
 
     pub fn leaked(rel: &str) -> Option<&'static [u8]> {

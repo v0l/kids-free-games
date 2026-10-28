@@ -214,6 +214,7 @@ pub struct Hotel {
     spend_tick: f32,
     pub learned_move: bool,
     pub fixed_focus: Option<Vec2>,
+    pub welcome_back: u32,
 }
 
 pub fn encode(number: u32, built: &[bool], wallet: u32, level: u32, xp: u32) -> String {
@@ -248,7 +249,27 @@ pub fn load_sim(seed: u64) -> Sim {
     }
 }
 
+fn saved_at_key() -> String {
+    crate::save::player_key(&format!("{GAME}.saved_at"))
+}
+
+pub const OFFLINE_CAP_SECS: f64 = 4.0 * 3600.0;
+
+pub fn offline_earnings(sim: &Sim, away_secs: f64) -> u32 {
+    let secs = away_secs.clamp(0.0, OFFLINE_CAP_SECS) as f32;
+    if secs < 60.0 {
+        return 0;
+    }
+    let staffed = if sim.has(Build::Clerk) { 0.5 } else { 0.2 };
+    let per_guest = sim.room_price(0, false) as f32 * 1.3;
+    (secs / sim.arrive_interval() * per_guest * staffed) as u32
+}
+
 pub fn store_state(sim: &Sim) {
+    crate::save::set_str(
+        &saved_at_key(),
+        &format!("{:.0}", crate::clock::unix_secs()),
+    );
     crate::save::set_str(
         &state_key(),
         &encode(sim.number(), &sim.built, sim.wallet, sim.level, sim.xp),
@@ -333,7 +354,19 @@ impl Default for Hotel {
 
 impl Hotel {
     pub fn new() -> Self {
-        Self::with(load_sim(rand::rand() as u64))
+        let mut sim = load_sim(rand::rand() as u64);
+        let away = crate::save::get_str(&saved_at_key())
+            .and_then(|v| v.parse::<f64>().ok())
+            .map(|then| crate::clock::unix_secs() - then)
+            .unwrap_or(0.0);
+        let earned = offline_earnings(&sim, away);
+        sim.wallet += earned;
+        let mut h = Self::with(sim);
+        h.welcome_back = earned;
+        if earned > 0 {
+            store_state(&h.sim);
+        }
+        h
     }
 
     pub fn with(sim: Sim) -> Self {
@@ -365,6 +398,7 @@ impl Hotel {
             spend_tick: 0.0,
             learned_move: crate::profile::get(GAME, "moved") > 0,
             fixed_focus: None,
+            welcome_back: 0,
         }
     }
 
@@ -679,6 +713,40 @@ mod tests {
         for _ in 0..frames {
             h.update(&Input::default(), &view, 1.0 / 60.0);
         }
+    }
+
+    #[test]
+    fn being_away_earns_a_capped_share_and_never_less_than_nothing() {
+        let mut sim = Sim::new(1, &[], 0, 1);
+        assert_eq!(offline_earnings(&sim, 20.0), 0);
+        assert_eq!(offline_earnings(&sim, -500.0), 0);
+        let hour = offline_earnings(&sim, 3600.0);
+        assert!(hour > 0);
+        assert_eq!(
+            offline_earnings(&sim, 3600.0 * 40.0),
+            offline_earnings(&sim, OFFLINE_CAP_SECS)
+        );
+        let n = sim.lay.pads.len();
+        sim.built = vec![true; n];
+        assert!(offline_earnings(&sim, 3600.0) > hour);
+    }
+
+    #[test]
+    fn coming_back_after_a_while_pays_into_the_wallet_once() {
+        crate::save::reset_for_test();
+        crate::profile::create("Mia", 0);
+        let sim = Sim::new(1, &[], 5, 1);
+        store_state(&sim);
+        crate::save::set_str(
+            &saved_at_key(),
+            &format!("{:.0}", crate::clock::unix_secs() - 7200.0),
+        );
+        let h = Hotel::new();
+        assert!(h.welcome_back > 0);
+        assert_eq!(h.sim.wallet, 5 + h.welcome_back);
+        let again = Hotel::new();
+        assert_eq!(again.welcome_back, 0);
+        assert_eq!(again.sim.wallet, h.sim.wallet);
     }
 
     #[test]
