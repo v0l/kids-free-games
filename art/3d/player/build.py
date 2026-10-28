@@ -104,9 +104,30 @@ for pb in rig.pose.bones:
 REST = {b.name: b.bone.matrix_local.to_3x3() for b in rig.pose.bones}
 
 
-def euler_q(name, rx, ry, rz):
-    R = Matrix.Rotation(rz, 3, "Z") @ Matrix.Rotation(ry, 3, "Y") @ Matrix.Rotation(rx, 3, "X")
+def rot_zyx(rx, ry, rz):
+    return Matrix.Rotation(rz, 3, "Z") @ Matrix.Rotation(ry, 3, "Y") @ Matrix.Rotation(rx, 3, "X")
+
+
+def rot_x(a):
+    return Matrix.Rotation(a, 3, "X")
+
+
+def arm_rot(d, side):
+    swing, down, extra = d.get(f"arm.{side}", (0, 0, 0))
+    return rot_x(swing) @ Matrix.Rotation(down, 3, "Y") @ Matrix.Rotation(extra, 3, "Z")
+
+
+def euler_q(name, rx, ry, rz, d=None):
     M = REST[name]
+    if name.startswith("arm."):
+        R = arm_rot(d, name[-1])
+    elif name.startswith("forearm."):
+        side = name[-1]
+        body = rot_zyx(*d.get("hips", (0, 0, 0))) @ rot_zyx(*d.get("spine", (0, 0, 0)))
+        wa = body @ arm_rot(d, side)
+        R = wa.inverted() @ rot_x(rx) @ wa
+    else:
+        R = rot_zyx(rx, ry, rz)
     return (M.inverted() @ R @ M).to_quaternion()
 
 
@@ -134,8 +155,8 @@ def idle(t):
         "head": (-0.03 * sin(p, 1, 0.8), 0, 0.12 * sin(p, 1, 0.6)),
     }
     for side, sg, ph in SIDES:
-        d[f"arm.{side}"] = (0, sg * (0.9 + 0.05 * sin(p, 1, 0.4)), sg * 0.06 * sin(p, 1, 0.9))
-        d[f"forearm.{side}"] = (0, 0, -sg * 0.18)
+        d[f"arm.{side}"] = (-0.06 * sin(p, 1, 0.9 + ph), sg * (0.9 + 0.05 * sin(p, 1, 0.4)), 0)
+        d[f"forearm.{side}"] = (-0.25 - 0.05 * sin(p), 0, 0)
     return d, 0.012 * sin(p)
 
 
@@ -151,8 +172,8 @@ def run(t):
         d[f"leg.{side}"] = (0.95 * sin(q), sg * 0.05, 0)
         d[f"shin.{side}"] = (0.15 + 1.45 * max(0.0, -cos(q)), 0, 0)
         d[f"foot.{side}"] = (0.35 * sin(q), 0, 0)
-        d[f"arm.{side}"] = (0, sg * 0.95, sg * -1.15 * sin(q))
-        d[f"forearm.{side}"] = (0, 0, -sg * 1.3)
+        d[f"arm.{side}"] = (-0.95 * sin(q), sg * 1.0, 0)
+        d[f"forearm.{side}"] = (-(1.25 - 0.35 * sin(q)), 0, 0)
     return d, 0.055 * sin(p) ** 2
 
 
@@ -174,8 +195,8 @@ def jump(t):
     }
     a = smooth(min(1.0, u * 3)) * (1 - 0.5 * out)
     for side, sg, ph in SIDES:
-        d[f"arm.{side}"] = (0, sg * (0.9 - 2.3 * a), sg * -0.5 * a)
-        d[f"forearm.{side}"] = (0, 0, -sg * (0.3 + 0.3 * s))
+        d[f"arm.{side}"] = (-0.3 * a, sg * (0.9 - 2.3 * a), 0)
+        d[f"forearm.{side}"] = (-(0.3 + 0.3 * s), 0, 0)
     return d, 0.0
 
 
@@ -183,8 +204,8 @@ def slide(t):
     k = smooth(t * 4)
     d = {"hips": (-0.5 * k, 0, 0), "spine": (0.7 * k, 0, 0), "head": (-0.5 * k, 0, 0)}
     for side, sg, ph in SIDES:
-        d[f"arm.{side}"] = (0.0, sg * 0.5, sg * 0.5 * k)
-        d[f"forearm.{side}"] = (0, 0, sg * 0.5)
+        d[f"arm.{side}"] = (-0.7 * k, sg * 0.6, 0)
+        d[f"forearm.{side}"] = (-0.7 * k, 0, 0)
         d[f"leg.{side}"] = (-1.2 * k, 0, 0)
         d[f"shin.{side}"] = (0.5 * k, 0, 0)
     return d, -0.35 * k
@@ -199,8 +220,8 @@ def happy(t):
         "head": (-0.12, 0.08 * sin(p), 0.15 * sin(p)),
     }
     for side, sg, ph in SIDES:
-        d[f"arm.{side}"] = (0, sg * -1.3, sg * 0.35 * sin(2 * p, 1, ph))
-        d[f"forearm.{side}"] = (0, 0, sg * 0.5 * sin(2 * p, 1, ph + 1.0))
+        d[f"arm.{side}"] = (0.35 * sin(2 * p, 1, ph), sg * -1.3, 0)
+        d[f"forearm.{side}"] = (-0.4 + 0.5 * sin(2 * p, 1, ph + 1.0), 0, 0)
         d[f"leg.{side}"] = (-0.3 * beat, 0, 0)
         d[f"shin.{side}"] = (0.2 + 0.7 * beat, 0, 0)
     return d, 0.0
@@ -215,8 +236,8 @@ def fail(t):
         "hips": (-0.12 * k, 0, 0),
     }
     for side, sg, ph in SIDES:
-        d[f"arm.{side}"] = (0, sg * (0.9 - 1.9 * k), sg * 0.4 * k)
-        d[f"forearm.{side}"] = (0, 0, -sg * 0.3)
+        d[f"arm.{side}"] = (-0.7 * k, sg * (0.9 - 1.9 * k), 0)
+        d[f"forearm.{side}"] = (-0.3, 0, 0)
         d[f"leg.{side}"] = (-0.35 * k, 0, 0)
         d[f"shin.{side}"] = (0.5 * k, 0, 0)
     return d, -0.06 * k
@@ -242,7 +263,7 @@ for name, (fn, n, loop) in CLIPS.items():
             pb.rotation_quaternion = Quaternion((1, 0, 0, 0))
             pb.location = (0, 0, 0)
         for bone, (rx, ry, rz) in d.items():
-            rig.pose.bones[bone].rotation_quaternion = euler_q(bone, rx, ry, rz)
+            rig.pose.bones[bone].rotation_quaternion = euler_q(bone, rx, ry, rz, d)
         rig.pose.bones["root"].location = Vector((0, z, 0))
         for pb in rig.pose.bones:
             pb.keyframe_insert("rotation_quaternion", frame=i + 1)
