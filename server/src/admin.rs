@@ -15,7 +15,10 @@ pub const DEFAULT_ADMIN_PAGE: i64 = 50;
 pub fn key_matches(configured: &str, presented: &str) -> bool {
     let a = Sha256::digest(configured.as_bytes());
     let b = Sha256::digest(presented.as_bytes());
-    a.iter().zip(b.iter()).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
+    a.iter()
+        .zip(b.iter())
+        .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+        == 0
 }
 
 pub fn authorize(configured: Option<&str>, presented: Option<&str>) -> ApiResult<()> {
@@ -213,7 +216,10 @@ async fn stats(db: &Db, now: i64) -> ApiResult<Value> {
     );
     let saves = count(db.one("SELECT COUNT(*) AS c FROM saves", &[]).await?);
     let scores = count(db.one("SELECT COUNT(*) AS c FROM scores", &[]).await?);
-    let sessions = count(db.one("SELECT COUNT(*) AS c FROM play_sessions", &[]).await?);
+    let sessions = count(
+        db.one("SELECT COUNT(*) AS c FROM play_sessions", &[])
+            .await?,
+    );
     let seconds: Option<Seconds> = db
         .one(
             "SELECT COALESCE(SUM(seconds), 0) AS seconds FROM play_sessions",
@@ -391,7 +397,9 @@ async fn patch_player(db: &Db, id: &str, body: PlayerPatch) -> ApiResult<Value> 
     )
     .await?;
     let p = player_exists(db, id).await?;
-    Ok(json!({ "player": { "id": p.id, "name": p.name, "avatar": p.avatar, "created_at": p.created_at, "last_seen": p.last_seen } }))
+    Ok(
+        json!({ "player": { "id": p.id, "name": p.name, "avatar": p.avatar, "created_at": p.created_at, "last_seen": p.last_seen } }),
+    )
 }
 
 async fn delete_player(db: &Db, id: &str) -> ApiResult<Value> {
@@ -517,12 +525,26 @@ pub async fn handle(
         }
         Admin::GetSave(id, slot) => get_save(db, &id, &slot).await,
         Admin::PutSave(id, slot) => {
-            put_save(db, &id, &slot, serde_json::from_str(&json_body(body)?)?, now).await
+            put_save(
+                db,
+                &id,
+                &slot,
+                serde_json::from_str(&json_body(body)?)?,
+                now,
+            )
+            .await
         }
         Admin::DeleteSave(id, slot) => delete_save(db, &id, &slot).await,
         Admin::Board(game) => board(db, &game, params.limit.as_deref()).await,
         Admin::PutScore(game, id) => {
-            put_score(db, &game, &id, serde_json::from_str(&json_body(body)?)?, now).await
+            put_score(
+                db,
+                &game,
+                &id,
+                serde_json::from_str(&json_body(body)?)?,
+                now,
+            )
+            .await
         }
         Admin::DeleteScore(game, id) => delete_score(db, &game, &id).await,
     }
@@ -535,7 +557,10 @@ mod tests {
     #[test]
     fn only_the_configured_key_is_accepted() {
         assert!(authorize(Some("s3cret"), Some("s3cret")).is_ok());
-        assert_eq!(authorize(Some("s3cret"), Some("s3cre")).unwrap_err().status, 401);
+        assert_eq!(
+            authorize(Some("s3cret"), Some("s3cre")).unwrap_err().status,
+            401
+        );
         assert_eq!(authorize(Some("s3cret"), Some("")).unwrap_err().status, 401);
         assert_eq!(authorize(Some("s3cret"), None).unwrap_err().status, 401);
     }

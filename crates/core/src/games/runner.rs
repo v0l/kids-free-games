@@ -654,6 +654,7 @@ impl Runner {
             Some(Dir::Right) => self.change_lane(1, view),
             Some(Dir::Up) => self.jump(view),
             Some(Dir::Down) => self.slide(),
+            None if input.action => self.jump(view),
             None => {}
         }
     }
@@ -1184,6 +1185,27 @@ mod tests {
         g.dist = g.rows[1].at - 0.1;
         g.update(&Input::default(), &view, 0.05);
         assert_eq!(g.hearts, HEARTS - 1);
+    }
+
+    #[test]
+    fn space_jumps_a_hurdle() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Runner::with_level(5);
+        g.state = State::Playing;
+        g.speed = 10.0;
+        g.rows[0].lanes = [None, Some(Kind::Hurdle), None];
+        g.dist = g.rows[0].at - 2.6;
+        let space = Input {
+            action: true,
+            ..Default::default()
+        };
+        g.update(&space, &view, 1.0 / 60.0);
+        assert!(g.vy > 0.0, "space did not jump");
+        for _ in 0..30 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+        }
+        assert_eq!(g.hits, 0);
     }
 
     #[test]

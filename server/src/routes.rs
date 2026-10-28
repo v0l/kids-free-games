@@ -158,7 +158,10 @@ mod tests {
     #[test]
     fn admin_routes_resolve_by_method_and_path() {
         let p = |m: Method, path: &str| resolve(&m, path).unwrap();
-        assert_eq!(p(Method::Get, "/v1/admin/stats"), Endpoint::Admin(Admin::Stats));
+        assert_eq!(
+            p(Method::Get, "/v1/admin/stats"),
+            Endpoint::Admin(Admin::Stats)
+        );
         assert_eq!(
             p(Method::Post, "/v1/admin/players"),
             Endpoint::Admin(Admin::CreatePlayer)
@@ -176,7 +179,9 @@ mod tests {
             Endpoint::Admin(Admin::PutScore("snake".into(), "abc".into()))
         );
         assert_eq!(
-            resolve(&Method::Delete, "/v1/admin/stats").unwrap_err().status,
+            resolve(&Method::Delete, "/v1/admin/stats")
+                .unwrap_err()
+                .status,
             405
         );
         assert_eq!(

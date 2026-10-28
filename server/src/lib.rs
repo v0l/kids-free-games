@@ -177,9 +177,7 @@ async fn route(mut req: Request, env: &Env) -> ApiResult<Value> {
         | Endpoint::Health
         | Endpoint::Games
         | Endpoint::Register
-        | Endpoint::RedeemLink => {
-            Err(ApiError::internal("public endpoint reached auth"))
-        }
+        | Endpoint::RedeemLink => Err(ApiError::internal("public endpoint reached auth")),
     }
 }
 
@@ -188,7 +186,9 @@ async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if req.method() == worker::Method::Options {
         return cors(Response::empty()?.with_status(204));
     }
-    if req.method() == worker::Method::Get && matches!(req.path().trim_end_matches('/'), "/admin" | "") {
+    if req.method() == worker::Method::Get
+        && matches!(req.path().trim_end_matches('/'), "/admin" | "")
+    {
         return Response::from_html(include_str!("admin.html")).map(|mut r| {
             let _ = r.headers_mut().set("Cache-Control", "no-store");
             let _ = r.headers_mut().set("X-Frame-Options", "DENY");

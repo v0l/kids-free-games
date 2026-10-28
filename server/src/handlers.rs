@@ -194,7 +194,10 @@ pub async fn issue_link_code(db: &Db, player_id: &str, now: i64) -> ApiResult<Va
     let expires = now + LINK_CODE_TTL;
     db.batch(vec![
         db.stmt("DELETE FROM link_codes WHERE expires_at < ?1", &[n(now)])?,
-        db.stmt("DELETE FROM link_codes WHERE player_id = ?1", &[s(player_id)])?,
+        db.stmt(
+            "DELETE FROM link_codes WHERE player_id = ?1",
+            &[s(player_id)],
+        )?,
         db.stmt(
             "INSERT INTO link_codes (code, player_id, expires_at) VALUES (?1, ?2, ?3)",
             &[s(&code), s(player_id), n(expires)],
