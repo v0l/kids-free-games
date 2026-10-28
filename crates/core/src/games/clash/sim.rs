@@ -1,4 +1,5 @@
 use super::bots::Brain;
+use super::powers::{Boosts, Kind, Power, MAGNET_REACH, SPEED_GAIN};
 use crate::rng as rand;
 use glam::{vec2, Vec2};
 use std::f32::consts::{PI, TAU};
@@ -74,6 +75,7 @@ pub struct Snake {
     pub phase: f32,
     pub age: f32,
     pub brain: Brain,
+    pub boosts: Boosts,
 }
 
 impl Snake {
@@ -94,7 +96,12 @@ impl Snake {
     }
 
     pub fn speed(&self) -> f32 {
-        speed_for(self.level()) * if self.boss { 0.92 } else { 1.0 }
+        let boost = if self.boosts.speed > 0.0 {
+            SPEED_GAIN
+        } else {
+            1.0
+        };
+        speed_for(self.level()) * if self.boss { 0.92 } else { 1.0 } * boost
     }
 
     pub fn spacing(&self) -> f32 {
@@ -147,6 +154,12 @@ pub enum Event {
         at: Vec2,
         player: bool,
     },
+    Power {
+        id: u32,
+        kind: Kind,
+        at: Vec2,
+        player: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -162,6 +175,7 @@ pub struct Spec {
     pub hi: u32,
     pub adaptive: bool,
     pub start: u32,
+    pub powerups: bool,
 }
 
 impl Spec {
@@ -192,6 +206,7 @@ impl Spec {
             hi: 4,
             adaptive: true,
             start: 1,
+            powerups: true,
         }
     }
 }
@@ -206,6 +221,8 @@ pub struct World {
     pub t: f32,
     pub player_eats: u32,
     pub boss_down: bool,
+    pub powers: Vec<Power>,
+    pub(super) power_clock: f32,
     respawns: Vec<f32>,
     next_id: u32,
     name_at: usize,
@@ -224,6 +241,8 @@ impl World {
             t: 0.0,
             player_eats: 0,
             boss_down: false,
+            powers: vec![],
+            power_clock: 2.0,
             respawns: vec![],
             next_id: 1,
             name_at: rand::gen_range(0usize, NAMES.len()),
@@ -285,14 +304,14 @@ impl World {
         self.snakes.iter().filter(|s| !s.player && s.alive)
     }
 
-    fn random_point(&self, margin: f32) -> Vec2 {
+    pub(super) fn random_point(&self, margin: f32) -> Vec2 {
         vec2(
             rand::gen_range(margin, self.size - margin),
             rand::gen_range(margin, self.size - margin),
         )
     }
 
-    fn near_rock(&self, p: Vec2, pad: f32) -> bool {
+    pub(super) fn near_rock(&self, p: Vec2, pad: f32) -> bool {
         self.rocks.iter().any(|r| (r.pos - p).length() < r.r + pad)
     }
 
@@ -350,6 +369,7 @@ impl World {
             phase: rand::gen_range(0.0, TAU),
             age: 0.0,
             brain: Brain::new(self.spec.skill, self.spec.aggression),
+            boosts: Boosts::default(),
         });
         let i = self.snakes.len() - 1;
         self.layout_tail(i);
@@ -457,6 +477,7 @@ impl World {
             self.advance(i, dt);
         }
         self.collect_eggs(dt);
+        self.tick_powers(dt);
         self.collisions(dt);
         self.refill(dt);
         self.respawn(dt);
@@ -510,7 +531,7 @@ impl World {
         }
     }
 
-    fn gain(&mut self, i: usize, amount: u32) {
+    pub(super) fn gain(&mut self, i: usize, amount: u32) {
         let s = &mut self.snakes[i];
         if s.boss {
             return;
@@ -545,7 +566,12 @@ impl World {
             let head = self.snakes[i].head();
             let r = self.snakes[i].radius();
             let reach = r + 8.0;
-            let magnet = 55.0 + r * 1.6;
+            let magnet = (55.0 + r * 1.6)
+                * if self.snakes[i].boosts.magnet > 0.0 {
+                    MAGNET_REACH
+                } else {
+                    1.0
+                };
             let pull_speed = self.snakes[i].speed() * 1.8;
             let mut got = 0;
             let mut k = 0;

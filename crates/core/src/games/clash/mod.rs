@@ -1,4 +1,5 @@
 pub mod bots;
+pub mod powers;
 pub mod sim;
 pub mod skins;
 pub mod tower;
@@ -596,6 +597,30 @@ impl Clash {
                 );
                 self.fx.sparkle(at, GOLD);
                 feel::impact(Impact::Small);
+            }
+            Event::Power {
+                kind, at, player, ..
+            } => {
+                let col = powers::color(kind);
+                self.fx.emit(
+                    at,
+                    &[col, WHITE],
+                    Burst {
+                        count: if player { 18 } else { 6 },
+                        speed: (90.0, 260.0),
+                        size: (4.0, 8.0),
+                        life: (0.3, 0.6),
+                        gravity: 0.0,
+                        drag: 3.5,
+                        ..Default::default()
+                    },
+                );
+                if player {
+                    sfx::play(Sfx::Magic);
+                    feel::impact(Impact::Small);
+                    self.bump.kick();
+                    self.popups.add(at, powers::label(kind), col, 46.0);
+                }
             }
             Event::Bump { at, player } => {
                 self.fx.emit(

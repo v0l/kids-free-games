@@ -190,6 +190,81 @@ fn draw_eggs(g: &Clash, pen: &mut Pen, view: &View) {
     }
 }
 
+fn draw_powers(g: &Clash, pen: &mut Pen, view: &View) {
+    use kg_core::games::clash::powers::{self, Kind};
+    for p in &g.world.powers {
+        let c = g.to_screen(view, p.pos);
+        if !on_screen(view, c, 60.0) {
+            continue;
+        }
+        let col = powers::color(p.kind);
+        let pop = kg_core::fx::ease_out_back((p.age / 0.4).min(1.0)).max(0.05);
+        let r = 26.0 * g.zoom.max(0.5) * pop * (1.0 + 0.08 * (g.t * 4.0 + p.pos.x).sin());
+        let at = c + vec2(0.0, (g.t * 2.5 + p.pos.y).sin() * r * 0.15);
+        pen.soft_shadow(c + vec2(0.0, r * 0.9), r * 0.8, r * 0.3, 0.35);
+        pen.circle(at, r * 1.45, col.with_alpha(0.22));
+        pen.circle(at, r + 3.0, PLUM);
+        pen.circle(at, r, col);
+        pen.circle(
+            at - vec2(r * 0.3, r * 0.35),
+            r * 0.38,
+            col.lerp(WHITE, 0.55),
+        );
+        let ink = WHITE;
+        let w = (r * 0.16).max(2.5);
+        match p.kind {
+            Kind::Speed => {
+                let pts = [
+                    at + vec2(r * 0.15, -r * 0.6),
+                    at + vec2(-r * 0.25, r * 0.05),
+                    at + vec2(r * 0.15, r * 0.05),
+                    at + vec2(-r * 0.15, r * 0.6),
+                ];
+                for k in 0..3 {
+                    pen.line(pts[k], pts[k + 1], w, ink);
+                }
+            }
+            Kind::Magnet => {
+                pen.ring(at, r * 0.42, w, ink);
+                pen.rect(
+                    kg_core::geom::Rect::new(at.x - r * 0.5, at.y - r * 0.05, r, r * 0.55),
+                    col,
+                );
+                pen.line(
+                    at + vec2(-r * 0.42, 0.0),
+                    at + vec2(-r * 0.42, r * 0.4),
+                    w,
+                    ink,
+                );
+                pen.line(
+                    at + vec2(r * 0.42, 0.0),
+                    at + vec2(r * 0.42, r * 0.4),
+                    w,
+                    ink,
+                );
+            }
+            Kind::Shield => {
+                pen.ring(at, r * 0.55, w, ink);
+                pen.circle(at, r * 0.2, ink);
+            }
+            Kind::Grow => {
+                pen.line(
+                    at - vec2(r * 0.45, 0.0),
+                    at + vec2(r * 0.45, 0.0),
+                    w * 1.2,
+                    ink,
+                );
+                pen.line(
+                    at - vec2(0.0, r * 0.45),
+                    at + vec2(0.0, r * 0.45),
+                    w * 1.2,
+                    ink,
+                );
+            }
+        }
+    }
+}
+
 const SHIELD: Color = Color::new(0.6, 0.9, 1.0, 1.0);
 
 struct Look {
@@ -263,6 +338,26 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
     }
     if s.shield > 0.0 {
         pen.ring(pts[0], radii[0] * 1.5, 4.0, SHIELD.with_alpha(0.7));
+    }
+    if s.boosts.magnet > 0.0 {
+        let pulse = (g.t * 3.0).fract();
+        let col = kg_core::games::clash::powers::color(kg_core::games::clash::powers::Kind::Magnet);
+        pen.ring(
+            pts[0],
+            radii[0] * (1.6 + 2.2 * pulse),
+            3.0,
+            col.with_alpha(0.5 * (1.0 - pulse)),
+        );
+    }
+    if s.boosts.speed > 0.0 {
+        let col = kg_core::games::clash::powers::color(kg_core::games::clash::powers::Kind::Speed);
+        let back = -s.dir();
+        let side = vec2(-back.y, back.x);
+        for k in -1..=1 {
+            let from = pts[0] + back * radii[0] * 1.1 + side * k as f32 * radii[0] * 0.5;
+            let len = radii[0] * (1.4 + 0.5 * ((g.t * 20.0 + k as f32).sin() * 0.5 + 0.5));
+            pen.line(from, from + back * len, 3.0, col.with_alpha(0.7));
+        }
     }
     draw_face(pen, pts[0], s.dir(), radii[0], s.stun > 0.0, g.t + s.phase);
 }
@@ -434,6 +529,7 @@ fn draw_world(g: &Clash, pen: &mut Pen, view: &View) {
     draw_floor(g, pen, view);
     draw_rocks(g, pen, view);
     draw_eggs(g, pen, view);
+    draw_powers(g, pen, view);
     let me = g.world.player().level();
     let mut order: Vec<&Snake> = g.world.snakes.iter().filter(|s| s.alive).collect();
     order.sort_by_key(|s| (s.player, s.level()));
