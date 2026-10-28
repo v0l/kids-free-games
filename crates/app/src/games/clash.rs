@@ -190,6 +190,8 @@ fn draw_eggs(g: &Clash, pen: &mut Pen, view: &View) {
     }
 }
 
+const SHIELD: Color = Color::new(0.6, 0.9, 1.0, 1.0);
+
 struct Look {
     mark: Option<Color>,
 }
@@ -224,8 +226,11 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
     if visible.is_empty() {
         return;
     }
-    let flicker = s.shield > 0.0 && ((g.t * 14.0) as i32) % 2 == 0;
-    let alpha = if flicker { 0.55 } else { 1.0 };
+    let glow = if s.shield > 0.0 {
+        0.18 + 0.18 * (g.t * 9.0).sin()
+    } else {
+        0.0
+    };
     pen.soft_shadow(
         pts[0] + vec2(0.0, radii[0] * 0.5),
         radii[0] * 1.2,
@@ -236,7 +241,7 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
         pen.circle(
             pts[i] + vec2(0.0, radii[i] * 0.08),
             radii[i] + 3.0 * zoom.max(0.6),
-            PLUM.with_alpha(alpha),
+            PLUM,
         );
     }
     for &i in visible.iter().rev() {
@@ -245,19 +250,19 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
         } else {
             skin.segment(i, n)
         };
-        let col = col.with_alpha(alpha);
+        let col = col.lerp(SHIELD, glow);
         pen.circle(pts[i], radii[i], col);
         pen.circle(
             pts[i] - vec2(radii[i] * 0.22, radii[i] * 0.3),
             radii[i] * 0.52,
-            col.lerp(WHITE, 0.28).with_alpha(alpha * 0.8),
+            col.lerp(WHITE, 0.28).with_alpha(0.8),
         );
     }
     if let Some(mark) = look.mark {
         pen.ring(pts[0], radii[0] * 1.35, 3.0, mark.with_alpha(0.8));
     }
     if s.shield > 0.0 {
-        pen.ring(pts[0], radii[0] * 1.5, 4.0, Color::new(0.6, 0.9, 1.0, 0.7));
+        pen.ring(pts[0], radii[0] * 1.5, 4.0, SHIELD.with_alpha(0.7));
     }
     draw_face(pen, pts[0], s.dir(), radii[0], s.stun > 0.0, g.t + s.phase);
 }
@@ -1027,6 +1032,28 @@ mod tests {
             let texs: Vec<_> = pen.used().iter().filter_map(|b| b.tex).collect();
             assert!(texs.contains(&Tex::Glyphs), "{screen:?}");
             assert!(pen.vertex_count() > 800, "{screen:?}");
+        }
+    }
+
+    #[test]
+    fn a_shielded_snake_stays_opaque_so_its_segments_never_show_through() {
+        let v = View::ipad_landscape();
+        let mut p = fresh();
+        p.g.start(Mode::Arena, 1);
+        for frame in 0..8 {
+            p.g.t = frame as f32 / 14.0;
+            let s = p.g.world.player().clone();
+            assert!(s.shield > 0.0);
+            let mut pen = Pen::default();
+            pen.begin(v, 1.0);
+            draw_snake(&p.g, &mut pen, &v, &s, &Look { mark: None });
+            let see_through = pen
+                .used()
+                .iter()
+                .flat_map(|b| b.color.iter())
+                .filter(|c| c[3] > 0.15 && c[3] < 0.69)
+                .count();
+            assert_eq!(see_through, 0, "frame {frame}");
         }
     }
 
