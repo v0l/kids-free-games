@@ -1801,6 +1801,31 @@ mod tests {
     }
 
     #[test]
+    fn no_purchase_waits_more_than_a_few_minutes_for_a_strong_player() {
+        for n in [1, 4] {
+            let mut sim = Sim::new(n, &[], 0, 3);
+            let (mut last, mut count, mut t) = (0.0f32, built(&sim), 0.0f32);
+            let dt = 1.0 / 30.0;
+            while t < 2400.0 && !sim.complete() {
+                sim.autopilot(dt);
+                sim.step(dt);
+                sim.events.clear();
+                t += dt;
+                if built(&sim) != count {
+                    count = built(&sim);
+                    assert!(
+                        t - last < 240.0,
+                        "hotel {n}: {:.0}s between builds",
+                        t - last
+                    );
+                    last = t;
+                }
+            }
+            assert!(sim.complete());
+        }
+    }
+
+    #[test]
     fn a_weak_player_keeps_progressing() {
         for n in [1, 3] {
             let mut sim = Sim::new(n, &[], 0, 11);

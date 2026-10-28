@@ -400,6 +400,26 @@ impl Hud<'_> {
     pub fn draw_overlay(&self, pen: &mut Pen) {
         let h = self.h;
         let view = &self.view;
+        if h.welcome_back > 0 && h.t < 3.5 {
+            let a = (h.t / 0.3).min(1.0) * (1.0 - ((h.t - 3.0) / 0.5).clamp(0.0, 1.0));
+            let k = ease_out_back((h.t / 0.4).min(1.0)).max(0.01);
+            let c = vec2(view.w / 2.0, view.h * 0.3);
+            pen.sprite_at(
+                "ui",
+                "p_coin",
+                c - vec2(110.0, 0.0),
+                70.0 * k,
+                Draw::tint(WHITE.with_alpha(a)),
+            );
+            pen.text_outline(
+                &format!("+{}", h.welcome_back),
+                c.x + 20.0,
+                c.y + 14.0,
+                (56.0 * k).round(),
+                GOLD.with_alpha(a),
+                PLUM.with_alpha(a),
+            );
+        }
         match h.mode {
             Mode::LevelUp(level, t) => {
                 let a = (t / 0.25).min(1.0) * (1.0 - ((t - 1.8) / 0.4).clamp(0.0, 1.0));
