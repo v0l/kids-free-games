@@ -253,7 +253,11 @@ fn asset_root() -> String {
         .into_iter()
         .find(|d| d.join("models").is_dir())
     {
-        return d.to_string_lossy().into_owned();
+        return d
+            .canonicalize()
+            .unwrap_or(d)
+            .to_string_lossy()
+            .into_owned();
     }
     "assets".into()
 }
