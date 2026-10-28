@@ -63,8 +63,8 @@ JOINTS = {
     "head": ((0, 0, 0.56), (0, 0, 0.98), "spine"),
 }
 for side, sx in (("L", 1), ("R", -1)):
-    JOINTS[f"arm.{side}"] = ((sx * 0.13, 0, 0.43), (sx * 0.26, 0, 0.38), "spine")
-    JOINTS[f"forearm.{side}"] = ((sx * 0.26, 0, 0.38), (sx * 0.36, 0, 0.33), f"arm.{side}")
+    JOINTS[f"arm.{side}"] = ((sx * 0.165, 0.04, 0.41), (sx * 0.255, 0.05, 0.355), "spine")
+    JOINTS[f"forearm.{side}"] = ((sx * 0.255, 0.05, 0.355), (sx * 0.34, 0.05, 0.28), f"arm.{side}")
     JOINTS[f"leg.{side}"] = ((sx * 0.08, 0, 0.26), (sx * 0.08, 0, 0.14), "hips")
     JOINTS[f"shin.{side}"] = ((sx * 0.08, 0, 0.14), (sx * 0.08, 0, 0.04), f"leg.{side}")
     JOINTS[f"foot.{side}"] = ((sx * 0.08, 0, 0.04), (sx * 0.08, -0.08, 0.02), f"shin.{side}")
@@ -303,15 +303,41 @@ def sample(src, f, yaw):
     return P
 
 
-def pose_world(P, R0):
+ARM_OUT = 0.5
+
+
+def splay(d, sx, least):
+    out = d.x * sx
+    if out >= least:
+        return d
+    rest = Vector((0.0, d.y, d.z))
+    if rest.length < 1e-6:
+        rest = Vector((0.0, 0.0, -1.0))
+    rest = rest.normalized() * math.sqrt(1 - least * least)
+    return Vector((sx * least, rest.y, rest.z))
+
+
+def limb_dirs(P, arm_out):
+    D = {b: (P[c] - P[a]).normalized() for b, (a, c) in LIMBS.items()}
+    for side, sx in (("L", 1), ("R", -1)):
+        upper, lower = D[f"arm.{side}"], D[f"forearm.{side}"]
+        new_upper = splay(upper, sx, arm_out)
+        bend = upper.rotation_difference(new_upper)
+        D[f"arm.{side}"] = new_upper
+        D[f"forearm.{side}"] = splay(bend @ lower, sx, -0.15)
+    return D
+
+
+def pose_world(P, R0, arm_out=ARM_OUT):
     W = {}
     for b, (a, c, l, r) in TRUNK.items():
         W[b] = basis(P[c] - P[a], P[l] - P[r]) @ R0[b].inverted()
-    for b, (a, c) in LIMBS.items():
+    D = limb_dirs(P, arm_out)
+    for b in LIMBS:
         parent = JOINTS[b][2]
         pw = W[parent]
         base = pw @ rest_dir(b)
-        W[b] = base.rotation_difference((P[c] - P[a]).normalized()).to_matrix() @ pw
+        W[b] = base.rotation_difference(D[b]).to_matrix() @ pw
     return W
 
 
@@ -356,7 +382,7 @@ def retarget(name, spec):
     hips = []
     for f in range(f0, f1 + 1):
         P = sample(src, f, yaw)
-        frames.append((pose_world(P, R0), (P["Hips"].z - ground - stand_h) * k))
+        frames.append((pose_world(P, R0, spec.get("arm_out", ARM_OUT)), (P["Hips"].z - ground - stand_h) * k))
         feet.append(min(P[j].z for j in ("LeftToeEnd", "RightToeEnd", "LeftFoot", "RightFoot")) - ground)
         hips.append(P["Hips"].z - ground)
     trim = spec.get("trim")
