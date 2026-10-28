@@ -167,7 +167,7 @@ pub async fn patch_me(db: &Db, auth: &Auth, body: PatchBody) -> ApiResult<Value>
     Ok(json!({ "player": load_player(db, &auth.player_id).await? }))
 }
 
-pub async fn delete_me(db: &Db, auth: &Auth) -> ApiResult<Value> {
+pub async fn delete_player(db: &Db, player_id: &str) -> ApiResult<usize> {
     let tables = [
         "DELETE FROM saves WHERE player_id = ?1",
         "DELETE FROM scores WHERE player_id = ?1",
@@ -178,28 +178,34 @@ pub async fn delete_me(db: &Db, auth: &Auth) -> ApiResult<Value> {
     ];
     let stmts = tables
         .iter()
-        .map(|sql| db.stmt(sql, &[s(&auth.player_id)]))
+        .map(|sql| db.stmt(sql, &[s(player_id)]))
         .collect::<ApiResult<Vec<_>>>()?;
-    db.batch(stmts).await?;
+    let changes = db.batch(stmts).await?;
+    Ok(changes.last().copied().unwrap_or(0))
+}
+
+pub async fn delete_me(db: &Db, auth: &Auth) -> ApiResult<Value> {
+    delete_player(db, &auth.player_id).await?;
     Ok(json!({ "deleted": true }))
 }
 
-pub async fn create_link(db: &Db, auth: &Auth, now: i64) -> ApiResult<Value> {
+pub async fn issue_link_code(db: &Db, player_id: &str, now: i64) -> ApiResult<Value> {
     let code = new_link_code()?;
     let expires = now + LINK_CODE_TTL;
     db.batch(vec![
         db.stmt("DELETE FROM link_codes WHERE expires_at < ?1", &[n(now)])?,
-        db.stmt(
-            "DELETE FROM link_codes WHERE player_id = ?1",
-            &[s(&auth.player_id)],
-        )?,
+        db.stmt("DELETE FROM link_codes WHERE player_id = ?1", &[s(player_id)])?,
         db.stmt(
             "INSERT INTO link_codes (code, player_id, expires_at) VALUES (?1, ?2, ?3)",
-            &[s(&code), s(&auth.player_id), n(expires)],
+            &[s(&code), s(player_id), n(expires)],
         )?,
     ])
     .await?;
     Ok(json!({ "code": display_code(&code), "expires_at": expires, "expires_in": LINK_CODE_TTL }))
+}
+
+pub async fn create_link(db: &Db, auth: &Auth, now: i64) -> ApiResult<Value> {
+    issue_link_code(db, &auth.player_id, now).await
 }
 
 #[derive(Deserialize)]
@@ -353,7 +359,7 @@ struct CountRow {
     c: i64,
 }
 
-fn order_by(better: Better) -> &'static str {
+pub fn order_by(better: Better) -> &'static str {
     match better {
         Better::Higher => "s.score DESC, s.achieved_at ASC, s.player_id ASC",
         Better::Lower => "s.score ASC, s.achieved_at ASC, s.player_id ASC",

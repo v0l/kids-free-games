@@ -1,0 +1,375 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Kids Games admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@500;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --plum:#2b1a45;--plum2:#3d2761;--lilac:#e8def8;--paper:#f6f2fc;--card:#fff;
+  --ink:#2b1a45;--mute:#76688f;--line:#ddd2f0;
+  --gold:#ffc53d;--green:#3fbf63;--green-d:#2c9a4b;--red:#e5484d;--red-d:#b9343a;--sky:#4aa3ff;
+  --r:18px;
+  --display:'Fredoka','Trebuchet MS',system-ui,sans-serif;
+  --body:'Nunito',system-ui,sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{font:500 15px/1.45 var(--body);color:var(--ink);background:var(--paper);min-height:100vh}
+h1,h2,h3{font-family:var(--display);font-weight:600;margin:0;letter-spacing:.01em}
+h1{font-size:34px;line-height:1.1}
+h2{font-size:22px}
+h3{font-size:17px}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--sky);outline-offset:2px;border-radius:10px}
+a{color:inherit}
+.app{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+nav{background:var(--plum);color:#efe7ff;padding:22px 14px;position:sticky;top:0;height:100vh;overflow:auto;display:flex;flex-direction:column;gap:4px}
+nav .brand{font:600 24px/1 var(--display);padding:4px 12px 18px;color:#fff;display:flex;align-items:center;gap:10px}
+nav .brand i{width:34px;height:34px;border-radius:11px;background:var(--gold);display:grid;place-items:center;color:var(--plum);font-style:normal;box-shadow:0 3px 0 #c8922a}
+nav a{display:flex;justify-content:space-between;align-items:center;text-decoration:none;padding:9px 12px;border-radius:12px;color:#cdbfe8}
+nav a:hover{background:var(--plum2);color:#fff}
+nav a[aria-current=page]{background:var(--lilac);color:var(--plum);font-weight:700}
+nav .group{font:600 13px var(--display);color:#9a88c2;padding:16px 12px 4px}
+nav .out{margin-top:auto;background:none;border:0;color:#cdbfe8;text-align:left;padding:10px 12px;border-radius:12px;cursor:pointer}
+nav .out:hover{background:var(--plum2);color:#fff}
+main{padding:34px clamp(18px,4vw,48px) 80px;max-width:1180px;width:100%}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:26px}
+.head p{margin:6px 0 0;color:var(--mute)}
+.btn{display:inline-flex;align-items:center;gap:8px;border:0;cursor:pointer;border-radius:14px;padding:10px 18px;font:600 15px var(--display);background:var(--green);color:#fff;box-shadow:0 4px 0 var(--green-d);transition:transform .08s,box-shadow .08s;text-decoration:none}
+.btn:hover{filter:brightness(1.05)}
+.btn:active{transform:translateY(3px);box-shadow:0 1px 0 var(--green-d)}
+.btn.quiet{background:var(--lilac);color:var(--plum);box-shadow:0 4px 0 #c5b6e6}
+.btn.danger{background:var(--red);box-shadow:0 4px 0 var(--red-d)}
+.btn.small{padding:6px 12px;font-size:14px;border-radius:11px;box-shadow:0 3px 0 var(--green-d)}
+.btn.small.quiet{box-shadow:0 3px 0 #c5b6e6}
+.btn.small.danger{box-shadow:0 3px 0 var(--red-d)}
+.btn[disabled]{opacity:.5;pointer-events:none}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:26px}
+.tile{background:var(--plum);color:#fff;border-radius:var(--r);padding:16px 18px;position:relative;overflow:hidden}
+.tile b{display:block;font:600 40px/1 var(--display);color:var(--gold);margin-bottom:6px;text-shadow:0 2px 0 rgba(0,0,0,.25)}
+.tile span{color:#cdbfe8}
+.tile:nth-child(even){background:var(--plum2)}
+.panel{background:var(--card);border:2px solid var(--line);border-radius:var(--r);padding:20px;margin-bottom:22px}
+.panel>header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+@media(max-width:1000px){.cols{grid-template-columns:1fr}}
+.bars{display:flex;align-items:flex-end;gap:7px;height:170px;padding-top:10px}
+.bars div{flex:1;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;height:100%;min-width:0}
+.bars i{display:block;width:100%;border-radius:10px 10px 4px 4px;background:linear-gradient(#ffd95e,var(--gold));box-shadow:inset 0 -4px 0 rgba(0,0,0,.12);min-height:4px}
+.bars span{font-size:12px;color:var(--mute)}
+table{width:100%;border-collapse:collapse}
+th{font:600 14px var(--display);text-align:left;color:var(--mute);padding:8px 10px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+tbody tr.link{cursor:pointer}
+tbody tr.link:hover td{background:var(--paper)}
+.who{display:flex;align-items:center;gap:10px;font-weight:700}
+.av{width:36px;height:36px;border-radius:50%;display:grid;place-items:center;font:600 16px var(--display);color:#fff;flex:none;box-shadow:inset 0 -3px 0 rgba(0,0,0,.18)}
+.av.big{width:72px;height:72px;font-size:32px}
+.id{font:12px ui-monospace,Menlo,monospace;color:var(--mute)}
+.mute{color:var(--mute)}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.right{margin-left:auto}
+.field{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.field label{font:600 14px var(--display)}
+input[type=text],input[type=password],input[type=number],select,textarea{width:100%;padding:10px 12px;border:2px solid var(--line);border-radius:12px;background:#fff}
+input:focus,select:focus,textarea:focus{border-color:var(--sky);outline:0}
+textarea{font:13px/1.4 ui-monospace,Menlo,monospace;min-height:220px;resize:vertical}
+.search{max-width:320px}
+.avatars{display:flex;gap:6px;flex-wrap:wrap}
+.avatars button{border:3px solid transparent;border-radius:50%;padding:0;background:none;cursor:pointer}
+.avatars button[aria-pressed=true]{border-color:var(--plum)}
+dialog{border:0;border-radius:22px;padding:0;width:min(520px,94vw);box-shadow:0 20px 60px rgba(43,26,69,.45);color:var(--ink)}
+dialog.wide{width:min(720px,94vw)}
+dialog::backdrop{background:rgba(43,26,69,.55)}
+dialog form{padding:0}
+dialog .top{background:var(--red);color:#fff;padding:12px 22px;font:600 20px var(--display);border-radius:22px 22px 0 0}
+dialog .top.ok{background:var(--plum2)}
+dialog .body{padding:20px 22px;background:var(--lilac)}
+dialog .foot{padding:14px 22px;background:var(--lilac);display:flex;gap:10px;justify-content:flex-end;border-radius:0 0 22px 22px}
+.code{font:600 44px var(--display);letter-spacing:.12em;text-align:center;color:var(--plum);background:#fff;border-radius:16px;padding:14px;margin:6px 0 10px}
+#toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%);display:flex;flex-direction:column;gap:8px;z-index:50;align-items:center}
+.toast{background:var(--plum);color:#fff;padding:10px 18px;border-radius:14px;font-weight:700;box-shadow:0 6px 20px rgba(0,0,0,.3);animation:pop .2s ease-out}
+.toast.bad{background:var(--red)}
+@keyframes pop{from{transform:scale(.9);opacity:0}}
+.empty{padding:26px;text-align:center;color:var(--mute)}
+.pager{display:flex;gap:10px;align-items:center;justify-content:flex-end;margin-top:14px;color:var(--mute)}
+.crumb{color:var(--mute);text-decoration:none;font-weight:700}
+.crumb:hover{color:var(--ink)}
+.login{min-height:100vh;display:grid;place-items:center;background:var(--plum);padding:20px}
+.login form{background:var(--lilac);border-radius:26px;width:min(400px,100%);overflow:hidden;box-shadow:0 8px 0 rgba(0,0,0,.25)}
+.login .top{background:var(--red);color:#fff;font:600 28px var(--display);padding:16px 26px;text-align:center}
+.login .body{padding:24px 26px}
+.login .btn{width:100%;justify-content:center;font-size:18px;padding:12px}
+.err{color:var(--red-d);font-weight:700;min-height:22px;margin:0 0 8px}
+.loading{padding:40px;text-align:center;color:var(--mute)}
+@media(max-width:780px){
+  .app{grid-template-columns:1fr}
+  nav{position:static;height:auto;flex-direction:row;flex-wrap:wrap;padding:10px;align-items:center}
+  nav .brand{padding:4px 8px}
+  nav .group{display:none}
+  nav .out{margin:0 0 0 auto}
+  .tbl{overflow-x:auto}
+}
+@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="toast" aria-live="polite"></div>
+<dialog id="dlg"></dialog>
+<script>
+const KEY='kg-admin-key';
+const root=document.getElementById('root');
+const dlg=document.getElementById('dlg');
+let key=localStorage.getItem(KEY)||'';
+let meta=null;
+
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const $=(sel,el=document)=>el.querySelector(sel);
+const GAMES=['blocks','breakout','count','crossy','flappy','fruit','helix','hotel','jumper','mathpop','memory','merge','paper','snake','spell','stack'];
+const NAMES={blocks:'Blocks',breakout:'Brick Breaker',count:'Count It',crossy:'Road Hopper',flappy:'Flappy',fruit:'Fruit Slice',helix:'Helix',hotel:'Hotel Hop',jumper:'Sky Jumper',mathpop:'Math Pop',memory:'Memory Match',merge:'2048',paper:'Paper Land',snake:'Snake',spell:'Spell It',stack:'Stack Tower'};
+const gname=g=>NAMES[g]||g;
+
+class ApiError extends Error{constructor(status,body){super(body.message||body.error||'request failed');this.status=status;this.code=body.error}}
+async function api(method,path,body){
+  const res=await fetch('/v1/admin'+path,{method,headers:{Authorization:'Bearer '+key,...(body!==undefined?{'Content-Type':'application/json'}:{})},body:body!==undefined?JSON.stringify(body):undefined});
+  let data={};
+  try{data=await res.json()}catch{}
+  if(res.status===401&&path!=='/stats'){signOut()}
+  if(!res.ok)throw new ApiError(res.status,data);
+  return data;
+}
+const get=p=>api('GET',p);
+
+function toast(msg,bad){
+  const t=document.createElement('div');
+  t.className='toast'+(bad?' bad':'');t.textContent=msg;
+  $('#toast').append(t);setTimeout(()=>t.remove(),bad?5000:2600);
+}
+async function act(fn,done){
+  try{const r=await fn();if(done)toast(done);return r}catch(e){toast(e.message,true);throw e}
+}
+
+const fmtDur=s=>{s=Math.round(s);if(s<60)return s+'s';const m=Math.round(s/60);if(m<60)return m+' min';const h=Math.floor(s/3600),mm=Math.round(s%3600/60);return h+'h '+(mm?mm+'m':'')};
+const fmtNum=n=>Number(n).toLocaleString();
+const fmtDate=t=>t?new Date(t*1000).toLocaleDateString(undefined,{day:'numeric',month:'short',year:'numeric'}):'never';
+function ago(t){
+  if(!t)return 'never';const d=Date.now()/1000-t;
+  if(d<90)return 'just now';if(d<3600)return Math.round(d/60)+' min ago';
+  if(d<86400)return Math.round(d/3600)+' h ago';if(d<86400*30)return Math.round(d/86400)+' days ago';
+  return fmtDate(t);
+}
+const avatar=(p,big)=>`<span class="av${big?' big':''}" style="background:hsl(${(p.avatar*47+250)%360} 62% 52%)" aria-hidden="true">${esc((p.name||'?')[0].toUpperCase())}</span>`;
+
+function modal({title,body,confirm='Save',danger,wide,cancel='Cancel',onOk}){
+  return new Promise(resolve=>{
+    dlg.className=wide?'wide':'';
+    dlg.innerHTML=`<form method="dialog"><div class="top${danger?'':' ok'}">${esc(title)}</div><div class="body"></div><div class="foot"><button type="button" class="btn quiet" data-x>${esc(cancel)}</button>${confirm?`<button class="btn${danger?' danger':''}" data-ok>${esc(confirm)}</button>`:''}</div></form>`;
+    const b=$('.body',dlg);
+    if(typeof body==='string')b.innerHTML=body;else b.append(body);
+    const close=v=>{dlg.close();resolve(v)};
+    $('[data-x]',dlg).onclick=()=>close(null);
+    dlg.oncancel=()=>resolve(null);
+    $('form',dlg).onsubmit=async e=>{
+      e.preventDefault();
+      const ok=$('[data-ok]',dlg);if(ok)ok.disabled=true;
+      try{const v=onOk?await onOk(dlg):true;close(v===undefined?true:v)}catch{if(ok)ok.disabled=false}
+    };
+    dlg.showModal();
+    const f=$('input,textarea,select',dlg);if(f)f.focus();
+  });
+}
+const confirmBox=(title,text,confirm)=>modal({title,body:`<p style="margin:0">${text}</p>`,confirm,danger:true});
+
+function avatarPicker(selected){
+  const wrap=document.createElement('div');wrap.className='avatars';
+  let cur=selected;
+  const draw=()=>{wrap.innerHTML=Array.from({length:12},(_,i)=>`<button type="button" data-i="${i}" aria-pressed="${i===cur}" aria-label="Avatar ${i+1}">${avatar({avatar:i,name:String.fromCharCode(65+i)})}</button>`).join('')};
+  wrap.onclick=e=>{const b=e.target.closest('button');if(b){cur=+b.dataset.i;draw()}};
+  draw();wrap.value=()=>cur;return wrap;
+}
+
+function playerForm(p){
+  const f=document.createElement('div');
+  f.innerHTML=`<div class="field"><label for="pn">Name</label><input id="pn" type="text" maxlength="12" autocomplete="off" value="${esc(p?p.name:'')}"><span class="mute">Letters only, up to 12.</span></div><div class="field"><label>Avatar</label></div>`;
+  const pick=avatarPicker(p?p.avatar:0);
+  f.lastElementChild.append(pick);
+  f.read=()=>({name:$('#pn',f).value,avatar:pick.value()});
+  return f;
+}
+
+function showLink(l,name){
+  return modal({title:'Link code',confirm:'',cancel:'Done',body:`<p style="margin:0 0 6px">Enter this on a device to sign in as <b>${esc(name)}</b>. It works once and expires in ${Math.round(l.expires_in/60)} minutes.</p><div class="code">${esc(l.code)}</div>`});
+}
+
+function setNav(route){
+  const items=[['#/','Overview'],['#/players','Players']];
+  const cur=route[0]||'';
+  $('nav').innerHTML=`<div class="brand"><i>K</i>Kids Games</div>`+
+    items.map(([h,t])=>`<a href="${h}"${(h==='#/'&&!cur)||(h==='#/players'&&cur==='players')?' aria-current="page"':''}>${t}</a>`).join('')+
+    `<div class="group">Leaderboards</div>`+
+    GAMES.map(g=>`<a href="#/games/${g}"${cur==='games'&&route[1]===g?' aria-current="page"':''}>${esc(gname(g))}</a>`).join('')+
+    `<button class="out" id="signout">Sign out</button>`;
+  $('#signout').onclick=signOut;
+}
+
+function shell(){
+  root.innerHTML=`<div class="app"><nav aria-label="Main"></nav><main id="main"><div class="loading">Loading</div></main></div>`;
+}
+
+function signOut(){
+  key='';localStorage.removeItem(KEY);renderLogin();
+}
+
+function renderLogin(msg){
+  root.innerHTML=`<div class="login"><form><div class="top">Kids Games admin</div><div class="body"><div class="field"><label for="k">Admin key</label><input id="k" type="password" autocomplete="current-password" autofocus></div><p class="err" id="err" role="alert">${esc(msg||'')}</p><button class="btn">Open dashboard</button></div></form></div>`;
+  $('form').onsubmit=async e=>{
+    e.preventDefault();
+    key=$('#k').value.trim();
+    try{await get('/stats');localStorage.setItem(KEY,key);start()}
+    catch(err){$('#err').textContent=err.status===404?'The server has no admin key set. Run: wrangler secret put ADMIN_KEY':err.status===401?'That key is not right.':err.message}
+  };
+}
+
+const views={};
+
+views.overview=async main=>{
+  const s=await get('/stats');
+  const max=Math.max(1,...s.by_day.map(d=>d.seconds));
+  const top=[...s.games].sort((a,b)=>b.seconds-a.seconds);
+  main.innerHTML=`<div class="head"><div><h1>Overview</h1><p>Everything the games have synced to this server.</p></div></div>
+  <div class="tiles">
+    <div class="tile"><b>${fmtNum(s.players)}</b><span>players</span></div>
+    <div class="tile"><b>${fmtNum(s.active_day)}</b><span>seen in the last day</span></div>
+    <div class="tile"><b>${fmtNum(s.active_week)}</b><span>seen in the last week</span></div>
+    <div class="tile"><b>${fmtDur(s.seconds)}</b><span>played over ${fmtNum(s.sessions)} sessions</span></div>
+    <div class="tile"><b>${fmtNum(s.scores)}</b><span>high scores</span></div>
+    <div class="tile"><b>${fmtNum(s.saves)}</b><span>cloud saves</span></div>
+  </div>
+  <div class="panel"><header><h2>Play time, last 14 days</h2></header>
+    <div class="bars" role="img" aria-label="Play time per day">${s.by_day.map(d=>`<div title="${esc(d.day)}: ${fmtDur(d.seconds)}"><i style="height:${Math.max(3,d.seconds/max*100)}%"></i><span>${+d.day.slice(8)}</span></div>`).join('')}</div></div>
+  <div class="panel"><header><h2>Games</h2></header><div class="tbl"><table><thead><tr><th>Game</th><th class="num">Play time</th><th class="num">Sessions</th><th class="num">Players</th><th class="num">Scored</th></tr></thead><tbody>
+  ${top.map(g=>`<tr class="link" data-go="#/games/${g.id}"><td><b>${esc(gname(g.id))}</b></td><td class="num">${fmtDur(g.seconds)}</td><td class="num">${fmtNum(g.sessions)}</td><td class="num">${fmtNum(g.players)}</td><td class="num">${fmtNum(g.scored_players)}</td></tr>`).join('')}
+  </tbody></table></div></div>`;
+};
+
+views.players=async main=>{
+  const st={q:'',sort:'recent',offset:0,limit:25};
+  main.innerHTML=`<div class="head"><div><h1>Players</h1><p id="sub"></p></div><button class="btn" id="new">Add player</button></div>
+  <div class="panel"><header><input class="search" id="q" type="text" placeholder="Search by name or id" aria-label="Search players"><select id="sort" aria-label="Sort players" style="width:auto"><option value="recent">Last seen</option><option value="playtime">Most played</option><option value="created">Newest</option><option value="name">Name</option></select></header><div id="list" class="tbl"></div><div class="pager" id="pager"></div></div>`;
+  const load=async()=>{
+    const qs=new URLSearchParams({limit:st.limit,offset:st.offset,sort:st.sort});if(st.q)qs.set('q',st.q);
+    const r=await get('/players?'+qs);
+    $('#sub').textContent=`${fmtNum(r.total)} ${r.total===1?'player':'players'}${st.q?' match':''}`;
+    $('#list').innerHTML=r.players.length?`<table><thead><tr><th>Player</th><th>Last seen</th><th class="num">Play time</th><th class="num">Scores</th><th class="num">Saves</th></tr></thead><tbody>${r.players.map(p=>`<tr class="link" data-go="#/players/${p.id}"><td><div class="who">${avatar(p)}<div>${esc(p.name)}<div class="id">${esc(p.id.slice(0,8))}</div></div></div></td><td>${ago(p.last_seen)}</td><td class="num">${fmtDur(p.seconds)}</td><td class="num">${p.scores}</td><td class="num">${p.saves}</td></tr>`).join('')}</tbody></table>`:`<div class="empty">${st.q?'No player matches that search.':'No players yet. Add one, or wait for the app to register a child.'}</div>`;
+    const from=r.total?r.offset+1:0,to=r.offset+r.players.length;
+    $('#pager').innerHTML=r.total>r.limit?`<span>${from}-${to} of ${fmtNum(r.total)}</span><button class="btn small quiet" id="prev" ${r.offset?'':'disabled'}>Previous</button><button class="btn small quiet" id="next" ${to>=r.total?'disabled':''}>Next</button>`:'';
+    const pv=$('#prev'),nx=$('#next');
+    if(pv)pv.onclick=()=>{st.offset=Math.max(0,st.offset-st.limit);load()};
+    if(nx)nx.onclick=()=>{st.offset+=st.limit;load()};
+  };
+  let timer;
+  $('#q').oninput=e=>{clearTimeout(timer);timer=setTimeout(()=>{st.q=e.target.value;st.offset=0;load()},250)};
+  $('#sort').onchange=e=>{st.sort=e.target.value;st.offset=0;load()};
+  $('#new').onclick=async()=>{
+    const form=playerForm();
+    let created;
+    const ok=await modal({title:'Add player',body:form,confirm:'Add player',onOk:async()=>{created=await act(()=>api('POST','/players',form.read()),'Player added')}});
+    if(ok&&created){await showLink(created.link,created.player.name);location.hash='#/players/'+created.player.id}
+  };
+  await load();
+};
+
+views.player=async(main,id)=>{
+  const r=await get('/players/'+id);
+  const p=r.player;
+  const reload=()=>render();
+  main.innerHTML=`<a class="crumb" href="#/players">All players</a>
+  <div class="head" style="margin-top:12px"><div class="row" style="gap:16px">${avatar(p,true)}<div><h1>${esc(p.name)}</h1><p>Joined ${fmtDate(p.created_at)}, seen ${ago(p.last_seen)}<br><span class="id">${esc(p.id)}</span></p></div></div>
+  <div class="row"><button class="btn quiet" id="edit">Edit</button><button class="btn quiet" id="link">Make link code</button><button class="btn danger" id="del">Delete player</button></div></div>
+  <div class="cols">
+   <div class="panel"><header><h2>High scores</h2></header>${r.scores.length?`<table><thead><tr><th>Game</th><th class="num">Best</th><th class="num">Plays</th><th></th></tr></thead><tbody>${r.scores.map(s=>`<tr><td><a href="#/games/${s.game}">${esc(gname(s.game))}</a></td><td class="num">${fmtNum(s.score)}</td><td class="num">${s.plays}</td><td class="num"><button class="btn small quiet" data-es="${s.game}" data-v="${s.score}">Edit</button> <button class="btn small danger" data-ds="${s.game}">Remove</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No scores yet.</div>'}
+   <div class="row" style="margin-top:12px"><select id="sg" style="width:auto">${GAMES.map(g=>`<option value="${g}">${esc(gname(g))}</option>`).join('')}</select><button class="btn small quiet" id="sadd">Set score</button></div></div>
+   <div class="panel"><header><h2>Play time</h2><span class="mute">${r.playtime.length?fmtDur(r.playtime.reduce((a,x)=>a+x.seconds,0)):''}</span></header>${r.playtime.length?`<table><tbody>${r.playtime.map(t=>`<tr><td>${esc(gname(t.game))}</td><td class="num">${fmtDur(t.seconds)}</td><td class="num mute">${t.sessions} ${t.sessions===1?'session':'sessions'}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">Nothing played yet.</div>'}</div>
+  </div>
+  <div class="panel"><header><h2>Cloud saves</h2><div class="row"><select id="slot" style="width:auto">${['profile',...GAMES].map(g=>`<option value="${g}">${esc(g==='profile'?'Profile':gname(g))}</option>`).join('')}</select><button class="btn small quiet" id="sedit">Open slot</button></div></header>${r.saves.length?`<table><thead><tr><th>Slot</th><th class="num">Revision</th><th class="num">Size</th><th>Updated</th><th></th></tr></thead><tbody>${r.saves.map(s=>`<tr><td>${esc(s.slot==='profile'?'Profile':gname(s.slot))}</td><td class="num">${s.rev}</td><td class="num">${fmtNum(s.size)} B</td><td>${ago(s.updated_at)}</td><td class="num"><button class="btn small quiet" data-sv="${s.slot}">View</button> <button class="btn small danger" data-sd="${s.slot}">Delete</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">No saves yet.</div>'}</div>
+  <div class="panel"><header><h2>Signed-in devices</h2></header>${r.devices.length?`<table><tbody>${r.devices.map(d=>`<tr><td>${esc(d.label||'Unnamed device')}</td><td class="mute">added ${fmtDate(d.created_at)}</td><td class="mute">used ${ago(d.last_used)}</td></tr>`).join('')}</tbody></table>`:'<div class="empty">No devices.</div>'}</div>`;
+
+  $('#edit').onclick=async()=>{
+    const form=playerForm(p);
+    if(await modal({title:'Edit player',body:form,onOk:()=>act(()=>api('PATCH','/players/'+id,form.read()),'Saved')}))reload();
+  };
+  $('#link').onclick=async()=>{const l=await act(()=>api('POST','/players/'+id+'/link'));showLink(l,p.name)};
+  $('#del').onclick=async()=>{
+    if(await confirmBox('Delete '+esc(p.name)+'?',`This erases <b>${esc(p.name)}</b> with every save, score and play session. It cannot be undone.`,'Delete player').then(async ok=>{if(!ok)return false;await act(()=>api('DELETE','/players/'+id),'Player deleted');return true}))location.hash='#/players';
+  };
+  const editScore=async(game,cur)=>{
+    const body=document.createElement('div');
+    body.innerHTML=`<div class="field"><label for="sv">${esc(gname(game))} score</label><input id="sv" type="number" min="1" step="1" value="${cur||''}"><span class="mute">${game==='memory'?'Moves: lower is better.':'Higher is better.'}</span></div>`;
+    if(await modal({title:'Set score',body,onOk:()=>act(()=>api('PUT',`/scores/${game}/${id}`,{score:parseInt($('#sv',body).value,10)}),'Score saved')}))reload();
+  };
+  main.querySelectorAll('[data-es]').forEach(b=>b.onclick=()=>editScore(b.dataset.es,b.dataset.v));
+  main.querySelectorAll('[data-ds]').forEach(b=>b.onclick=async()=>{
+    const g=b.dataset.ds;
+    if(await confirmBox('Remove score?',`Remove ${esc(p.name)} from the ${esc(gname(g))} board?`,'Remove').then(async ok=>{if(!ok)return false;await act(()=>api('DELETE',`/scores/${g}/${id}`),'Score removed');return true}))reload();
+  });
+  $('#sadd').onclick=()=>{const g=$('#sg').value;const ex=r.scores.find(x=>x.game===g);editScore(g,ex&&ex.score)};
+  const openSave=async slot=>{
+    let cur=null;
+    try{cur=await get(`/players/${id}/saves/${slot}`)}catch(e){if(e.status!==404)return}
+    const body=document.createElement('div');
+    body.innerHTML=`<div class="field"><label for="sd">${esc(slot==='profile'?'Profile':gname(slot))} save${cur?`, revision ${cur.rev}`:' (new)'}</label><textarea id="sd" spellcheck="false"></textarea><span class="mute">Plain text exactly as the app stores it. Up to 64 KiB.</span></div>`;
+    $('#sd',body).value=cur?cur.data:'';
+    if(await modal({title:cur?'Edit save':'Create save',wide:true,body,onOk:()=>act(()=>api('PUT',`/players/${id}/saves/${slot}`,{data:$('#sd',body).value}),'Save written')}))reload();
+  };
+  main.querySelectorAll('[data-sv]').forEach(b=>b.onclick=()=>openSave(b.dataset.sv));
+  $('#sedit').onclick=()=>openSave($('#slot').value);
+  main.querySelectorAll('[data-sd]').forEach(b=>b.onclick=async()=>{
+    const slot=b.dataset.sd;
+    if(await confirmBox('Delete save?',`Delete the ${esc(slot==='profile'?'profile':gname(slot))} save for ${esc(p.name)}? The app will start that slot fresh.`,'Delete save').then(async ok=>{if(!ok)return false;await act(()=>api('DELETE',`/players/${id}/saves/${slot}`),'Save deleted');return true}))reload();
+  });
+};
+
+views.game=async(main,game)=>{
+  if(!GAMES.includes(game)){main.innerHTML='<div class="empty">No such game.</div>';return}
+  const r=await get(`/scores/${game}?limit=200`);
+  main.innerHTML=`<div class="head"><div><h1>${esc(gname(game))}</h1><p>${fmtNum(r.total)} ${r.total===1?'score':'scores'}. ${r.better==='lower'?'Lower is better.':'Higher is better.'}</p></div></div>
+  <div class="panel tbl">${r.entries.length?`<table><thead><tr><th class="num" style="width:60px">Rank</th><th>Player</th><th class="num">Score</th><th class="num">Plays</th><th>Set</th><th></th></tr></thead><tbody>${r.entries.map(e=>`<tr><td class="num"><b>${e.rank}</b></td><td><a class="who" style="text-decoration:none" href="#/players/${e.player_id}">${avatar(e)}${esc(e.name)}</a></td><td class="num">${fmtNum(e.score)}</td><td class="num">${e.plays}</td><td>${ago(e.achieved_at)}</td><td class="num"><button class="btn small danger" data-rm="${e.player_id}" data-n="${esc(e.name)}">Remove</button></td></tr>`).join('')}</tbody></table>`:'<div class="empty">Nobody has a score here yet.</div>'}</div>`;
+  main.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{
+    const ok=await confirmBox('Remove score?',`Remove ${esc(b.dataset.n)} from the ${esc(gname(game))} board?`,'Remove');
+    if(ok){await act(()=>api('DELETE',`/scores/${game}/${b.dataset.rm}`),'Score removed');render()}
+  });
+};
+
+let renderToken=0;
+async function render(){
+  if(!key)return;
+  const route=location.hash.replace(/^#\/?/,'').split('/').filter(Boolean);
+  setNav(route);
+  const main=$('#main');
+  const tok=++renderToken;
+  const view=route[0]==='players'?(route[1]?['player',route[1]]:['players']):route[0]==='games'&&route[1]?['game',route[1]]:['overview'];
+  try{
+    main.innerHTML='<div class="loading">Loading</div>';
+    await views[view[0]](main,view[1]);
+    if(tok!==renderToken)return;
+    main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>location.hash=el.dataset.go);
+  }catch(e){
+    if(tok!==renderToken||!key)return;
+    main.innerHTML=`<div class="empty">${e.status===404?'That one is gone.':esc(e.message)} <a href="#/">Back to overview</a></div>`;
+  }
+}
+
+function start(){shell();render()}
+window.addEventListener('hashchange',render);
+if(key)start();else renderLogin();
+</script>
+</body>
+</html>

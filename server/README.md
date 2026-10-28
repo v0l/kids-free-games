@@ -55,6 +55,21 @@ One row per player and game (best score, plays). `memory` counts moves so lower 
 
 The app generates a random `id` (8 to 64 of `A-Za-z0-9_-`) when a game starts and uploads `{id, game, started_at, seconds}` when it ends or is paused, and again later while it keeps running. Uploads are idempotent: the longest `seconds` for an id wins, so retries and resends after going offline are safe. Sessions are capped at 4 hours and cannot end in the future.
 
+## Admin dashboard
+
+`GET /admin` serves a single-page dashboard (overview, players, saves, scores, per-game boards) that manages data through `/v1/admin/*`. Those routes take one shared key as the bearer token, set with `wrangler secret put ADMIN_KEY` (locally, `ADMIN_KEY=...` in `.dev.vars`). With no key set they return 404. The page keeps the key in the browser's localStorage after sign-in.
+
+| Method and path | Purpose |
+|---|---|
+| `GET /v1/admin/stats` | totals, per-game play time, 14-day chart |
+| `GET /v1/admin/players?q=&sort=&limit=&offset=` | search and page players |
+| `POST /v1/admin/players` `{name, avatar}` | create, returns a link code |
+| `GET/PATCH/DELETE /v1/admin/players/{id}` | detail, rename, erase |
+| `POST /v1/admin/players/{id}/link` | new link code |
+| `GET/PUT/DELETE /v1/admin/players/{id}/saves/{slot}` | read, overwrite (no rev check), delete |
+| `GET /v1/admin/scores/{game}` | full board |
+| `PUT/DELETE /v1/admin/scores/{game}/{id}` | set or remove a score |
+
 ## Limits
 
 Rate limits (Workers rate limiting binding): 120 requests per minute per player, 10 registrations and 10 link redemptions per minute per IP. Request bodies are capped at 128 KiB.
