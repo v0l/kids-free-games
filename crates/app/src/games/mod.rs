@@ -16,6 +16,7 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod runner;
 pub mod snake;
 pub mod spell;
 pub mod stack;
@@ -78,6 +79,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
         memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
+        runner::KEY => Some(|| Box::new(runner::RunnerPlay::new())),
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
         _ => None,

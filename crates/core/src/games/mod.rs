@@ -12,6 +12,7 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod runner;
 pub mod snake;
 pub mod spell;
 pub mod spell_words;
@@ -59,7 +60,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 17] = [
+pub const CATALOG: [Info; 18] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -144,6 +145,13 @@ pub const CATALOG: [Info; 17] = [
         Kind::Arcade,
         "Helix Jump",
         (255, 130, 70),
+    ),
+    info(
+        "runner",
+        "Lane Runner",
+        Kind::Arcade,
+        "Subway Surfers",
+        (240, 90, 80),
     ),
     info(
         "blocks",

@@ -19,6 +19,7 @@ mod clash_scene;
 mod count_scene;
 mod fruit_scene;
 mod helix_scene;
+mod runner_scene;
 mod hotel_scene;
 mod jumper_scene;
 mod mathpop_scene;
@@ -197,6 +198,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (117, "helix level clear, three stars"),
     (118, "helix level clear, one star"),
     (119, "helix last level mid run"),
+    (200, "runner level select"),
+    (201, "runner ready on the street"),
+    (202, "runner first run with the swipe hint"),
+    (203, "runner first hurdle with the jump hint"),
+    (204, "runner train lane at level eight"),
+    (205, "runner coin combo mid run"),
+    (206, "runner crash into a barrier"),
+    (207, "runner slide under a gate"),
+    (208, "runner out of hearts with the board"),
+    (209, "runner level clear, three stars"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -434,6 +445,7 @@ fn setup(n: u32, view: &View) -> Stage {
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
         110..=119 => helix_scene::setup(n, view),
+        200..=209 => runner_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -620,13 +632,15 @@ mod tests {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
             for &(n, name) in SCENES
                 .iter()
-                .filter(|(n, _)| (110..=119).contains(n) || (170..=189).contains(n))
+                .filter(|(n, _)| (110..=119).contains(n) || (170..=189).contains(n) || (200..=209).contains(n))
             {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
                 let parts = crate::game3d::testing::parts(&mut app).len();
-                let (want, least) = if n >= 170 {
+                let (want, least) = if n >= 200 {
+                    (crate::game3d::World3d::Runner, 40)
+                } else if n >= 170 {
                     (crate::game3d::World3d::Hotel, 150)
                 } else {
                     (crate::game3d::World3d::Helix, 1)
@@ -690,6 +704,11 @@ mod tests {
     #[test]
     fn breakout_scenes_land_in_the_state_they_are_named_for() {
         breakout_scene::check();
+    }
+
+    #[test]
+    fn runner_scenes_land_in_the_state_they_are_named_for() {
+        runner_scene::check();
     }
 
     #[test]

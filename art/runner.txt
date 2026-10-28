@@ -1,0 +1,5 @@
+# Painted with FLUX.1-dev (art/gen/prompts/runner.json)
+bg   | gen:runner_bg.png | solo jpg max=1344 keep
+wall | gen:runner_wall.png | max=128
+walk | gen:runner_walk.png | max=128
+road | gen:runner_road_tile.png | max=320

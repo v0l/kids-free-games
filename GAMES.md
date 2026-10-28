@@ -15,7 +15,7 @@ The games kids actually play on iPads and phones, what they are like in the stor
 | Bricks Breaker Quest, Brick Out | Paddle, ball, bricks | Brick Breaker | Done |
 | Doodle Jump | Tilt or tap to bounce up platforms | Sky Jumper | Done |
 | Memory / Pairs games | Flip cards to find pairs | Memory Match | Done |
-| Subway Surfers, Temple Run | 3D lane runner | | Not yet |
+| Subway Surfers, Temple Run | 3D lane runner | Lane Runner | Done |
 | Crossy Road | Hop across roads, rivers and rails | Road Hopper | Done |
 | Helix Jump | Drop a ball through a spinning tower | Helix Drop | Done |
 | Hole.io | Grow a hole that swallows a city | | Not yet |
@@ -68,4 +68,4 @@ Math Pop stays as the mixed warm-up. Each operation also gets a game of its own,
 
 ### Arcade still to do
 
-From the table above: a lane runner (Subway Surfers style), Hole.io and Cut the Rope. Each gets the same level and save treatment as the arcade games already reworked.
+From the table above: Hole.io and Cut the Rope. Each gets the same level and save treatment as the arcade games already reworked.
