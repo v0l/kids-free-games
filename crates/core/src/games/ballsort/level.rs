@@ -202,15 +202,15 @@ mod tests {
             let lv = make(l, 0);
             let s = spec(l);
             assert_eq!(lv.tubes.len(), s.tubes(), "level {l}");
-            let mut count = vec![0; COLORS];
+            let mut count = [0; COLORS];
             for t in &lv.tubes {
                 assert!(solve::len(*t) <= CAP);
                 for c in solve::unpack(*t) {
                     count[c as usize] += 1;
                 }
             }
-            for c in 0..s.colors {
-                assert_eq!(count[c], CAP, "level {l} colour {c}");
+            for (c, n) in count.iter().enumerate().take(s.colors) {
+                assert_eq!(*n, CAP, "level {l} colour {c}");
             }
             assert!(!solve::solved(&lv.tubes), "level {l} starts finished");
             let path = solve::solve(&lv.tubes, SOLVE_LIMIT).unwrap_or_else(|| panic!("level {l}"));

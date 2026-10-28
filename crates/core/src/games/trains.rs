@@ -186,7 +186,9 @@ impl Memory {
     }
 
     fn pack(self) -> i64 {
-        ((self.rung as i64) << 56) | ((self.due as i64 & 0x0FFF_FFFF) << 28) | (self.at as i64 & 0x0FFF_FFFF)
+        ((self.rung as i64) << 56)
+            | ((self.due as i64 & 0x0FFF_FFFF) << 28)
+            | (self.at as i64 & 0x0FFF_FFFF)
     }
 
     fn unpack(v: i64) -> Memory {
@@ -264,10 +266,7 @@ pub fn pick_pair(
         if recent.contains(&p) {
             continue;
         }
-        let at = seen
-            .iter()
-            .find(|(q, _)| *q == p)
-            .map_or(0, |(_, m)| m.at);
+        let at = seen.iter().find(|(q, _)| *q == p).map_or(0, |(_, m)| m.at);
         if best.is_none_or(|(_, b)| at < b) {
             best = Some((p, at));
         }
@@ -485,7 +484,11 @@ pub fn rider_look(seed: u32, i: usize) -> u8 {
 pub fn hop_pos(from: Vec3, to: Vec3, u: f32) -> Vec3 {
     let u = u.clamp(0.0, 1.0);
     let flat = from.lerp(to, ease_out_cubic(u));
-    vec3(flat.x, flat.y + (u * std::f32::consts::PI).sin() * 1.1, flat.z)
+    vec3(
+        flat.x,
+        flat.y + (u * std::f32::consts::PI).sin() * 1.1,
+        flat.z,
+    )
 }
 
 pub fn cam(view: &View) -> Cam {
@@ -517,7 +520,12 @@ pub fn goal_row_y(view: &View) -> f32 {
 pub fn prompt_rect(view: &View) -> Rect {
     let k = ui_scale(view).min(1.25);
     let w = (view.w - 60.0).min(560.0);
-    Rect::new(view.w / 2.0 - w / 2.0, goal_row_y(view) + 34.0 * k, w, 92.0 * k)
+    Rect::new(
+        view.w / 2.0 - w / 2.0,
+        goal_row_y(view) + 34.0 * k,
+        w,
+        92.0 * k,
+    )
 }
 
 pub fn levels_button(view: &View) -> Rect {
@@ -857,7 +865,12 @@ impl Trains {
             let (a, b) = self.question.pair();
             let r = round() + 1;
             profile::set(GAME, "round", r as i64);
-            remember(level, a, b, memory_of(level, a, b).after(r, self.attempt.wrong == 0));
+            remember(
+                level,
+                a,
+                b,
+                memory_of(level, a, b).after(r, self.attempt.wrong == 0),
+            );
             self.record(step);
             self.pending_step = Some(step);
             self.phase = Phase::Resolve;
@@ -996,7 +1009,8 @@ impl Trains {
             Tap::Wrong => {
                 sfx::play(Sfx::Wrong);
                 self.shake.add(0.2);
-                self.popups.add(at - vec2(0.0, 90.0), "Try again", orange, 48.0);
+                self.popups
+                    .add(at - vec2(0.0, 90.0), "Try again", orange, 48.0);
             }
             Tap::Reveal => {
                 sfx::play(Sfx::Wrong);
@@ -1097,7 +1111,8 @@ impl Trains {
                         if let Some(i) = self.hop_order(0) {
                             self.send_off(i);
                             sfx::play(Sfx::Pop);
-                            self.bursts.push((self.rider_world(i), hsv(k as f32 * 0.2, 0.5, 1.0)));
+                            self.bursts
+                                .push((self.rider_world(i), hsv(k as f32 * 0.2, 0.5, 1.0)));
                         }
                     }
                 }
@@ -1211,9 +1226,10 @@ impl Trains {
     }
 
     pub fn left_in_train(&self) -> i32 {
-        if matches!(self.phase, Phase::Resolve | Phase::Depart) || self.attempt.solved {
-            self.question.result()
-        } else if self.phase == Phase::Choose && taps_off(self.ladder.level) {
+        let shown = matches!(self.phase, Phase::Resolve | Phase::Depart)
+            || self.attempt.solved
+            || (self.phase == Phase::Choose && taps_off(self.ladder.level));
+        if shown {
             self.question.result()
         } else {
             self.question.a
@@ -1309,7 +1325,9 @@ mod tests {
             }
         }
         if !clean {
-            let slot = (0..OPTIONS).find(|s| *s != g.question.slot_of_answer()).unwrap();
+            let slot = (0..OPTIONS)
+                .find(|s| *s != g.question.slot_of_answer())
+                .unwrap();
             let t = g.pick(slot);
             g.react(v, slot, t);
         }
@@ -1371,9 +1389,7 @@ mod tests {
         for level in 5..LEVELS {
             assert!(pool(level).len() >= 200, "level {level}");
         }
-        assert!(
-            (0..LEVELS).all(|l| target_secs(l) <= target_secs((l + 1).min(LEVELS - 1)))
-        );
+        assert!((0..LEVELS).all(|l| target_secs(l) <= target_secs((l + 1).min(LEVELS - 1))));
         assert!(taps_off(0) && taps_off(1) && !taps_off(2));
         assert!(pictures(2) && !pictures(3));
         assert!(riders_hide(2) && !riders_hide(1));
@@ -1390,7 +1406,10 @@ mod tests {
                 let pair = g.question.pair();
                 let window = RECENT.min(pool(level).len() / 2);
                 let tail = &last[last.len().saturating_sub(window)..];
-                assert!(!tail.contains(&pair), "level {level} question {n}: {pair:?}");
+                assert!(
+                    !tail.contains(&pair),
+                    "level {level} question {n}: {pair:?}"
+                );
                 last.push(pair);
                 solve(&mut g, &v, true);
                 if g.ladder.level != level {
@@ -1442,7 +1461,11 @@ mod tests {
     fn memory_survives_the_save_round_trip_per_player() {
         let mut g = fresh();
         g.start_level(3);
-        let m = Memory { at: 77, due: 107, rung: 3 };
+        let m = Memory {
+            at: 77,
+            due: 107,
+            rung: 3,
+        };
         remember(3, 15, 6, m);
         assert_eq!(memory_of(3, 15, 6), m);
         let other = profile::create("Leo", 1).unwrap();
@@ -1549,7 +1572,10 @@ mod tests {
                 for x in [-train_len(riders) / 2.0, train_len(riders) / 2.0] {
                     let p = c.project(&v, vec3(x, 0.5, 0.0)).expect("on screen");
                     if riders <= 10 {
-                        assert!(p.x > f.x - 5.0 && p.x < f.x + f.w + 5.0, "{riders} {p:?} {f:?}");
+                        assert!(
+                            p.x > f.x - 5.0 && p.x < f.x + f.w + 5.0,
+                            "{riders} {p:?} {f:?}"
+                        );
                     }
                 }
             }
@@ -1693,7 +1719,9 @@ mod tests {
         ready(&mut g, &v);
         run(&mut g, &v, 12.0);
         assert_eq!(g.glow_slot(), None);
-        let wrong: Vec<usize> = (0..OPTIONS).filter(|s| *s != g.question.slot_of_answer()).collect();
+        let wrong: Vec<usize> = (0..OPTIONS)
+            .filter(|s| *s != g.question.slot_of_answer())
+            .collect();
         g.pick(wrong[0]);
         g.pick(wrong[1]);
         assert!(g.glow_slot().is_some());
@@ -1707,7 +1735,9 @@ mod tests {
         for i in (0..g.riders.len()).rev().take(g.question.hops()) {
             g.tap_rider(i);
         }
-        let wrong = (0..OPTIONS).find(|s| *s != g.question.slot_of_answer()).unwrap();
+        let wrong = (0..OPTIONS)
+            .find(|s| *s != g.question.slot_of_answer())
+            .unwrap();
         assert_eq!(g.pick(wrong), Tap::Wrong);
         assert_eq!(g.phase, Phase::Choose);
         assert_eq!(g.ladder.level, 0);
@@ -1718,7 +1748,11 @@ mod tests {
         let mut g = fresh();
         let v = View::ipad_landscape();
         let mut questions = 0;
-        while g.report.as_ref().is_none_or(|r| !matches!(r, Report::Cleared { .. })) {
+        while g
+            .report
+            .as_ref()
+            .is_none_or(|r| !matches!(r, Report::Cleared { .. }))
+        {
             let level = g.ladder.level;
             let tap = {
                 ready(&mut g, &v);
@@ -1802,7 +1836,11 @@ mod tests {
             crate::mastery::record(
                 GAME,
                 1,
-                crate::mastery::Answer { first_try: true, secs: 2.0, helped: false },
+                crate::mastery::Answer {
+                    first_try: true,
+                    secs: 2.0,
+                    helped: false,
+                },
                 target_secs(1),
             );
         }
@@ -1868,10 +1906,7 @@ mod tests {
         let mut g = fresh();
         for v in views() {
             for f in 0..3600 {
-                let pos = vec2(
-                    rand::gen_range(0.0, v.w),
-                    rand::gen_range(0.0, v.h),
-                );
+                let pos = vec2(rand::gen_range(0.0, v.w), rand::gen_range(0.0, v.h));
                 let mut input = Input::press_at(pos);
                 input.pressed = f % 7 == 0;
                 g.update(&input, &v, DT);

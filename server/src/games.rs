@@ -22,6 +22,7 @@ impl Better {
 
 pub const GAMES: &[(&str, Better)] = &[
     ("blocks", Better::Higher),
+    ("ballsort", Better::Higher),
     ("breakout", Better::Higher),
     ("clash", Better::Higher),
     ("count", Better::Higher),
@@ -39,6 +40,7 @@ pub const GAMES: &[(&str, Better)] = &[
     ("snake", Better::Higher),
     ("spell", Better::Higher),
     ("stack", Better::Higher),
+    ("trains", Better::Higher),
 ];
 
 pub const PROFILE_SAVE: &str = "profile";

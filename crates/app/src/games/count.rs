@@ -102,7 +102,14 @@ fn draw_backdrop(pen: &mut Pen, view: &View, t: f32) {
     }
 }
 
-pub fn draw_hud(pen: &mut Pen, view: &View, ladder: &Ladder, label: &str, accent: Color, bump: &Bump) {
+pub fn draw_hud(
+    pen: &mut Pen,
+    view: &View,
+    ladder: &Ladder,
+    label: &str,
+    accent: Color,
+    bump: &Bump,
+) {
     let k = ui_scale(view);
     let tw = measure(label, 28.0 * k) + 44.0 * k;
     let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0 * k);

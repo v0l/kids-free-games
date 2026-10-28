@@ -221,6 +221,7 @@ type Posed<'a> = (
     &'a mut MeshMaterial3d<StandardMaterial>,
 );
 
+#[allow(clippy::too_many_arguments)]
 fn sync(
     mut commands: Commands,
     frame: NonSend<crate::Frame>,

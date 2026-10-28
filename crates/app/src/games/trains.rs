@@ -123,7 +123,12 @@ fn draw_prompt(g: &Trains, pen: &mut Pen, view: &View) {
     pen.text_outline(&text, c.x, c.y - rr.h * 0.02, size, WHITE, BLUE_INK);
     let ear = Vec2::new(rr.x + rr.w - rr.h * 0.42, c.y);
     pen.painted_round(
-        Rect::new(ear.x - rr.h * 0.3, ear.y - rr.h * 0.3, rr.h * 0.6, rr.h * 0.6),
+        Rect::new(
+            ear.x - rr.h * 0.3,
+            ear.y - rr.h * 0.3,
+            rr.h * 0.6,
+            rr.h * 0.6,
+        ),
         "icon_audio",
         0.0,
     );
@@ -222,7 +227,12 @@ fn draw_buttons(g: &Trains, pen: &mut Pen, view: &View) {
         if glow_slot == Some(i) {
             let glow = 10.0 + 4.0 * (g.t * 6.0).sin();
             pen.round_rect(
-                Rect::new(rr.x - glow, rr.y - glow, rr.w + glow * 2.0, rr.h + glow * 2.0),
+                Rect::new(
+                    rr.x - glow,
+                    rr.y - glow,
+                    rr.w + glow * 2.0,
+                    rr.h + glow * 2.0,
+                ),
                 24.0,
                 Color::new(1.0, 0.95, 0.4, 0.7),
             );
@@ -455,11 +465,10 @@ mod tests {
             }
             assert_eq!(p.g.phase, Phase::Remove);
             let i = p.g.riders.len() - 1;
-            let at = p
-                .g
-                .cam_of(&v)
-                .project(&v, p.g.rider_world(i) + vec3(0.0, 0.35, 0.0))
-                .unwrap();
+            let at =
+                p.g.cam_of(&v)
+                    .project(&v, p.g.rider_world(i) + vec3(0.0, 0.35, 0.0))
+                    .unwrap();
             p.update(&Input::press_at(at), &v, 1.0 / 60.0);
             assert_eq!(p.g.removed(), 1, "{v:?}");
         }
