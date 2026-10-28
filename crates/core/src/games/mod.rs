@@ -1,3 +1,4 @@
+pub mod ballsort;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -153,6 +154,13 @@ pub const CATALOG: [Info; 18] = [
         Kind::Arcade,
         "Subway Surfers",
         (240, 90, 80),
+    ),
+    info(
+        "ballsort",
+        "Ball Sort",
+        Kind::Arcade,
+        "Color Bump, ball sort puzzles",
+        (40, 190, 180),
     ),
     info(
         "blocks",

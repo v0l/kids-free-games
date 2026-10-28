@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod ballsort_scene;
 mod blocks_scene;
 mod breakout_scene;
 mod clash_scene;
@@ -189,6 +190,16 @@ pub const SCENES: &[(u32, &str)] = &[
     (181, "hotel level up"),
     (182, "hotel moving to the next hotel"),
     (183, "hotel boss finale"),
+    (250, "ball sort level select"),
+    (251, "ball sort first level with the hint"),
+    (252, "ball sort a tube lifted"),
+    (253, "ball sort ball mid pour"),
+    (254, "ball sort level nine mid pour"),
+    (255, "ball sort hidden balls"),
+    (256, "ball sort level 24 big board"),
+    (257, "ball sort level clear, three stars, board"),
+    (258, "ball sort level clear, one star"),
+    (259, "ball sort last level mid pour"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -458,6 +469,7 @@ fn setup(n: u32, view: &View) -> Stage {
         80..=89 => jumper_scene::setup(n, view),
         110..=119 => helix_scene::setup(n, view),
         200..=219 => runner_scene::setup(n, view),
+        250..=259 => ballsort_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -644,13 +656,18 @@ mod tests {
     fn every_3d_scene_spawns_its_world() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
             for &(n, name) in SCENES.iter().filter(|(n, _)| {
-                (110..=119).contains(n) || (170..=189).contains(n) || (200..=229).contains(n)
+                (110..=119).contains(n)
+                    || (170..=189).contains(n)
+                    || (200..=229).contains(n)
+                    || (250..=259).contains(n)
             }) {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
                 let parts = crate::game3d::testing::parts(&mut app).len();
-                let (want, least) = if n >= 220 {
+                let (want, least) = if n >= 250 {
+                    (crate::game3d::World3d::BallSort, 40)
+                } else if n >= 220 {
                     (crate::game3d::World3d::Trains, 150)
                 } else if n >= 200 {
                     (crate::game3d::World3d::Runner, 40)
@@ -728,6 +745,11 @@ mod tests {
     #[test]
     fn trains_scenes_land_in_the_state_they_are_named_for() {
         trains_scene::check();
+    }
+
+    #[test]
+    fn ballsort_scenes_land_in_the_state_they_are_named_for() {
+        ballsort_scene::check();
     }
 
     #[test]

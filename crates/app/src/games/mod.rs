@@ -2,6 +2,7 @@ use crate::paint::Pen;
 use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
+pub mod ballsort;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -81,6 +82,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
         runner::KEY => Some(|| Box::new(runner::RunnerPlay::new())),
+        ballsort::KEY => Some(|| Box::new(ballsort::BallSortPlay::new())),
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
         trains::KEY => Some(|| Box::new(trains::TrainsPlay::new())),
