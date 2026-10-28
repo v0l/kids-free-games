@@ -360,12 +360,16 @@ async function render(){
     main.innerHTML='<div class="loading">Loading</div>';
     await views[view[0]](main,view[1]);
     if(tok!==renderToken)return;
-    main.querySelectorAll('[data-go]').forEach(el=>el.onclick=()=>location.hash=el.dataset.go);
   }catch(e){
     if(tok!==renderToken||!key)return;
     main.innerHTML=`<div class="empty">${e.status===404?'That one is gone.':esc(e.message)} <a href="#/">Back to overview</a></div>`;
   }
 }
+
+document.addEventListener('click',e=>{
+  const row=e.target.closest('[data-go]');
+  if(row&&!e.target.closest('a,button'))location.hash=row.dataset.go;
+});
 
 function start(){shell();render()}
 window.addEventListener('hashchange',render);
