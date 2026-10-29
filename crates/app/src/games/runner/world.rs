@@ -522,17 +522,10 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                 v.set_if_neq(shown(!g.blinking()));
             }
             Role::Body => {
-                let slide = (g.slide_t / SLIDE_TIME).clamp(0.0, 1.0);
-                let slide_k = (slide * 8.0).min(1.0) * if g.sliding() { 1.0 } else { 0.0 };
-                let fall = if g.state == Phase::Dead {
-                    (g.end_t * 3.0).min(1.0)
-                } else {
-                    0.0
-                };
                 let sq = g.squash;
                 t.set_if_neq(Transform {
-                    translation: Vec3::new(0.0, -slide_k * 0.05, 0.0),
-                    rotation: Quat::from_rotation_x(fall * -0.5),
+                    translation: Vec3::ZERO,
+                    rotation: Quat::IDENTITY,
                     scale: Vec3::new(1.0 + sq * 0.14, 1.0 - sq * 0.2, 1.0 + sq * 0.14),
                 });
             }
@@ -751,6 +744,30 @@ mod tests {
         );
         assert_eq!(roles(&mut app, |r| matches!(r, Role::Coin(_))), coins);
         assert_eq!(roles(&mut app, |r| *r == Role::Player), 1);
+    }
+
+    #[test]
+    fn falling_and_sliding_are_left_to_the_hero_clips() {
+        let mut app = open(fresh(1));
+        for (dead, slide) in [(true, 0.0), (false, 0.3)] {
+            {
+                let g = &mut runner(&mut app).g;
+                g.state = if dead { Phase::Dead } else { Phase::Playing };
+                g.end_t = 1.0;
+                g.slide_t = slide;
+                g.y = 0.0;
+            }
+            testing::step(&mut app, 1);
+            let w = app.world_mut();
+            let t = *w
+                .query::<(&Role, &Transform)>()
+                .iter(w)
+                .find(|(r, _)| **r == Role::Body)
+                .unwrap()
+                .1;
+            assert!(t.rotation.angle_between(Quat::IDENTITY) < 1e-3, "body tilts {:?}", t.rotation);
+            assert!(t.translation.y.abs() < 1e-3, "body dips {}", t.translation.y);
+        }
     }
 
     #[test]
