@@ -29,6 +29,7 @@ pub const GAMES: &[(&str, Better)] = &[
     ("crossy", Better::Higher),
     ("flappy", Better::Higher),
     ("fruit", Better::Higher),
+    ("garden", Better::Higher),
     ("helix", Better::Higher),
     ("hotel", Better::Higher),
     ("jumper", Better::Higher),
@@ -43,10 +44,41 @@ pub const GAMES: &[(&str, Better)] = &[
     ("trains", Better::Higher),
 ];
 
+pub const NAMES: &[(&str, &str)] = &[
+    ("blocks", "Block Drop"),
+    ("ballsort", "Ball Sort"),
+    ("breakout", "Brick Breaker"),
+    ("clash", "Snake Clash"),
+    ("count", "Count It"),
+    ("crossy", "Road Hopper"),
+    ("flappy", "Flappy Bird"),
+    ("fruit", "Fruit Slice"),
+    ("garden", "Times Table Garden"),
+    ("helix", "Helix Drop"),
+    ("hotel", "Happy Hotel"),
+    ("jumper", "Sky Jumper"),
+    ("mathpop", "Math Pop"),
+    ("memory", "Memory Match"),
+    ("merge", "2048"),
+    ("paper", "Paper Land"),
+    ("runner", "Lane Runner"),
+    ("snake", "Snake"),
+    ("spell", "Spell It"),
+    ("stack", "Stack Tower"),
+    ("trains", "Take Away Trains"),
+];
+
 pub const PROFILE_SAVE: &str = "profile";
 
 pub fn direction(game: &str) -> Option<Better> {
     GAMES.iter().find(|(g, _)| *g == game).map(|(_, b)| *b)
+}
+
+pub fn name(game: &str) -> &str {
+    NAMES
+        .iter()
+        .find(|(g, _)| *g == game)
+        .map_or(game, |(_, n)| n)
 }
 
 pub fn is_game(game: &str) -> bool {
@@ -96,6 +128,24 @@ mod tests {
         assert!(keys.len() >= 16, "found {keys:?}");
         for key in keys {
             assert!(is_game(&key), "{key} is missing from GAMES");
+        }
+    }
+
+    #[test]
+    fn every_game_has_the_same_name_as_in_the_app() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../crates/core/src/games/mod.rs");
+        let text = std::fs::read_to_string(path).unwrap();
+        for (g, _) in GAMES {
+            let named = NAMES.iter().find(|(n, _)| n == g).map(|(_, n)| *n);
+            let name = named.unwrap_or_else(|| panic!("{g} has no name"));
+            let squashed: String = text.split_whitespace().collect::<Vec<_>>().join(" ");
+            let entry = format!("info( \"{g}\", \"{name}\",");
+            let inline = format!("info(\"{g}\", \"{name}\",");
+            assert!(
+                squashed.contains(&entry) || squashed.contains(&inline),
+                "{g} is called {name} on the server but not in the app catalog"
+            );
         }
     }
 

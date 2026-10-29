@@ -61,12 +61,19 @@ thread_local! {
     static MEMORY: std::cell::Cell<bool> = const { std::cell::Cell::new(cfg!(test)) };
 }
 
+static OFFLINE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
 pub fn in_memory() -> bool {
     MEMORY.with(|m| m.get())
 }
 
+pub fn offline() -> bool {
+    in_memory() || OFFLINE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub fn use_memory_only() {
     MEMORY.with(|m| m.set(true));
+    OFFLINE.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
 fn with<R>(f: impl FnOnce(&mut Map) -> R) -> R {

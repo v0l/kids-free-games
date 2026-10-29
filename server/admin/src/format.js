@@ -1,11 +1,10 @@
-export const GAMES = ['blocks', 'breakout', 'count', 'crossy', 'flappy', 'fruit', 'helix', 'hotel', 'jumper', 'mathpop', 'memory', 'merge', 'paper', 'snake', 'spell', 'stack'];
+export const GAMES = [];
+const NAMES = {};
 
-const NAMES = {
-  blocks: 'Blocks', breakout: 'Brick Breaker', count: 'Count It', crossy: 'Road Hopper',
-  flappy: 'Flappy', fruit: 'Fruit Slice', helix: 'Helix', hotel: 'Hotel Hop',
-  jumper: 'Sky Jumper', mathpop: 'Math Pop', memory: 'Memory Match', merge: '2048',
-  paper: 'Paper Land', snake: 'Snake', spell: 'Spell It', stack: 'Stack Tower',
-};
+export function setGames(list) {
+  GAMES.splice(0, GAMES.length, ...list.map((g) => g.id));
+  for (const g of list) NAMES[g.id] = g.name || g.id;
+}
 
 export const gameName = (g) => NAMES[g] || g;
 export const slotName = (slot) => (slot === 'profile' ? 'Profile' : gameName(slot));

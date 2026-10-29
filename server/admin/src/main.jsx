@@ -4,7 +4,7 @@ import './style.css';
 import { get, session } from './api.js';
 import { Overlay } from './overlay.jsx';
 import { Overview, Players, Player, Game } from './views.jsx';
-import { GAMES, gameName, parseRoute } from './format.js';
+import { GAMES, gameName, parseRoute, setGames } from './format.js';
 
 function Login({ onSignedIn }) {
   const [key, setKey] = useState('');
@@ -86,4 +86,8 @@ function App() {
   );
 }
 
-render(<App />, document.getElementById('app'));
+fetch('/v1/games')
+  .then((r) => r.json())
+  .then((r) => setGames(r.games))
+  .catch(() => {})
+  .finally(() => render(<App />, document.getElementById('app')));

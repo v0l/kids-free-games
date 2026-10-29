@@ -782,7 +782,7 @@ thread_local! {
 }
 
 pub fn sync_enabled() -> bool {
-    !(cfg!(test) || crate::save::in_memory())
+    !(cfg!(test) || crate::save::offline())
 }
 
 fn with<R>(f: impl FnOnce(&mut Net) -> R) -> Option<R> {

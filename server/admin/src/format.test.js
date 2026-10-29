@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { ago, duration, parseRoute } from './format.js';
+import { GAMES, ago, duration, gameName, parseRoute, setGames } from './format.js';
 
 test('durations read as seconds, minutes, then hours', () => {
   expect(duration(45)).toBe('45s');
@@ -19,4 +19,11 @@ test('routes parse from the hash, including a player on any page', () => {
   expect(parseRoute('#/players')).toEqual({ name: 'players' });
   expect(parseRoute('#/players/abc')).toEqual({ name: 'player', id: 'abc' });
   expect(parseRoute('#/games/snake')).toEqual({ name: 'game', game: 'snake' });
+});
+
+test('the game list and names come from the server', () => {
+  setGames([{ id: 'clash', name: 'Snake Clash' }, { id: 'trains', name: 'Take Away Trains' }]);
+  expect(GAMES).toEqual(['clash', 'trains']);
+  expect(gameName('trains')).toBe('Take Away Trains');
+  expect(gameName('nope')).toBe('nope');
 });

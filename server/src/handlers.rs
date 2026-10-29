@@ -566,7 +566,7 @@ pub fn games_list() -> Value {
     json!({
         "games": games::GAMES
             .iter()
-            .map(|(g, b)| json!({ "id": g, "better": b.as_str() }))
+            .map(|(g, b)| json!({ "id": g, "name": games::name(g), "better": b.as_str() }))
             .collect::<Vec<_>>(),
         "save_slots": std::iter::once(games::PROFILE_SAVE)
             .chain(games::GAMES.iter().map(|(g, _)| *g))

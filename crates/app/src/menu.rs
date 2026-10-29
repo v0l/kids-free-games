@@ -688,6 +688,18 @@ mod tests {
     }
 
     #[test]
+    fn game_code_on_another_thread_never_syncs_during_tests() {
+        let _ = menu();
+        let synced = std::thread::spawn(|| {
+            kg_core::profile::create("Mia", 0);
+            kg_core::net::sync_enabled()
+        })
+        .join()
+        .unwrap();
+        assert!(!synced);
+    }
+
+    #[test]
     fn tests_never_sync_to_the_live_server() {
         let _ = menu();
         assert!(!kg_core::net::sync_enabled());
