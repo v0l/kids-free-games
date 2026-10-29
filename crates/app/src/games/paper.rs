@@ -190,11 +190,11 @@ fn draw_share(g: &Paper, pen: &mut Pen) {
     );
     let left = Rect::new(HUD_LEFT, kills.y + kills.h + 10.0, 196.0, 36.0);
     pill(pen, left, Color::new(0.08, 0.1, 0.2, 0.55));
-    let n = g.snakes_left();
+    let n = g.rivals_left();
     let label = if n == 1 {
-        "1 snake left".to_string()
+        "1 player left".to_string()
     } else {
-        format!("{n} snakes left")
+        format!("{n} players left")
     };
     pen.text_outline(&label, left.center().x, left.center().y, 22.0, WHITE, INK);
     if let Some(m) = g.milestone.filter(|_| g.state == State::Playing) {
@@ -359,7 +359,7 @@ fn draw_ready(g: &Paper, pen: &mut Pen, view: &View) {
     let c = vec2(view.w / 2.0, view.h * 0.32);
     pen.ribbon(view, "Paper Land", c, g.clock);
     pen.text_outline(
-        "Be the last snake standing!",
+        "Be the last one standing!",
         c.x,
         c.y + 86.0,
         36.0,
@@ -400,7 +400,7 @@ fn draw_dead(g: &Paper, pen: &mut Pen, view: &View) {
     pen.painted_panel(pr, WHITE);
     let won = g.state == State::Won;
     let title = if won {
-        "Last snake!"
+        "Last one standing!"
     } else if g.new_best {
         "New best!"
     } else {
@@ -408,7 +408,7 @@ fn draw_dead(g: &Paper, pen: &mut Pen, view: &View) {
     };
     pen.ribbon(view, title, vec2(c.x, pr.y + 8.0 * s), age);
     let line = if won {
-        "Every other snake is gone".to_string()
+        "Every other player is gone".to_string()
     } else {
         cause_line(g)
     };

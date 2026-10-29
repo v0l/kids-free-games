@@ -612,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    fn the_way_home_points_back_at_the_snakes_own_land() {
+    fn the_way_home_points_back_at_the_players_own_land() {
         let mut w = World::new(0.5);
         let id = w.add_player(vec2(30.0, 30.0), 0.0, false);
         w.players[id].pos = vec2(45.0, 30.0);
@@ -650,7 +650,7 @@ mod tests {
     }
 
     #[test]
-    fn the_view_turns_with_the_snake_and_shows_its_own_land_behind() {
+    fn the_view_turns_with_the_player_and_shows_its_own_land_behind() {
         let a = Arena::new(3, 30.0);
         let o = &a.obs;
         assert_eq!(o.grid.len(), grid_len());
@@ -692,7 +692,7 @@ mod tests {
     }
 
     #[test]
-    fn being_the_last_snake_pays_the_win_bonus_and_ends_the_episode() {
+    fn being_the_last_one_standing_pays_the_win_bonus_and_ends_the_episode() {
         let mut a = Arena::new(2, 60.0);
         for id in 1..a.w.players.len() {
             a.w.kill(id, None, super::super::world::Cause::Trail);

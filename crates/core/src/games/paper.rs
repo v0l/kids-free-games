@@ -206,7 +206,7 @@ impl Paper {
             .project(view, vec3(world.x, camera::SLAB, world.y))
     }
 
-    pub fn snakes_left(&self) -> usize {
+    pub fn rivals_left(&self) -> usize {
         self.w.players.iter().skip(1).filter(|p| p.alive).count()
     }
 
@@ -559,7 +559,7 @@ impl Game for Paper {
             }
         }
         self.react();
-        if self.state == State::Playing && self.me().alive && self.snakes_left() == 0 {
+        if self.state == State::Playing && self.me().alive && self.rivals_left() == 0 {
             self.win();
         }
         self.follow(dt);
