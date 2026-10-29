@@ -21,6 +21,10 @@ Cloudflare, which hosts the server, sees the IP address of each request as part 
 
 No email, phone number, real name, location, contacts, photos, microphone or camera data, advertising identifier or browsing history. No data is sold or shared with advertisers or data brokers.
 
+## Delete your data
+
+In the app, open the player picker, tap the gear next to the player, then Delete and Sure. This erases the player and all their server data: profile, name, avatar, saves, scores and play sessions. Nothing is kept. You can also ask by email at kieran@apexstrata.ie and we delete it within 30 days.
+
 ## Controls
 
 - The app works offline. Without a connection, progress stays on the device and syncs later.
