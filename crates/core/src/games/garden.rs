@@ -37,7 +37,11 @@ pub fn level_name(level: usize) -> String {
 }
 
 pub fn stage_name(stage: usize) -> &'static str {
-    ["Count the flowers", "Remember the flowers", "Just the numbers"][stage.min(2)]
+    [
+        "Count the flowers",
+        "Remember the flowers",
+        "Just the numbers",
+    ][stage.min(2)]
 }
 
 pub fn tables_of(level: usize) -> Vec<i32> {
@@ -58,7 +62,11 @@ pub struct Fact {
 
 impl Fact {
     pub fn key(&self) -> String {
-        format!("{}x{}", self.table.min(self.other), self.table.max(self.other))
+        format!(
+            "{}x{}",
+            self.table.min(self.other),
+            self.table.max(self.other)
+        )
     }
 
     pub fn product(&self) -> i32 {
@@ -173,9 +181,21 @@ pub fn decoys(q_a: i32, q_b: i32, form: Form, stage: usize, level: usize) -> Vec
     let mut pool: Vec<i32> = vec![];
     match form {
         Form::Product => {
-            let near = [q_a * (q_b - 1), q_a * (q_b + 1), (q_a - 1) * q_b, (q_a + 1) * q_b];
+            let near = [
+                q_a * (q_b - 1),
+                q_a * (q_b + 1),
+                (q_a - 1) * q_b,
+                (q_a + 1) * q_b,
+            ];
             if stage == 0 && level < 3 {
-                pool.extend([answer - 3, answer + 3, answer + 2, answer - 2, answer + 1, answer - 1]);
+                pool.extend([
+                    answer - 3,
+                    answer + 3,
+                    answer + 2,
+                    answer - 2,
+                    answer + 1,
+                    answer - 1,
+                ]);
             } else {
                 pool.extend(near);
                 pool.extend([answer + 10, answer - 10, answer + q_a + 1]);
@@ -235,7 +255,10 @@ impl Question {
     }
 
     pub fn slot_of_answer(&self) -> usize {
-        self.options.iter().position(|v| *v == self.answer).unwrap_or(0)
+        self.options
+            .iter()
+            .position(|v| *v == self.answer)
+            .unwrap_or(0)
     }
 
     pub fn prompt(&self) -> String {
@@ -248,7 +271,9 @@ impl Question {
     pub fn voice(&self) -> Say {
         match self.form {
             Form::Product => Say::Times(TimesLine::Ask, self.a as u8, self.b as u8),
-            Form::MissingFactor => Say::Times(TimesLine::Missing, self.a as u8, self.product() as u8),
+            Form::MissingFactor => {
+                Say::Times(TimesLine::Missing, self.a as u8, self.product() as u8)
+            }
         }
     }
 
@@ -390,7 +415,11 @@ pub fn play_button(view: &View) -> Rect {
 pub fn overview_cam(view: &View) -> Cam {
     let f = view.full();
     let tall_view = f.h > f.w * 1.15;
-    let fov = if tall_view { FOV * (f.h / f.w).min(1.6) } else { FOV };
+    let fov = if tall_view {
+        FOV * (f.h / f.w).min(1.6)
+    } else {
+        FOV
+    };
     let dist = if tall_view { 24.0 } else { 17.0 };
     Cam {
         target: Vec3::ZERO,
@@ -415,7 +444,11 @@ pub fn fit_cam(view: &View, rows: f32, cols: f32, push: f32) -> Cam {
     let f = view.full();
     let aspect = f.w / f.h.max(1.0);
     let tall_view = f.h > f.w * 1.15;
-    let fov = if tall_view { FOV * (f.h / f.w).min(1.6) } else { FOV };
+    let fov = if tall_view {
+        FOV * (f.h / f.w).min(1.6)
+    } else {
+        FOV
+    };
     let corners = |rows: f32, cols: f32| {
         let hw = cols * SPACING / 2.0 + 1.0;
         let hd = rows * SPACING / 2.0 + 0.8;
@@ -742,7 +775,10 @@ impl Garden {
     fn finish_round(&mut self) -> u8 {
         let stars = self.session.stars(TARGET_SECS);
         profile::award_stars(GAME, self.level as u32, stars);
-        self.summary = format!("{} of {} right first time", self.session.first_try, self.session.answers);
+        self.summary = format!(
+            "{} of {} right first time",
+            self.session.first_try, self.session.answers
+        );
         self.session.reset();
         self.asked = 0;
         self.used.clear();
@@ -803,7 +839,11 @@ impl Garden {
     }
 
     pub fn can_rest(&self) -> Vec3 {
-        vec3(self.cam_cols * SPACING / 2.0 + 1.3, 0.75, self.cam_rows * SPACING / 2.0 + 0.2)
+        vec3(
+            self.cam_cols * SPACING / 2.0 + 1.3,
+            0.75,
+            self.cam_rows * SPACING / 2.0 + 0.2,
+        )
     }
 
     pub fn can_pos(&self) -> Vec3 {
@@ -881,7 +921,8 @@ impl Garden {
             Pick::Wrong | Pick::Reveal => {
                 sfx::play(Sfx::Wrong);
                 self.shake.add(0.22);
-                self.popups.add(at - vec2(0.0, 150.0), "Count and try again", orange, 40.0);
+                self.popups
+                    .add(at - vec2(0.0, 150.0), "Count and try again", orange, 40.0);
                 if self.slips + 1 >= SLIPS_DOWN || self.wrong >= 2 {
                     sfx::say(Say::Steady);
                 }
@@ -909,8 +950,14 @@ impl Garden {
         }
         let target = self.array_target();
         let was = self.shown;
-        self.shown = approach(self.shown, target, if target > self.shown { 5.0 } else { 6.0 }, dt);
-        if target > 0.5 && was < 0.3 && self.shown >= 0.3 && self.stage > 0 && self.solved.is_none() {
+        self.shown = approach(
+            self.shown,
+            target,
+            if target > self.shown { 5.0 } else { 6.0 },
+            dt,
+        );
+        if target > 0.5 && was < 0.3 && self.shown >= 0.3 && self.stage > 0 && self.solved.is_none()
+        {
             self.grow_age = 0.0;
         }
         if let Some(t) = self.solved {
@@ -946,7 +993,8 @@ impl Garden {
                     let cam = self.view_cam(view);
                     let w = self.flower_world(i, j) + vec3(0.0, 0.9, 0.0);
                     if let Some(at) = cam.project(view, w) {
-                        self.fx.sparkle(at, hsv(flower_hue(self.level, i, j), 0.5, 1.0));
+                        self.fx
+                            .sparkle(at, hsv(flower_hue(self.level, i, j), 0.5, 1.0));
                     }
                 }
                 if self.ticked % 2 == 1 || n < 30 {
@@ -1004,7 +1052,10 @@ impl Garden {
             let left = MASTER_RUN.saturating_sub(self.run);
             format!("{left} more right in a row to bloom a new bed")
         } else {
-            format!("{} right in a row to grow harder", STAGE_UP_RUN.saturating_sub(self.stage_run))
+            format!(
+                "{} right in a row to grow harder",
+                STAGE_UP_RUN.saturating_sub(self.stage_run)
+            )
         }
     }
 
@@ -1074,7 +1125,9 @@ mod tests {
         let slot = if right {
             g.q.slot_of_answer()
         } else {
-            (0..OPTIONS).find(|i| *i != g.q.slot_of_answer() && !g.tried[*i]).unwrap()
+            (0..OPTIONS)
+                .find(|i| *i != g.q.slot_of_answer() && !g.tried[*i])
+                .unwrap()
         };
         let p = g.pick(slot);
         g.react(&v, slot, p);
@@ -1216,7 +1269,9 @@ mod tests {
     #[test]
     fn a_second_wrong_pick_reveals_and_a_repeat_is_gentle() {
         let mut g = fresh();
-        let wrong: Vec<usize> = (0..OPTIONS).filter(|i| *i != g.q.slot_of_answer()).collect();
+        let wrong: Vec<usize> = (0..OPTIONS)
+            .filter(|i| *i != g.q.slot_of_answer())
+            .collect();
         assert_eq!(g.pick(wrong[0]), Pick::Wrong);
         assert_eq!(g.pick(wrong[0]), Pick::Again);
         assert_eq!(g.pick(wrong[1]), Pick::Reveal);
@@ -1328,7 +1383,12 @@ mod tests {
         let mastered = *pool.iter().find(|f| f.key() != missed.key()).unwrap();
         remember(
             &mastered,
-            crate::games::spell::Memory { at: 1, due: 0, rung: 0 }.after(round_clock(), true),
+            crate::games::spell::Memory {
+                at: 1,
+                due: 0,
+                rung: 0,
+            }
+            .after(round_clock(), true),
         );
         let later = round_clock() + crate::games::spell::GAPS[0] + 1;
         for _ in 0..30 {
@@ -1392,15 +1452,25 @@ mod tests {
 
     #[test]
     fn the_camera_frames_every_bed_size_inside_the_play_region() {
-        for v in [View::ipad_landscape(), View::ipad_portrait(), View::fit(390.0, 844.0)] {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+        ] {
             let region = play_region(&v);
             for (r, c) in [(2usize, 2usize), (3, 4), (12, 12), (12, 2), (2, 12)] {
                 let cam = fit_cam(&v, r as f32, c as f32, 1.0);
                 for i in [0, r - 1] {
                     for j in [0, c - 1] {
                         let p = cam.project(&v, plot(r, c, i, j)).unwrap();
-                        assert!(p.x > region.x - 8.0 && p.x < region.x + region.w + 8.0, "{p:?} {region:?} {r}x{c}");
-                        assert!(p.y > region.y - 8.0 && p.y < region.y + region.h + 8.0, "{p:?} {region:?} {r}x{c}");
+                        assert!(
+                            p.x > region.x - 8.0 && p.x < region.x + region.w + 8.0,
+                            "{p:?} {region:?} {r}x{c}"
+                        );
+                        assert!(
+                            p.y > region.y - 8.0 && p.y < region.y + region.h + 8.0,
+                            "{p:?} {region:?} {r}x{c}"
+                        );
                     }
                 }
             }
@@ -1409,7 +1479,11 @@ mod tests {
 
     #[test]
     fn seeds_are_big_enough_to_touch_and_do_not_overlap() {
-        for v in [View::ipad_landscape(), View::ipad_portrait(), View::fit(390.0, 844.0)] {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+        ] {
             let r = seed_rects(&v);
             for w in r.windows(2) {
                 assert!(w[0].right() < w[1].left());

@@ -518,9 +518,7 @@ pub fn take_voice() -> Option<Say> {
 }
 
 pub fn prefetch_words(words: &[&'static str]) {
-    PREFETCH.with(|p| {
-        *p.borrow_mut() = Some(words.iter().map(|w| Say::Word(w).key()).collect())
-    });
+    PREFETCH.with(|p| *p.borrow_mut() = Some(words.iter().map(|w| Say::Word(w).key()).collect()));
 }
 
 pub fn prefetch_say(lines: &[Say]) {

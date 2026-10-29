@@ -228,7 +228,9 @@ fn sync(
                     v.set_if_neq(shown(true));
                     let w = cols as f32 * SPACING + 0.5;
                     let d = rows as f32 * SPACING + 0.5;
-                    t.set_if_neq(Transform::from_xyz(0.0, LAYER, 0.0).with_scale(Vec3::new(w, 1.0, d)));
+                    t.set_if_neq(
+                        Transform::from_xyz(0.0, LAYER, 0.0).with_scale(Vec3::new(w, 1.0, d)),
+                    );
                     let rep = Vec2::new(w / 2.5, d / 2.5);
                     kit.repaint(
                         &mut part,
@@ -296,7 +298,10 @@ fn sync(
                 kit.repaint(&mut part, &mut mat, sprite(name));
                 let size = crate::art::size(SHEET, name);
                 let aspect = size.x / size.y.max(1.0);
-                let h = FLOWER_H * spot.scale * grown.max(0.0) * if name == "sprout" { 0.7 } else { 1.0 };
+                let h = FLOWER_H
+                    * spot.scale
+                    * grown.max(0.0)
+                    * if name == "sprout" { 0.7 } else { 1.0 };
                 t.set_if_neq(Transform {
                     translation: Vec3::new(spot.at.x, h / 2.0, spot.at.z),
                     rotation: face * sway(i),
@@ -310,18 +315,30 @@ fn sync(
                     k <= 1 + beds_bloomed() / 3
                 };
                 v.set_if_neq(shown(want && !over || want && k < 3));
-                let reach = if over { 6.5 } else { cols.max(rows) as f32 * 0.5 + 1.0 };
+                let reach = if over {
+                    6.5
+                } else {
+                    cols.max(rows) as f32 * 0.5 + 1.0
+                };
                 let a = g.t * (0.5 + k as f32 * 0.17) + k as f32 * 2.1;
                 let at = Vec3::new(
                     a.cos() * reach,
                     1.3 + (a * 2.3).sin() * 0.4 + k as f32 * 0.2,
                     (a * 1.3).sin() * reach * 0.8,
                 );
-                let flap = 0.65 + 0.35 * (g.t * (if k == 0 { 40.0 } else { 14.0 }) + k as f32).sin().abs();
+                let flap = 0.65
+                    + 0.35
+                        * (g.t * (if k == 0 { 40.0 } else { 14.0 }) + k as f32)
+                            .sin()
+                            .abs();
                 let name = if k == 0 { "bee" } else { "butterfly" };
                 let size = crate::art::size(SHEET, name);
                 let hh = if k == 0 { 0.7 } else { 0.8 };
-                let heading = if a.sin() * (a * 0.0 + 1.0) > 0.0 { 1.0 } else { -1.0 };
+                let heading = if a.sin() * (a * 0.0 + 1.0) > 0.0 {
+                    1.0
+                } else {
+                    -1.0
+                };
                 t.set_if_neq(Transform {
                     translation: at,
                     rotation: face,
@@ -441,7 +458,10 @@ mod tests {
         g.mode = Mode::Beds;
         g.cam_mix = 1.0;
         testing::step(&mut app, 2);
-        assert_eq!(visible_flowers(&mut app), 3 * OVER_ROWS * OVER_COLS + OVER_ROWS * OVER_COLS);
+        assert_eq!(
+            visible_flowers(&mut app),
+            3 * OVER_ROWS * OVER_COLS + OVER_ROWS * OVER_COLS
+        );
     }
 
     #[test]

@@ -67,7 +67,11 @@ impl Play for GardenPlay {
 
 fn draw_pips(g: &Garden, pen: &mut Pen, view: &View) {
     let k = ui_scale(view);
-    let n = if g.stage == 2 { MASTER_RUN } else { STAGE_UP_RUN } as usize;
+    let n = if g.stage == 2 {
+        MASTER_RUN
+    } else {
+        STAGE_UP_RUN
+    } as usize;
     let have = if g.stage == 2 { g.run } else { g.stage_run } as usize;
     let r = 11.0 * k;
     let gap = r * 2.7;
@@ -85,13 +89,27 @@ fn draw_pips(g: &Garden, pen: &mut Pen, view: &View) {
         pen.circle(
             c,
             r * pop,
-            if on { STAR_GOLD } else { with_alpha(WHITE, 0.6) },
+            if on {
+                STAR_GOLD
+            } else {
+                with_alpha(WHITE, 0.6)
+            },
         );
         if on {
-            pen.circle(c - vec2(r * 0.25, r * 0.3), r * 0.35, with_alpha(WHITE, 0.7));
+            pen.circle(
+                c - vec2(r * 0.25, r * 0.3),
+                r * 0.35,
+                with_alpha(WHITE, 0.7),
+            );
         }
     }
-    pen.text_shadow(stage_name(g.stage), view.w / 2.0, y + 30.0 * k, 22.0 * k, WHITE);
+    pen.text_shadow(
+        stage_name(g.stage),
+        view.w / 2.0,
+        y + 30.0 * k,
+        22.0 * k,
+        WHITE,
+    );
 }
 
 fn draw_prompt(g: &Garden, pen: &mut Pen, view: &View) {
@@ -171,7 +189,11 @@ fn draw_beds(g: &Garden, pen: &mut Pen, view: &View) {
                 Color::new(1.0, 0.95, 0.4, 0.7),
             );
         }
-        pen.round_rect(*r, 26.0, Color::new(0.1, 0.25, 0.1, if can { 0.28 } else { 0.5 }));
+        pen.round_rect(
+            *r,
+            26.0,
+            Color::new(0.1, 0.25, 0.1, if can { 0.28 } else { 0.5 }),
+        );
         let label = level_name(i);
         let size = (r.h * 0.17).min(r.w * 0.8 / measure(&label, 10.0) * 10.0);
         let ly = r.y + r.h * 0.66;
@@ -179,7 +201,10 @@ fn draw_beds(g: &Garden, pen: &mut Pen, view: &View) {
             pen.text_outline(&label, r.center().x, ly, size, WHITE, LEAF);
             let earned = kg_core::profile::stars(GAME, i as u32);
             for j in 0..3u8 {
-                let c = vec2(r.center().x + (j as f32 - 1.0) * r.h * 0.17, r.y + r.h * 0.86);
+                let c = vec2(
+                    r.center().x + (j as f32 - 1.0) * r.h * 0.17,
+                    r.y + r.h * 0.86,
+                );
                 let fill = if j < earned {
                     STAR_GOLD
                 } else {
@@ -195,7 +220,14 @@ fn draw_beds(g: &Garden, pen: &mut Pen, view: &View) {
                 r.h * 0.26,
                 Draw::tint(with_alpha(WHITE, 0.9)),
             );
-            pen.text_outline(&label, r.center().x, ly + 8.0, size * 0.9, with_alpha(WHITE, 0.75), darker(LEAF, 0.6));
+            pen.text_outline(
+                &label,
+                r.center().x,
+                ly + 8.0,
+                size * 0.9,
+                with_alpha(WHITE, 0.75),
+                darker(LEAF, 0.6),
+            );
         }
     }
     pen.painted_button(play_button(view), "Play", Tone::Green, 0.0, 1.0);
@@ -210,13 +242,23 @@ fn draw_report(g: &Garden, pen: &mut Pen, view: &View, age: f32) {
             } else {
                 Color::from_rgba(150, 140, 170, 140)
             };
-            pen.star(vec2(view.w / 2.0 + (j as f32 - 1.0) * 90.0, y), 38.0 * k, 0.0, fill);
+            pen.star(
+                vec2(view.w / 2.0 + (j as f32 - 1.0) * 90.0, y),
+                38.0 * k,
+                0.0,
+                fill,
+            );
         }
     };
     let c = view.center() + vec2(0.0, 20.0);
     match g.report {
         Some(Report::Round { stars }) => {
-            pen.panel(view, "Lovely planting!", &["", &g.summary, "Keep growing"], age);
+            pen.panel(
+                view,
+                "Lovely planting!",
+                &["", &g.summary, "Keep growing"],
+                age,
+            );
             let ph = 150.0 + 3.0 * 64.0;
             stars_at(pen, stars, c.y - ph / 2.0 + 118.0);
         }
@@ -272,7 +314,11 @@ pub fn draw(g: &Garden, pen: &mut Pen, view: &View) {
         if g.first_time && g.mode == Mode::Play && g.solved.is_none() {
             let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
             let y = seed_rects(view)[0].y - 40.0 * k;
-            pen.hint("Count the flowers, then tap the right seed", vec2(view.w / 2.0, y), pulse);
+            pen.hint(
+                "Count the flowers, then tap the right seed",
+                vec2(view.w / 2.0, y),
+                pulse,
+            );
         }
     }
     pen.particles(&g.fx);
@@ -304,8 +350,18 @@ mod tests {
     fn garden_sprites_all_exist() {
         let have = crate::art::names(SHEET);
         for n in [
-            "soil", "red", "yellow", "pink", "blue", "purple", "orange", "sprout",
-            "butterfly", "bee", "can", "seed",
+            "soil",
+            "red",
+            "yellow",
+            "pink",
+            "blue",
+            "purple",
+            "orange",
+            "sprout",
+            "butterfly",
+            "bee",
+            "can",
+            "seed",
         ] {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
@@ -313,7 +369,9 @@ mod tests {
         for n in ["icon_lock", "icon_audio"] {
             assert!(ui.iter().any(|h| h == n), "missing {n}");
         }
-        assert!(crate::art::names("icons").iter().any(|h| h == "icon_garden"));
+        assert!(crate::art::names("icons")
+            .iter()
+            .any(|h| h == "icon_garden"));
     }
 
     #[test]
@@ -361,7 +419,11 @@ mod tests {
         p.update(&Input::press_at(prompt_pos(&v)), &v, 1.0 / 60.0);
         assert!(kg_core::sfx::take_voice().is_some());
         let slot = p.g.q.slot_of_answer();
-        p.update(&Input::press_at(seed_rects(&v)[slot].center()), &v, 1.0 / 60.0);
+        p.update(
+            &Input::press_at(seed_rects(&v)[slot].center()),
+            &v,
+            1.0 / 60.0,
+        );
         assert!(p.g.solved.is_some());
     }
 }
