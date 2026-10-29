@@ -19,6 +19,17 @@ sips -z 120 120 ios/icon-1024.png --out "$APP/AppIcon60x60@2x.png" >/dev/null
 sips -z 152 152 ios/icon-1024.png --out "$APP/AppIcon76x76@2x~ipad.png" >/dev/null
 sips -z 167 167 ios/icon-1024.png --out "$APP/AppIcon83.5x83.5@2x~ipad.png" >/dev/null
 sed "s/__BUNDLE_ID__/$BUNDLE_ID/" ios/Info.plist > "$APP/Info.plist"
+if [ "$TARGET" = aarch64-apple-ios ]; then
+  icons=target/ios/Assets.xcassets/AppIcon.appiconset
+  rm -rf target/ios/Assets.xcassets
+  mkdir -p "$icons"
+  cp ios/icon-1024.png "$icons/icon-1024.png"
+  echo '{"images":[{"filename":"icon-1024.png","idiom":"universal","platform":"ios","size":"1024x1024"}],"info":{"author":"xcode","version":1}}' > "$icons/Contents.json"
+  echo '{"info":{"author":"xcode","version":1}}' > target/ios/Assets.xcassets/Contents.json
+  xcrun actool target/ios/Assets.xcassets --compile "$APP" --platform iphoneos --minimum-deployment-target 13.0 \
+    --app-icon AppIcon --output-partial-info-plist target/ios/icons.plist --target-device iphone --target-device ipad >/dev/null
+  /usr/libexec/PlistBuddy -c "Merge target/ios/icons.plist" "$APP/Info.plist"
+fi
 echo "APPL????" > "$APP/PkgInfo"
 if [ "$TARGET" = aarch64-apple-ios ]; then
   if [ -n "${PROVISION:-}" ]; then
@@ -30,7 +41,7 @@ if [ "$TARGET" = aarch64-apple-ios ]; then
     PROFILE_PLIST=target/ios/entitlements.plist
   fi
   codesign --force --sign "${SIGN_IDENTITY:?set SIGN_IDENTITY for a device build}" \
-    ${PROFILE_PLIST:+--entitlements "$PROFILE_PLIST"} "$APP"
+    ${KEYCHAIN:+--keychain "$KEYCHAIN"} ${PROFILE_PLIST:+--entitlements "$PROFILE_PLIST"} "$APP"
 else
   codesign --force --sign - "$APP"
 fi
