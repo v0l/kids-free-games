@@ -1,6 +1,6 @@
 # Porting a game to Bevy
 
-The `bevy` branch splits the project into two crates. Flappy Bird is the worked example: read `crates/core/src/games/flappy.rs` and `crates/app/src/games/flappy.rs` side by side before you start. The macroquad code from `main` is kept under `legacy/` as a reference only. It is not built.
+The project is split into two crates. Flappy Bird is the worked example: read `crates/core/src/games/flappy.rs` and `crates/app/src/games/flappy.rs` side by side before you start.
 
 ## Layout
 
@@ -33,7 +33,7 @@ crates/app    kids_games: the Bevy app, desktop, web, Android and iOS
 
 A game is two files.
 
-1. **Logic, `crates/core/src/games/<key>.rs`.** Move the game file from `legacy/src/games/` as it is. Keep the struct, `update`, the tuning, every test. Then:
+1. **Logic, `crates/core/src/games/<key>.rs`.** Write the game file with no drawing code. Keep the struct, `update`, the tuning, every test. Then:
    - Replace `use macroquad::prelude::*` with `use crate::geom::*; use glam::{vec2, Vec2}; use quad_rand as rand;`.
    - Delete `draw`, `draw_*`, `icon` and the `mod art { sprites!(..) }` block. Delete `fn draw` from the `Game` impl (the trait only has `update` now).
    - Make the fields the renderer needs `pub` (`t`, `fx`, `shake`, `popups`, `bump`, ...). If drawing needs a derived value, add a small `pub fn` for it (Flappy has `bird_frame`, `bird_angle`, `goal_progress`, `shows_results`) and test it there.
@@ -54,7 +54,7 @@ impl Play for FlappyPlay {
 
 Port the old `draw_*` functions here, one for one. The coordinate system is the same as `main`: view units, y down, `(0,0)` at the top-left of the safe area, `view.full()` for full-bleed backgrounds. So most draw code moves over by renaming calls:
 
-| macroquad (`legacy/`) | Bevy branch (`pen: &mut Pen`) |
+| macroquad (old API) | Bevy (`pen: &mut Pen`) |
 | --- | --- |
 | `set_view_camera(view)` | nothing, the app does it |
 | `draw_rectangle(x, y, w, h, c)` | `pen.rect(Rect::new(x, y, w, h), c)` |

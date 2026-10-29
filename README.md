@@ -2,7 +2,7 @@
 
 Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, Android, the web and desktop. No ads, no purchases, no email or passwords. Progress and leaderboards sync through a small server (see [PRIVACY.md](PRIVACY.md)); the games also work offline.
 
-Written in Rust. This `bevy` branch moves the app to [Bevy](https://bevy.org) 0.20: `crates/core` holds the game logic, save, profiles and sync with no drawing, and `crates/app` is the Bevy app. Flappy Bird is ported; the other games are in `legacy/` until they move over. `docs/BEVY.md` is the porting guide.
+Written in Rust on [Bevy](https://bevy.org) 0.20: `crates/core` holds the game logic, save, profiles and sync with no drawing, and `crates/app` is the Bevy app. `docs/BEVY.md` explains how a game is split between the two.
 
 Art is painted with FLUX.1-dev. Sound effects and voice lines are from [Kenney](https://kenney.nl) (CC0). Music is Carnival Rides, Summer Park and Happy Lullaby from [OpenGameArt](https://opengameart.org) (CC0). The font is Fredoka (SIL OFL). `docs/DESIGN.md` explains the process and `docs/STYLE.md` the rules. Sprite sheets and the sound pack are built into `assets/` by `scripts/assets.py` from the manifests in `art/` and `sound.txt`; see `art/README.md`.
 
@@ -24,7 +24,7 @@ All of them work with touch (tap and swipe), mouse and keyboard (arrows or WASD,
 - `crates/app`: the Bevy app. `paint.rs` and `draw.rs` draw shapes, sprites and outlined text; `ui.rs` is the painted UI kit; `menu.rs` is the game picker; `games/` has one renderer per ported game.
 - `scripts/shots.sh`: render the numbered scenes in `crates/app/src/shots.rs` in headless Chrome for a screenshot sheet.
 
-To port a game, follow `docs/BEVY.md`.
+To add a game, follow `docs/BEVY.md`.
 
 ## Run
 
