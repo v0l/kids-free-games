@@ -5,7 +5,7 @@
 
     <application
         android:icon="@mipmap/ic_launcher"
-        android:label="Kids Games"
+        android:label="Kids Free Games"
         android:theme="@style/Theme.AppCompat.NoActionBar">
         <activity
             android:name=".MainActivity"
