@@ -504,15 +504,7 @@ pub fn flight(age: f32, lane: usize) -> Transform {
     }
 }
 
-pub fn stride(dist: f32) -> f32 {
-    dist * 1.9
-}
-
 fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
-    let airborne = g.y > 0.05;
-    let phase = stride(g.dist);
-    let moving = (g.speed / 8.0).clamp(0.0, 1.0);
-    let cheer = g.state == Phase::Won && g.end_t > 0.4;
     for (_, role, mut t, mut v) in nodes.iter_mut() {
         match *role {
             Role::Player => {
@@ -532,21 +524,6 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
             Role::Body => {
                 let slide = (g.slide_t / SLIDE_TIME).clamp(0.0, 1.0);
                 let slide_k = (slide * 8.0).min(1.0) * if g.sliding() { 1.0 } else { 0.0 };
-                let bob = if airborne || g.state == Phase::Ready {
-                    0.0
-                } else {
-                    (phase * 2.0).sin().abs() * 0.07 * moving
-                };
-                let idle = if g.state == Phase::Ready {
-                    (g.t * 3.0).sin() * 0.03
-                } else {
-                    0.0
-                };
-                let hop = if cheer {
-                    (g.end_t * 7.0).sin().abs() * 0.35
-                } else {
-                    0.0
-                };
                 let fall = if g.state == Phase::Dead {
                     (g.end_t * 3.0).min(1.0)
                 } else {
@@ -554,7 +531,7 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                 };
                 let sq = g.squash;
                 t.set_if_neq(Transform {
-                    translation: Vec3::new(0.0, bob + idle + hop + 0.0 - slide_k * 0.05, 0.0),
+                    translation: Vec3::new(0.0, -slide_k * 0.05, 0.0),
                     rotation: Quat::from_rotation_x(fall * -0.5),
                     scale: Vec3::new(1.0 + sq * 0.14, 1.0 - sq * 0.2, 1.0 + sq * 0.14),
                 });
@@ -774,6 +751,34 @@ mod tests {
         );
         assert_eq!(roles(&mut app, |r| matches!(r, Role::Coin(_))), coins);
         assert_eq!(roles(&mut app, |r| *r == Role::Player), 1);
+    }
+
+    #[test]
+    fn the_body_does_not_shake_while_running_flat_out() {
+        let mut app = open(fresh(20));
+        let mut heights = vec![];
+        for i in 0..40 {
+            {
+                let g = &mut runner(&mut app).g;
+                g.state = Phase::Playing;
+                g.speed = speed_of(20, 0);
+                g.dist = 20.0 + i as f32 * g.speed / 60.0;
+            }
+            testing::step(&mut app, 1);
+            let w = app.world_mut();
+            let y = w
+                .query::<(&Role, &Transform)>()
+                .iter(w)
+                .find(|(r, _)| **r == Role::Body)
+                .unwrap()
+                .1
+                .translation
+                .y;
+            heights.push(y);
+        }
+        let swing = heights.iter().cloned().fold(f32::MIN, f32::max)
+            - heights.iter().cloned().fold(f32::MAX, f32::min);
+        assert!(swing < 1e-3, "body bobs {swing} on top of the run clip");
     }
 
     #[test]
