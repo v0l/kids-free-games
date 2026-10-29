@@ -1,13 +1,17 @@
 use super::{RunnerPlay, SHEET};
 use crate::game3d::*;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
+use bevy::animation::graph::AnimationGraphHandle;
+use bevy::animation::transition::AnimationTransitions;
+use bevy::gltf::GltfAssetLabel;
 use bevy::pbr::{DistanceFog, FogFalloff};
+use std::collections::HashMap;
+use std::time::Duration;
 use bevy::prelude::*;
 use kg_core::engine::View;
 use kg_core::games::runner::State as Phase;
 use kg_core::games::runner::*;
 use kg_core::geom::{Color as Col, WHITE};
-use std::f32::consts::FRAC_PI_2;
 
 const SKY: Col = Col::new(0.66, 0.88, 0.99, 1.0);
 const SKY_DEPTH: f32 = 140.0;
@@ -28,22 +32,17 @@ const TINTS: [Col; 5] = [
     Col::new(0.82, 1.0, 0.86, 1.0),
     Col::new(0.94, 0.84, 1.0, 1.0),
 ];
-const SKIN: Col = Col::new(1.0, 0.78, 0.62, 1.0);
-const JACKET: Col = Col::new(1.0, 0.76, 0.1, 1.0);
-const JEANS: Col = Col::new(0.2, 0.36, 0.7, 1.0);
-const CAP: Col = Col::new(0.95, 0.2, 0.2, 1.0);
-const PACK: Col = Col::new(0.55, 0.12, 0.25, 1.0);
-const GOLD: Col = Col::new(1.0, 0.8, 0.1, 1.0);
 
 pub struct RunnerWorld;
 
 impl Plugin for RunnerWorld {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<Models>().add_systems(
             Update,
             (
                 spawn.run_if(opened(World3d::Runner)),
                 sync.run_if(is_open(World3d::Runner)),
+                animate_hero.run_if(is_open(World3d::Runner)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -62,8 +61,6 @@ pub enum Role {
     Course,
     Player,
     Body,
-    Leg(usize),
-    Arm(usize),
     Shade,
     Obstacle(usize, usize),
     Coin(usize),
@@ -130,7 +127,17 @@ fn node(out: &mut ChildSpawnerCommands, role: Role, at: Transform) -> Entity {
     out.spawn((role, at, Visibility::default())).id()
 }
 
-fn spawn(mut commands: Commands, mut kit: Kit) {
+fn spawn(
+    mut commands: Commands,
+    mut kit: Kit,
+    assets: Option<Res<AssetServer>>,
+    graphs: Option<ResMut<Assets<AnimationGraph>>>,
+) {
+    let models = match (assets, graphs) {
+        (Some(a), Some(mut g)) => Models::load(&a, &mut g),
+        _ => Models::default(),
+    };
+    commands.insert_resource(models.clone());
     let world = spawn_world(
         &mut commands,
         Root { serial: 0 },
@@ -165,7 +172,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         let player = node(w, Role::Player, Transform::default());
         w.commands()
             .entity(player)
-            .with_children(|p| kid(p, &mut kit));
+            .with_children(|p| kid(p, &models));
         w.spawn((
             Role::Shade,
             kit.part(
@@ -187,283 +194,190 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         for i in 0..TREES * 2 {
             let t = node(w, Role::Tree(i), Transform::default());
             w.commands().entity(t).with_children(|c| {
-                put(
-                    c,
-                    &mut kit,
-                    Shape::Cylinder(8),
-                    matte(Col::new(0.5, 0.33, 0.2, 1.0)),
-                    Vec3::new(0.0, 0.7, 0.0),
-                    Vec3::new(0.3, 1.4, 0.3),
-                );
-                put(
-                    c,
-                    &mut kit,
-                    Shape::Sphere,
-                    gloss(Col::new(0.34, 0.72, 0.28, 1.0)),
-                    Vec3::new(0.0, 2.2, 0.0),
-                    Vec3::new(1.9, 1.7, 1.9),
-                );
-                put(
-                    c,
-                    &mut kit,
-                    Shape::Sphere,
-                    gloss(Col::new(0.45, 0.82, 0.32, 1.0)),
-                    Vec3::new(0.25, 2.8, 0.1),
-                    Vec3::new(1.2, 1.1, 1.2),
-                );
+                prop(c, &models, "tree", 3.6, Vec3::ZERO);
             });
         }
     });
 }
 
-fn kid(p: &mut ChildSpawnerCommands, kit: &mut Kit) {
+const HERO_H: f32 = 1.8;
+const STRIDE_METRES: f32 = 6.0;
+const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
+const PROPS: [&str; 7] = [
+    "barrier", "hurdle", "gate", "train", "coin", "tree", "arch",
+];
+
+#[derive(Resource, Default, Clone)]
+pub struct Models {
+    scenes: HashMap<&'static str, Handle<WorldAsset>>,
+    graph: Option<Handle<AnimationGraph>>,
+    clips: Vec<AnimationNodeIndex>,
+}
+
+impl Models {
+    fn load(assets: &AssetServer, graphs: &mut Assets<AnimationGraph>) -> Self {
+        let scene = |file: &str| {
+            assets.load(GltfAssetLabel::Scene(0).from_asset(format!("models/{file}.glb")))
+        };
+        let mut scenes = HashMap::new();
+        scenes.insert("hero", scene("hero"));
+        for name in PROPS {
+            scenes.insert(name, scene(&format!("prop_{name}")));
+        }
+        let clips = (0..HERO_CLIPS.len())
+            .map(|i| assets.load(GltfAssetLabel::Animation(i).from_asset("models/hero.glb")));
+        let (graph, clips) = AnimationGraph::from_clips(clips);
+        Self {
+            scenes,
+            graph: Some(graphs.add(graph)),
+            clips,
+        }
+    }
+}
+
+pub fn hero_clip(g: &Runner) -> &'static str {
+    if g.state == Phase::Dead {
+        "fail"
+    } else if g.state == Phase::Won && g.end_t > 0.4 {
+        "happy"
+    } else if g.sliding() {
+        "slide"
+    } else if g.y > 0.05 {
+        "jump"
+    } else if g.state == Phase::Ready || g.speed < 0.5 {
+        "idle"
+    } else {
+        "run"
+    }
+}
+
+fn model(c: &mut ChildSpawnerCommands, models: &Models, name: &'static str, at: Transform) {
+    if let Some(scene) = models.scenes.get(name) {
+        c.spawn((WorldAssetRoot(scene.clone()), at));
+    }
+}
+
+fn kid(p: &mut ChildSpawnerCommands, models: &Models) {
     let body = node(p, Role::Body, Transform::default());
     p.commands().entity(body).with_children(|b| {
-        put(
+        model(
             b,
-            kit,
-            Shape::Sphere,
-            gloss(JACKET),
-            Vec3::new(0.0, 0.88, 0.0),
-            Vec3::new(0.62, 0.7, 0.5),
+            models,
+            "hero",
+            Transform::from_rotation(Quat::from_rotation_y(std::f32::consts::PI))
+                .with_scale(Vec3::splat(HERO_H)),
         );
-        put(
-            b,
-            kit,
-            Shape::Cube,
-            matte(PACK),
-            Vec3::new(0.0, 0.92, 0.3),
-            Vec3::new(0.44, 0.5, 0.2),
-        );
-        put(
-            b,
-            kit,
-            Shape::Sphere,
-            gloss(SKIN),
-            Vec3::new(0.0, 1.4, 0.0),
-            Vec3::splat(0.6),
-        );
-        put(
-            b,
-            kit,
-            Shape::Sphere,
-            gloss(CAP),
-            Vec3::new(0.0, 1.52, 0.02),
-            Vec3::new(0.66, 0.42, 0.66),
-        );
-        put(
-            b,
-            kit,
-            Shape::Cube,
-            matte(CAP.darker(0.8)),
-            Vec3::new(0.0, 1.45, -0.36),
-            Vec3::new(0.46, 0.06, 0.3),
-        );
-        for s in 0..2 {
-            let side = if s == 0 { -1.0 } else { 1.0 };
-            let leg = node(b, Role::Leg(s), Transform::from_xyz(side * 0.17, 0.55, 0.0));
-            b.commands().entity(leg).with_children(|l| {
-                put(
-                    l,
-                    kit,
-                    Shape::Cylinder(10),
-                    matte(JEANS),
-                    Vec3::new(0.0, -0.22, 0.0),
-                    Vec3::new(0.2, 0.46, 0.2),
-                );
-                put(
-                    l,
-                    kit,
-                    Shape::Cube,
-                    matte(CAP),
-                    Vec3::new(0.0, -0.5, -0.05),
-                    Vec3::new(0.22, 0.12, 0.34),
-                );
-            });
-            let arm = node(b, Role::Arm(s), Transform::from_xyz(side * 0.38, 1.05, 0.0));
-            b.commands().entity(arm).with_children(|a| {
-                put(
-                    a,
-                    kit,
-                    Shape::Cylinder(10),
-                    gloss(JACKET),
-                    Vec3::new(0.0, -0.2, 0.0),
-                    Vec3::new(0.16, 0.42, 0.16),
-                );
-                put(
-                    a,
-                    kit,
-                    Shape::Sphere,
-                    gloss(SKIN),
-                    Vec3::new(0.0, -0.44, 0.0),
-                    Vec3::splat(0.17),
-                );
-            });
-        }
     });
 }
 
-fn train_colour(row: usize) -> Col {
-    [
-        Col::new(0.25, 0.55, 0.95, 1.0),
-        Col::new(0.2, 0.75, 0.6, 1.0),
-        Col::new(0.7, 0.4, 0.9, 1.0),
-    ][row % 3]
+fn prop(c: &mut ChildSpawnerCommands, models: &Models, name: &'static str, h: f32, at: Vec3) {
+    model(
+        c,
+        models,
+        name,
+        Transform::from_translation(at).with_scale(Vec3::splat(h)),
+    );
 }
 
-fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, kind: Kind, row: usize) {
-    let white = matte(Col::new(0.98, 0.98, 0.96, 1.0));
-    let red = gloss(Col::new(0.93, 0.25, 0.22, 1.0));
-    let orange = gloss(Col::new(1.0, 0.55, 0.12, 1.0));
-    let grey = matte(Col::new(0.45, 0.46, 0.55, 1.0));
+fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, kind: Kind) {
     match kind {
-        Kind::Barrier => {
-            for x in [-0.55, 0.55] {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    grey,
-                    Vec3::new(x, 0.5, 0.0),
-                    Vec3::new(0.14, 1.0, 0.14),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                red,
-                Vec3::new(0.0, 0.8, 0.0),
-                Vec3::new(1.4, 0.5, 0.2),
-            );
-            for k in 0..3 {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    white,
-                    Vec3::new(-0.45 + k as f32 * 0.45, 0.8, 0.0),
-                    Vec3::new(0.2, 0.52, 0.22),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Sphere,
-                Paint::new(Finish::Glow, Col::new(1.0, 0.7, 0.1, 1.0)),
-                Vec3::new(0.0, 1.15, 0.0),
-                Vec3::splat(0.2),
-            );
-        }
-        Kind::Hurdle => {
-            for x in [-0.62, 0.62] {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    grey,
-                    Vec3::new(x, 0.28, 0.0),
-                    Vec3::new(0.12, 0.56, 0.12),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                orange,
-                Vec3::new(0.0, 0.5, 0.0),
-                Vec3::new(1.5, 0.2, 0.16),
-            );
-            for k in 0..3 {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    white,
-                    Vec3::new(-0.45 + k as f32 * 0.45, 0.5, 0.0),
-                    Vec3::new(0.18, 0.22, 0.18),
-                );
-            }
-        }
-        Kind::Overhead => {
-            for x in [-0.72, 0.72] {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    grey,
-                    Vec3::new(x, 1.2, 0.0),
-                    Vec3::new(0.16, 2.4, 0.16),
-                );
-            }
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                gloss(Col::new(0.2, 0.7, 0.45, 1.0)),
-                Vec3::new(0.0, 1.5, 0.0),
-                Vec3::new(1.6, 0.55, 0.26),
-            );
-            for k in 0..4 {
-                put(
-                    c,
-                    kit,
-                    Shape::Cube,
-                    matte(GOLD),
-                    Vec3::new(-0.6 + k as f32 * 0.4, 1.5, 0.0),
-                    Vec3::new(0.14, 0.58, 0.28),
-                );
-            }
-        }
+        Kind::Barrier => prop(c, models, "barrier", 1.25, Vec3::ZERO),
+        Kind::Hurdle => prop(c, models, "hurdle", 0.8, Vec3::ZERO),
+        Kind::Overhead => prop(c, models, "gate", 2.5, Vec3::ZERO),
         Kind::Train => {
-            let body = train_colour(row);
             put(
                 c,
                 kit,
                 Shape::Cube,
-                gloss(body),
-                Vec3::new(0.0, 1.3, 0.0),
-                Vec3::new(1.45, 2.2, TRAIN_LEN),
+                gloss(Col::new(0.23, 0.5, 0.88, 1.0)),
+                Vec3::new(0.0, 0.95, -0.05),
+                Vec3::new(1.3, 1.9, TRAIN_LEN - 0.1),
             );
-            put(
+            prop(
                 c,
-                kit,
-                Shape::Cube,
-                gloss(body.darker(1.15)),
-                Vec3::new(0.0, 2.45, 0.0),
-                Vec3::new(1.3, 0.2, TRAIN_LEN - 0.4),
+                models,
+                "train",
+                2.0,
+                Vec3::new(0.0, 0.0, TRAIN_LEN / 2.0 + 0.02),
             );
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                gloss(Col::new(0.75, 0.93, 1.0, 1.0)),
-                Vec3::new(0.0, 1.85, 0.0),
-                Vec3::new(1.47, 0.7, TRAIN_LEN - 1.0),
-            );
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                matte(Col::new(0.2, 0.2, 0.3, 1.0)),
-                Vec3::new(0.0, 0.3, 0.0),
-                Vec3::new(1.2, 0.3, TRAIN_LEN - 0.6),
-            );
-            for x in [-0.4, 0.4] {
-                put(
-                    c,
-                    kit,
-                    Shape::Sphere,
-                    Paint::new(Finish::Glow, Col::new(1.0, 0.95, 0.6, 1.0)),
-                    Vec3::new(x, 0.9, TRAIN_LEN / 2.0 + 0.02),
-                    Vec3::splat(0.3),
-                );
+        }
+    }
+}
+
+fn clip_secs(
+    graphs: &Assets<AnimationGraph>,
+    clips: &Assets<AnimationClip>,
+    graph: &Handle<AnimationGraph>,
+    node: AnimationNodeIndex,
+) -> f32 {
+    graphs
+        .get(graph)
+        .and_then(|g| g.get(node))
+        .and_then(|n| match &n.node_type {
+            bevy::animation::graph::AnimationNodeType::Clip(c) => clips.get(c),
+            _ => None,
+        })
+        .map_or(1.0, |c| c.duration())
+}
+
+fn animate_hero(
+    mut commands: Commands,
+    frame: NonSend<crate::Frame>,
+    models: Res<Models>,
+    fresh: Query<Entity, (With<AnimationPlayer>, Without<AnimationGraphHandle>)>,
+    mut players: Query<(&mut AnimationPlayer, &mut AnimationTransitions)>,
+    clips: Option<Res<Assets<AnimationClip>>>,
+    graphs: Option<Res<Assets<AnimationGraph>>>,
+) {
+    let (Some(clips), Some(graphs)) = (clips, graphs) else {
+        return;
+    };
+    let Some(graph) = models.graph.clone() else {
+        return;
+    };
+    for e in &fresh {
+        commands
+            .entity(e)
+            .insert((AnimationGraphHandle(graph.clone()), AnimationTransitions::new()));
+    }
+    let Some(p) = playing::<RunnerPlay>(&frame) else {
+        return;
+    };
+    let g = &p.g;
+    let want = hero_clip(g);
+    let Some(at) = HERO_CLIPS.iter().position(|c| *c == want) else {
+        return;
+    };
+    let node = models.clips[at];
+    for (mut player, mut tr) in &mut players {
+        if tr.get_main_animation() != Some(node) {
+            let a = tr.play(&mut player, node, Duration::from_millis(120));
+            match want {
+                "run" | "idle" => {
+                    a.repeat();
+                }
+                "jump" | "slide" => {
+                    let secs = clip_secs(&graphs, &clips, &graph, node);
+                    let wanted = if want == "jump" {
+                        2.0 * JUMP_V / GRAVITY
+                    } else {
+                        SLIDE_TIME
+                    };
+                    a.set_speed(secs / wanted);
+                }
+                _ => {}
+            }
+        }
+        if want == "run" {
+            if let Some(a) = player.animation_mut(node) {
+                let secs = clip_secs(&graphs, &clips, &graph, node);
+                a.set_speed((secs * g.speed / STRIDE_METRES).clamp(0.6, 3.0));
             }
         }
     }
 }
 
-fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
+fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, g: &Runner) {
     let end = g.length + FINISH_RUN + 130.0;
     let len = end + 20.0;
     let mid = (20.0 - end) / 2.0;
@@ -507,47 +421,21 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Runner) {
             let kind = *kind;
             c.commands()
                 .entity(n)
-                .with_children(|o| obstacle(o, kit, kind, i));
+                .with_children(|o| obstacle(o, kit, models, kind));
         }
     }
     for (i, coin) in g.coins_list.iter().enumerate() {
-        c.spawn((
+        let n = node(
+            c,
             Role::Coin(i),
-            kit.part(
-                Shape::Cylinder(18),
-                Paint::new(Finish::Gloss, GOLD),
-                Transform::from_xyz(lane_x(coin.lane as i32 - 1), coin.h, -coin.at)
-                    .with_scale(Vec3::new(0.5, 0.09, 0.5)),
-            ),
-        ));
+            Transform::from_xyz(lane_x(coin.lane as i32 - 1), coin.h, -coin.at),
+        );
+        c.commands().entity(n).with_children(|k| {
+            prop(k, models, "coin", 0.55, Vec3::new(0.0, -0.275, 0.0));
+        });
     }
     let z = -g.length;
-    let post = matte(Col::new(0.95, 0.95, 0.98, 1.0));
-    for x in [-2.9, 2.9] {
-        c.spawn(kit.part(
-            Shape::Cube,
-            post,
-            Transform::from_xyz(x, 2.2, z).with_scale(Vec3::new(0.4, 4.4, 0.4)),
-        ));
-    }
-    for k in 0..12 {
-        for row in 0..2 {
-            let dark = (k + row) % 2 == 0;
-            let col = if dark {
-                Col::new(0.1, 0.1, 0.15, 1.0)
-            } else {
-                WHITE
-            };
-            c.spawn(
-                kit.part(
-                    Shape::Cube,
-                    matte(col),
-                    Transform::from_xyz(-2.75 + k as f32 * 0.5, 4.5 - row as f32 * 0.5, z)
-                        .with_scale(Vec3::new(0.5, 0.5, 0.3)),
-                ),
-            );
-        }
-    }
+    prop(c, models, "arch", 4.8, Vec3::new(0.0, 0.0, z));
     c.spawn(kit.part(
         Shape::Plane,
         matte(WHITE),
@@ -561,6 +449,7 @@ fn sync(
     frame: NonSend<crate::Frame>,
     pen: Res<crate::paint::Pen>,
     mut kit: Kit,
+    models: Res<Models>,
     mut root: Query<&mut Root>,
     mut eye: Lens,
     mut nodes: Nodes<'_, '_>,
@@ -589,7 +478,7 @@ fn sync(
         if let Some((e, ..)) = nodes.iter().find(|(_, r, ..)| **r == Role::Course) {
             let mut c = commands.entity(e);
             c.despawn_children();
-            c.with_children(|c| course(c, &mut kit, g));
+            c.with_children(|c| course(c, &mut kit, &models, g));
         }
         return;
     }
@@ -615,15 +504,7 @@ pub fn flight(age: f32, lane: usize) -> Transform {
     }
 }
 
-pub fn stride(dist: f32) -> f32 {
-    dist * 1.9
-}
-
 fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
-    let airborne = g.y > 0.05;
-    let phase = stride(g.dist);
-    let moving = (g.speed / 8.0).clamp(0.0, 1.0);
-    let cheer = g.state == Phase::Won && g.end_t > 0.4;
     for (_, role, mut t, mut v) in nodes.iter_mut() {
         match *role {
             Role::Player => {
@@ -641,66 +522,26 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                 v.set_if_neq(shown(!g.blinking()));
             }
             Role::Body => {
-                let slide = (g.slide_t / SLIDE_TIME).clamp(0.0, 1.0);
-                let slide_k = (slide * 8.0).min(1.0) * if g.sliding() { 1.0 } else { 0.0 };
-                let bob = if airborne || g.state == Phase::Ready {
-                    0.0
-                } else {
-                    (phase * 2.0).sin().abs() * 0.07 * moving
-                };
-                let idle = if g.state == Phase::Ready {
-                    (g.t * 3.0).sin() * 0.03
-                } else {
-                    0.0
-                };
-                let hop = if cheer {
-                    (g.end_t * 7.0).sin().abs() * 0.35
-                } else {
-                    0.0
-                };
-                let fall = if g.state == Phase::Dead {
-                    (g.end_t * 3.0).min(1.0)
-                } else {
-                    0.0
-                };
                 let sq = g.squash;
                 t.set_if_neq(Transform {
-                    translation: Vec3::new(0.0, bob + idle + hop + 0.0 - slide_k * 0.05, 0.0),
-                    rotation: Quat::from_rotation_x(
-                        slide_k * 1.25 - fall * 1.3 + if airborne { -0.12 } else { 0.1 * moving },
-                    ),
+                    translation: Vec3::ZERO,
+                    rotation: Quat::IDENTITY,
                     scale: Vec3::new(1.0 + sq * 0.14, 1.0 - sq * 0.2, 1.0 + sq * 0.14),
                 });
             }
-            Role::Leg(s) => {
-                let sgn = if s == 0 { 1.0 } else { -1.0 };
-                let swing = if g.sliding() {
-                    -1.2
-                } else if airborne {
-                    sgn * 0.7 - 0.3
-                } else {
-                    (phase).sin() * sgn * 0.95 * moving
+            Role::Coin(i) => {
+                let Some(c) = g.coins_list.get(i) else {
+                    continue;
                 };
+                v.set_if_neq(shown(!c.taken));
+                let spin = g.t * 4.0 + i as f32 * 0.7;
                 t.set_if_neq(Transform {
-                    translation: Vec3::new(if s == 0 { -0.17 } else { 0.17 }, 0.55, 0.0),
-                    rotation: Quat::from_rotation_x(swing),
-                    scale: Vec3::ONE,
-                });
-            }
-            Role::Arm(s) => {
-                let sgn = if s == 0 { -1.0 } else { 1.0 };
-                let swing = if cheer {
-                    2.8 + (g.end_t * 14.0).sin() * 0.3
-                } else if airborne {
-                    2.4
-                } else if g.sliding() {
-                    0.8
-                } else {
-                    (phase).sin() * sgn * 0.9 * moving
-                };
-                t.set_if_neq(Transform {
-                    translation: Vec3::new(sgn * 0.38, 1.05, 0.0),
-                    rotation: Quat::from_rotation_x(swing) * Quat::from_rotation_z(sgn * 0.12),
+                    translation: Vec3::new(
+                        lane_x(c.lane as i32 - 1),
+                        c.h + (g.t * 3.0 + i as f32).sin() * 0.06,
+                        -c.at,
+                    ),
+                    rotation: Quat::from_rotation_y(spin),
                     scale: Vec3::ONE,
                 });
             }
@@ -787,22 +628,6 @@ fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Par
                 );
                 v.set_if_neq(shown(g.state != Phase::Select));
             }
-            Role::Coin(i) => {
-                let Some(c) = g.coins_list.get(i) else {
-                    continue;
-                };
-                v.set_if_neq(shown(!c.taken));
-                let spin = g.t * 4.0 + i as f32 * 0.7;
-                t.set_if_neq(Transform {
-                    translation: Vec3::new(
-                        lane_x(c.lane as i32 - 1),
-                        c.h + (g.t * 3.0 + i as f32).sin() * 0.06,
-                        -c.at,
-                    ),
-                    rotation: Quat::from_rotation_y(spin) * Quat::from_rotation_z(FRAC_PI_2),
-                    scale: Vec3::new(0.5, 0.09, 0.5),
-                });
-            }
             Role::Building(i) => {
                 let side = if i % 2 == 0 { -1.0 } else { 1.0 };
                 let k = i / 2;
@@ -835,6 +660,34 @@ mod tests {
     use crate::game3d::testing;
     use crate::games::Play;
     use kg_core::engine::{Dir, Input};
+
+    #[test]
+    fn every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips() {
+        for name in PROPS.iter().map(|p| format!("prop_{p}")).chain(["hero".to_string()]) {
+            let bytes = kg_core::assets::read(&format!("models/{name}.glb"))
+                .unwrap_or_else(|| panic!("models/{name}.glb missing"));
+            assert_eq!(&bytes[..4], b"glTF", "{name} is not a glb");
+        }
+        let hero = kg_core::assets::read("models/hero.glb").unwrap();
+        let json = String::from_utf8_lossy(&hero);
+        for clip in HERO_CLIPS {
+            assert!(json.contains(&format!("\"name\":\"{clip}\"")), "hero has no {clip} clip");
+        }
+    }
+
+    #[test]
+    fn the_hero_clip_follows_the_game_state() {
+        let mut g = Runner::with_level(1);
+        g.state = Phase::Ready;
+        assert_eq!(hero_clip(&g), "idle");
+        g.state = Phase::Playing;
+        g.speed = 6.0;
+        assert_eq!(hero_clip(&g), "run");
+        g.y = 1.0;
+        assert_eq!(hero_clip(&g), "jump");
+        g.state = Phase::Dead;
+        assert_eq!(hero_clip(&g), "fail");
+    }
 
     fn open(play: RunnerPlay) -> App {
         let mut app = testing::with_game(Box::new(play), View::ipad_portrait());
@@ -891,6 +744,58 @@ mod tests {
         );
         assert_eq!(roles(&mut app, |r| matches!(r, Role::Coin(_))), coins);
         assert_eq!(roles(&mut app, |r| *r == Role::Player), 1);
+    }
+
+    #[test]
+    fn falling_and_sliding_are_left_to_the_hero_clips() {
+        let mut app = open(fresh(1));
+        for (dead, slide) in [(true, 0.0), (false, 0.3)] {
+            {
+                let g = &mut runner(&mut app).g;
+                g.state = if dead { Phase::Dead } else { Phase::Playing };
+                g.end_t = 1.0;
+                g.slide_t = slide;
+                g.y = 0.0;
+            }
+            testing::step(&mut app, 1);
+            let w = app.world_mut();
+            let t = *w
+                .query::<(&Role, &Transform)>()
+                .iter(w)
+                .find(|(r, _)| **r == Role::Body)
+                .unwrap()
+                .1;
+            assert!(t.rotation.angle_between(Quat::IDENTITY) < 1e-3, "body tilts {:?}", t.rotation);
+            assert!(t.translation.y.abs() < 1e-3, "body dips {}", t.translation.y);
+        }
+    }
+
+    #[test]
+    fn the_body_does_not_shake_while_running_flat_out() {
+        let mut app = open(fresh(20));
+        let mut heights = vec![];
+        for i in 0..40 {
+            {
+                let g = &mut runner(&mut app).g;
+                g.state = Phase::Playing;
+                g.speed = speed_of(20, 0);
+                g.dist = 20.0 + i as f32 * g.speed / 60.0;
+            }
+            testing::step(&mut app, 1);
+            let w = app.world_mut();
+            let y = w
+                .query::<(&Role, &Transform)>()
+                .iter(w)
+                .find(|(r, _)| **r == Role::Body)
+                .unwrap()
+                .1
+                .translation
+                .y;
+            heights.push(y);
+        }
+        let swing = heights.iter().cloned().fold(f32::MIN, f32::max)
+            - heights.iter().cloned().fold(f32::MAX, f32::min);
+        assert!(swing < 1e-3, "body bobs {swing} on top of the run clip");
     }
 
     #[test]

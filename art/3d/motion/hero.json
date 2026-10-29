@@ -1,0 +1,8 @@
+[
+ {"name": "run", "secs": 3.0, "seeds": [1, 2, 3], "prompt": "A child runs forward fast in a straight line, pumping the arms with bent elbows, energetic and bouncy."},
+ {"name": "jump", "secs": 1.6, "seeds": [1, 2, 3], "prompt": "A person running forward jumps high over a low obstacle, tucking the knees, then lands and keeps running."},
+ {"name": "slide", "secs": 1.6, "seeds": [1, 2, 3], "prompt": "A person running forward drops into a low baseball slide on the ground feet first, then gets back up."},
+ {"name": "idle", "secs": 3.0, "seeds": [1, 2], "prompt": "A person stands in place, relaxed, breathing, shifting weight slightly, looking around."},
+ {"name": "happy", "secs": 2.5, "seeds": [1, 2, 3], "prompt": "A child jumps up and down cheering with both arms raised in celebration."},
+ {"name": "fail", "secs": 2.0, "seeds": [1, 2], "prompt": "A person trips and stumbles backwards, then falls to the ground sitting down, dazed."}
+]

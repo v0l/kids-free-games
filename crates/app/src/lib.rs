@@ -251,6 +251,21 @@ fn demo_input(f: u32, raw: &mut Raw, view: &View) {
     }
 }
 
+fn asset_root() -> String {
+    #[cfg(not(target_arch = "wasm32"))]
+    if let Some(d) = kg_core::assets::dirs()
+        .into_iter()
+        .find(|d| d.join("models").is_dir())
+    {
+        return d
+            .canonicalize()
+            .unwrap_or(d)
+            .to_string_lossy()
+            .into_owned();
+    }
+    "assets".into()
+}
+
 pub fn window() -> Window {
     Window {
         title: "Kids Free Games".into(),
@@ -288,6 +303,10 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
+            .set(AssetPlugin {
+                file_path: asset_root(),
+                ..default()
+            })
             .set(WindowPlugin {
                 primary_window: Some(window()),
                 ..default()

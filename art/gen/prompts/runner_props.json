@@ -1,0 +1,114 @@
+[
+ {
+  "name": "rp_barrier_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5001,
+  "cut": true,
+  "prompt": "A chunky cartoon road barrier: two short grey posts holding a wide red and white striped plank with a glowing orange warning lamp on top, seen straight from the front, slightly from above, rounded smooth shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_barrier_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5002,
+  "cut": true,
+  "prompt": "A chunky cartoon road barrier: two short grey posts holding a wide red and white striped plank with a glowing orange warning lamp on top, seen straight from the front, slightly from above, rounded smooth shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_hurdle_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5003,
+  "cut": true,
+  "prompt": "A low cartoon track hurdle: two short grey legs holding a wide orange and white striped bar, seen straight from the front, slightly from above, rounded smooth chunky shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_hurdle_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5004,
+  "cut": true,
+  "prompt": "A low cartoon track hurdle: two short grey legs holding a wide orange and white striped bar, seen straight from the front, slightly from above, rounded smooth chunky shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_gate_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5005,
+  "cut": true,
+  "prompt": "A tall cartoon overhead gate: two tall grey posts holding a wide green sign board across the top with gold rivets, no writing on it, seen straight from the front, rounded chunky shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_gate_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5006,
+  "cut": true,
+  "prompt": "A tall cartoon overhead gate: two tall grey posts holding a wide green sign board across the top with gold rivets, no writing on it, seen straight from the front, rounded chunky shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_train_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5007,
+  "cut": true,
+  "prompt": "The front of a cute chunky cartoon subway train car seen straight from the front, slightly from above, glossy blue body, big light-blue windscreen, two round glowing yellow headlights, dark grey skirt, rounded corners, toy-like. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_train_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5008,
+  "cut": true,
+  "prompt": "The front of a cute chunky cartoon subway train car seen straight from the front, slightly from above, glossy blue body, big light-blue windscreen, two round glowing yellow headlights, dark grey skirt, rounded corners, toy-like. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_coin_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5009,
+  "cut": true,
+  "prompt": "A shiny gold cartoon coin standing upright seen at a slight angle, with a raised star in the middle and a thick rounded rim, glossy. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_coin_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5010,
+  "cut": true,
+  "prompt": "A shiny gold cartoon coin standing upright seen at a slight angle, with a raised star in the middle and a thick rounded rim, glossy. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_tree_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5011,
+  "cut": true,
+  "prompt": "A round chunky cartoon street tree with a brown trunk and a big fluffy glossy bright green rounded crown made of overlapping blobs, toy-like. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_tree_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5012,
+  "cut": true,
+  "prompt": "A round chunky cartoon street tree with a brown trunk and a big fluffy glossy bright green rounded crown made of overlapping blobs, toy-like. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_arch_a",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5013,
+  "cut": true,
+  "prompt": "A cartoon finish line arch: two white posts and a wide black and white chequered banner across the top, seen straight from the front, slightly from above, rounded chunky shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ },
+ {
+  "name": "rp_arch_b",
+  "w": 1024,
+  "h": 1024,
+  "seed": 5014,
+  "cut": true,
+  "prompt": "A cartoon finish line arch: two white posts and a wide black and white chequered banner across the top, seen straight from the front, slightly from above, rounded chunky shapes. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground, sharp focus, crisp clean edges, everything in focus, no depth of field blur"
+ }
+]

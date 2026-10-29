@@ -28,6 +28,13 @@ bevy = { version = "0.20", default-features = false, features = [
   "bevy_sprite_render",
   "bevy_pbr",
   "bevy_light",
+  "bevy_gltf",
+  "gltf_animation",
+  "bevy_animation",
+  "bevy_scene",
+  "jpeg",
+  "debug",
+  "reflect_auto_register",
   
   "mouse",
   "keyboard",

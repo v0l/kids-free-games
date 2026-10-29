@@ -1,0 +1,27 @@
+{
+ "run": {
+  "file": "art/3d/motion/bvh/sprint_13.bvh",
+  "loop": true
+ },
+ "jump": {
+  "file": "art/3d/motion/bvh/hop_11.bvh",
+  "trim": "air",
+  "pad": 5
+ },
+ "slide": {
+  "file": "art/3d/motion/bvh/duck_11.bvh",
+  "trim": "low",
+  "pad": 4
+ },
+ "idle": {
+  "file": "art/3d/motion/bvh/idle_1.bvh",
+  "loop": true,
+  "lift": false
+ },
+ "happy": {
+  "file": "art/3d/motion/bvh/cheer_12.bvh"
+ },
+ "fail": {
+  "file": "art/3d/motion/bvh/fail_1.bvh"
+ }
+}

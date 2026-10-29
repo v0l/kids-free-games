@@ -4,7 +4,7 @@ cd "$(dirname "$0")/.."
 PROFILE=${PROFILE:-small}
 OUT=${OUT:-dist}
 start=$(date +%s)
-export KG_ASSET_VERSION=${KG_ASSET_VERSION:-$(cat assets/art/*.kga assets/*.kgs | sha1sum | cut -c1-10)}
+export KG_ASSET_VERSION=${KG_ASSET_VERSION:-$(cat assets/art/*.kga assets/models/*.glb assets/*.kgs | sha1sum | cut -c1-10)}
 RUSTFLAGS="${RUSTFLAGS:-} --cfg getrandom_backend=\"wasm_js\" -C link-arg=--allow-undefined -C target-feature=+simd128" \
   cargo build -p kids_games --lib --profile "$PROFILE" --target wasm32-unknown-unknown
 rm -rf "$OUT"
@@ -12,6 +12,8 @@ mkdir -p "$OUT"
 cp web/index.html web/manifest.json web/icon.png web/_headers web/kg-mixer.js "$OUT/"
 mkdir -p "$OUT/assets/art"
 cp assets/art/*.kga "$OUT/assets/art/"
+mkdir -p "$OUT/assets/models"
+cp assets/models/*.glb "$OUT/assets/models/"
 cp assets/sound.kgs assets/sound_words.kgs "$OUT/assets/"
 wasm-bindgen --target web --no-typescript --out-dir "$OUT" --out-name kids_games \
   "target/wasm32-unknown-unknown/$PROFILE/kids_games.wasm"
