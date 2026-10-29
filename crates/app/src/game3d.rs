@@ -23,6 +23,7 @@ pub enum World3d {
     Runner,
     Trains,
     BallSort,
+    Paper,
 }
 
 #[derive(Component, Clone, Copy, PartialEq, Eq, Debug)]
@@ -58,6 +59,7 @@ impl Plugin for Game3dPlugin {
                 crate::games::runner::world::RunnerWorld,
                 crate::games::trains::world::TrainsWorld,
                 crate::games::ballsort::world::BallSortWorld,
+                crate::games::paper::world::PaperWorld,
             ));
     }
 }
@@ -414,6 +416,18 @@ impl Kit<'_> {
         let h = self.meshes.add(build_mesh(shape));
         self.pal.meshes.insert(shape, h.clone());
         h
+    }
+
+    pub fn add_mesh(&mut self, mesh: Mesh) -> Handle<Mesh> {
+        self.meshes.add(mesh)
+    }
+
+    pub fn refill(&mut self, at: &mut Handle<Mesh>, mesh: Mesh) {
+        if *at == Handle::<Mesh>::default() {
+            *at = self.meshes.add(mesh);
+        } else {
+            let _ = self.meshes.insert(at.id(), mesh);
+        }
     }
 
     pub fn mat(&mut self, paint: Paint) -> Handle<StandardMaterial> {

@@ -254,7 +254,7 @@ impl BrainPaper {
         let mut input = Input::default();
         match g.state {
             State::Ready => input.action = true,
-            State::Dead => {
+            State::Dead | State::Won => {
                 if !self.was_dead {
                     self.runs += 1;
                     self.dead_for = 0.0;
@@ -292,7 +292,7 @@ impl BrainPaper {
                 }
             }
         }
-        self.was_dead = g.state == State::Dead;
+        self.was_dead = matches!(g.state, State::Dead | State::Won);
         self.best = self.best.max(g.run.peak.max(g.share(0)));
         self.game.update(&input, view, dt);
     }

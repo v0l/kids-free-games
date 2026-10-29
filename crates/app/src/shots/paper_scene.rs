@@ -60,6 +60,7 @@ fn grow_blob(p: &mut PaperPlay, r: f32) {
         }
     }
     p.g.zoom = p.g.target_zoom();
+    p.g.cam = p.g.me().pos;
 }
 
 pub fn setup(n: u32, view: &View) -> Stage {
@@ -102,10 +103,13 @@ pub fn setup(n: u32, view: &View) -> Stage {
         153 => {
             go(&mut p, view);
             fly(&mut p, view, &mut Pilot::new(6, true), 8.0);
-            p.g.w.kill(3, Some(0), Cause::Trail);
-            p.g.w.kill(5, Some(2), Cause::Trail);
+            let alive: Vec<usize> = (1..p.g.w.players.len())
+                .filter(|i| p.g.w.players[*i].alive)
+                .collect();
+            p.g.w.kill(alive[0], Some(0), Cause::Trail);
+            p.g.w.kill(alive[2], Some(alive[1]), Cause::Trail);
             idle(&mut p, view, 4);
-            p.g.w.kill(4, Some(0), Cause::Trail);
+            p.g.w.kill(alive[3], Some(0), Cause::Trail);
             idle(&mut p, view, 16);
         }
         154 => {
@@ -152,7 +156,7 @@ pub fn setup(n: u32, view: &View) -> Stage {
                 view,
                 DT,
             );
-            idle(&mut p, view, 20);
+            idle(&mut p, view, 50);
         }
     }
     kg_core::sfx::take_cues();
