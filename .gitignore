@@ -3,3 +3,4 @@
 __pycache__/
 android/app/src/main/assets/
 art/3d/out/
+/.wrangler
