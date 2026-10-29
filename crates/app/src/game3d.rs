@@ -743,6 +743,10 @@ pub mod testing {
         app
     }
 
+    pub fn pen(view: View) -> crate::paint::Pen {
+        pen_for(view)
+    }
+
     fn pen_for(view: View) -> crate::paint::Pen {
         let mut pen = crate::paint::Pen::default();
         pen.begin(view, 1.0);

@@ -36,7 +36,7 @@ impl Plugin for BallSortWorld {
 
 #[derive(Component, Default)]
 pub struct Root {
-    key: (u64, u32, u32, usize),
+    key: (u64, Vec<(i32, i32)>),
 }
 
 #[derive(Component)]
@@ -257,9 +257,10 @@ fn sync(
     });
     let key = (
         g.serial,
-        g.cam_key.0 as u32,
-        g.cam_key.1 as u32,
-        g.tubes.len(),
+        g.spots
+            .iter()
+            .map(|s| ((s.x * 100.0).round() as i32, (s.y * 100.0).round() as i32))
+            .collect::<Vec<_>>(),
     );
     if root.key != key && !g.spots.is_empty() {
         root.key = key;
@@ -429,6 +430,108 @@ mod tests {
         );
         assert!(mid.y > end.y - 0.01);
         let _ = a;
+    }
+
+    #[test]
+    fn turning_the_screen_moves_the_tubes_with_the_balls() {
+        let land = View::ipad_landscape();
+        let tall = View::ipad_portrait();
+        let mut app = open(fresh(9), land);
+        for _ in 0..2 {
+            testing::game::<BallSortPlay>(&mut app).update(&Input::default(), &tall, 1.0 / 60.0);
+            app.insert_resource(testing::pen(tall));
+            testing::step(&mut app, 2);
+        }
+        let g = &testing::game::<BallSortPlay>(&mut app).g;
+        let spots: Vec<_> = (0..g.tubes.len()).map(|i| g.spot(i)).collect();
+        let w = app.world_mut();
+        let glass: Vec<(usize, Vec3)> = w
+            .query::<(&Role, &GlobalTransform)>()
+            .iter(w)
+            .filter_map(|(r, t)| match r {
+                Role::Glass(i) => Some((*i, t.translation())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(glass.len(), spots.len());
+        for (i, at) in glass {
+            let s = spots[i];
+            assert!(
+                (at.x - s.x).abs() < 0.01 && (at.z - s.y).abs() < 0.01,
+                "tube {i} glass at {at:?}, its balls at {s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn opening_from_the_menu_in_portrait_lines_tubes_up_with_balls() {
+        let tall = View::ipad_portrait();
+        let mut app = testing::app(crate::Scene::Menu(Box::default()), tall);
+        testing::step(&mut app, 3);
+        kg_core::save::reset_for_test();
+        kg_core::profile::set_level(kg_core::games::ballsort::GAME, 3);
+        if let crate::Scene::Menu(m) = &mut testing::frame(&mut app).scene {
+            m.current = Some((0, Box::new(BallSortPlay::new())));
+        }
+        for _ in 0..6 {
+            testing::game::<BallSortPlay>(&mut app).update(&Input::default(), &tall, 1.0 / 60.0);
+            testing::step(&mut app, 1);
+        }
+        let g = &testing::game::<BallSortPlay>(&mut app).g;
+        let spots: Vec<_> = (0..g.tubes.len()).map(|i| g.spot(i)).collect();
+        let w = app.world_mut();
+        let glass: Vec<(usize, Vec3)> = w
+            .query::<(&Role, &GlobalTransform)>()
+            .iter(w)
+            .filter_map(|(r, t)| match r {
+                Role::Glass(i) => Some((*i, t.translation())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(glass.len(), spots.len());
+        for (i, at) in glass {
+            let s = spots[i];
+            assert!(
+                (at.x - s.x).abs() < 0.01 && (at.z - s.y).abs() < 0.01,
+                "tube {i} glass at {at:?}, its balls at {s:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn restarting_until_the_helper_tube_appears_keeps_tubes_under_balls() {
+        let tall = View::ipad_portrait();
+        let mut app = open(fresh(3), tall);
+        for _ in 0..4 {
+            testing::game::<BallSortPlay>(&mut app).g.restart();
+            for _ in 0..3 {
+                testing::game::<BallSortPlay>(&mut app).update(
+                    &Input::default(),
+                    &tall,
+                    1.0 / 60.0,
+                );
+                testing::step(&mut app, 1);
+            }
+        }
+        let g = &testing::game::<BallSortPlay>(&mut app).g;
+        let spots: Vec<_> = (0..g.tubes.len()).map(|i| g.spot(i)).collect();
+        let w = app.world_mut();
+        let glass: Vec<(usize, Vec3)> = w
+            .query::<(&Role, &GlobalTransform)>()
+            .iter(w)
+            .filter_map(|(r, t)| match r {
+                Role::Glass(i) => Some((*i, t.translation())),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(glass.len(), spots.len());
+        for (i, at) in glass {
+            let s = spots[i];
+            assert!(
+                (at.x - s.x).abs() < 0.01 && (at.z - s.y).abs() < 0.01,
+                "tube {i} glass at {at:?}, its balls at {s:?}"
+            );
+        }
     }
 
     #[test]
