@@ -1,7 +1,13 @@
 use super::layout::*;
 use super::nav::Nav;
 use crate::geom::*;
+use crate::brain::{Effort, Net};
 use glam::{vec2, Vec2};
+use std::sync::{Arc, OnceLock};
+
+mod crew;
+pub use crew::{Chooser, CREW_FEATURES, THINK_FASTEST};
+use crew::Pick;
 
 pub const LOOKS: usize = 10;
 pub const PLAYER_R: f32 = 0.32;
@@ -107,6 +113,9 @@ pub struct Staff {
     pub target: Option<u32>,
     pub carry: Option<Item>,
     pub work: f32,
+    pub think: f32,
+    pub rested: bool,
+    pub pick: Option<usize>,
 }
 
 #[derive(Clone, Debug)]
@@ -192,6 +201,9 @@ pub struct Sim {
     pub t: f32,
     pub idle: f32,
     pub events: Vec<Event>,
+    pub net: Option<Arc<Net>>,
+    pub rules: bool,
+    pub effort: Option<Effort>,
     spawn_in: f32,
     next_id: u32,
     looks: [Option<u8>; 2],
@@ -362,6 +374,9 @@ impl Sim {
             t: 0.0,
             idle: 0.0,
             events: vec![],
+            net: crew::shipped(),
+            rules: false,
+            effort: None,
             spawn_in: 1.0,
             next_id: 0,
             looks: [None; 2],
@@ -793,6 +808,20 @@ impl Sim {
     }
 
     pub fn step(&mut self, dt: f32) {
+        let net = if self.rules { None } else { self.net.clone() };
+        match net {
+            Some(net) => {
+                crate::rng::srand(self.rng ^ self.t.to_bits() as u64);
+                self.step_with(dt, &mut |effort, options| {
+                    let scores: Vec<f32> = options.iter().map(|o| net.score(o)).collect();
+                    Some(crate::brain::pick_soft(&scores, effort))
+                });
+            }
+            None => self.step_with(dt, &mut |_, _| None),
+        }
+    }
+
+    pub fn step_with(&mut self, dt: f32, choose: Chooser) {
         self.t += dt;
         self.idle += dt;
         self.spawn_in -= dt;
@@ -805,7 +834,7 @@ impl Sim {
         self.step_guests(dt);
         self.step_desk(dt);
         self.step_player_actions(dt);
-        self.step_staff(dt);
+        self.step_staff(dt, choose);
         self.guests.retain(|g| !g.gone);
     }
 
@@ -1248,6 +1277,9 @@ impl Sim {
                 target: None,
                 carry: None,
                 work: 0.0,
+                think: 0.0,
+                rested: false,
+                pick: None,
             });
         }
         if let Build::Decor(r, _) = b {
@@ -1266,9 +1298,10 @@ impl Sim {
         }
     }
 
-    fn step_staff(&mut self, dt: f32) {
+    fn step_staff(&mut self, dt: f32, choose: Chooser) {
         for s in 0..self.staff.len() {
             let st = &mut self.staff[s];
+            st.think -= dt;
             let moving = !st.path.is_empty();
             if let Some(d) = walk_along(&mut st.pos, &mut st.path, STAFF_SPEED, dt) {
                 st.face = turn_to(st.face, heading(d), dt);
@@ -1276,15 +1309,17 @@ impl Sim {
             } else if !moving {
                 st.walk = 0.0;
             }
-            if !self.staff[s].path.is_empty() {
+            let strolling_home =
+                self.staff[s].job == Job::Idle && self.staff[s].role != Build::Clerk;
+            if !self.staff[s].path.is_empty() && !strolling_home {
                 continue;
             }
             match self.staff[s].role {
                 Build::Clerk => self.staff_clerk(s),
-                Build::Maid => self.staff_maid(s, dt),
-                Build::Janitor => self.staff_janitor(s),
-                Build::Waiter => self.staff_server(s, Item::Snack),
-                Build::Lifeguard => self.staff_server(s, Item::Towel),
+                Build::Maid => self.staff_maid(s, dt, choose),
+                Build::Janitor => self.staff_janitor(s, choose),
+                Build::Waiter => self.staff_server(s, Item::Snack, choose),
+                Build::Lifeguard => self.staff_server(s, Item::Towel, choose),
                 _ => {}
             }
         }
@@ -1297,7 +1332,7 @@ impl Sim {
 
     fn go_home(&mut self, s: usize) {
         let home = self.lay.idle_spot(self.staff[s].role);
-        if (self.staff[s].pos - home).length() > 0.1 {
+        if self.staff[s].path.is_empty() && (self.staff[s].pos - home).length() > 0.1 {
             self.go(s, home);
         }
         self.staff[s].job = Job::Idle;
@@ -1319,7 +1354,7 @@ impl Sim {
             .any(|st| st.role == Build::Maid && st.job == Job::Clean(k))
     }
 
-    fn staff_maid(&mut self, s: usize, dt: f32) {
+    fn staff_maid(&mut self, s: usize, dt: f32, choose: Chooser) {
         match self.staff[s].job {
             Job::Clean(k) => {
                 if self.rooms[k].tip > 0 {
@@ -1345,21 +1380,21 @@ impl Sim {
             }
             _ => {
                 self.staff[s].work = 0.0;
-                let dirty = (0..self.rooms.len())
-                    .find(|&k| self.rooms[k].is_dirty() && !self.claimed_room(k));
-                match dirty {
-                    Some(k) => self.staff[s].job = Job::Clean(k),
-                    None => self.go_home(s),
+                match self.crew_pick(s, choose) {
+                    Some(Pick::Room(k)) => self.staff[s].job = Job::Clean(k),
+                    _ => self.go_home(s),
                 }
             }
         }
     }
 
-    fn staff_janitor(&mut self, s: usize) {
+    fn staff_janitor(&mut self, s: usize, choose: Chooser) {
         match self.staff[s].job {
             Job::Fetch => {
                 self.staff[s].carry = Some(Item::Paper);
-                let need = (0..self.stalls.len()).find(|&k| self.stalls[k].paper < PAPER_MAX);
+                let wanted = self.staff[s].pick.filter(|&k| self.stalls[k].paper < PAPER_MAX);
+                let need = wanted
+                    .or_else(|| (0..self.stalls.len()).find(|&k| self.stalls[k].paper < PAPER_MAX));
                 match need {
                     Some(k) => {
                         self.staff[s].job = Job::Deliver(k);
@@ -1383,12 +1418,14 @@ impl Sim {
                 self.go_home(s);
             }
             _ => {
-                if self.stalls.iter().any(|st| st.paper == 0) {
-                    self.staff[s].job = Job::Fetch;
-                    let to = self.lay.paper_shelf + vec2(0.0, 0.8);
-                    self.go(s, to);
-                } else {
-                    self.go_home(s);
+                match self.crew_pick(s, choose) {
+                    Some(Pick::Stall(k)) => {
+                        self.staff[s].pick = Some(k);
+                        self.staff[s].job = Job::Fetch;
+                        let to = self.lay.paper_shelf + vec2(0.0, 0.8);
+                        self.go(s, to);
+                    }
+                    _ => self.go_home(s),
                 }
             }
         }
@@ -1398,7 +1435,7 @@ impl Sim {
         self.staff.iter().any(|st| st.target == Some(id))
     }
 
-    fn staff_server(&mut self, s: usize, item: Item) {
+    fn staff_server(&mut self, s: usize, item: Item, choose: Chooser) {
         let waiting = |st: Stage| match item {
             Item::Snack => matches!(st, Stage::WaitSnack(_)),
             _ => matches!(st, Stage::WaitTowel(_)),
@@ -1439,11 +1476,10 @@ impl Sim {
                 self.go_home(s);
             }
             _ => {
-                let g = self
-                    .guests
-                    .iter()
-                    .find(|g| waiting(g.stage) && !self.claimed_guest(g.id))
-                    .map(|g| g.id);
+                let g = match self.crew_pick(s, choose) {
+                    Some(Pick::Guest(id)) => Some(id),
+                    _ => None,
+                };
                 match (g, self.source(item)) {
                     (Some(id), Some(src)) => {
                         self.staff[s].target = Some(id);

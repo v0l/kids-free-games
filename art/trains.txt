@@ -1,0 +1,5 @@
+# Painted with FLUX.1-dev (art/gen/prompts/trains.json)
+bg       | gen:trains_bg.png | solo jpg max=1344 keep
+grass    | gen:trains_grass.png | max=256
+platform | gen:trains_platform.png | max=256
+gravel   | gen:trains_gravel.png | max=256

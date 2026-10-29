@@ -1,5 +1,6 @@
 pub mod art;
 pub mod assets;
+pub mod brain;
 pub mod clock;
 pub mod engine;
 pub mod feel;

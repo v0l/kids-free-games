@@ -1,3 +1,4 @@
+pub mod ballsort;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -13,10 +14,12 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod runner;
 pub mod snake;
 pub mod spell;
 pub mod spell_words;
 pub mod stack;
+pub mod trains;
 
 use crate::geom::Color;
 
@@ -60,7 +63,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 18] = [
+pub const CATALOG: [Info; 21] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -147,6 +150,20 @@ pub const CATALOG: [Info; 18] = [
         (255, 130, 70),
     ),
     info(
+        "runner",
+        "Lane Runner",
+        Kind::Arcade,
+        "Subway Surfers",
+        (240, 90, 80),
+    ),
+    info(
+        "ballsort",
+        "Ball Sort",
+        Kind::Arcade,
+        "Color Bump, ball sort puzzles",
+        (40, 190, 180),
+    ),
+    info(
         "blocks",
         "Block Drop",
         Kind::Arcade,
@@ -173,6 +190,13 @@ pub const CATALOG: [Info; 18] = [
         Kind::Learn,
         "Spelling games",
         (250, 150, 80),
+    ),
+    info(
+        "trains",
+        "Take Away Trains",
+        Kind::Learn,
+        "Subtraction games for kids",
+        (225, 70, 60),
     ),
     info(
         "garden",

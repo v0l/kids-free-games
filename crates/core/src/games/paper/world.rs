@@ -1,56 +1,93 @@
 use super::arena::{self, Tuning, NAMES, PERSONAS};
-use crate::engine::Dir;
+use crate::brain::{Brain, Effort, Net};
 use crate::rng as rand;
 use glam::{ivec2, vec2, IVec2, Vec2};
 use std::collections::VecDeque;
+use std::f32::consts::{FRAC_PI_2, PI, TAU};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 
-pub const GW: i32 = 110;
-pub const GH: i32 = 110;
+static NEXT_UID: AtomicU64 = AtomicU64::new(1);
+pub const FRESH_FLASH: f32 = 0.4;
+
+mod sense;
+pub use sense::FEATURES;
+
+static SHIPPED: &[u8] = include_bytes!("../../../../../assets/brains/paper.kgb");
+
+pub fn shipped_net() -> Option<&'static Net> {
+    static NET: OnceLock<Option<Net>> = OnceLock::new();
+    NET.get_or_init(|| Net::from_bytes(SHIPPED).filter(|n| n.inputs() == FEATURES))
+        .as_ref()
+}
+
+pub type Lesson = (Vec<Vec<f32>>, usize);
+
+pub type Policy<'a> = &'a mut dyn FnMut(usize, &[Vec<f32>]) -> Option<usize>;
+
+pub const SIZE: f32 = 110.0;
+pub const RES: i32 = 4;
+pub const N: i32 = 440;
+pub const UNITS: i32 = N / RES;
+pub const CELL: f32 = 1.0 / RES as f32;
 pub const START_R: f32 = 3.2;
 pub const SUB: f32 = 1.0 / 120.0;
 pub const HEAD_HIT: f32 = 0.6;
 pub const MAX_PLAYERS: usize = 12;
-pub const QUEUE: usize = 2;
-pub const EARLY_TURN: f32 = 0.22;
-const SWEEP_STEP: f32 = 0.022;
+pub const PLAYER_TURN: f32 = 6.5;
+pub const BOT_TURN: f32 = 5.0;
+pub const SELF_GAP: f32 = 0.9;
+pub const LOOK: f32 = 1.8;
+pub const WALL: f32 = 0.35;
+const TRAIL_STEP: f32 = 0.2;
+const STAMP: i32 = 1;
+const SWEEP_STEP: f32 = 0.0055;
 const SWEEP_MAX: f32 = 0.7;
+const THINK: f32 = 0.16;
+const PROBE_STEP: f32 = 0.2;
 
-pub fn idx(p: IVec2) -> usize {
-    (p.y * GW + p.x) as usize
+pub fn block_of(i: usize) -> usize {
+    let (x, y) = (i % N as usize, i / N as usize);
+    (y / BLOCK).min(BLOCKS - 1) * BLOCKS + (x / BLOCK).min(BLOCKS - 1)
+}
+
+pub fn idx(c: IVec2) -> usize {
+    (c.y * N + c.x) as usize
 }
 
 pub fn cell_of(i: usize) -> IVec2 {
-    ivec2(i as i32 % GW, i as i32 / GW)
+    ivec2(i as i32 % N, i as i32 / N)
 }
 
-pub fn in_bounds(p: IVec2) -> bool {
-    p.x >= 0 && p.y >= 0 && p.x < GW && p.y < GH
+pub fn in_grid(c: IVec2) -> bool {
+    c.x >= 0 && c.y >= 0 && c.x < N && c.y < N
 }
 
-pub fn center(c: IVec2) -> Vec2 {
-    c.as_vec2() + 0.5
+pub fn cell_at(p: Vec2) -> IVec2 {
+    (p * RES as f32)
+        .floor()
+        .as_ivec2()
+        .clamp(IVec2::ZERO, IVec2::splat(N - 1))
 }
 
-pub fn bezier(a: Vec2, b: Vec2, c: Vec2, t: f32) -> Vec2 {
-    let u = 1.0 - t;
-    a * u * u + b * 2.0 * u * t + c * t * t
+pub fn cell_center(c: IVec2) -> Vec2 {
+    (c.as_vec2() + 0.5) * CELL
 }
 
-pub fn turn_left(d: Dir) -> Dir {
-    match d {
-        Dir::Up => Dir::Left,
-        Dir::Left => Dir::Down,
-        Dir::Down => Dir::Right,
-        Dir::Right => Dir::Up,
-    }
+pub fn wrap_angle(a: f32) -> f32 {
+    (a + PI).rem_euclid(TAU) - PI
 }
 
-pub fn turn_right(d: Dir) -> Dir {
-    turn_left(d).opposite()
+pub fn dir_of(a: f32) -> Vec2 {
+    vec2(a.cos(), a.sin())
 }
 
-fn dvec(d: Dir) -> Vec2 {
-    d.delta().as_vec2()
+pub fn angle_of(v: Vec2) -> f32 {
+    v.y.atan2(v.x)
+}
+
+fn inside(p: Vec2, pad: f32) -> bool {
+    p.x >= pad && p.y >= pad && p.x <= SIZE - pad && p.y <= SIZE - pad
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -80,8 +117,13 @@ pub struct Claim {
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum Plan {
-    Leave(Dir),
-    Out { left: i32, turns: u8, right: bool },
+    Leave(f32),
+    Out {
+        to: Vec2,
+        dir: f32,
+        turns: u8,
+        side: f32,
+    },
     Home,
     Hunt,
 }
@@ -93,20 +135,24 @@ pub struct Player {
     pub persona: usize,
     pub tune: Tuning,
     pub speed: f32,
-    pub cell: IVec2,
-    pub dir: Dir,
-    pub in_dir: Dir,
-    pub progress: f32,
-    pub queue: VecDeque<Dir>,
-    pub trail: Vec<IVec2>,
-    pub trail_from: IVec2,
+    pub turn: f32,
+    pub pos: Vec2,
+    pub angle: f32,
+    pub want: f32,
+    pub spin: f32,
+    pub trail: Vec<Vec2>,
+    pub cells: Vec<usize>,
+    pub odo: f32,
     pub alive: bool,
     pub respawn: f32,
     pub kills: u32,
     pub age: f32,
     pub peak: f32,
-    pub turned_at: f32,
+    think: f32,
     plan: Plan,
+    pub brain: Option<Brain>,
+    pub rl: Option<Effort>,
+    pub manual: bool,
 }
 
 impl Player {
@@ -115,97 +161,70 @@ impl Player {
         bot: bool,
         persona: usize,
         tune: Tuning,
-        at: IVec2,
-        dir: Dir,
+        at: Vec2,
+        angle: f32,
     ) -> Self {
         Self {
             name,
             bot,
             persona,
             tune,
-            speed: tune.speed,
-            cell: at,
-            dir,
-            in_dir: dir,
-            progress: 0.0,
-            queue: VecDeque::new(),
+            speed: if bot { tune.speed } else { arena::PLAYER_SPEED },
+            turn: if bot { BOT_TURN } else { PLAYER_TURN },
+            pos: at,
+            angle,
+            want: angle,
+            spin: 0.0,
             trail: vec![],
-            trail_from: at,
+            cells: vec![],
+            odo: 0.0,
             alive: true,
             respawn: 0.0,
             kills: 0,
             age: 0.0,
             peak: 0.0,
-            turned_at: -10.0,
+            think: rand::gen_range(0.0, THINK),
             plan: Plan::Home,
+            brain: None,
+            rl: None,
+            manual: false,
         }
     }
 
-    pub fn pos(&self) -> Vec2 {
-        center(self.cell) + dvec(self.dir) * self.progress
-    }
-
     pub fn look(&self) -> Vec2 {
-        let c = center(self.cell);
-        bezier(
-            c - dvec(self.in_dir) * 0.5,
-            c,
-            c + dvec(self.dir) * 0.5,
-            self.progress,
-        )
+        self.pos
     }
 
     pub fn heading(&self) -> Vec2 {
-        let t = self.progress;
-        let a = dvec(self.in_dir);
-        let b = dvec(self.dir);
-        (a * (1.0 - t) + b * t).normalize_or(b)
+        dir_of(self.angle)
+    }
+
+    pub fn out(&self) -> bool {
+        !self.cells.is_empty()
     }
 
     pub fn trail_points(&self) -> Vec<Vec2> {
         if self.trail.is_empty() {
             return vec![];
         }
-        let mut cells = Vec::with_capacity(self.trail.len() + 1);
-        cells.push(center(self.trail_from));
-        cells.extend(self.trail.iter().map(|c| center(*c)));
-        let mid = |k: usize| (cells[k] + cells[k + 1]) * 0.5;
-        let mut out = vec![mid(0)];
-        for (k, &b) in cells.iter().enumerate().take(cells.len() - 1).skip(1) {
-            let (a, c) = (mid(k - 1), mid(k));
-            if (b - a).perp_dot(c - b).abs() < 1e-4 {
-                out.push(c);
-            } else {
-                for s in 1..=5 {
-                    out.push(bezier(a, b, c, s as f32 / 5.0));
-                }
-            }
-        }
-        let n = cells.len() - 1;
-        let a = if n >= 1 { mid(n - 1) } else { cells[n] };
-        let b = cells[n];
-        let c = b + dvec(self.dir) * 0.5;
-        for s in 1..=4 {
-            out.push(bezier(a, b, c, self.progress * s as f32 / 4.0));
-        }
-        out
-    }
-
-    pub fn wants(&mut self, d: Dir) {
-        let last = self.queue.back().copied().unwrap_or(self.dir);
-        if d == last || d == last.opposite() {
-            return;
-        }
-        if self.queue.len() >= QUEUE {
-            self.queue.pop_back();
-        }
-        self.queue.push_back(d);
+        let mut pts = self.trail.clone();
+        pts.push(self.pos);
+        pts
     }
 }
+
+pub const BLOCKS: usize = 16;
+pub const BLOCK: usize = N as usize / BLOCKS;
 
 pub struct World {
     pub owner: Vec<Option<u8>>,
     pub trail: Vec<Option<u8>>,
+    pub block_owner: Vec<[u16; MAX_PLAYERS]>,
+    pub block_trail: Vec<u16>,
+    pub block_serial: Vec<u32>,
+    pub block_until: Vec<f32>,
+    pub uid: u64,
+    pub laid: Vec<f32>,
     pub prev: Vec<Option<u8>>,
     pub changed: Vec<f32>,
     pub counts: Vec<u32>,
@@ -214,6 +233,9 @@ pub struct World {
     pub claims: Vec<Claim>,
     pub clock: f32,
     pub skill: f32,
+    pub brains: bool,
+    pub effort: Option<f32>,
+    pub lessons: Option<Vec<Lesson>>,
     acc: f32,
     name_turn: usize,
 }
@@ -226,10 +248,16 @@ impl Default for World {
 
 impl World {
     pub fn new(skill: f32) -> Self {
-        let n = (GW * GH) as usize;
+        let n = (N * N) as usize;
         Self {
             owner: vec![None; n],
             trail: vec![None; n],
+            block_owner: vec![[0; MAX_PLAYERS]; BLOCKS * BLOCKS],
+            block_trail: vec![0; BLOCKS * BLOCKS],
+            block_serial: vec![0; BLOCKS * BLOCKS],
+            block_until: vec![0.0; BLOCKS * BLOCKS],
+            uid: NEXT_UID.fetch_add(1, Ordering::Relaxed),
+            laid: vec![0.0; n],
             prev: vec![None; n],
             changed: vec![-10.0; n],
             counts: vec![0; MAX_PLAYERS],
@@ -238,6 +266,9 @@ impl World {
             claims: vec![],
             clock: 0.0,
             skill,
+            brains: true,
+            effort: None,
+            lessons: None,
             acc: 0.0,
             name_turn: rand::gen_range(0, NAMES.len()),
         }
@@ -263,6 +294,10 @@ impl World {
         self.clock - self.changed[i]
     }
 
+    pub fn owner_at(&self, p: Vec2) -> Option<u8> {
+        self.owner[idx(cell_at(p))]
+    }
+
     fn set_owner(&mut self, i: usize, to: Option<u8>, delay: f32) {
         let was = self.owner[i];
         if was == to {
@@ -270,27 +305,91 @@ impl World {
         }
         self.prev[i] = self.shown(i);
         self.changed[i] = self.clock + delay;
+        let b = block_of(i);
+        self.block_serial[b] = self.block_serial[b].wrapping_add(1);
+        self.block_until[b] = self.block_until[b].max(self.changed[i] + FRESH_FLASH);
         if let Some(w) = was {
             self.counts[w as usize] -= 1;
+            self.block_owner[b][w as usize] -= 1;
         }
         if let Some(t) = to {
             self.counts[t as usize] += 1;
+            self.block_owner[b][t as usize] += 1;
         }
         self.owner[i] = to;
     }
 
-    pub fn add_player(&mut self, at: IVec2, dir: Dir, bot: bool) -> usize {
+    pub fn nearest_own(&self, id: usize) -> Option<Vec2> {
+        let p = &self.players[id];
+        let me = Some(id as u8);
+        let span = SIZE / BLOCKS as f32;
+        let here = (p.pos / span).floor().as_ivec2();
+        let mut best: Option<(f32, Vec2)> = None;
+        for by in 0..BLOCKS as i32 {
+            for bx in 0..BLOCKS as i32 {
+                if self.block_owner[by as usize * BLOCKS + bx as usize][id] == 0 {
+                    continue;
+                }
+                let lo = (ivec2(bx, by) - here).abs().max(IVec2::ZERO).as_vec2() * span;
+                if best.is_some_and(|b| (lo.length() - span * 1.5) > b.0) {
+                    continue;
+                }
+                let x0 = bx as usize * BLOCK;
+                let y0 = by as usize * BLOCK;
+                for y in (y0..y0 + BLOCK).step_by(2) {
+                    for x in (x0..x0 + BLOCK).step_by(2) {
+                        if self.owner[y * N as usize + x] != me {
+                            continue;
+                        }
+                        let c = cell_center(ivec2(x as i32, y as i32));
+                        let d = c.distance(p.pos);
+                        if best.is_none_or(|b| d < b.0) {
+                            best = Some((d, c));
+                        }
+                    }
+                }
+            }
+        }
+        best.map(|b| b.1)
+    }
+
+    pub fn claim(&mut self, i: usize, to: Option<u8>) {
+        self.set_owner(i, to, 0.0);
+    }
+
+    fn set_trail(&mut self, i: usize, to: Option<u8>) {
+        let was = self.trail[i];
+        if was.is_some() == to.is_some() {
+            self.trail[i] = to;
+            return;
+        }
+        let b = block_of(i);
+        if was.is_some() {
+            self.block_trail[b] -= 1;
+        } else {
+            self.block_trail[b] += 1;
+        }
+        self.trail[i] = to;
+    }
+
+    pub fn add_player(&mut self, at: Vec2, angle: f32, bot: bool) -> usize {
         let id = self.players.len();
         let persona = id % PERSONAS.len();
         let name = if bot { self.fresh_name() } else { "You" };
         let tune = arena::tuning(PERSONAS[persona], self.skill);
-        let mut p = Player::new(name, bot, persona, tune, at, dir);
-        if !bot {
-            p.speed = arena::PLAYER_SPEED;
-        }
+        let mut p = Player::new(name, bot, persona, tune, at, angle);
+        p.brain = self.brain_for(bot, tune);
         self.players.push(p);
         self.stake(id, at);
         id
+    }
+
+    fn brain_for(&self, bot: bool, tune: Tuning) -> Option<Brain> {
+        if !bot || !self.brains {
+            return None;
+        }
+        shipped_net()
+            .map(|n| Brain::new(n.clone(), Effort::new(self.effort.unwrap_or(tune.effort))))
     }
 
     pub fn fresh_name(&mut self) -> &'static str {
@@ -304,29 +403,34 @@ impl World {
         NAMES[self.name_turn]
     }
 
-    pub fn stake(&mut self, id: usize, at: IVec2) {
-        let r = START_R.ceil() as i32;
-        let c = center(at);
-        for dy in -r..=r {
-            for dx in -r..=r {
-                let p = at + ivec2(dx, dy);
-                if in_bounds(p) && center(p).distance(c) <= START_R {
-                    if let Some(t) = self.trail[idx(p)] {
-                        self.kill(t as usize, None, Cause::Trail);
-                    }
-                    self.set_owner(idx(p), Some(id as u8), dx.abs().max(dy.abs()) as f32 * 0.05);
-                }
+    fn disc(at: Vec2, r: f32) -> impl Iterator<Item = IVec2> {
+        let lo = cell_at(at - Vec2::splat(r));
+        let hi = cell_at(at + Vec2::splat(r));
+        (lo.y..=hi.y)
+            .flat_map(move |y| (lo.x..=hi.x).map(move |x| ivec2(x, y)))
+            .filter(move |c| cell_center(*c).distance(at) <= r)
+    }
+
+    pub fn stake(&mut self, id: usize, at: Vec2) {
+        for c in Self::disc(at, START_R).collect::<Vec<_>>() {
+            let i = idx(c);
+            if let Some(t) = self.trail[i] {
+                self.kill(t as usize, None, Cause::Trail);
             }
+            let d = cell_center(c).distance(at);
+            self.set_owner(i, Some(id as u8), d * 0.05);
         }
     }
 
-    pub fn free_spot(&self, tries: usize) -> Option<IVec2> {
-        let r = START_R.ceil() as i32 + 2;
+    pub fn free_spot(&self, tries: usize) -> Option<Vec2> {
+        let r = START_R + 2.0;
         for _ in 0..tries {
-            let at = ivec2(rand::gen_range(r, GW - r), rand::gen_range(r, GH - r));
-            let clear = (-r..=r).all(|dy| {
-                (-r..=r).all(|dx| {
-                    let i = idx(at + ivec2(dx, dy));
+            let at = vec2(rand::gen_range(r, SIZE - r), rand::gen_range(r, SIZE - r));
+            let clear = (0..=8).all(|k| {
+                let ring = r * k as f32 / 8.0;
+                (0..12).all(|s| {
+                    let p = at + dir_of(s as f32 / 12.0 * TAU) * ring;
+                    let i = idx(cell_at(p));
                     self.owner[i].is_none() && self.trail[i].is_none()
                 })
             });
@@ -334,7 +438,7 @@ impl World {
                 .players
                 .iter()
                 .filter(|p| p.alive)
-                .all(|p| p.pos().distance(center(at)) > 10.0);
+                .all(|p| p.pos.distance(at) > 10.0);
             if clear && far {
                 return Some(at);
             }
@@ -342,8 +446,8 @@ impl World {
         None
     }
 
-    pub fn respawn(&mut self, id: usize, at: IVec2) {
-        let dir = Dir::ALL[rand::gen_range(0, 4)];
+    pub fn respawn(&mut self, id: usize, at: Vec2) {
+        let angle = rand::gen_range(-PI, PI);
         let p = &self.players[id];
         let (bot, persona) = (p.bot, p.persona);
         let name = if bot { self.fresh_name() } else { "You" };
@@ -353,32 +457,37 @@ impl World {
             persona
         };
         let tune = arena::tuning(PERSONAS[persona], self.skill);
-        let mut p = Player::new(name, bot, persona, tune, at, dir);
-        if !bot {
-            p.speed = arena::PLAYER_SPEED;
-        }
+        let mut p = Player::new(name, bot, persona, tune, at, angle);
+        p.brain = self.brain_for(bot, tune);
         self.players[id] = p;
         self.stake(id, at);
+    }
+
+    fn clear_trail(&mut self, id: usize) {
+        let me = Some(id as u8);
+        let p = &mut self.players[id];
+        p.trail.clear();
+        p.odo = 0.0;
+        for i in std::mem::take(&mut p.cells) {
+            if self.trail[i] == me {
+                self.set_trail(i, None);
+            }
+        }
     }
 
     pub fn kill(&mut self, victim: usize, killer: Option<usize>, cause: Cause) {
         if !self.players[victim].alive {
             return;
         }
-        let at = self.players[victim].look();
+        let at = self.players[victim].pos;
         let name = self.players[victim].name;
         let p = &mut self.players[victim];
         p.alive = false;
         p.respawn = rand::gen_range(2.5, 4.0);
-        p.queue.clear();
-        for t in std::mem::take(&mut p.trail) {
-            if self.trail[idx(t)] == Some(victim as u8) {
-                self.trail[idx(t)] = None;
-            }
-        }
+        self.clear_trail(victim);
         for i in 0..self.owner.len() {
             if self.owner[i] == Some(victim as u8) {
-                let d = center(cell_of(i)).distance(at);
+                let d = cell_center(cell_of(i)).distance(at);
                 self.set_owner(i, None, (d * 0.012).min(0.6));
             }
         }
@@ -397,12 +506,18 @@ impl World {
 
     pub fn close_loop(&mut self, id: usize) {
         let me = Some(id as u8);
-        let trail = std::mem::take(&mut self.players[id].trail);
-        for t in &trail {
-            self.trail[idx(*t)] = None;
-            self.set_owner(idx(*t), me, 0.0);
+        let cells = std::mem::take(&mut self.players[id].cells);
+        self.players[id].trail.clear();
+        self.players[id].odo = 0.0;
+        let mut ring = vec![];
+        for &i in &cells {
+            if self.trail[i] == me {
+                self.set_trail(i, None);
+                ring.push(i);
+            }
+            self.set_owner(i, me, 0.0);
         }
-        let (mut lo, mut hi) = (ivec2(GW, GH), ivec2(-1, -1));
+        let (mut lo, mut hi) = (ivec2(N, N), ivec2(-1, -1));
         for (i, o) in self.owner.iter().enumerate() {
             if *o == me {
                 let c = cell_of(i);
@@ -415,7 +530,9 @@ impl World {
         let w = (hi.x - lo.x + 1) as usize;
         let h = (hi.y - lo.y + 1) as usize;
         let local = |c: IVec2| ((c.y - lo.y) as usize) * w + (c.x - lo.x) as usize;
-        let mine = |c: IVec2| in_bounds(c) && self.owner[idx(c)] == me;
+        let within = |c: IVec2| c.x >= lo.x && c.y >= lo.y && c.x <= hi.x && c.y <= hi.y;
+        let mine = |c: IVec2| in_grid(c) && self.owner[idx(c)] == me;
+        let steps = [ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1)];
         let mut outside = vec![false; w * h];
         let mut q = VecDeque::new();
         for y in lo.y..=hi.y {
@@ -429,49 +546,50 @@ impl World {
             }
         }
         while let Some(c) = q.pop_front() {
-            for d in Dir::ALL {
-                let n = c + d.delta();
-                if n.x < lo.x || n.y < lo.y || n.x > hi.x || n.y > hi.y {
-                    continue;
-                }
-                if !outside[local(n)] && !mine(n) {
+            for s in steps {
+                let n = c + s;
+                if within(n) && !outside[local(n)] && !mine(n) {
                     outside[local(n)] = true;
                     q.push_back(n);
                 }
             }
         }
+        const UNSET: u16 = u16::MAX - 1;
         let mut inside = vec![u16::MAX; w * h];
-        let mut cells = vec![];
+        let mut filled = vec![];
         for y in lo.y..=hi.y {
             for x in lo.x..=hi.x {
                 let c = ivec2(x, y);
-                if in_bounds(c) && !outside[local(c)] && !mine(c) {
-                    inside[local(c)] = u16::MAX - 1;
-                    cells.push(c);
+                if in_grid(c) && !outside[local(c)] && !mine(c) {
+                    inside[local(c)] = UNSET;
+                    filled.push(c);
                 }
             }
         }
-        let mut q: VecDeque<(IVec2, u16)> = trail.iter().map(|t| (*t, 0)).collect();
+        let mut q: VecDeque<(IVec2, u16)> = ring.iter().map(|i| (cell_of(*i), 0)).collect();
         while let Some((c, dist)) = q.pop_front() {
-            for d in Dir::ALL {
-                let n = c + d.delta();
-                if n.x < lo.x || n.y < lo.y || n.x > hi.x || n.y > hi.y {
-                    continue;
-                }
-                if inside[local(n)] == u16::MAX - 1 {
+            for s in steps {
+                let n = c + s;
+                if within(n) && inside[local(n)] == UNSET {
                     inside[local(n)] = dist + 1;
                     q.push_back((n, dist + 1));
                 }
             }
         }
         let mut taken = 0;
-        for c in &cells {
+        for c in &filled {
             let i = idx(*c);
             if self.owner[i].is_some() {
                 taken += 1;
             }
+            if let Some(t) = self.trail[i] {
+                let t = t as usize;
+                if t != id && self.players[t].alive {
+                    self.kill(t, Some(id), Cause::Trail);
+                }
+            }
             let dist = inside[local(*c)];
-            let delay = if dist >= u16::MAX - 1 {
+            let delay = if dist >= UNSET {
                 SWEEP_MAX * 0.5
             } else {
                 (dist as f32 * SWEEP_STEP).min(SWEEP_MAX)
@@ -480,8 +598,8 @@ impl World {
         }
         self.claims.push(Claim {
             id,
-            cells: cells.len() + trail.len(),
-            at: self.players[id].look(),
+            cells: filled.len() + cells.len(),
+            at: self.players[id].pos,
             taken,
         });
         for o in 0..self.players.len() {
@@ -499,37 +617,47 @@ impl World {
         }
     }
 
+    pub fn advance_with(&mut self, dt: f32, policy: Policy) {
+        self.acc += dt;
+        while self.acc >= SUB {
+            self.acc -= SUB;
+            self.step_with(policy);
+        }
+    }
+
     pub fn substep(&mut self) {
+        self.step_with(&mut |_, _| None);
+    }
+
+    pub fn step_with(&mut self, policy: Policy) {
         self.clock += SUB;
         for id in 0..self.players.len() {
             if !self.players[id].alive {
                 continue;
             }
-            let p = &mut self.players[id];
-            p.age += SUB;
-            if p.progress == 0.0 && !in_bounds(p.cell + p.dir.delta()) {
-                self.steer(id);
-                let p = &self.players[id];
-                if !in_bounds(p.cell + p.dir.delta()) {
-                    continue;
+            if let Some(effort) = self.players[id].rl.filter(|_| !self.players[id].manual) {
+                self.players[id].think -= SUB;
+                if self.players[id].think <= 0.0 {
+                    self.players[id].think += effort.think_every(super::rl::DECIDE);
+                    self.rl_think(id, effort);
+                }
+            } else if self.players[id].bot && !self.players[id].manual {
+                self.players[id].think -= SUB;
+                if self.players[id].think <= 0.0 {
+                    let every = self.players[id]
+                        .brain
+                        .as_ref()
+                        .map_or(THINK, |b| b.effort.think_every(THINK));
+                    self.players[id].think += every;
+                    self.bot_think(id, policy);
                 }
             }
-            let p = &mut self.players[id];
-            if !p.bot && p.progress < EARLY_TURN && p.dir == p.in_dir {
-                if let Some(&d) = p.queue.front() {
-                    p.queue.pop_front();
-                    if d != p.dir && d != p.dir.opposite() {
-                        p.dir = d;
-                        p.turned_at = self.clock;
-                    }
-                }
-            }
-            p.progress = (p.progress + p.speed * SUB).min(1.0);
+            self.move_player(id);
         }
         self.head_ons();
         for id in 0..self.players.len() {
-            if self.players[id].alive && self.players[id].progress >= 1.0 {
-                self.arrive(id);
+            if self.players[id].alive {
+                self.touch(id);
             }
         }
         for id in 0..self.players.len() {
@@ -540,15 +668,59 @@ impl World {
         }
     }
 
+    fn move_player(&mut self, id: usize) {
+        let p = &mut self.players[id];
+        p.age += SUB;
+        let limit = p.turn * SUB;
+        let turn = wrap_angle(p.want - p.angle).clamp(-limit, limit);
+        p.angle = wrap_angle(p.angle + turn);
+        p.spin = turn / SUB;
+        let step = p.speed * SUB;
+        if step <= 0.0 {
+            return;
+        }
+        let mut d = p.heading();
+        let next = p.pos + d * step;
+        let (lo, hi) = (WALL, SIZE - WALL);
+        let off_x = next.x < lo || next.x > hi;
+        let off_y = next.y < lo || next.y > hi;
+        if off_x || off_y {
+            let mut slide = vec2(if off_x { 0.0 } else { d.x }, if off_y { 0.0 } else { d.y });
+            if slide.length_squared() < 0.01 {
+                let to_mid = Vec2::splat(SIZE / 2.0) - p.pos;
+                slide = if off_x {
+                    vec2(0.0, to_mid.y.signum())
+                } else {
+                    vec2(to_mid.x.signum(), 0.0)
+                };
+            }
+            d = slide.normalize();
+            p.angle = angle_of(d);
+            if p.bot {
+                p.want = p.angle;
+            }
+        }
+        p.pos = (p.pos + d * step).clamp(Vec2::splat(lo), Vec2::splat(hi));
+        if p.out() {
+            p.odo += step;
+            if p.trail
+                .last()
+                .is_none_or(|l| l.distance(p.pos) >= TRAIL_STEP)
+            {
+                p.trail.push(p.pos);
+            }
+        }
+    }
+
     fn head_ons(&mut self) {
         let n = self.players.len();
         for a in 0..n {
             for b in (a + 1)..n {
                 let (pa, pb) = (&self.players[a], &self.players[b]);
-                if !pa.alive || !pb.alive || pa.pos().distance(pb.pos()) >= HEAD_HIT {
+                if !pa.alive || !pb.alive || pa.pos.distance(pb.pos) >= HEAD_HIT {
                     continue;
                 }
-                let (la, lb) = (pa.trail.len(), pb.trail.len());
+                let (la, lb) = (pa.odo, pb.odo);
                 if la <= lb {
                     self.kill(a, Some(b), Cause::HeadOn);
                 }
@@ -559,51 +731,54 @@ impl World {
         }
     }
 
-    fn arrive(&mut self, id: usize) {
+    fn touch(&mut self, id: usize) {
         let me = id as u8;
-        let p = &mut self.players[id];
-        let from = p.cell;
-        p.progress = 0.0;
-        p.cell += p.dir.delta();
-        p.in_dir = p.dir;
-        let c = p.cell;
+        let pos = self.players[id].pos;
+        let c = cell_at(pos);
+        for dy in -STAMP..=STAMP {
+            for dx in -STAMP..=STAMP {
+                let q = c + ivec2(dx, dy);
+                if !in_grid(q) {
+                    continue;
+                }
+                if let Some(o) = self.trail[idx(q)] {
+                    if o != me {
+                        self.kill(o as usize, Some(id), Cause::Trail);
+                    }
+                }
+            }
+        }
         let i = idx(c);
-        if let Some(o) = self.trail[i] {
-            if o == me {
-                self.kill(id, None, Cause::OwnTrail);
-                return;
-            }
-            self.kill(o as usize, Some(id), Cause::Trail);
-        }
-        if self.owner[i] == Some(me) {
-            if !self.players[id].trail.is_empty() {
-                self.close_loop(id);
-            }
-        } else {
-            let p = &mut self.players[id];
-            if p.trail.is_empty() {
-                p.trail_from = from;
-            }
-            p.trail.push(c);
-            self.trail[i] = Some(me);
-        }
-        if self.players[id].alive {
-            self.steer(id);
-        }
-    }
-
-    fn steer(&mut self, id: usize) {
-        if self.players[id].bot {
-            self.bot_think(id);
+        let odo = self.players[id].odo;
+        if self.trail[i] == Some(me) && self.laid[i] < odo - SELF_GAP {
+            self.kill(id, None, Cause::OwnTrail);
             return;
         }
-        let clock = self.clock;
-        let p = &mut self.players[id];
-        while let Some(d) = p.queue.pop_front() {
-            if d != p.dir && d != p.dir.opposite() {
-                p.dir = d;
-                p.turned_at = clock;
-                break;
+        if self.owner[i] == Some(me) {
+            if self.players[id].out() {
+                self.close_loop(id);
+            }
+            return;
+        }
+        if !self.players[id].out() {
+            let p = &mut self.players[id];
+            let back = pos - p.heading() * p.speed * SUB;
+            p.trail = vec![back];
+            p.odo = 0.0;
+        }
+        for dy in -STAMP..=STAMP {
+            for dx in -STAMP..=STAMP {
+                let q = c + ivec2(dx, dy);
+                if !in_grid(q) || dx * dx + dy * dy > STAMP * STAMP {
+                    continue;
+                }
+                let j = idx(q);
+                if self.owner[j] == Some(me) || self.trail[j] == Some(me) {
+                    continue;
+                }
+                self.set_trail(j, Some(me));
+                self.laid[j] = odo;
+                self.players[id].cells.push(j);
             }
         }
     }
@@ -635,45 +810,105 @@ impl World {
 }
 
 impl World {
-    fn path(&self, id: usize, goal: impl Fn(usize) -> bool, budget: usize) -> Option<(Dir, usize)> {
+    fn unit_blocked(&self, id: usize, u: IVec2) -> bool {
         let me = Some(id as u8);
+        let fresh = self.players[id].odo - 1.0;
+        (0..RES).any(|y| {
+            (0..RES).any(|x| {
+                let i = idx(u * RES + ivec2(x, y));
+                self.trail[i] == me && self.laid[i] < fresh
+            })
+        })
+    }
+
+    fn route(&self, id: usize, goal: impl Fn(IVec2) -> bool, budget: usize) -> Option<(f32, f32)> {
         let p = &self.players[id];
-        let start = p.cell;
-        let mut seen = std::collections::HashMap::with_capacity(budget.min(4096));
-        let mut q = VecDeque::new();
-        seen.insert(start, None::<Dir>);
-        q.push_back((start, 0usize));
+        let unit = |v: Vec2| {
+            v.floor()
+                .as_ivec2()
+                .clamp(IVec2::ZERO, IVec2::splat(UNITS - 1))
+        };
+        let start = unit(p.pos);
+        thread_local! {
+            static SCRATCH: std::cell::RefCell<(Vec<i32>, Vec<u16>, Vec<usize>)> =
+                const { std::cell::RefCell::new((Vec::new(), Vec::new(), Vec::new())) };
+        }
+        SCRATCH.with(|scratch| {
+            let mut scratch = scratch.borrow_mut();
+            let (parent, depth, touched) = &mut *scratch;
+            if parent.len() != (UNITS * UNITS) as usize {
+                *parent = vec![-1; (UNITS * UNITS) as usize];
+                *depth = vec![0; (UNITS * UNITS) as usize];
+            }
+            let out = self.route_in(id, &goal, budget, start, parent, depth, touched);
+            for i in touched.drain(..) {
+                parent[i] = -1;
+                depth[i] = 0;
+            }
+            out
+        })
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn route_in(
+        &self,
+        id: usize,
+        goal: &impl Fn(IVec2) -> bool,
+        budget: usize,
+        start: IVec2,
+        parent: &mut [i32],
+        depth: &mut [u16],
+        touched: &mut Vec<usize>,
+    ) -> Option<(f32, f32)> {
+        let p = &self.players[id];
+        let at = |u: IVec2| (u.y * UNITS + u.x) as usize;
+        parent[at(start)] = at(start) as i32;
+        touched.push(at(start));
+        let mut q = VecDeque::from([start]);
+        let heading = p.heading();
+        let steps = [ivec2(1, 0), ivec2(-1, 0), ivec2(0, 1), ivec2(0, -1)];
         let mut visited = 0;
-        while let Some((c, dist)) = q.pop_front() {
-            if c != start && goal(idx(c)) {
-                return seen[&c].map(|d| (d, dist));
+        while let Some(c) = q.pop_front() {
+            if c != start && goal(c) {
+                let mut node = c;
+                while depth[at(node)] > 2 {
+                    let up = parent[at(node)] as usize;
+                    node = ivec2(up as i32 % UNITS, up as i32 / UNITS);
+                }
+                let target = node.as_vec2() + 0.5;
+                return Some((angle_of(target - p.pos), depth[at(c)] as f32));
             }
             visited += 1;
             if visited > budget {
                 return None;
             }
-            for d in Dir::ALL {
-                if c == start && d == p.dir.opposite() {
+            for s in steps {
+                if c == start && s.as_vec2().dot(heading) < -0.5 {
                     continue;
                 }
-                let n = c + d.delta();
-                if !in_bounds(n) || seen.contains_key(&n) {
+                let n = c + s;
+                if n.x < 0 || n.y < 0 || n.x >= UNITS || n.y >= UNITS || parent[at(n)] >= 0 {
                     continue;
                 }
-                if self.trail[idx(n)] == me {
+                if self.unit_blocked(id, n) {
                     continue;
                 }
-                let first = seen[&c].or(Some(d));
-                seen.insert(n, first);
-                q.push_back((n, dist + 1));
+                parent[at(n)] = at(c) as i32;
+                depth[at(n)] = depth[at(c)] + 1;
+                touched.push(at(n));
+                q.push_back(n);
             }
         }
         None
     }
 
-    pub fn way_home(&self, id: usize) -> Option<(Dir, usize)> {
+    pub fn way_home(&self, id: usize) -> Option<(f32, f32)> {
         let me = Some(id as u8);
-        self.path(id, |i| self.owner[i] == me, 6000)
+        self.route(
+            id,
+            |u| self.owner[idx(u * RES + IVec2::splat(RES / 2))] == me,
+            6000,
+        )
     }
 
     fn gentle_to(&self, id: usize, other: usize) -> bool {
@@ -688,49 +923,81 @@ impl World {
             .iter()
             .enumerate()
             .filter(|(o, p)| *o != id && p.alive)
-            .map(|(_, p)| (p.pos() - at).abs().element_sum())
+            .map(|(_, p)| p.pos.distance(at))
             .fold(f32::MAX, f32::min)
     }
 
-    fn bot_safe(&self, id: usize, d: Dir, hunting: bool) -> bool {
+    pub fn probe(&self, id: usize, aim: f32, avoid_trails: bool) -> f32 {
         let p = &self.players[id];
         let me = Some(id as u8);
-        let n = p.cell + d.delta();
-        if !in_bounds(n) || d == p.dir.opposite() || self.trail[idx(n)] == me {
-            return false;
+        let mut a = p.angle;
+        let mut pos = p.pos;
+        let mut odo = p.odo;
+        let dt = PROBE_STEP / p.speed.max(0.5);
+        let steps = (LOOK / PROBE_STEP) as usize;
+        for k in 1..=steps {
+            let limit = p.turn * dt;
+            a += wrap_angle(aim - a).clamp(-limit, limit);
+            pos += dir_of(a) * PROBE_STEP;
+            odo += PROBE_STEP;
+            let gone = (k - 1) as f32 * PROBE_STEP;
+            if !inside(pos, WALL + 0.3) {
+                return gone;
+            }
+            let i = idx(cell_at(pos));
+            if p.out() && self.owner[i] == me {
+                return LOOK;
+            }
+            match self.trail[i] {
+                Some(o) if Some(o) == me => {
+                    if self.laid[i] < odo - SELF_GAP {
+                        return gone;
+                    }
+                }
+                Some(o) if avoid_trails || self.gentle_to(id, o as usize) => return gone,
+                _ => {}
+            }
+            if k <= 6 {
+                for (o, q) in self.players.iter().enumerate() {
+                    if o == id || !q.alive || q.pos.distance(pos) > 1.4 {
+                        continue;
+                    }
+                    if self.gentle_to(id, o) || q.odo >= p.odo {
+                        return gone;
+                    }
+                }
+            }
         }
-        let nc = center(n);
-        for (o, q) in self.players.iter().enumerate() {
-            if o == id || !q.alive {
-                continue;
-            }
-            let near = q.pos().distance(nc) < 1.8;
-            if near && (self.gentle_to(id, o) || q.trail.len() >= p.trail.len()) {
-                return false;
-            }
-        }
-        if let Some(t) = self.trail[idx(n)] {
-            if self.gentle_to(id, t as usize) {
-                return false;
-            }
-            if !hunting && rand::gen_range(0.0, 1.0) < p.tune.caution {
-                return false;
-            }
-        }
-        true
+        LOOK
     }
 
-    pub fn open_ahead(&self, id: usize, d: Dir) -> i32 {
+    pub fn safe_aim(&self, id: usize, want: f32, avoid_trails: bool) -> f32 {
+        let mut best = (want, -1.0);
+        for k in 0..13 {
+            let off = ((k + 1) / 2) as f32 * if k % 2 == 0 { 1.0 } else { -1.0 } * 0.4;
+            let a = wrap_angle(want + off);
+            let s = self.probe(id, a, avoid_trails);
+            if s >= LOOK {
+                return a;
+            }
+            if s > best.1 {
+                best = (a, s);
+            }
+        }
+        best.0
+    }
+
+    pub fn open_ahead(&self, id: usize, angle: f32) -> i32 {
         let p = &self.players[id];
         let me = Some(id as u8);
-        let mut c = p.cell;
+        let d = dir_of(angle);
         let mut score = 0;
-        for k in 0..14 {
-            c += d.delta();
-            if !in_bounds(c) {
+        for k in 1..=14 {
+            let at = p.pos + d * (k as f32 * 0.5);
+            if !inside(at, 1.0) {
                 return score - 20 + k;
             }
-            let i = idx(c);
+            let i = idx(cell_at(at));
             if self.trail[i].is_some() {
                 return score - 5;
             }
@@ -741,177 +1008,187 @@ impl World {
         score
     }
 
-    fn leg(&self, id: usize) -> i32 {
-        let reach = self.players[id].tune.reach as i32;
-        rand::gen_range((reach / 4).max(2), (reach / 3).max(3) + 1)
+    fn leg(&self, id: usize) -> f32 {
+        let reach = self.players[id].tune.reach as f32;
+        rand::gen_range((reach / 4.0).max(2.0), (reach / 3.0).max(3.0) + 1.0)
     }
 
-    fn prey(&self, id: usize) -> Option<(Dir, usize)> {
+    fn prey(&self, id: usize) -> Option<(f32, f32)> {
         let me = &self.players[id];
-        let eligible = |o: u8| {
-            let o = o as usize;
-            o != id
-                && self.players[o].alive
-                && (o != 0
-                    || self.players[0].bot
-                    || arena::hunts_player(self.skill, self.players[0].age))
-        };
-        let close = self.players.iter().enumerate().any(|(o, q)| {
-            eligible(o as u8)
-                && q.trail
-                    .iter()
-                    .any(|t| (*t - me.cell).abs().element_sum() <= 10)
-        });
-        if !close {
-            return None;
+        let mut best: Option<(f32, f32)> = None;
+        for (o, q) in self.players.iter().enumerate() {
+            let eligible = o != id
+                && q.alive
+                && (o != 0 || self.players[0].bot || arena::hunts_player(self.skill, q.age));
+            if !eligible {
+                continue;
+            }
+            for t in &q.trail {
+                let d = t.distance(me.pos);
+                if d <= 10.0 && best.is_none_or(|b| d < b.1) {
+                    best = Some((angle_of(*t - me.pos), d));
+                }
+            }
         }
-        self.path(id, |i| self.trail[i].is_some_and(eligible), 500)
-            .filter(|(_, d)| *d <= 12)
+        best
     }
 
-    fn bot_think(&mut self, id: usize) {
+    fn pick_exit(&self, id: usize) -> f32 {
+        let a = self.players[id].angle;
+        (-3..=3)
+            .map(|k| wrap_angle(a + k as f32 * 0.45))
+            .max_by_key(|d| self.open_ahead(id, *d) * 4 + rand::gen_range(0, 12))
+            .unwrap_or(a)
+    }
+
+    fn rl_think(&mut self, id: usize, effort: Effort) {
+        let Some(net) = super::rl::shipped() else {
+            return;
+        };
+        let coarse = super::rl::Coarse::of(self);
+        let a = net.choose(&super::rl::observe(self, id, &coarse), effort);
+        let p = &mut self.players[id];
+        p.want = wrap_angle(p.angle + super::rl::TURNS[a]);
+    }
+
+    fn bot_think(&mut self, id: usize, policy: Policy) {
+        let (aims, feats) = self.options(id);
+        let picked = match policy(id, &feats) {
+            Some(k) => Some(k),
+            None => self.players[id].brain.as_mut().map(|b| b.choose(&feats)),
+        };
+        let Some(k) = picked else {
+            self.plan_think(id);
+            if self.lessons.is_some() {
+                let want = self.players[id].want;
+                let k = (0..aims.len())
+                    .min_by(|a, b| {
+                        let d = |k: usize| wrap_angle(aims[k] - want).abs();
+                        d(*a).total_cmp(&d(*b))
+                    })
+                    .unwrap_or(0);
+                if let Some(l) = self.lessons.as_mut() {
+                    l.push((feats, k));
+                }
+            }
+            return;
+        };
+        let mut aim = aims[k.min(aims.len() - 1)];
+        if self.hits_gentle(id, aim) {
+            aim = self.safe_aim(id, aim, false);
+        }
+        self.players[id].want = aim;
+    }
+
+    fn plan_think(&mut self, id: usize) {
         let me = Some(id as u8);
         let p = &self.players[id];
-        let out = !p.trail.is_empty();
-        let dir = p.dir;
+        let out = p.out();
         let tune = p.tune;
+        let pos = p.pos;
         let mut plan = p.plan;
-        let mut want = dir;
+        let mut want = p.want;
         if !out {
-            let home = self.owner[idx(p.cell)] == me;
-            if !matches!(plan, Plan::Leave(_)) || rand::gen_range(0, 10) == 0 || !home {
-                let pick = [dir, turn_left(dir), turn_right(dir)]
-                    .into_iter()
-                    .max_by_key(|d| self.open_ahead(id, *d) * 4 + rand::gen_range(0, 12))
-                    .unwrap_or(dir);
-                plan = Plan::Leave(pick);
+            let home = self.owner_at(pos) == me;
+            if !matches!(plan, Plan::Leave(_)) || rand::gen_range(0, 20) == 0 || !home {
+                plan = Plan::Leave(self.pick_exit(id));
             }
             if let Plan::Leave(d) = plan {
                 want = d;
             }
         } else {
             if matches!(plan, Plan::Leave(_)) {
+                let dir = p.angle;
+                let to = (pos + dir_of(dir) * self.leg(id))
+                    .clamp(Vec2::splat(2.0), Vec2::splat(SIZE - 2.0));
                 plan = Plan::Out {
-                    left: self.leg(id),
+                    to,
+                    dir,
                     turns: 0,
-                    right: rand::gen_range(0, 2) == 0,
+                    side: if rand::gen_range(0, 2) == 0 {
+                        1.0
+                    } else {
+                        -1.0
+                    },
                 };
             }
-            let len = p.trail.len();
+            let len = p.odo;
             let home = self.way_home(id);
-            let home_dist = home.map_or(99, |(_, d)| d) as f32;
-            let threat = self.nearest_head(id, p.pos());
+            let home_dist = home.map_or(99.0, |(_, d)| d);
+            let threat = self.nearest_head(id, pos);
             if plan != Plan::Home {
-                let flee = threat <= home_dist + 4.0 && rand::gen_range(0.0, 1.0) < tune.caution;
-                if len >= tune.reach || home.is_none() || flee {
+                let flee = threat <= home_dist + 4.0 && rand::gen_range(0.0, 1.0) < tune.effort;
+                if len >= tune.reach as f32 || home.is_none() || flee {
                     plan = Plan::Home;
                 } else if plan != Plan::Hunt
-                    && len * 2 < tune.reach
-                    && rand::gen_range(0.0, 1.0) < tune.hunt * 0.3
+                    && len * 2.0 < tune.reach as f32
+                    && rand::gen_range(0.0, 1.0) < tune.effort * 0.15
                     && self.prey(id).is_some()
                 {
                     plan = Plan::Hunt;
                 }
             }
+            let go_home = |w: &World| home.map_or(w.players[id].angle, |(d, _)| d);
             match plan {
-                Plan::Out { left, turns, right } => {
-                    if left <= 1 {
+                Plan::Out {
+                    to,
+                    dir,
+                    turns,
+                    side,
+                } => {
+                    if pos.distance(to) < 0.9 || (to - pos).dot(dir_of(dir)) < 0.0 {
                         if turns >= 2 {
                             plan = Plan::Home;
-                            want = home.map_or(dir, |(d, _)| d);
+                            want = go_home(self);
                         } else {
-                            want = if right {
-                                turn_right(dir)
-                            } else {
-                                turn_left(dir)
-                            };
+                            let bend = rand::gen_range(0.75, 1.3) * FRAC_PI_2;
+                            let dir = wrap_angle(dir + side * bend);
+                            let leg = self.leg(id) + if turns == 0 { 0.0 } else { 2.0 };
+                            let to = (to + dir_of(dir) * leg)
+                                .clamp(Vec2::splat(2.0), Vec2::splat(SIZE - 2.0));
                             plan = Plan::Out {
-                                left: self.leg(id) + if turns == 0 { 0 } else { 2 },
+                                to,
+                                dir,
                                 turns: turns + 1,
-                                right,
+                                side,
                             };
+                            want = angle_of(to - pos);
                         }
                     } else {
-                        plan = Plan::Out {
-                            left: left - 1,
-                            turns,
-                            right,
-                        };
+                        want = angle_of(to - pos);
                     }
                 }
                 Plan::Hunt => match self.prey(id) {
-                    Some((d, _)) if len < tune.reach => want = d,
+                    Some((d, _)) if len < tune.reach as f32 => want = d,
                     _ => {
                         plan = Plan::Home;
-                        want = home.map_or(dir, |(d, _)| d);
+                        want = go_home(self);
                     }
                 },
-                _ => want = home.map_or(dir, |(d, _)| d),
+                _ => want = go_home(self),
             }
         }
         let hunting = plan == Plan::Hunt;
-        if !self.bot_safe(id, want, hunting) {
-            let options = [dir, turn_left(dir), turn_right(dir)];
-            let mut best = None;
-            let mut best_score = i32::MIN;
-            for d in options {
-                if !self.bot_safe(id, d, hunting) && in_bounds(self.players[id].cell + d.delta()) {
-                    continue;
-                }
-                let n = self.players[id].cell + d.delta();
-                if !in_bounds(n) || self.trail[idx(n)] == me {
-                    continue;
-                }
-                let mut s = self.open_ahead(id, d) + rand::gen_range(0, 3);
-                if out {
-                    let saved = self.players[id].dir;
-                    self.players[id].dir = d;
-                    self.players[id].cell = n;
-                    let back = self.owner[idx(n)] == me || self.way_home(id).is_some();
-                    self.players[id].cell = n - d.delta();
-                    self.players[id].dir = saved;
-                    if back {
-                        s += 100;
-                    }
-                }
-                if s > best_score {
-                    best_score = s;
-                    best = Some(d);
-                }
-            }
-            want = best.unwrap_or_else(|| {
-                options
-                    .into_iter()
-                    .find(|d| {
-                        let n = self.players[id].cell + d.delta();
-                        in_bounds(n) && self.trail[idx(n)] != me
-                    })
-                    .unwrap_or(dir)
-            });
-        }
-        let clock = self.clock;
+        let avoid = !hunting && rand::gen_range(0.0, 1.0) < tune.effort;
+        let want = self.safe_aim(id, want, avoid);
         let p = &mut self.players[id];
         p.plan = plan;
-        if want != p.dir {
-            p.dir = want;
-            p.turned_at = clock;
-        }
+        p.want = want;
     }
 }
 
-pub fn spread_spots(n: usize) -> Vec<IVec2> {
+pub fn spread_spots(n: usize) -> Vec<Vec2> {
     let mut spots = vec![];
     let ring = |k: usize, total: usize, r: f32| {
-        let a = k as f32 / total as f32 * std::f32::consts::TAU + 0.4;
-        let c = vec2(GW as f32, GH as f32) * 0.5;
-        (c + vec2(a.cos(), a.sin()) * r).as_ivec2()
+        let a = k as f32 / total as f32 * TAU + 0.4;
+        Vec2::splat(SIZE / 2.0) + dir_of(a) * r
     };
     let inner = n.min(4);
     for k in 0..inner {
-        spots.push(ring(k, inner, GW as f32 * 0.22));
+        spots.push(ring(k, inner, SIZE * 0.22));
     }
     for k in 0..n - inner {
-        spots.push(ring(k, n - inner, GW as f32 * 0.4));
+        spots.push(ring(k, n - inner, SIZE * 0.4));
     }
     spots
 }

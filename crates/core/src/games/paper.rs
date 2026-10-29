@@ -1,5 +1,8 @@
 pub mod arena;
+pub mod camera;
+pub mod learn;
 pub mod pilot;
+pub mod rl;
 pub mod world;
 
 use crate::engine::*;
@@ -8,9 +11,10 @@ use crate::fx::*;
 use crate::geom::*;
 use crate::profile::{self, Better};
 use crate::sfx::{self, Say, Sfx};
-use glam::{vec2, IVec2, Vec2};
+use glam::{vec2, vec3, Vec2, Vec3};
 pub use world::{
-    center, idx, in_bounds, Cause, Death, Player, World, GH, GW, MAX_PLAYERS, START_R,
+    cell_at, cell_center, cell_of, idx, in_grid, Cause, Death, Player, World, CELL, MAX_PLAYERS, N,
+    RES, SIZE, START_R,
 };
 
 pub const GAME: &str = "paper";
@@ -21,6 +25,9 @@ pub const FEED_MAX: usize = 3;
 const MIN_CELLS: f32 = 17.0;
 const MAX_CELLS: f32 = 46.0;
 const THREAT_RANGE: f32 = 26.0;
+const WIN_DELAY: f32 = 1.4;
+const STEER_DEAD_MM: f32 = 2.5;
+const MIN_CLAIM_PCT: f32 = 0.05;
 
 pub const COLORS: [(u8, u8, u8); 12] = [
     (40, 170, 230),
@@ -52,7 +59,23 @@ pub enum State {
     Ready,
     Playing,
     Dead,
+    Won,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Chunk {
+    pub pos: Vec3,
+    pub vel: Vec3,
+    pub yaw: f32,
+    pub spin: f32,
+    pub age: f32,
+    pub life: f32,
+    pub size: f32,
+    pub color: Color,
+}
+
+pub const MAX_CHUNKS: usize = 160;
+const CHUNK_GRAVITY: f32 = 26.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct FeedLine {
@@ -79,6 +102,7 @@ pub struct Paper {
     pub zoom: f32,
     pub cam: Vec2,
     pub particles: Particles,
+    pub chunks: Vec<Chunk>,
     pub popups: Popups,
     pub shake: Shake,
     pub bump: Bump,
@@ -90,8 +114,7 @@ pub struct Paper {
     pub lives: u32,
     pub skill: f32,
     pub milestone: Option<i64>,
-    pub steer: Option<Dir>,
-    drag_from: Option<Vec2>,
+    pub steer: Option<f32>,
     last_claim_say: f32,
 }
 
@@ -106,12 +129,13 @@ impl Paper {
         let mut w = World::new(skill);
         let n = arena::bots_for(skill);
         let spots = world::spread_spots(n + 1);
-        w.add_player(spots[0], Dir::Right, false);
+        w.add_player(spots[0], 0.0, false);
         for s in &spots[1..] {
-            w.add_player(*s, Dir::ALL[crate::rng::gen_range(0, 4)], true);
+            let a = crate::rng::gen_range(-std::f32::consts::PI, std::f32::consts::PI);
+            w.add_player(*s, a, true);
         }
         w.players[0].speed = 0.0;
-        let start = w.players[0].pos();
+        let start = w.players[0].pos;
         let mut g = Self {
             w,
             state: State::Ready,
@@ -120,6 +144,7 @@ impl Paper {
             zoom: MIN_CELLS,
             cam: start,
             particles: Particles::default(),
+            chunks: vec![],
             popups: Popups::default(),
             shake: Shake::default(),
             bump: Bump::default(),
@@ -138,7 +163,6 @@ impl Paper {
             skill,
             milestone: arena::next_milestone(best.max(0)),
             steer: None,
-            drag_from: None,
             last_claim_say: -10.0,
         };
         g.zoom = g.target_zoom();
@@ -168,22 +192,28 @@ impl Paper {
     }
 
     pub fn cell_px(&self, view: &View) -> f32 {
-        let short = view.w.min(view.h - TOP * 0.5);
+        let short = view.w.min(view.h);
         short / self.zoom
     }
 
-    pub fn origin(&self, view: &View) -> Vec2 {
-        let cell = self.cell_px(view);
-        vec2(view.w / 2.0, (view.h + TOP * 0.5) / 2.0) - self.cam * cell
+    pub fn eye(&self, view: &View) -> camera::Cam {
+        camera::Cam::new(view, self.cam, self.zoom)
     }
 
     pub fn to_screen(&self, view: &View, world: Vec2) -> Vec2 {
-        self.origin(view) + world * self.cell_px(view)
+        self.eye(view)
+            .project(view, vec3(world.x, camera::SLAB, world.y))
+    }
+
+    pub fn snakes_left(&self) -> usize {
+        self.w.players.iter().skip(1).filter(|p| p.alive).count()
     }
 
     pub fn threats(&self, view: &View) -> Vec<(usize, Vec2, f32)> {
-        let cell = self.cell_px(view);
-        let half = vec2(view.w, view.h) / cell / 2.0;
+        let eye = self.eye(view);
+        let f = view.full();
+        let mid = f.center();
+        let (half_w, half_h) = (f.w / 2.0 * 0.92, f.h / 2.0 * 0.92);
         let me = self.me().look();
         self.w
             .players
@@ -192,40 +222,41 @@ impl Paper {
             .skip(1)
             .filter(|(_, p)| p.alive)
             .filter_map(|(id, p)| {
-                let d = p.look() - self.cam;
-                let off =
-                    d.x.abs() > half.x * 0.92 || d.y.abs() > (half.y - TOP / cell * 0.5) * 0.92;
+                let s = eye.project(view, vec3(p.look().x, camera::SLAB, p.look().y));
+                let d = s - mid;
+                let off = d.x.abs() > half_w || d.y.abs() > half_h;
                 let dist = p.look().distance(me);
                 (off && dist < THREAT_RANGE).then_some((id, d.normalize_or_zero(), dist))
             })
             .collect()
     }
 
-    fn read_input(&mut self, input: &Input) -> Option<Dir> {
-        if let Some(d) = input.key_dir {
-            return Some(d);
+    fn read_input(&self, input: &Input, view: &View) -> Option<f32> {
+        let keys = vec2(
+            (input.right as i32 - input.left as i32) as f32,
+            (input.down_key as i32 - input.up as i32) as f32,
+        );
+        let keys = if keys == Vec2::ZERO {
+            input.key_dir.map_or(Vec2::ZERO, |d| d.delta().as_vec2())
+        } else {
+            keys
+        };
+        if keys != Vec2::ZERO {
+            return Some(world::angle_of(keys));
         }
-        if input.pressed {
-            self.drag_from = Some(input.pos);
+        if input.down {
+            let head = self.to_screen(view, self.me().pos);
+            if (input.pos - head).length() > STEER_DEAD_MM * input.mm() {
+                let at = self.eye(view).ground(view, input.pos, camera::SLAB)?;
+                return Some(world::angle_of(at - self.me().pos));
+            }
         }
-        if !input.down {
-            self.drag_from = None;
-            return input.swipe;
-        }
-        let from = self.drag_from?;
-        let delta = input.pos - from;
-        let step = SWIPE_MM * input.mm() * 0.8;
-        if delta.length() < step {
-            return None;
-        }
-        let d = Dir::from_vec(delta);
-        let along = delta.dot(d.delta().as_vec2());
-        let across = delta.length_squared() - along * along;
-        if along * along < across * 1.5 {
-            return None;
-        }
-        self.drag_from = Some(input.pos);
-        Some(d)
+        input.swipe.map(|d| world::angle_of(d.delta().as_vec2()))
+    }
+
+    pub fn aim(&mut self, angle: f32) {
+        self.steer = Some(angle);
+        self.w.players[0].want = angle;
     }
 
     fn begin(&mut self) {
@@ -237,37 +268,20 @@ impl Paper {
     }
 
     pub fn respawn_me(&mut self) {
-        let at = self
-            .w
-            .free_spot(200)
-            .or_else(|| self.w.free_spot(400))
-            .unwrap_or(IVec2::new(GW / 2, GH / 2));
-        self.w.respawn(0, at);
-        self.cam = self.w.players[0].pos();
-        self.zoom = self.target_zoom();
+        let lives = self.lives + 1;
+        let best = self.best;
+        *self = Self::with_best(best);
+        self.lives = lives;
         self.state = State::Playing;
-        self.since = 0.0;
-        self.lives += 1;
-        self.new_best = false;
-        self.rank = None;
-        self.run = Run {
-            peak: 0.0,
-            kills: 0,
-            time: 0.0,
-            cause: None,
-            killer: None,
-        };
+        self.w.players[0].speed = arena::PLAYER_SPEED;
         sfx::play(Sfx::Pop);
         sfx::say(Say::Go);
     }
 
-    fn die(&mut self, d: &Death) {
-        self.state = State::Dead;
+    fn settle(&mut self) {
         self.since = 0.0;
-        self.run.peak = self.run.peak.max(self.me().peak);
+        self.run.peak = self.run.peak.max(self.me().peak).max(self.share(0));
         self.run.kills = self.me().kills;
-        self.run.cause = Some(d.cause);
-        self.run.killer = d.killer.map(|k| self.w.players[k].name);
         let score = arena::score(self.run.peak);
         self.new_best = score > self.best;
         self.rank = profile::submit(GAME, score, Better::Higher);
@@ -279,10 +293,68 @@ impl Paper {
                 (self.run.kills as i64).max(profile::get(GAME, "kills_best")),
             );
         }
+    }
+
+    fn win(&mut self) {
+        self.state = State::Won;
+        self.settle();
+        profile::set(GAME, "wins", profile::get(GAME, "wins") + 1);
+        sfx::play(Sfx::Win);
+        sfx::say(Say::Win);
+        feel::impact_tinted(Impact::Large, color(0));
+    }
+
+    fn die(&mut self, d: &Death) {
+        self.state = State::Dead;
+        self.run.cause = Some(d.cause);
+        self.run.killer = d.killer.map(|k| self.w.players[k].name);
+        self.settle();
         sfx::play(Sfx::Lose);
         sfx::say(Say::Oops);
         feel::impact_tinted(Impact::Large, color(0));
         self.shake.add(0.8);
+    }
+
+    fn scatter(&mut self, at: Vec2, col: Color) {
+        for k in 0..16 {
+            if self.chunks.len() >= MAX_CHUNKS {
+                self.chunks.remove(0);
+            }
+            let a = crate::rng::gen_range(0.0, std::f32::consts::TAU);
+            let out = crate::rng::gen_range(2.5, 8.0);
+            let dark = if k % 3 == 0 { col } else { col.darker(0.35) };
+            self.chunks.push(Chunk {
+                pos: vec3(at.x, camera::SLAB + 0.4, at.y),
+                vel: vec3(
+                    a.cos() * out,
+                    crate::rng::gen_range(6.0, 13.0),
+                    a.sin() * out,
+                ),
+                yaw: a,
+                spin: crate::rng::gen_range(-9.0, 9.0),
+                age: 0.0,
+                life: crate::rng::gen_range(0.9, 1.5),
+                size: crate::rng::gen_range(0.28, 0.5),
+                color: dark,
+            });
+        }
+    }
+
+    fn move_chunks(&mut self, dt: f32) {
+        for c in &mut self.chunks {
+            c.age += dt;
+            c.vel.y -= CHUNK_GRAVITY * dt;
+            c.pos += c.vel * dt;
+            c.yaw += c.spin * dt;
+            if c.pos.y < camera::SLAB + c.size / 2.0 {
+                c.pos.y = camera::SLAB + c.size / 2.0;
+                c.vel.y = c.vel.y.abs() * 0.3;
+                c.vel.x *= 0.6;
+                c.vel.z *= 0.6;
+                c.spin *= 0.6;
+            }
+        }
+        self.chunks.retain(|c| c.age < c.life);
     }
 
     fn feed_line(&mut self, text: String, color: Color, mine: bool) {
@@ -315,6 +387,7 @@ impl Paper {
                     ..Default::default()
                 },
             );
+            self.scatter(d.at, col);
             let killer = d.killer.map(|k| self.w.players[k].name);
             if d.victim == 0 {
                 let text = match (killer, d.cause) {
@@ -331,7 +404,7 @@ impl Paper {
                 feel::impact(Impact::Medium);
                 self.shake.add(0.35);
                 self.bump.kick();
-                self.popups.add(d.at - vec2(0.0, 1.0), "+1", GOLD, 1.4);
+                self.popups.add(d.at - vec2(0.0, 1.0), "Kill!", GOLD, 1.5);
             } else {
                 let text = match killer {
                     Some(k) => format!("{k} eliminated {}", d.name),
@@ -348,6 +421,9 @@ impl Paper {
                 continue;
             }
             let pct = c.cells as f32 / self.w.total() as f32 * 100.0;
+            if pct < MIN_CLAIM_PCT {
+                continue;
+            }
             self.popups.add(
                 c.at - vec2(0.0, 2.4),
                 format!("+{pct:.1}%"),
@@ -397,6 +473,7 @@ impl Paper {
     fn follow(&mut self, dt: f32) {
         let want = self.target_zoom();
         self.zoom = approach(self.zoom, want, 1.5, dt);
+        self.move_chunks(dt);
         if self.me().alive {
             let target = self.me().look() + self.me().heading() * 1.2;
             let k = 1.0 - (-dt * 8.0).exp();
@@ -404,14 +481,12 @@ impl Paper {
         }
     }
 
-    fn tick(&mut self, input: &Input, dt: f32) {
-        if let Some(d) = self.read_input(input) {
-            self.steer = Some(d);
-            self.w.players[0].wants(d);
+    fn tick(&mut self, input: &Input, view: &View, dt: f32) {
+        if let Some(a) = self.read_input(input, view) {
+            self.aim(a);
         }
         self.run.time += dt;
         self.w.advance(dt);
-        self.w.respawn_bots(dt);
         self.run.peak = self.run.peak.max(self.me().peak);
     }
 }
@@ -455,21 +530,25 @@ impl Game for Paper {
         self.feed.retain(|f| f.age < FEED_LIFE);
         match self.state {
             State::Ready => {
-                if let Some(d) = self.read_input(input).or(input.dir()) {
+                if let Some(a) = self.read_input(input, view) {
                     self.begin();
-                    self.w.players[0].wants(d);
+                    self.aim(a);
                 } else if input.tap() {
                     self.begin();
                 } else {
                     self.w.advance(dt * 0.5);
-                    self.w.respawn_bots(dt);
                 }
             }
-            State::Playing => self.tick(input, dt),
-            State::Dead => {
+            State::Playing => self.tick(input, view, dt),
+            State::Dead | State::Won => {
                 self.w.advance(dt);
-                self.w.respawn_bots(dt);
-                let ready = self.since >= RESPAWN_WAIT;
+                let ready = self.since
+                    >= RESPAWN_WAIT
+                        + if self.state == State::Won {
+                            WIN_DELAY
+                        } else {
+                            0.0
+                        };
                 let tapped = (input.pressed && play_again_button(view).contains(input.pos))
                     || input.action
                     || input.key_dir.is_some();
@@ -479,6 +558,9 @@ impl Game for Paper {
             }
         }
         self.react();
+        if self.state == State::Playing && self.me().alive && self.snakes_left() == 0 {
+            self.win();
+        }
         self.follow(dt);
     }
 }

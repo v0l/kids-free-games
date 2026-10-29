@@ -2,47 +2,54 @@ use super::pilot::Pilot;
 use super::world::*;
 use super::*;
 use crate::rng as rand;
-use glam::ivec2;
+use std::f32::consts::{FRAC_PI_2, PI};
+
+const RIGHT: f32 = 0.0;
+const DOWN: f32 = FRAC_PI_2;
+const LEFT: f32 = PI;
+const UP: f32 = -FRAC_PI_2;
 
 fn solo() -> World {
     let mut w = World::new(0.5);
-    w.add_player(ivec2(20, 20), Dir::Right, false);
+    w.add_player(vec2(20.0, 20.0), RIGHT, false);
     w
 }
 
-fn go(w: &mut World, id: usize, d: Dir, cells: usize) {
+fn go(w: &mut World, id: usize, angle: f32, dist: f32) {
     let speeds: Vec<f32> = w.players.iter().map(|p| p.speed).collect();
     for (o, p) in w.players.iter_mut().enumerate() {
         if o != id {
             p.speed = 0.0;
         }
     }
-    walk(w, id, d, cells);
+    walk(w, id, angle, dist);
     for (p, s) in w.players.iter_mut().zip(speeds) {
         p.speed = s;
     }
 }
 
-fn walk(w: &mut World, id: usize, d: Dir, cells: usize) {
-    w.players[id].wants(d);
-    for _ in 0..cells {
-        let start = w.players[id].cell;
-        let mut guard = 0;
-        while w.players[id].alive && w.players[id].cell == start && guard < 2000 {
-            w.substep();
-            guard += 1;
-        }
-        if !w.players[id].alive {
-            return;
-        }
+fn walk(w: &mut World, id: usize, angle: f32, dist: f32) {
+    w.players[id].want = angle;
+    let mut moved = 0.0;
+    let mut guard = 0;
+    while w.players[id].alive && moved < dist && guard < 20_000 {
+        let before = w.players[id].pos;
+        w.substep();
+        moved += w.players[id].pos.distance(before);
+        guard += 1;
     }
 }
 
-fn box_loop(w: &mut World) {
-    go(w, 0, Dir::Right, 6);
-    go(w, 0, Dir::Down, 6);
-    go(w, 0, Dir::Left, 6);
-    go(w, 0, Dir::Up, 6);
+fn box_loop(w: &mut World, side: f32) {
+    go(w, 0, RIGHT, side);
+    go(w, 0, DOWN, side);
+    go(w, 0, LEFT, side);
+    go(w, 0, UP, side);
+    go(w, 0, UP, 4.0);
+}
+
+fn owned(w: &World, p: Vec2, id: usize) -> bool {
+    w.owner_at(p) == Some(id as u8)
 }
 
 fn fresh_player() {
@@ -54,18 +61,25 @@ fn still(w: &mut World, id: usize) {
     w.players[id].speed = 0.0;
 }
 
+fn place(w: &mut World, id: usize, at: Vec2, angle: f32) {
+    let p = &mut w.players[id];
+    p.pos = at;
+    p.angle = angle;
+    p.want = angle;
+}
+
 #[test]
 fn closing_a_loop_fills_the_inside_and_clears_the_trail() {
     let mut w = solo();
     let before = w.counts[0];
-    box_loop(&mut w);
+    box_loop(&mut w, 8.0);
     assert!(w.players[0].alive);
-    assert!(w.players[0].trail.is_empty());
+    assert!(!w.players[0].out());
     assert!(w.trail.iter().all(|t| t.is_none()));
-    for c in [ivec2(24, 24), ivec2(25, 25), ivec2(23, 21)] {
-        assert_eq!(w.owner[idx(c)], Some(0), "{c}");
+    for p in [vec2(26.0, 25.0), vec2(24.0, 26.0), vec2(27.0, 22.0)] {
+        assert!(owned(&w, p, 0), "{p}");
     }
-    assert!(w.counts[0] as usize > before as usize + 30);
+    assert!(w.counts[0] as usize > before as usize + 40 * (RES * RES) as usize);
     assert_eq!(
         w.counts[0] as usize,
         w.owner.iter().filter(|o| **o == Some(0)).count()
@@ -76,12 +90,9 @@ fn closing_a_loop_fills_the_inside_and_clears_the_trail() {
 #[test]
 fn the_fill_sweeps_out_from_the_loop() {
     let mut w = solo();
-    go(&mut w, 0, Dir::Right, 10);
-    go(&mut w, 0, Dir::Down, 10);
-    go(&mut w, 0, Dir::Left, 10);
-    go(&mut w, 0, Dir::Up, 10);
-    let near = idx(ivec2(29, 25));
-    let deep = idx(ivec2(25, 26));
+    box_loop(&mut w, 12.0);
+    let near = idx(cell_at(vec2(31.0, 26.0)));
+    let deep = idx(cell_at(vec2(27.0, 27.0)));
     assert!(w.changed[deep] > w.changed[near]);
     w.clock = w.changed[near] + 0.001;
     assert_eq!(w.shown(near), Some(0));
@@ -91,12 +102,60 @@ fn the_fill_sweeps_out_from_the_loop() {
 }
 
 #[test]
+fn heads_steer_at_any_angle_and_turn_smoothly() {
+    let mut w = solo();
+    go(&mut w, 0, RIGHT, 5.0);
+    let diag = PI / 5.0;
+    w.players[0].want = diag;
+    let mut last = w.players[0].angle;
+    let mut biggest: f32 = 0.0;
+    let mut jump: f32 = 0.0;
+    let mut pos = w.players[0].pos;
+    for _ in 0..240 {
+        w.substep();
+        let a = w.players[0].angle;
+        biggest = biggest.max(wrap_angle(a - last).abs());
+        jump = jump.max(w.players[0].pos.distance(pos));
+        last = a;
+        pos = w.players[0].pos;
+    }
+    assert!((w.players[0].angle - diag).abs() < 1e-3);
+    assert!(
+        biggest <= PLAYER_TURN * SUB + 1e-4,
+        "turned {biggest} in one step"
+    );
+    assert!(jump < 0.1, "jumped {jump}");
+    let h = w.players[0].heading();
+    assert!(h.x > 0.5 && h.y > 0.4, "{h}");
+    let pts = w.players[0].trail_points();
+    let bends = pts
+        .windows(3)
+        .map(|t| wrap_angle(angle_of(t[2] - t[1]) - angle_of(t[1] - t[0])).abs())
+        .fold(0.0, f32::max);
+    assert!(bends < 0.5, "trail kinks by {bends}");
+}
+
+#[test]
+fn a_diagonal_loop_claims_a_diamond() {
+    let mut w = solo();
+    let s = 7.0;
+    for k in 0..4 {
+        go(&mut w, 0, PI / 4.0 + k as f32 * FRAC_PI_2, s);
+    }
+    go(&mut w, 0, PI / 4.0, 3.0);
+    assert!(w.players[0].alive);
+    let c = vec2(20.0, 20.0) + vec2(0.0, s * 0.7);
+    assert!(owned(&w, c, 0), "centre of the diamond");
+    assert!(!owned(&w, vec2(20.0 + s * 0.65, 20.0), 0), "outside corner");
+}
+
+#[test]
 fn crossing_your_own_trail_kills_you() {
     let mut w = solo();
-    go(&mut w, 0, Dir::Right, 6);
-    go(&mut w, 0, Dir::Down, 3);
-    go(&mut w, 0, Dir::Left, 2);
-    go(&mut w, 0, Dir::Up, 3);
+    go(&mut w, 0, RIGHT, 8.0);
+    go(&mut w, 0, DOWN, 3.0);
+    go(&mut w, 0, LEFT, 3.0);
+    go(&mut w, 0, UP, 4.0);
     assert!(!w.players[0].alive);
     assert_eq!(w.deaths[0].cause, Cause::OwnTrail);
     assert_eq!(w.deaths[0].killer, None);
@@ -104,15 +163,22 @@ fn crossing_your_own_trail_kills_you() {
 }
 
 #[test]
+fn the_tightest_turn_does_not_bite_your_own_trail() {
+    let mut w = solo();
+    go(&mut w, 0, RIGHT, 6.0);
+    go(&mut w, 0, LEFT, 2.0);
+    assert!(w.players[0].alive, "{:?}", w.deaths);
+}
+
+#[test]
 fn touching_an_enemy_trail_kills_its_owner_and_credits_you() {
     let mut w = solo();
-    let bot = w.add_player(ivec2(40, 20), Dir::Down, false);
-    go(&mut w, bot, Dir::Down, 6);
+    let bot = w.add_player(vec2(40.0, 20.0), DOWN, false);
+    go(&mut w, bot, DOWN, 7.0);
     still(&mut w, bot);
-    assert_eq!(w.trail[idx(ivec2(40, 25))], Some(bot as u8));
-    w.players[0].cell = ivec2(36, 25);
-    w.players[0].dir = Dir::Right;
-    go(&mut w, 0, Dir::Right, 4);
+    assert_eq!(w.trail[idx(cell_at(vec2(40.0, 25.0)))], Some(bot as u8));
+    place(&mut w, 0, vec2(36.0, 25.0), RIGHT);
+    go(&mut w, 0, RIGHT, 5.0);
     assert!(!w.players[bot].alive);
     assert!(w.players[0].alive);
     assert_eq!(w.deaths[0].victim, bot);
@@ -124,15 +190,25 @@ fn touching_an_enemy_trail_kills_its_owner_and_credits_you() {
 }
 
 #[test]
+fn a_diagonal_pass_still_cuts_a_trail() {
+    let mut w = solo();
+    let bot = w.add_player(vec2(60.0, 20.0), DOWN, false);
+    go(&mut w, bot, DOWN, 10.0);
+    still(&mut w, bot);
+    place(&mut w, 0, vec2(55.0, 22.0), PI / 4.0);
+    go(&mut w, 0, PI / 4.0, 9.0);
+    assert!(!w.players[bot].alive);
+}
+
+#[test]
 fn a_bot_touching_your_trail_kills_you() {
     let mut w = solo();
-    let bot = w.add_player(ivec2(40, 30), Dir::Left, false);
-    go(&mut w, 0, Dir::Right, 6);
-    go(&mut w, 0, Dir::Down, 5);
+    let bot = w.add_player(vec2(40.0, 30.0), LEFT, false);
+    go(&mut w, 0, RIGHT, 8.0);
+    go(&mut w, 0, DOWN, 6.0);
     still(&mut w, 0);
-    w.players[bot].cell = ivec2(31, 22);
-    w.players[bot].dir = Dir::Left;
-    go(&mut w, bot, Dir::Left, 8);
+    place(&mut w, bot, vec2(33.0, 22.0), LEFT);
+    go(&mut w, bot, LEFT, 9.0);
     assert!(!w.players[0].alive);
     assert_eq!(w.deaths[0].killer, Some(bot));
 }
@@ -140,17 +216,14 @@ fn a_bot_touching_your_trail_kills_you() {
 #[test]
 fn head_on_kills_the_shorter_trail() {
     let mut w = solo();
-    let bot = w.add_player(ivec2(50, 40), Dir::Left, false);
-    go(&mut w, 0, Dir::Down, 8);
-    go(&mut w, 0, Dir::Right, 10);
-    go(&mut w, bot, Dir::Left, 4);
-    let mine = w.players[0].trail.len();
-    let theirs = w.players[bot].trail.len();
+    let bot = w.add_player(vec2(50.0, 40.0), LEFT, false);
+    go(&mut w, 0, DOWN, 9.0);
+    go(&mut w, 0, RIGHT, 10.0);
+    go(&mut w, bot, LEFT, 4.0);
+    let (mine, theirs) = (w.players[0].odo, w.players[bot].odo);
     assert!(mine > theirs, "{mine} {theirs}");
-    w.players[bot].cell = w.players[0].cell + ivec2(4, 0);
-    w.players[bot].progress = 0.0;
-    w.players[bot].dir = Dir::Left;
-    w.players[bot].in_dir = Dir::Left;
+    let at = w.players[0].pos + vec2(4.0, 0.0);
+    place(&mut w, bot, at, LEFT);
     for _ in 0..200 {
         w.substep();
     }
@@ -164,10 +237,8 @@ fn head_on_kills_the_shorter_trail() {
 #[test]
 fn head_on_with_equal_trails_kills_both_even_at_home() {
     let mut w = World::new(0.5);
-    let a = w.add_player(ivec2(20, 20), Dir::Right, false);
-    let b = w.add_player(ivec2(30, 20), Dir::Left, false);
-    w.players[a].wants(Dir::Right);
-    w.players[b].wants(Dir::Left);
+    let a = w.add_player(vec2(20.0, 20.0), RIGHT, false);
+    let b = w.add_player(vec2(26.0, 20.0), LEFT, false);
     for _ in 0..200 {
         w.substep();
     }
@@ -178,19 +249,15 @@ fn head_on_with_equal_trails_kills_both_even_at_home() {
 #[test]
 fn enclosing_an_enemy_takes_their_land_but_not_their_life() {
     let mut w = solo();
-    let bot = w.add_player(ivec2(26, 26), Dir::Up, false);
+    let bot = w.add_player(vec2(27.0, 27.0), UP, false);
     still(&mut w, bot);
     let theirs = w.counts[bot];
     assert!(theirs > 0);
-    go(&mut w, 0, Dir::Right, 12);
-    go(&mut w, 0, Dir::Down, 12);
-    go(&mut w, 0, Dir::Left, 12);
-    go(&mut w, 0, Dir::Up, 12);
-    assert!(w.players[0].trail.is_empty());
-    assert_eq!(w.owner[idx(ivec2(26, 26))], Some(0));
+    box_loop(&mut w, 14.0);
+    assert!(!w.players[0].out());
+    assert!(owned(&w, vec2(27.0, 27.0), 0));
     assert!(w.claims[0].taken >= theirs as usize);
-    let lost_all = w.counts[bot] == 0;
-    assert!(lost_all);
+    assert_eq!(w.counts[bot], 0);
     assert!(!w.players[bot].alive);
     assert_eq!(w.deaths[0].cause, Cause::Land);
 }
@@ -198,13 +265,13 @@ fn enclosing_an_enemy_takes_their_land_but_not_their_life() {
 #[test]
 fn enclosing_part_of_an_enemy_leaves_them_alive() {
     let mut w = solo();
-    let bot = w.add_player(ivec2(32, 30), Dir::Up, false);
+    let bot = w.add_player(vec2(36.0, 26.0), UP, false);
     still(&mut w, bot);
     let theirs = w.counts[bot];
-    go(&mut w, 0, Dir::Right, 12);
-    go(&mut w, 0, Dir::Down, 9);
-    go(&mut w, 0, Dir::Left, 12);
-    go(&mut w, 0, Dir::Up, 9);
+    go(&mut w, 0, RIGHT, 13.0);
+    go(&mut w, 0, DOWN, 10.0);
+    go(&mut w, 0, LEFT, 13.0);
+    go(&mut w, 0, UP, 12.0);
     assert!(w.players[0].alive);
     assert!(w.players[bot].alive);
     assert!(w.counts[bot] < theirs && w.counts[bot] > 0);
@@ -212,84 +279,18 @@ fn enclosing_part_of_an_enemy_leaves_them_alive() {
 }
 
 #[test]
-fn walking_over_enemy_land_and_home_captures_it() {
-    let mut w = solo();
-    let bot = w.add_player(ivec2(29, 20), Dir::Up, false);
-    still(&mut w, bot);
-    w.players[bot].cell = ivec2(29, 40);
-    let before = w.counts[bot];
-    go(&mut w, 0, Dir::Right, 7);
-    go(&mut w, 0, Dir::Down, 2);
-    go(&mut w, 0, Dir::Left, 7);
-    assert!(w.counts[bot] < before);
-    assert_eq!(w.owner[idx(ivec2(27, 20))], Some(0));
-}
-
-#[test]
 fn walls_turn_you_aside_and_never_kill() {
     let mut w = solo();
-    w.players[0].cell = ivec2(3, 20);
-    w.players[0].dir = Dir::Left;
+    place(&mut w, 0, vec2(3.0, 20.0), LEFT);
     for _ in 0..600 {
         w.substep();
     }
     assert!(w.players[0].alive);
-    assert_eq!(w.players[0].cell.x, 0);
-}
-
-#[test]
-fn a_quick_double_turn_is_buffered() {
-    let mut w = solo();
-    go(&mut w, 0, Dir::Right, 3);
-    let y = w.players[0].cell.y;
-    w.players[0].wants(Dir::Down);
-    w.players[0].wants(Dir::Left);
-    for _ in 0..200 {
-        w.substep();
-    }
-    assert!(w.players[0].cell.y > y);
-    assert_eq!(w.players[0].dir, Dir::Left);
-}
-
-#[test]
-fn a_reverse_press_is_ignored_and_does_not_eat_the_queue() {
-    let mut w = solo();
-    w.players[0].wants(Dir::Left);
-    assert!(w.players[0].queue.is_empty());
-    w.players[0].wants(Dir::Up);
-    w.players[0].wants(Dir::Down);
-    assert_eq!(w.players[0].queue.len(), 1);
-}
-
-#[test]
-fn heads_move_smoothly_and_round_corners() {
-    let mut w = solo();
-    let mut last = w.players[0].look();
-    let mut biggest: f32 = 0.0;
-    w.players[0].wants(Dir::Down);
-    for _ in 0..240 {
-        w.substep();
-        let now = w.players[0].look();
-        biggest = biggest.max(now.distance(last));
-        last = now;
-    }
-    assert!(biggest < 0.1, "jump {biggest}");
-    let mut w = solo();
-    go(&mut w, 0, Dir::Right, 2);
-    w.players[0].wants(Dir::Down);
-    while w.players[0].dir == w.players[0].in_dir {
-        w.substep();
-    }
-    while w.players[0].progress < 0.5 {
-        w.substep();
-    }
-    let p = w.players[0].look();
-    let c = center(w.players[0].cell);
-    assert!(p.x < c.x - 0.05 && p.y > c.y + 0.05, "{p} {c}");
-    let pts = w.players[0].trail_points();
-    for pair in pts.windows(2) {
-        assert!(pair[0].distance(pair[1]) < 1.01);
-    }
+    assert!(w.players[0].pos.x < 1.0);
+    assert!(
+        (w.players[0].pos.y - 20.0).abs() > 2.0,
+        "slid along the fence"
+    );
 }
 
 #[test]
@@ -312,13 +313,13 @@ fn bots_only(skill: f32, seed: u64, secs: usize) -> (World, usize, usize) {
     rand::srand(seed);
     let mut w = World::new(skill);
     let spots = spread_spots(10);
-    w.add_player(spots[0], Dir::Up, true);
+    w.add_player(spots[0], UP, true);
     for s in &spots[1..] {
-        w.add_player(*s, Dir::ALL[rand::gen_range(0, 4)], true);
+        w.add_player(*s, rand::gen_range(-PI, PI), true);
     }
     let mut stuck = 0;
     let mut kills = 0;
-    let mut last: Vec<IVec2> = w.players.iter().map(|p| p.cell).collect();
+    let mut last: Vec<Vec2> = w.players.iter().map(|p| p.pos).collect();
     let mut still_for = vec![0usize; w.players.len()];
     for frame in 0..secs * 60 {
         w.advance(1.0 / 60.0);
@@ -328,13 +329,13 @@ fn bots_only(skill: f32, seed: u64, secs: usize) -> (World, usize, usize) {
         w.respawn_bots(1.0 / 60.0);
         if frame % 60 == 0 {
             for (id, p) in w.players.iter().enumerate() {
-                if p.alive && p.cell == last[id] {
+                if p.alive && p.pos.distance(last[id]) < 0.5 {
                     still_for[id] += 1;
                     stuck = stuck.max(still_for[id]);
                 } else {
                     still_for[id] = 0;
                 }
-                last[id] = p.cell;
+                last[id] = p.pos;
             }
         }
     }
@@ -350,6 +351,33 @@ fn no_bot_ever_gets_stuck() {
 }
 
 #[test]
+fn bots_wander_in_curves_not_on_a_grid() {
+    rand::srand(3);
+    let mut w = World::new(0.6);
+    for s in spread_spots(8) {
+        w.add_player(s, rand::gen_range(-PI, PI), true);
+    }
+    let mut off_axis = 0;
+    let mut samples = 0;
+    for _ in 0..60 * 30 {
+        w.advance(1.0 / 60.0);
+        w.respawn_bots(1.0 / 60.0);
+        for p in w.players.iter().filter(|p| p.alive) {
+            let a = p.angle.rem_euclid(FRAC_PI_2);
+            samples += 1;
+            if a > 0.2 && a < FRAC_PI_2 - 0.2 {
+                off_axis += 1;
+            }
+        }
+    }
+    let share = off_axis as f32 / samples as f32;
+    assert!(
+        share > 0.25,
+        "only {share:.2} of headings were off the axes"
+    );
+}
+
+#[test]
 fn bots_leave_trails_grow_and_eventually_kill() {
     let mut kills = 0;
     let mut grew = 0;
@@ -358,7 +386,7 @@ fn bots_leave_trails_grow_and_eventually_kill() {
         rand::srand(seed);
         let mut w = World::new(1.0);
         for s in spread_spots(10) {
-            w.add_player(s, Dir::ALL[rand::gen_range(0, 4)], true);
+            w.add_player(s, rand::gen_range(-PI, PI), true);
         }
         let start = w.counts.clone();
         for _ in 0..120 * 60 {
@@ -370,7 +398,10 @@ fn bots_leave_trails_grow_and_eventually_kill() {
         }
         grew += (0..10).filter(|i| w.counts[*i] > start[*i] * 2).count();
     }
-    assert!(trails > 20, "bots never went out: {trails}");
+    assert!(
+        trails > 20 * (RES * RES) as usize,
+        "bots never went out: {trails}"
+    );
     assert!(grew >= 6, "only {grew} bots grew");
     assert!(kills >= 1, "bots never killed anyone");
 }
@@ -386,16 +417,14 @@ fn gentle_bots_rarely_die_alone() {
 fn nobody_hunts_a_new_beginner() {
     rand::srand(2);
     let mut w = World::new(0.0);
-    w.add_player(ivec2(55, 55), Dir::Right, false);
+    w.add_player(vec2(55.0, 55.0), RIGHT, false);
     for s in spread_spots(9).into_iter().skip(1) {
-        w.add_player(s, Dir::Up, true);
+        w.add_player(s, UP, true);
     }
-    w.players[0].speed = 0.0;
-    w.players[0].trail = (40..55).map(|x| ivec2(x, 60)).collect();
-    w.players[0].trail_from = ivec2(39, 60);
-    for c in w.players[0].trail.clone() {
-        w.trail[idx(c)] = Some(0);
-    }
+    go(&mut w, 0, DOWN, 5.0);
+    go(&mut w, 0, LEFT, 15.0);
+    still(&mut w, 0);
+    assert!(w.players[0].out());
     for _ in 0..60 * 30 {
         w.advance(1.0 / 60.0);
         w.respawn_bots(1.0 / 60.0);
@@ -406,13 +435,16 @@ fn nobody_hunts_a_new_beginner() {
 fn play(g: &mut Paper, v: &View, bot: &mut Pilot, secs: f32) {
     let mut t = 0.0;
     while t < secs && g.state != State::Dead {
-        let input = Input {
-            key_dir: bot.decide(g),
-            ..Default::default()
-        };
-        g.update(&input, v, 1.0 / 60.0);
+        if let Some(a) = bot.decide(g) {
+            g.aim(a);
+        }
+        g.update(&Input::default(), v, 1.0 / 60.0);
         t += 1.0 / 60.0;
     }
+}
+
+fn start(g: &mut Paper, v: &View) {
+    g.update(&Input::key(Dir::Right), v, 1.0 / 60.0);
 }
 
 #[test]
@@ -423,10 +455,10 @@ fn a_weak_player_who_makes_small_loops_still_grows() {
         rand::srand(seed);
         fresh_player();
         let mut g = Paper::new();
-        g.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
-        let start = g.share(0);
+        start(&mut g, &v);
+        let first = g.share(0);
         play(&mut g, &v, &mut Pilot::new(3, false), 40.0);
-        if g.run.peak > start * 2.0 {
+        if g.run.peak > first * 2.0 {
             grew += 1;
         }
     }
@@ -441,7 +473,7 @@ fn a_strong_player_with_big_loops_climbs_past_the_bots() {
         rand::srand(seed);
         fresh_player();
         let mut g = Paper::new();
-        g.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
+        start(&mut g, &v);
         play(&mut g, &v, &mut Pilot::new(9, true), 90.0);
         if g.run.peak > 0.05 && g.my_rank() <= 3 {
             tops += 1;
@@ -458,7 +490,7 @@ fn a_strong_player_still_meets_real_danger_once_the_bots_are_good() {
         rand::srand(seed + 40);
         fresh_player();
         let mut g = Paper::with_best(400);
-        g.update(&Input::key(Dir::Right), &v, 1.0 / 60.0);
+        start(&mut g, &v);
         play(&mut g, &v, &mut Pilot::new(14, false), 180.0);
         if g.state == State::Dead {
             deaths += 1;
@@ -481,23 +513,22 @@ fn the_ramp_follows_your_best() {
         g.w.players.iter().skip(1).map(|p| p.speed).sum::<f32>() / (g.w.players.len() - 1) as f32
     };
     assert!(pace(&easy) < pace(&hard));
-    assert!(g_max_speed(&hard) < arena::PLAYER_SPEED);
-}
-
-fn g_max_speed(g: &Paper) -> f32 {
-    g.w.players
+    let fastest = hard
+        .w
+        .players
         .iter()
         .skip(1)
         .map(|p| p.speed)
-        .fold(0.0, f32::max)
+        .fold(0.0, f32::max);
+    assert!(fastest < arena::PLAYER_SPEED);
 }
 
 #[test]
 fn bots_respawn_with_new_names() {
     rand::srand(4);
     let mut w = World::new(0.5);
-    w.add_player(ivec2(20, 20), Dir::Right, false);
-    let bot = w.add_player(ivec2(60, 60), Dir::Up, true);
+    w.add_player(vec2(20.0, 20.0), RIGHT, false);
+    let bot = w.add_player(vec2(60.0, 60.0), UP, true);
     let first = w.players[bot].name;
     w.kill(bot, None, Cause::Trail);
     for _ in 0..600 {
@@ -515,12 +546,12 @@ fn the_map_is_big_and_the_camera_zooms_out_as_you_grow() {
     let mut g = Paper::new();
     let small = g.target_zoom();
     let near = g.cell_px(&v);
-    for y in 30..70 {
-        for x in 30..70 {
-            g.w.owner[idx(ivec2(x, y))] = Some(0);
+    for y in 30 * RES..70 * RES {
+        for x in 30 * RES..70 * RES {
+            let i = idx(glam::ivec2(x, y));
+            g.w.claim(i, Some(0));
         }
     }
-    g.w.counts[0] = 1600;
     assert!(g.target_zoom() > small * 1.5);
     for _ in 0..300 {
         g.update(&Input::default(), &v, 1.0 / 60.0);
@@ -541,7 +572,7 @@ fn the_head_stays_on_screen() {
         for _ in 0..120 {
             g.update(&Input::default(), &v, 1.0 / 60.0);
         }
-        let s = g.to_screen(&v, g.me().look());
+        let s = g.to_screen(&v, g.me().pos);
         assert!(
             s.x > 0.0 && s.x < v.w && s.y > TOP && s.y < v.h,
             "{s} {v:?}"
@@ -550,50 +581,63 @@ fn the_head_stays_on_screen() {
 }
 
 #[test]
-fn the_game_waits_for_the_first_swipe() {
+fn the_game_waits_for_the_first_touch() {
     fresh_player();
     let v = View::ipad_landscape();
     let mut g = Paper::new();
-    let at = g.me().cell;
+    let at = g.me().pos;
     for _ in 0..120 {
         g.update(&Input::default(), &v, 1.0 / 60.0);
     }
     assert_eq!(g.state, State::Ready);
-    assert_eq!(g.me().cell, at);
-    g.update(
-        &Input {
-            swipe: Some(Dir::Up),
-            ..Default::default()
-        },
-        &v,
-        1.0 / 60.0,
-    );
+    assert_eq!(g.me().pos, at);
+    let below = g.to_screen(&v, at) + vec2(0.0, 200.0);
+    g.update(&Input::press_at(below), &v, 1.0 / 60.0);
     assert_eq!(g.state, State::Playing);
+    assert!((g.me().want - DOWN).abs() < 0.1);
 }
 
 #[test]
-fn dragging_steers_without_lifting_the_finger() {
+fn holding_a_finger_steers_the_head_toward_it() {
     fresh_player();
     let v = View::ipad_landscape();
     let mut g = Paper::new();
     g.state = State::Playing;
-    let o = v.center();
-    let mm = Input::default().mm();
-    let at = |p: Vec2, pressed: bool| Input {
-        pos: p,
+    g.w.players[0].speed = arena::PLAYER_SPEED;
+    let hold = |g: &Paper, off: Vec2| Input {
+        pos: g.to_screen(&v, g.me().pos) + off,
         down: true,
-        pressed,
         ..Default::default()
     };
-    g.update(&at(o, true), &v, 1.0 / 60.0);
-    g.update(&at(o + vec2(0.0, 10.0 * mm), false), &v, 1.0 / 60.0);
-    assert_eq!(g.steer, Some(Dir::Down));
-    g.update(&at(o + vec2(-10.0 * mm, 10.0 * mm), false), &v, 1.0 / 60.0);
-    assert_eq!(g.steer, Some(Dir::Left));
-    assert_eq!(
-        g.me().queue.len() + usize::from(g.me().dir != Dir::Right),
-        2
+    let ahead = g.me().pos + vec2(-9.0, -9.0);
+    let target = -PI * 0.75;
+    let off = g.to_screen(&v, ahead) - g.to_screen(&v, g.me().pos);
+    for _ in 0..40 {
+        let i = hold(&g, off);
+        g.update(&i, &v, 1.0 / 60.0);
+    }
+    assert!((g.me().angle - target).abs() < 0.12, "{}", g.me().angle);
+    let i = hold(&g, vec2(3.0, 0.0));
+    g.update(&i, &v, 1.0 / 60.0);
+    assert!(
+        (g.me().want - g.me().angle).abs() < 0.2,
+        "a finger on the head is ignored"
     );
+}
+
+#[test]
+fn arrow_keys_steer_in_eight_directions() {
+    fresh_player();
+    let v = View::ipad_landscape();
+    let mut g = Paper::new();
+    g.state = State::Playing;
+    let keys = Input {
+        right: true,
+        down_key: true,
+        ..Default::default()
+    };
+    g.update(&keys, &v, 1.0 / 60.0);
+    assert!((g.me().want - PI / 4.0).abs() < 1e-3);
 }
 
 #[test]
@@ -642,7 +686,7 @@ fn eliminating_a_bot_lands_in_the_feed() {
     for _ in 0..(FEED_LIFE * 60.0) as usize + 5 {
         g.update(&Input::default(), &v, 1.0 / 60.0);
     }
-    assert!(g.feed.is_empty());
+    assert!(g.feed.iter().all(|f| !f.mine));
 }
 
 #[test]
@@ -651,11 +695,10 @@ fn the_leaderboard_ranks_by_land() {
     let mut g = Paper::new();
     let r = g.w.ranking();
     assert_eq!(r.len(), g.w.players.len());
-    for c in 0..400 {
-        let i = idx(ivec2(c % 20, c / 20));
+    for c in 0..400 * (RES * RES) {
+        let i = idx(glam::ivec2(c % (20 * RES), c / (20 * RES)));
         if g.w.owner[i].is_none() {
-            g.w.owner[i] = Some(0);
-            g.w.counts[0] += 1;
+            g.w.claim(i, Some(0));
         }
     }
     assert_eq!(g.w.ranking()[0], 0);
@@ -667,10 +710,103 @@ fn threats_point_at_bots_off_screen() {
     fresh_player();
     let v = View::ipad_landscape();
     let mut g = Paper::new();
-    let me = g.me().cell;
-    g.w.players[2].cell = me + ivec2(18, 0);
-    g.w.players[2].progress = 0.0;
+    let me = g.me().pos;
+    g.w.players[2].pos = me + vec2(18.0, 0.0);
     let t = g.threats(&v);
     let hit = t.iter().find(|(id, _, _)| *id == 2).expect("arrow");
     assert!(hit.1.x > 0.9);
+}
+
+#[test]
+fn grazing_your_own_edge_makes_no_popup() {
+    fresh_player();
+    let v = View::ipad_landscape();
+    let mut g = Paper::new();
+    g.state = State::Playing;
+    let at = g.me().pos;
+    g.w.claims.push(Claim {
+        id: 0,
+        cells: 3,
+        at,
+        taken: 0,
+    });
+    g.update(&Input::default(), &v, 1.0 / 60.0);
+    assert!(g.popups.list.is_empty());
+}
+
+fn contest(brains: bool, effort: Option<f32>, secs: f32) -> f32 {
+    let env = learn::PaperEnv {
+        secs,
+        ..Default::default()
+    };
+    let setup = learn::Setup {
+        lessons: false,
+        skill: 1.0,
+        brains,
+        effort,
+    };
+    env.fitness(&setup, &[101, 102, 103, 104, 105, 106])
+}
+
+#[test]
+fn the_shipped_brain_loads_and_matches_the_features() {
+    let net =
+        crate::brain::Net::from_bytes(include_bytes!("../../../../../assets/brains/paper.kgb"))
+            .expect("paper.kgb");
+    assert_eq!(net.inputs(), learn::FEATURES);
+    let mut w = World::new(1.0);
+    w.add_player(vec2(30.0, 30.0), RIGHT, true);
+    assert!(w.players[0].brain.is_some());
+    let (aims, feats) = w.options(0);
+    assert_eq!(aims.len(), feats.len());
+    assert!(feats
+        .iter()
+        .all(|f| f.len() == learn::FEATURES && f.iter().all(|x| (-2.01..=2.01).contains(x))));
+}
+
+#[test]
+fn at_full_effort_the_brain_grows_more_land_than_the_old_bot() {
+    let old = contest(false, None, 60.0);
+    let new = contest(true, Some(1.0), 60.0);
+    assert!(new > old, "brain {new:.3} vs old bot {old:.3}");
+}
+
+#[test]
+fn bot_fitness_rises_with_effort() {
+    let lazy = contest(true, Some(0.0), 60.0);
+    let mid = contest(true, Some(0.5), 60.0);
+    let best = contest(true, Some(1.0), 60.0);
+    assert!(lazy < mid && mid < best, "{lazy:.3} {mid:.3} {best:.3}");
+}
+
+#[test]
+fn a_low_effort_brain_never_gets_stuck() {
+    for seed in 0..3 {
+        let (_, stuck, _) = bots_only(0.0, seed, 90);
+        assert!(stuck <= 1, "seed {seed}: a bot sat still {stuck}s");
+    }
+}
+
+#[test]
+fn block_counts_track_the_land_and_trail_grids_through_a_busy_game() {
+    rand::srand(9);
+    let mut g = Paper::with_best(200);
+    g.state = State::Playing;
+    for _ in 0..60 * 40 {
+        g.w.advance(1.0 / 60.0);
+        g.w.respawn_bots(1.0 / 60.0);
+    }
+    let mut owners = vec![[0u16; MAX_PLAYERS]; BLOCKS * BLOCKS];
+    let mut trails = vec![0u16; BLOCKS * BLOCKS];
+    for i in 0..g.w.owner.len() {
+        if let Some(o) = g.w.owner[i] {
+            owners[block_of(i)][o as usize] += 1;
+        }
+        if g.w.trail[i].is_some() {
+            trails[block_of(i)] += 1;
+        }
+    }
+    assert_eq!(owners, g.w.block_owner);
+    assert_eq!(trails, g.w.block_trail);
+    assert!(trails.iter().any(|t| *t > 0) || owners.iter().any(|o| o[1] > 0));
 }

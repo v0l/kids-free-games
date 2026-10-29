@@ -1,0 +1,42 @@
+[
+ {
+  "name": "runner_bg",
+  "w": 768,
+  "h": 1344,
+  "seed": 301,
+  "cut": false,
+  "prompt": "Mobile game portrait background, a sunny cartoon city skyline far away with colourful rounded buildings and hills, pastel blue sky gradient with big puffy clouds near the top, soft haze at the horizon, empty lower half, no characters, no text. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "runner_road",
+  "w": 512,
+  "h": 512,
+  "seed": 302,
+  "cut": false,
+  "prompt": "Seamless flat texture swatch filling the whole frame: smooth warm grey cartoon asphalt road surface with soft painted speckles, subtle sheen, no lines, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "runner_walk",
+  "w": 512,
+  "h": 512,
+  "seed": 303,
+  "cut": false,
+  "prompt": "Seamless flat texture swatch filling the whole frame: cheerful cartoon sidewalk paving of cream and light orange rounded bricks, glossy, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "runner_wall",
+  "w": 512,
+  "h": 512,
+  "seed": 304,
+  "cut": false,
+  "prompt": "Seamless flat texture swatch filling the whole frame: cartoon building facade wall with a regular grid of blue glass windows with white frames on a pastel plaster wall, flat front view, no objects. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "iconr_runner",
+  "w": 1024,
+  "h": 1024,
+  "seed": 960,
+  "cut": false,
+  "prompt": "Square mobile game app icon: a cute chubby kid in a red cap and backpack sprinting down a colourful city street with three lanes, gold coins flying around, a striped barrier ahead, dynamic motion lines, warm sunny colours, rounded chunky shapes, fills the whole square edge to edge. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, sharp focus"
+ }
+]

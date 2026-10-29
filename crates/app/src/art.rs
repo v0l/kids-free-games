@@ -15,7 +15,8 @@ pub static EMBEDDED: &[(&str, &[u8])] = &[
 
 pub const LATER: &[&str] = &[
     "flappy", "crossy", "snake", "clash", "merge", "fruit", "stack", "breakout", "jumper",
-    "blocks", "mathpop", "count", "paper", "memory", "hotel", "helix", "spell", "garden",
+    "blocks", "mathpop", "count", "paper", "memory", "hotel", "helix", "runner", "spell", "trains",
+    "ballsort", "garden",
 ];
 
 pub fn all_sheets() -> impl Iterator<Item = &'static str> {

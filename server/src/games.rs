@@ -22,7 +22,9 @@ impl Better {
 
 pub const GAMES: &[(&str, Better)] = &[
     ("blocks", Better::Higher),
+    ("ballsort", Better::Higher),
     ("breakout", Better::Higher),
+    ("clash", Better::Higher),
     ("count", Better::Higher),
     ("crossy", Better::Higher),
     ("flappy", Better::Higher),
@@ -34,9 +36,11 @@ pub const GAMES: &[(&str, Better)] = &[
     ("memory", Better::Lower),
     ("merge", Better::Higher),
     ("paper", Better::Higher),
+    ("runner", Better::Higher),
     ("snake", Better::Higher),
     ("spell", Better::Higher),
     ("stack", Better::Higher),
+    ("trains", Better::Higher),
 ];
 
 pub const PROFILE_SAVE: &str = "profile";
@@ -58,11 +62,19 @@ mod tests {
     use super::*;
 
     fn client_game_keys() -> Vec<String> {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../src/games");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../crates/core/src/games");
         let mut keys = vec![];
+        let mut files = vec![];
         for entry in std::fs::read_dir(dir).unwrap() {
             let path = entry.unwrap().path();
-            if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+            if path.is_dir() {
+                files.push(path.join("mod.rs"));
+            } else {
+                files.push(path);
+            }
+        }
+        for path in files {
+            if path.extension().and_then(|e| e.to_str()) != Some("rs") || !path.exists() {
                 continue;
             }
             let text = std::fs::read_to_string(&path).unwrap();

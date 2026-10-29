@@ -12,7 +12,7 @@ pub const MAX_SESSIONS_PER_REQUEST: usize = 50;
 pub const MIN_STARTED_AT: i64 = 1_577_836_800;
 pub const FUTURE_SLACK: i64 = 300;
 pub const LINK_CODE_TTL: i64 = 600;
-pub const TOKEN_TOUCH_AFTER: i64 = 24 * 60 * 60;
+pub const TOKEN_TOUCH_AFTER: i64 = 5 * 60;
 pub const MAX_TOKENS_PER_PLAYER: i64 = 20;
 pub const DEFAULT_BOARD: i64 = 10;
 pub const MAX_BOARD: i64 = 50;
@@ -34,6 +34,10 @@ pub fn hex(bytes: &[u8]) -> String {
 
 pub fn new_token() -> ApiResult<String> {
     Ok(format!("{TOKEN_PREFIX}{}", hex(&random_bytes::<32>()?)))
+}
+
+pub fn should_touch(last_used: i64, now: i64) -> bool {
+    now - last_used >= TOKEN_TOUCH_AFTER
 }
 
 pub fn looks_like_token(t: &str) -> bool {
@@ -217,6 +221,15 @@ mod tests {
             hash_token("abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn last_seen_follows_a_player_who_plays_all_day() {
+        let start = NOW;
+        assert!(!should_touch(start, start + 60));
+        assert!(should_touch(start, start + 3 * 60 * 60));
+        assert!(should_touch(start, start + TOKEN_TOUCH_AFTER));
+        const { assert!(TOKEN_TOUCH_AFTER <= 10 * 60) };
     }
 
     #[test]

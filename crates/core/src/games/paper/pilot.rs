@@ -1,69 +1,68 @@
-use super::world::{idx, in_bounds, turn_left, turn_right};
+use super::world::World;
+use super::world::{dir_of, wrap_angle};
 use super::Paper;
-use crate::engine::Dir;
-use glam::{ivec2, IVec2};
+use glam::Vec2;
+use std::f32::consts::FRAC_PI_2;
 
 pub struct Pilot {
-    leg: usize,
+    leg: f32,
     wary: bool,
     turns: u8,
-    steps: usize,
-    last: IVec2,
+    from: Vec2,
+    heading: f32,
+    was_out: bool,
 }
 
 impl Pilot {
     pub fn new(leg: usize, wary: bool) -> Self {
         Self {
-            leg,
+            leg: leg as f32,
             wary,
             turns: 0,
-            steps: 0,
-            last: ivec2(-1, -1),
+            from: Vec2::ZERO,
+            heading: 0.0,
+            was_out: false,
         }
     }
 
-    pub fn decide(&mut self, g: &Paper) -> Option<Dir> {
-        let p = g.me();
-        if p.cell == self.last {
+    pub fn decide(&mut self, g: &Paper) -> Option<f32> {
+        self.decide_in(&g.w)
+    }
+
+    pub fn decide_in(&mut self, w: &World) -> Option<f32> {
+        let p = &w.players[0];
+        if !p.alive {
             return None;
         }
-        self.last = p.cell;
-        let pick = self.plan(g);
-        let d = pick.unwrap_or(p.dir);
-        let n = p.cell + d.delta();
-        let blocked = !in_bounds(n) || g.w.trail[idx(n)] == Some(0);
-        if blocked {
-            return g.w.way_home(0).map(|(d, _)| d);
-        }
-        pick
-    }
-
-    fn plan(&mut self, g: &Paper) -> Option<Dir> {
-        let p = g.me();
-        let dir = p.dir;
-        if p.trail.is_empty() {
+        if !p.out() {
+            self.was_out = false;
             self.turns = 0;
-            self.steps = 0;
-            return [dir, turn_left(dir), turn_right(dir)]
-                .into_iter()
-                .max_by_key(|d| g.w.open_ahead(0, *d));
+            let best = (-3..=3)
+                .map(|k| wrap_angle(p.angle + k as f32 * 0.45))
+                .max_by_key(|a| w.open_ahead(0, *a))
+                .unwrap_or(p.angle);
+            return Some(best);
         }
-        self.steps += 1;
-        let home = g.w.way_home(0).map(|(d, _)| d);
-        let danger = self.wary && g.w.nearest_head(0, p.pos()) < 7.0;
+        if !self.was_out {
+            self.was_out = true;
+            self.from = p.pos;
+            self.heading = p.angle;
+        }
+        let home = w.way_home(0).map(|(a, _)| a);
+        let danger = self.wary && w.nearest_head(0, p.pos) < 7.0;
         if self.turns >= 3 || danger {
-            return home;
+            return home.or(Some(p.want));
         }
         let leg = if self.turns == 1 {
-            self.leg * 2 / 3
+            self.leg * 2.0 / 3.0
         } else {
             self.leg
         };
-        if self.steps >= leg {
-            self.steps = 0;
+        if (p.pos - self.from).dot(dir_of(self.heading)) >= leg {
             self.turns += 1;
-            return Some(turn_right(dir));
+            self.from = p.pos;
+            self.heading = wrap_angle(self.heading + FRAC_PI_2);
         }
-        None
+        Some(self.heading)
     }
 }

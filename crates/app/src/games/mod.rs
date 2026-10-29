@@ -2,6 +2,7 @@ use crate::paint::Pen;
 use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
+pub mod ballsort;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -17,9 +18,11 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod runner;
 pub mod snake;
 pub mod spell;
 pub mod stack;
+pub mod trains;
 
 pub trait IntoAny {
     fn into_any(self: Box<Self>) -> Box<dyn std::any::Any>;
@@ -79,8 +82,11 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         paper::KEY => Some(|| Box::new(paper::PaperPlay::new())),
         memory::KEY => Some(|| Box::new(memory::MemoryPlay::new())),
         hotel::KEY => Some(|| Box::new(hotel::HotelPlay::new())),
+        runner::KEY => Some(|| Box::new(runner::RunnerPlay::new())),
+        ballsort::KEY => Some(|| Box::new(ballsort::BallSortPlay::new())),
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
+        trains::KEY => Some(|| Box::new(trains::TrainsPlay::new())),
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
         _ => None,
     }

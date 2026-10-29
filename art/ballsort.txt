@@ -1,0 +1,2 @@
+bg    | gen:ballsort_bg.png | solo jpg max=1344 keep
+table | gen:ballsort_table.png | max=256

@@ -24,6 +24,8 @@ pub struct Stats {
     pub eaten: u32,
     pub floor: u32,
     pub games: u32,
+    pub wins: u32,
+    pub rating: i64,
 }
 
 impl Need {
@@ -297,6 +299,8 @@ mod tests {
             eaten: 999,
             floor: 99,
             games: 99,
+            wins: 99,
+            rating: 2000,
         };
         assert_eq!(unlocked_count(&all), SKINS.len());
     }

@@ -52,7 +52,7 @@ pub fn full_url(path: &str) -> String {
 }
 
 pub fn default_transport() -> Box<dyn Transport> {
-    if cfg!(test) {
+    if !super::sync_enabled() {
         Box::new(Offline)
     } else {
         Box::new(platform::Platform::default())

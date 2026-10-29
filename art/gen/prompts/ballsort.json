@@ -1,0 +1,26 @@
+[
+ {
+  "name": "ballsort_bg",
+  "w": 768,
+  "h": 1344,
+  "seed": 251,
+  "cut": false,
+  "prompt": "Mobile game portrait background, a cosy cartoon toy room seen softly out of focus: pastel teal and lilac wall with a round window showing blue sky, soft bokeh fairy lights, a few blurred toys on shelves, empty middle, no characters, no text. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "ballsort_table",
+  "w": 768,
+  "h": 768,
+  "seed": 252,
+  "cut": false,
+  "prompt": "Top down seamless texture of smooth painted warm honey wooden planks with soft grain, flat even lighting, no objects, fills the whole frame. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "iconr_ballsort",
+  "w": 768,
+  "h": 768,
+  "seed": 253,
+  "cut": false,
+  "prompt": "Square mobile game app icon illustration filling the whole frame: three tall glossy glass test tubes filled with shiny red, blue, green and yellow balls, one ball floating in the air being poured, teal background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, bold readable shapes, centred composition, no border, no frame"
+ }
+]

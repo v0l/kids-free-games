@@ -142,6 +142,30 @@ req DELETE /v1/saves/profile "$A"; expect "wrong method" 405 .error method_not_a
 req DELETE /v1/me "$A"; expect "delete mia" 200 .deleted true
 req GET /v1/me "$C"; expect "linked token dies with the player" 401 .error unauthorized
 
+ADMIN="${ADMIN_KEY:-dev-admin-key}"
+req GET /v1/admin/stats; expect "admin needs a key" 401 .error unauthorized
+req GET /v1/admin/stats "$A"; expect "player token is not an admin key" 401 .error unauthorized
+req GET /v1/admin/stats "$ADMIN"; expect "admin stats" 200 '.games | length' 16
+req POST /v1/admin/players "$ADMIN" '{"name":"12"}'; expect "admin create bad name" 400 .error bad_request
+req POST /v1/admin/players "$ADMIN" '{"name":"ada","avatar":4}'; expect "admin creates a player" 200 .player.name Ada
+expect "admin create returns a link code" 200 '.link.code | length' 9
+ADM_ID=$(echo "$BODY" | jq -r .player.id)
+req PUT /v1/admin/scores/snake/$ADM_ID "$ADMIN" '{"score":77}'; expect "admin sets a score" 200 .score 77
+req PUT /v1/admin/scores/nope/$ADM_ID "$ADMIN" '{"score":7}'; expect "admin score unknown game" 404 .error not_found
+req PUT /v1/admin/players/$ADM_ID/saves/profile "$ADMIN" '{"data":"a=1"}'; expect "admin writes a save" 200 .rev 1
+req PUT /v1/admin/players/$ADM_ID/saves/profile "$ADMIN" '{"data":"a=2"}'; expect "admin overwrites without rev" 200 .rev 2
+req PATCH /v1/admin/players/$ADM_ID "$ADMIN" '{"name":"grace"}'; expect "admin renames" 200 .player.name Grace
+req GET "/v1/admin/players?q=gra" "$ADMIN"; expect "admin search finds her" 200 '.players | length' 1
+req GET "/v1/admin/players?q=%25" "$ADMIN"; expect "wildcards are literal" 200 .total 0
+req GET /v1/admin/players/$ADM_ID "$ADMIN"; expect "admin player detail has the score" 200 '.scores[0].score' 77
+req GET /v1/admin/scores/snake "$ADMIN"; expect "admin board lists her" 200 '.entries | map(select(.name=="Grace")) | length' 1
+req DELETE /v1/admin/scores/snake/$ADM_ID "$ADMIN"; expect "admin removes score" 200 .deleted true
+req DELETE /v1/admin/scores/snake/$ADM_ID "$ADMIN"; expect "removing twice is 404" 404 .error not_found
+req DELETE /v1/admin/players/$ADM_ID/saves/profile "$ADMIN"; expect "admin deletes save" 200 .deleted true
+req POST /v1/admin/players/$ADM_ID/link "$ADMIN"; expect "admin makes a link code" 200 '.code | length' 9
+req DELETE /v1/admin/players/$ADM_ID "$ADMIN"; expect "admin deletes player" 200 .deleted true
+req GET /v1/admin/players/$ADM_ID "$ADMIN"; expect "deleted player is gone" 404 .error not_found
+
 echo
 echo "$((n - fails))/$n passed"
 [ "$fails" -eq 0 ]

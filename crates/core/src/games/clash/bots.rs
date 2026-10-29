@@ -173,7 +173,16 @@ impl World {
                     .min_by(|a, b| a.1.total_cmp(&b.1))
                     .map(|(p, _)| p);
             }
-            if !chasing {
+            let notice = 180.0 + 320.0 * brain.skill;
+            let power = self
+                .powers
+                .iter()
+                .map(|p| (p.pos, (p.pos - head).length()))
+                .filter(|(p, d)| *d < notice && reachable(*p))
+                .min_by(|a, b| a.1.total_cmp(&b.1));
+            if let Some((p, _)) = power.filter(|_| !chasing) {
+                steer += (p - head).normalize_or_zero() * 2.4;
+            } else if !chasing {
                 steer += to_roam * 0.7;
                 if let Some(p) = brain.target_egg {
                     steer += (p - head).normalize_or_zero() * 1.6;

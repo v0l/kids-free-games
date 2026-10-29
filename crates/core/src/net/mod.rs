@@ -273,6 +273,19 @@ impl Net {
         }
     }
 
+    pub fn flush(&mut self, now: i64, wait: &mut dyn FnMut()) {
+        self.end_play();
+        self.retry_at = 0.0;
+        self.check_in = 0.0;
+        for _ in 0..40 {
+            self.update(0.0, now, false);
+            if self.flight.is_none() && self.next_job().is_none() {
+                return;
+            }
+            wait();
+        }
+    }
+
     pub fn end_play(&mut self) {
         self.tracker.end();
         self.push_now = true;
@@ -427,7 +440,7 @@ impl Net {
             });
         }
         let include_open = self.clock - self.open_sent_at >= OPEN_SESSION_EVERY;
-        let pending = self.tracker.pending(&p, include_open);
+        let pending = self.tracker.pending(&p, include_open, self.clock);
         if !pending.is_empty() {
             return Some(Job::Playtime {
                 player: p,
@@ -487,9 +500,8 @@ impl Net {
             Job::Playtime { player, sent } => {
                 let sessions: Vec<Value> = self
                     .tracker
-                    .pending(player, true)
+                    .lookup(player, sent.iter().map(|(id, _)| id.as_str()))
                     .into_iter()
-                    .filter(|(id, _, _, _)| sent.iter().any(|(s, _)| s == id))
                     .map(|(id, game, started, secs)| {
                         json!({ "id": id, "game": game, "started_at": started, "seconds": secs })
                     })
@@ -676,10 +688,8 @@ impl Net {
                 401 => self.lost_account(&player),
                 s if Self::retryable(s) => self.back_off(),
                 _ => {
-                    for (id, secs) in sent {
-                        self.tracker.mark_sent(&id, secs);
-                    }
-                    self.persist_playtime();
+                    self.tracker
+                        .reject(sent.iter().map(|(id, _)| id.as_str()), self.clock);
                 }
             },
             Job::Board(game) => {
@@ -771,8 +781,12 @@ thread_local! {
     static NET: RefCell<Option<Net>> = const { RefCell::new(None) };
 }
 
+pub fn sync_enabled() -> bool {
+    !(cfg!(test) || crate::save::in_memory())
+}
+
 fn with<R>(f: impl FnOnce(&mut Net) -> R) -> Option<R> {
-    if cfg!(test) {
+    if !sync_enabled() {
         return None;
     }
     NET.with(|n| {
@@ -796,6 +810,23 @@ pub fn begin_play(game: &str) {
 
 pub fn end_play() {
     with(|n| n.end_play());
+}
+
+pub fn going_to_background() {
+    with(|n| {
+        n.end_play();
+        n.retry_at = 0.0;
+        n.check_in = 0.0;
+        n.update(0.0, unix_now(), false);
+    });
+}
+
+pub fn flush_before_exit() {
+    with(|n| {
+        n.flush(unix_now(), &mut || {
+            std::thread::sleep(std::time::Duration::from_millis(100))
+        })
+    });
 }
 
 pub fn on_score(game: &str, score: i64) {

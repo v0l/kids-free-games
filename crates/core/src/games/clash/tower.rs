@@ -38,6 +38,12 @@ pub fn floor(n: u32) -> Floor {
         hi: start + 1 + n / 4,
         adaptive: false,
         start,
+        powerups: true,
+        rival: None,
+        seat: None,
+        rival_share: 0.0,
+        respawn: true,
+        effort: crate::brain::Effort::BEST,
     };
     let goal = if is_boss(n) {
         Goal::Boss((n / 5 + 5).clamp(start + 2, 16))

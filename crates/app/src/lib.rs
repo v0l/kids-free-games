@@ -28,6 +28,9 @@ pub enum Scene {
     Menu(Box<menu::App>),
     Shot(shots::Shot),
     Jev(Box<jev::Jev>),
+    JevClash(Box<jev::JevClash>),
+    BrainPaper(Box<jev::BrainPaper>),
+    BrainClash(Box<jev::BrainClash>),
 }
 
 pub struct Frame {
@@ -58,6 +61,9 @@ impl Frame {
             Scene::Menu(app) => app.current.as_ref().map(|(_, p)| &**p),
             Scene::Shot(s) => s.play(),
             Scene::Jev(_) => None,
+            Scene::JevClash(j) => Some(&j.game),
+            Scene::BrainPaper(j) => Some(&j.game),
+            Scene::BrainClash(j) => Some(&j.game),
         }
     }
 
@@ -69,6 +75,9 @@ impl Frame {
                 .map(|(_, p)| &mut **p as &mut dyn games::Play),
             Scene::Shot(s) => s.play_mut(),
             Scene::Jev(_) => None,
+            Scene::JevClash(j) => Some(&mut j.game),
+            Scene::BrainPaper(j) => Some(&mut j.game),
+            Scene::BrainClash(j) => Some(&mut j.game),
         }
     }
 }
@@ -207,6 +216,9 @@ fn frame(
         }
         Scene::Shot(s) => s.frame(&mut pen, &view, dt),
         Scene::Jev(j) => j.frame(&mut pen, &view, dt),
+        Scene::JevClash(j) => j.frame(&mut pen, &view, dt),
+        Scene::BrainPaper(j) => j.frame(&mut pen, &view, dt, &input.typed),
+        Scene::BrainClash(j) => j.frame(&mut pen, &view, dt, &input.typed),
     }
     let touched = input.pressed || input.action || !input.typed.is_empty();
     if let Some(a) = &mut state.audio {
@@ -257,6 +269,21 @@ pub fn window() -> Window {
     }
 }
 
+fn sync_on_close(
+    mut closing: MessageReader<bevy::window::WindowCloseRequested>,
+    mut life: MessageReader<bevy::window::AppLifecycle>,
+) {
+    if life
+        .read()
+        .any(|l| *l == bevy::window::AppLifecycle::WillSuspend)
+    {
+        kg_core::net::going_to_background();
+    }
+    if closing.read().count() > 0 {
+        kg_core::net::flush_before_exit();
+    }
+}
+
 pub fn build(scene: Scene, with_audio: bool) -> App {
     let mut app = App::new();
     app.add_plugins(
@@ -274,6 +301,10 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     .add_plugins(paint::PaintPlugin)
     .insert_non_send(Frame::new(scene))
     .add_systems(Update, frame.in_set(game3d::Step))
+    .add_systems(
+        Last,
+        sync_on_close.before(bevy::window::close_when_requested),
+    )
     .add_plugins(game3d::Game3dPlugin);
     if with_audio {
         app.add_systems(Startup, |mut f: NonSendMut<Frame>| {
@@ -294,6 +325,9 @@ pub fn run() {
     let scene = match shots::requested() {
         Some(n) => Scene::Shot(shots::Shot::new(n)),
         None if jev::requested() => Scene::Jev(Box::default()),
+        None if jev::requested_clash() => Scene::JevClash(Box::default()),
+        None if jev::requested_brain() => Scene::BrainPaper(Box::default()),
+        None if jev::requested_brain_clash() => Scene::BrainClash(Box::default()),
         None => Scene::Menu(Box::default()),
     };
     let audio = !matches!(scene, Scene::Shot(_));

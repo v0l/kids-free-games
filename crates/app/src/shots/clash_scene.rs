@@ -1,6 +1,7 @@
 use super::{Stage, DT};
 use crate::games::clash::ClashPlay;
 use crate::games::Play;
+use glam::vec2;
 use kg_core::engine::{Input, View};
 use kg_core::games::clash::sim::xp_for_level;
 use kg_core::games::clash::{self, Mode, Screen};
@@ -62,6 +63,40 @@ pub fn setup(n: u32, view: &View) -> Stage {
         193 => {
             p.g.start(Mode::Arena, 1);
             play(&mut p, view, 60 * 3);
+        }
+        231 => {
+            kg_core::profile::set("clash", "rating", 1090);
+            p = ClashPlay::new();
+            p.g.start(Mode::Survival, 1);
+            grow(&mut p, 9);
+            p.g.world.snakes[0].shield = 1e9;
+            for i in 1..p.g.world.snakes.len() {
+                p.g.world.kill(i, None);
+            }
+            play(&mut p, view, 60 * 6);
+        }
+        232 => {
+            p.g.start(Mode::Arena, 1);
+            grow(&mut p, 9);
+            play(&mut p, view, 30);
+            let head = p.g.world.player().head();
+            let a =
+                p.g.world
+                    .add_snake(head + vec2(-220.0, -120.0), 6, "Shielded".into(), 0);
+            p.g.world.snakes[a].shield = 5.0;
+            let b =
+                p.g.world
+                    .add_snake(head + vec2(220.0, -120.0), 6, "Sky".into(), 3);
+            p.g.world.snakes[b].shield = 0.0;
+            play(&mut p, view, 6);
+        }
+        230 => {
+            p.g.start(Mode::Survival, 1);
+            grow(&mut p, 9);
+            for i in (1..p.g.world.snakes.len()).step_by(2) {
+                p.g.world.kill(i, None);
+            }
+            play(&mut p, view, 60 * 6);
         }
         194 => {
             p.g.start(Mode::Arena, 1);

@@ -13,6 +13,7 @@ use kg_core::profile;
 
 pub const IDLE: u32 = 1000;
 
+mod ballsort_scene;
 mod blocks_scene;
 mod breakout_scene;
 mod clash_scene;
@@ -26,9 +27,11 @@ mod mathpop_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
+mod runner_scene;
 mod snake_scene;
 mod spell_scene;
 mod stack_scene;
+mod trains_scene;
 
 pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
@@ -174,6 +177,9 @@ pub const SCENES: &[(u32, &str)] = &[
     (177, "hotel city tower built out"),
     (178, "hotel royal palace built out"),
     (179, "hotel pool with swimmers"),
+    (230, "clash survival with snakes left"),
+    (231, "clash survival win with a rank up"),
+    (232, "clash shielded snake beside a sky skin"),
     (190, "clash title with the skin picker"),
     (191, "clash locked skin"),
     (192, "clash tower floor picker"),
@@ -188,16 +194,26 @@ pub const SCENES: &[(u32, &str)] = &[
     (181, "hotel level up"),
     (182, "hotel moving to the next hotel"),
     (183, "hotel boss finale"),
-    (200, "garden first launch with the hint"),
-    (201, "garden sprouting a three by four array"),
-    (202, "garden four times six bed"),
-    (203, "garden right answer, watering can"),
-    (204, "garden remember stage, flowers fading"),
-    (205, "garden numbers only, wrong pick wilts"),
-    (206, "garden bed picker overview"),
-    (207, "garden every bed in bloom, board"),
-    (208, "garden bed bloom"),
-    (209, "garden round report"),
+    (250, "ball sort level select"),
+    (251, "ball sort first level with the hint"),
+    (252, "ball sort a tube lifted"),
+    (253, "ball sort ball mid pour"),
+    (254, "ball sort level nine mid pour"),
+    (255, "ball sort hidden balls"),
+    (256, "ball sort level 24 big board"),
+    (257, "ball sort level clear, three stars, board"),
+    (258, "ball sort level clear, one star"),
+    (259, "ball sort last level mid pour"),
+    (260, "garden first launch with the hint"),
+    (261, "garden sprouting a three by four array"),
+    (262, "garden four times six bed"),
+    (263, "garden right answer, watering can"),
+    (264, "garden remember stage, flowers fading"),
+    (265, "garden numbers only, wrong pick wilts"),
+    (266, "garden bed picker overview"),
+    (267, "garden every bed in bloom, board"),
+    (268, "garden bed bloom"),
+    (269, "garden round report"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -208,6 +224,27 @@ pub const SCENES: &[(u32, &str)] = &[
     (117, "helix level clear, three stars"),
     (118, "helix level clear, one star"),
     (119, "helix last level mid run"),
+    (200, "runner level select"),
+    (201, "runner ready on the street"),
+    (202, "runner first run with the swipe hint"),
+    (203, "runner first hurdle with the jump hint"),
+    (204, "runner train lane at level eight"),
+    (205, "runner coin combo mid run"),
+    (206, "runner crash into a barrier"),
+    (207, "runner slide under a gate"),
+    (208, "runner out of hearts with the board"),
+    (209, "runner level clear, three stars"),
+    (210, "runner jumping through a coin arc"),
+    (220, "trains first ride with the hint"),
+    (221, "trains riders hopping off"),
+    (222, "trains pick how many are left"),
+    (223, "trains riders hidden after a second"),
+    (224, "trains numbers only within 20"),
+    (225, "trains missing number"),
+    (226, "trains borrowing, one slip"),
+    (227, "trains right answer, train leaving"),
+    (228, "trains level picker"),
+    (229, "trains finished with the board"),
 ];
 
 pub fn requested() -> Option<u32> {
@@ -445,7 +482,9 @@ fn setup(n: u32, view: &View) -> Stage {
         70..=79 => breakout_scene::setup(n, view),
         80..=89 => jumper_scene::setup(n, view),
         110..=119 => helix_scene::setup(n, view),
-        200..=209 => garden_scene::setup(n, view),
+        200..=219 => runner_scene::setup(n, view),
+        250..=259 => ballsort_scene::setup(n, view),
+        260..=269 => garden_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -453,7 +492,8 @@ fn setup(n: u32, view: &View) -> Stage {
         90..=99 => memory_scene::setup(n, view),
         170..=189 => hotel_scene::setup(n, view),
         160..=169 => spell_scene::setup(n, view),
-        190..=199 => clash_scene::setup(n, view),
+        190..=199 | 230..=232 => clash_scene::setup(n, view),
+        220..=229 => trains_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();
             let mia = profile::create("Mia", 2).unwrap();
@@ -630,15 +670,26 @@ mod tests {
     #[test]
     fn every_3d_scene_spawns_its_world() {
         for v in [View::ipad_landscape(), View::ipad_portrait()] {
-            for &(n, name) in SCENES
-                .iter()
-                .filter(|(n, _)| (110..=119).contains(n) || (170..=189).contains(n))
-            {
+            for &(n, name) in SCENES.iter().filter(|(n, _)| {
+                (110..=119).contains(n)
+                    || (170..=189).contains(n)
+                    || (200..=229).contains(n)
+                    || (250..=259).contains(n)
+                    || (150..=159).contains(n)
+            }) {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
                 let parts = crate::game3d::testing::parts(&mut app).len();
-                let (want, least) = if n >= 170 {
+                let (want, least) = if (150..=159).contains(&n) {
+                    (crate::game3d::World3d::Paper, 10)
+                } else if n >= 250 {
+                    (crate::game3d::World3d::BallSort, 40)
+                } else if n >= 220 {
+                    (crate::game3d::World3d::Trains, 150)
+                } else if n >= 200 {
+                    (crate::game3d::World3d::Runner, 40)
+                } else if n >= 170 {
                     (crate::game3d::World3d::Hotel, 150)
                 } else {
                     (crate::game3d::World3d::Helix, 1)
@@ -702,6 +753,21 @@ mod tests {
     #[test]
     fn breakout_scenes_land_in_the_state_they_are_named_for() {
         breakout_scene::check();
+    }
+
+    #[test]
+    fn runner_scenes_land_in_the_state_they_are_named_for() {
+        runner_scene::check();
+    }
+
+    #[test]
+    fn trains_scenes_land_in_the_state_they_are_named_for() {
+        trains_scene::check();
+    }
+
+    #[test]
+    fn ballsort_scenes_land_in_the_state_they_are_named_for() {
+        ballsort_scene::check();
     }
 
     #[test]

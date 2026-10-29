@@ -7,7 +7,7 @@ use crate::learn::{hud_bottom, tall, ui_scale, PRAISE};
 use crate::mastery::{self, Session};
 use crate::profile;
 use crate::rng as rand;
-use crate::sfx::{self, Line, Say, Sfx};
+use crate::sfx::{self, Say, Sfx, TimesLine};
 use glam::{vec2, vec3, Vec2, Vec3};
 
 pub const GAME: &str = "garden";
@@ -247,13 +247,13 @@ impl Question {
 
     pub fn voice(&self) -> Say {
         match self.form {
-            Form::Product => Say::Times(Line::Ask, self.a as u8, self.b as u8),
-            Form::MissingFactor => Say::Times(Line::Missing, self.a as u8, self.product() as u8),
+            Form::Product => Say::Times(TimesLine::Ask, self.a as u8, self.b as u8),
+            Form::MissingFactor => Say::Times(TimesLine::Missing, self.a as u8, self.product() as u8),
         }
     }
 
     pub fn answer_voice(&self) -> Say {
-        Say::Times(Line::Answer, self.a as u8, self.b as u8)
+        Say::Times(TimesLine::Answer, self.a as u8, self.b as u8)
     }
 
     pub fn rows(&self) -> usize {
@@ -866,7 +866,7 @@ impl Garden {
                 self.fx.sparkle(top, gold);
                 sfx::say(self.q.answer_voice());
                 self.push = 1.05;
-                if self.run > 0 && self.run % 5 == 0 {
+                if self.run > 0 && self.run.is_multiple_of(5) {
                     feel::impact_tinted(Impact::Medium, gold);
                     self.shake.add(0.2);
                 }
@@ -942,7 +942,7 @@ impl Garden {
                 self.ticked += 1;
                 let cols = self.q.cols();
                 let (i, j) = ((self.ticked - 1) / cols, (self.ticked - 1) % cols);
-                if n < 40 || self.ticked % 3 == 0 {
+                if n < 40 || self.ticked.is_multiple_of(3) {
                     let cam = self.view_cam(view);
                     let w = self.flower_world(i, j) + vec3(0.0, 0.9, 0.0);
                     if let Some(at) = cam.project(view, w) {
@@ -1380,14 +1380,14 @@ mod tests {
         g.q = Question::new(Fact { table: 3, other: 4 }, 0, 0, false, false);
         g.next_question();
         let said = sfx::take_voice();
-        assert!(matches!(said, Some(Say::Times(Line::Ask, _, _))));
+        assert!(matches!(said, Some(Say::Times(TimesLine::Ask, _, _))));
         let v = View::ipad_landscape();
         let slot = g.q.slot_of_answer();
         let p = g.pick(slot);
         g.react(&v, slot, p);
         assert_eq!(sfx::take_voice(), Some(g.q.answer_voice()));
-        assert_eq!(Say::Times(Line::Answer, 3, 4).key(), "word_ta3x4");
-        assert_eq!(Say::Times(Line::Missing, 3, 12).key(), "word_tm3x12");
+        assert_eq!(Say::Times(TimesLine::Answer, 3, 4).key(), "word_ta3x4");
+        assert_eq!(Say::Times(TimesLine::Missing, 3, 12).key(), "word_tm3x12");
     }
 
     #[test]

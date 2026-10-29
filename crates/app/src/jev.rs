@@ -1,13 +1,29 @@
+use crate::games::clash::ClashPlay;
 use crate::games::flappy::FlappyPlay;
 use crate::games::Play;
 use crate::paint::Pen;
+use kg_core::engine::Input;
 use kg_core::engine::View;
+use kg_core::games::clash::{Mode, Screen};
 use kg_core::geom::{Color, Rect, WHITE};
+use kg_core::jev::clash::ClashPlayer;
 use kg_core::jev::{mode_from, yalr_key, Player};
 
 pub struct Jev {
     pub player: Option<Player>,
     pub game: FlappyPlay,
+}
+
+pub fn requested_brain_clash() -> bool {
+    crate::web::query("brain").is_some_and(|g| g == "clash")
+}
+
+pub fn requested_brain() -> bool {
+    crate::web::query("brain").is_some_and(|g| g == "paper")
+}
+
+pub fn requested_clash() -> bool {
+    crate::web::query("jev").is_some_and(|g| g == "clash")
 }
 
 pub fn requested() -> bool {
@@ -84,6 +100,514 @@ pub fn fit(s: &str, width: f32, size: f32) -> String {
         out.pop();
     }
     format!("{}...", out.trim_end())
+}
+
+pub struct JevClash {
+    pub player: Option<ClashPlayer>,
+    pub game: ClashPlay,
+    was_playing: bool,
+}
+
+impl JevClash {
+    pub fn new() -> Self {
+        kg_core::save::use_memory_only();
+        if kg_core::profile::current().is_none() {
+            kg_core::profile::create("Jev", 4);
+        }
+        let player = crate::web::query("key")
+            .filter(|k| !k.is_empty())
+            .or_else(yalr_key)
+            .map(ClashPlayer::new);
+        let mut game = ClashPlay::new();
+        game.g.start(Mode::Arena, 1);
+        Self {
+            player,
+            game,
+            was_playing: true,
+        }
+    }
+
+    pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32) {
+        let Some(player) = &mut self.player else {
+            pen.fill_screen(view, Color::new(0.06, 0.03, 0.15, 1.0));
+            pen.text_center(
+                "No Yalr key: set YALR_KEY or ?key=",
+                view.w / 2.0,
+                view.h / 2.0,
+                36.0,
+                WHITE,
+            );
+            return;
+        };
+        let g = &mut self.game.g;
+        let playing = g.screen == Screen::Playing;
+        if playing && g.ending == 0.0 {
+            if let Some(a) = player.drive(&g.world) {
+                g.steer = a;
+            }
+        }
+        if self.was_playing && !playing {
+            player.end_run(g.world.player().level());
+        }
+        self.was_playing = playing;
+        if g.screen == Screen::Over && self.game.results_age > 2.5 {
+            self.game.g.start(Mode::Arena, 1);
+        }
+        let held = Input {
+            mm: 6.0,
+            ..Default::default()
+        };
+        self.game.update(&held, view, dt);
+        self.game.draw(pen, view);
+        pen.offset = glam::Vec2::ZERO;
+        let level = self.game.g.world.player().level();
+        let mut lines = vec![
+            ("JEV 1.13 playing Snake Clash".to_string(), true),
+            (
+                format!("calls {}   avg {:.0} ms", player.calls, player.avg_ms()),
+                false,
+            ),
+            (
+                format!(
+                    "run {}   level {}   best {}",
+                    player.runs + 1,
+                    level,
+                    player.best.max(level)
+                ),
+                false,
+            ),
+        ];
+        if !player.last_seen.is_empty() {
+            lines.push((format!("saw: {}", player.last_seen), false));
+        }
+        lines.extend(player.log.iter().map(|l| (l.clone(), false)));
+        let w = 420.0f32.min(view.w * 0.45);
+        let r = Rect::new(
+            16.0,
+            view.h - 30.0 - lines.len() as f32 * 26.0 - 16.0,
+            w,
+            30.0 + lines.len() as f32 * 26.0,
+        );
+        pen.round_rect(r, 18.0, Color::new(0.06, 0.03, 0.15, 0.78));
+        let gold = Color::from_rgba(255, 210, 70, 255);
+        let dim = Color::new(0.75, 0.78, 0.9, 1.0);
+        for (i, (l, strong)) in lines.iter().enumerate() {
+            pen.text_left(
+                &fit(l, w - 32.0, 22.0),
+                r.x + 16.0,
+                r.y + 27.0 + i as f32 * 26.0,
+                22.0,
+                if *strong { gold } else { dim },
+            );
+        }
+    }
+}
+
+pub const MAX_SPEED: f32 = 32.0;
+
+pub struct BrainPaper {
+    pub brain: Option<kg_core::brain::Brain>,
+    pub rl: bool,
+    pub game: crate::games::paper::PaperPlay,
+    pub effort: f32,
+    pub speed: f32,
+    since: f32,
+    dead_for: f32,
+    runs: u32,
+    best: f32,
+    was_dead: bool,
+}
+
+impl BrainPaper {
+    pub fn new() -> Self {
+        kg_core::save::use_memory_only();
+        if kg_core::profile::current().is_none() {
+            kg_core::profile::create("Brain", 5);
+        }
+        let effort = crate::web::query("effort")
+            .and_then(|e| e.parse().ok())
+            .unwrap_or(1.0);
+        let brain = kg_core::games::paper::world::shipped_net()
+            .map(|n| kg_core::brain::Brain::new(n.clone(), kg_core::brain::Effort::new(effort)));
+        let rl = crate::web::query("model").is_some_and(|m| m == "rl")
+            && kg_core::games::paper::rl::shipped().is_some();
+        Self {
+            brain,
+            rl,
+            game: crate::games::paper::PaperPlay::new(),
+            effort,
+            speed: crate::web::query("speed")
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(1.0)
+                .clamp(1.0, MAX_SPEED),
+            since: 0.0,
+            dead_for: 0.0,
+            runs: 0,
+            best: 0.0,
+            was_dead: false,
+        }
+    }
+
+    fn step(&mut self, view: &View, dt: f32) {
+        use kg_core::games::paper::State;
+        let g = &mut self.game.g;
+        let mut input = Input::default();
+        match g.state {
+            State::Ready => input.action = true,
+            State::Dead | State::Won => {
+                if !self.was_dead {
+                    self.runs += 1;
+                    self.dead_for = 0.0;
+                }
+                self.dead_for += dt;
+                if self.dead_for > 2.0 {
+                    input =
+                        Input::press_at(kg_core::games::paper::play_again_button(view).center());
+                }
+            }
+            State::Playing => {
+                self.since += dt;
+                if self.rl {
+                    let effort = kg_core::brain::Effort::new(self.effort);
+                    if self.since >= effort.think_every(kg_core::games::paper::rl::DECIDE) {
+                        self.since = 0.0;
+                        if let Some(net) = kg_core::games::paper::rl::shipped() {
+                            use kg_core::games::paper::rl;
+                            let coarse = rl::Coarse::of(&g.w);
+                            let a = net.choose(&rl::observe(&g.w, 0, &coarse), effort);
+                            let me = g.me();
+                            let want = me.angle + rl::TURNS[a];
+                            g.aim(kg_core::games::paper::world::wrap_angle(want));
+                        }
+                    }
+                } else if let Some(b) = &mut self.brain {
+                    if self.since >= b.effort.think_every(0.16) {
+                        self.since = 0.0;
+                        let (aims, feats) = g.w.options(0);
+                        let k = b.choose(&feats);
+                        if let Some(a) = aims.get(k) {
+                            g.aim(*a);
+                        }
+                    }
+                }
+            }
+        }
+        self.was_dead = matches!(g.state, State::Dead | State::Won);
+        self.best = self.best.max(g.run.peak.max(g.share(0)));
+        self.game.update(&input, view, dt);
+    }
+
+    pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32, typed: &[char]) {
+        for c in typed {
+            match c {
+                '+' | '=' => self.speed = (self.speed * 2.0).min(MAX_SPEED),
+                '-' | '_' => self.speed = (self.speed / 2.0).max(1.0),
+                _ => {}
+            }
+        }
+        let steps = self.speed.round().max(1.0) as usize;
+        for _ in 0..steps {
+            self.step(view, dt);
+        }
+        self.game.draw(pen, view);
+        pen.offset = glam::Vec2::ZERO;
+        let lines = [
+            (
+                format!(
+                    "Brain playing, effort {:.2}, speed {}x",
+                    self.effort, self.speed
+                ),
+                true,
+            ),
+            (
+                format!(
+                    "run {}   land {:.1}%   best {:.1}%",
+                    self.runs + 1,
+                    self.game.g.share(0) * 100.0,
+                    self.best * 100.0
+                ),
+                false,
+            ),
+            (
+                match (&self.brain, self.rl) {
+                    (_, true) => format!(
+                        "{} weights, conv net on a 32x32 view",
+                        kg_core::games::paper::rl::shipped().map_or(0, |p| p.param_count())
+                    ),
+                    (Some(b), _) => format!(
+                        "{} weights, thinks every {:.2} s",
+                        b.net.weights.len(),
+                        b.effort.think_every(0.16)
+                    ),
+                    (None, _) => "no brain file".into(),
+                },
+                false,
+            ),
+        ];
+        let w = 470.0f32.min(view.w * 0.5);
+        let r = Rect::new(
+            16.0,
+            view.h - 30.0 - lines.len() as f32 * 26.0 - 200.0,
+            w,
+            30.0 + lines.len() as f32 * 26.0,
+        );
+        pen.round_rect(r, 18.0, Color::new(0.06, 0.03, 0.15, 0.78));
+        let gold = Color::from_rgba(255, 210, 70, 255);
+        let dim = Color::new(0.75, 0.78, 0.9, 1.0);
+        for (i, (l, strong)) in lines.iter().enumerate() {
+            pen.text_left(
+                &fit(l, w - 32.0, 22.0),
+                r.x + 16.0,
+                r.y + 27.0 + i as f32 * 26.0,
+                22.0,
+                if *strong { gold } else { dim },
+            );
+        }
+    }
+}
+
+impl Default for BrainPaper {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct BrainClash {
+    pub game: ClashPlay,
+    pub policy: Option<kg_core::brain::conv::Policy>,
+    pub effort: f32,
+    pub speed: f32,
+    watch: Option<String>,
+    stamp: Option<std::time::SystemTime>,
+    check: f32,
+    since: f32,
+    runs: u32,
+    best: u32,
+    reloads: u32,
+    round: Option<String>,
+    was_playing: bool,
+    rivals: bool,
+    shared: Option<std::sync::Arc<kg_core::brain::conv::Policy>>,
+}
+
+impl BrainClash {
+    pub fn new() -> Self {
+        kg_core::save::use_memory_only();
+        if kg_core::profile::current().is_none() {
+            kg_core::profile::create("Brain", 5);
+        }
+        let watch = crate::web::query("watch").filter(|w| !w.is_empty());
+        let mut game = ClashPlay::new();
+        game.g.start(Mode::Arena, 1);
+        let mut me = Self {
+            game,
+            policy: kg_core::games::clash::rl::shipped().cloned(),
+            effort: crate::web::query("effort")
+                .and_then(|e| e.parse().ok())
+                .unwrap_or(1.0),
+            speed: crate::web::query("speed")
+                .and_then(|v| v.parse::<f32>().ok())
+                .unwrap_or(1.0)
+                .clamp(1.0, MAX_SPEED),
+            watch,
+            stamp: None,
+            check: 0.0,
+            since: 0.0,
+            runs: 0,
+            best: 0,
+            reloads: 0,
+            round: None,
+            rivals: crate::web::query("rivals").is_some(),
+            shared: kg_core::games::clash::rl::shipped()
+                .cloned()
+                .map(std::sync::Arc::new),
+            was_playing: true,
+        };
+        me.round = me.read_round();
+        me.reload();
+        me
+    }
+
+    fn read_round(&self) -> Option<String> {
+        let path = self.watch.as_ref()?;
+        std::fs::read_to_string(format!("{path}.round"))
+            .ok()
+            .map(|r| r.trim().to_string())
+    }
+
+    fn new_round(&mut self) {
+        let round = self.read_round();
+        if round.is_none() || round == self.round {
+            return;
+        }
+        self.round = round;
+        self.stamp = None;
+        self.reload();
+        self.runs = 0;
+        self.best = 0;
+        self.since = 0.0;
+        self.was_playing = true;
+        self.game = ClashPlay::new();
+        self.game.g.start(Mode::Arena, 1);
+    }
+
+    fn reload(&mut self) {
+        let Some(path) = &self.watch else { return };
+        let Ok(meta) = std::fs::metadata(path) else {
+            return;
+        };
+        let stamp = meta.modified().ok();
+        if stamp == self.stamp {
+            return;
+        }
+        if let Some(p) = std::fs::read(path)
+            .ok()
+            .and_then(|b| kg_core::brain::conv::Policy::from_bytes(&b))
+            .filter(kg_core::games::clash::rl::fits)
+        {
+            self.shared = Some(std::sync::Arc::new(p.clone()));
+            self.policy = Some(p);
+            self.stamp = stamp;
+            self.reloads += 1;
+        }
+    }
+
+    fn step(&mut self, view: &View, dt: f32) {
+        use kg_core::games::clash::rl;
+        let g = &mut self.game.g;
+        let playing = g.screen == Screen::Playing;
+        if self.was_playing && !playing {
+            self.runs += 1;
+        }
+        self.was_playing = playing;
+        if self.rivals {
+            if let Some(p) = &self.shared {
+                for s in g
+                    .world
+                    .snakes
+                    .iter_mut()
+                    .filter(|s| !s.player && s.rival.is_none())
+                {
+                    s.rival = Some(p.clone());
+                }
+            }
+        }
+        if playing && g.ending == 0.0 {
+            self.since += dt;
+            self.best = self.best.max(g.world.player().level());
+            if let Some(p) = &self.policy {
+                if self.since >= kg_core::brain::Effort::new(self.effort).think_every(rl::DECIDE) {
+                    self.since = 0.0;
+                    let a = p.choose(
+                        &rl::observe(&g.world, 0),
+                        kg_core::brain::Effort::new(self.effort),
+                    );
+                    let me = g.world.player();
+                    g.steer = kg_core::games::clash::sim::wrap_angle(me.angle + rl::TURNS[a]);
+                }
+            }
+        }
+        if g.screen == Screen::Over && self.game.results_age > 1.5 {
+            self.game.g.start(Mode::Arena, 1);
+        }
+        self.game.update(
+            &Input {
+                mm: 6.0,
+                ..Default::default()
+            },
+            view,
+            dt,
+        );
+    }
+
+    pub fn frame(&mut self, pen: &mut Pen, view: &View, dt: f32, typed: &[char]) {
+        for c in typed {
+            match c {
+                '+' | '=' => self.speed = (self.speed * 2.0).min(MAX_SPEED),
+                '-' | '_' => self.speed = (self.speed / 2.0).max(1.0),
+                _ => {}
+            }
+        }
+        self.check -= dt;
+        if self.check <= 0.0 {
+            self.check = 2.0;
+            self.new_round();
+            self.reload();
+        }
+        for _ in 0..self.speed.round().max(1.0) as usize {
+            self.step(view, dt);
+        }
+        self.game.draw(pen, view);
+        pen.offset = glam::Vec2::ZERO;
+        let level = self.game.g.world.player().level();
+        let lines = [
+            (
+                format!(
+                    "{}, effort {:.2}, speed {}x",
+                    match (&self.watch, &self.round) {
+                        (Some(_), Some(r)) => format!("Watching training, generation {r}"),
+                        (Some(_), None) => "Watching training".into(),
+                        _ => "RL policy".into(),
+                    },
+                    self.effort,
+                    self.speed
+                ),
+                true,
+            ),
+            (
+                format!(
+                    "run {}   level {}   best {}",
+                    self.runs + 1,
+                    level,
+                    self.best
+                ),
+                false,
+            ),
+            (
+                match (&self.policy, self.watch.is_some()) {
+                    (None, _) => "no policy yet, waiting for the trainer".into(),
+                    (Some(p), true) => format!(
+                        "{} weights, snapshot {} reloaded",
+                        p.param_count(),
+                        self.reloads
+                    ),
+                    (Some(p), false) => format!("{} weights", p.param_count()),
+                },
+                false,
+            ),
+        ];
+        let w = 470.0f32.min(view.w * 0.5);
+        let r = Rect::new(
+            16.0,
+            view.h - 30.0 - lines.len() as f32 * 26.0 - 200.0,
+            w,
+            30.0 + lines.len() as f32 * 26.0,
+        );
+        pen.round_rect(r, 18.0, Color::new(0.06, 0.03, 0.15, 0.78));
+        let gold = Color::from_rgba(255, 210, 70, 255);
+        let dim = Color::new(0.75, 0.78, 0.9, 1.0);
+        for (i, (l, strong)) in lines.iter().enumerate() {
+            pen.text_left(
+                &fit(l, w - 32.0, 22.0),
+                r.x + 16.0,
+                r.y + 27.0 + i as f32 * 26.0,
+                22.0,
+                if *strong { gold } else { dim },
+            );
+        }
+    }
+}
+
+impl Default for BrainClash {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Default for JevClash {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Default for Jev {

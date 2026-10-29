@@ -1,4 +1,8 @@
 pub mod bots;
+pub mod powers;
+pub mod rating;
+pub mod rl;
+pub mod sight;
 pub mod sim;
 pub mod skins;
 pub mod tower;
@@ -30,6 +34,7 @@ pub enum Screen {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
     Arena,
+    Survival,
     Tower,
 }
 
@@ -41,6 +46,8 @@ pub struct Outcome {
     pub new_skins: Vec<usize>,
     pub new_best: bool,
     pub floor: u32,
+    pub left: usize,
+    pub rating: (i64, i64),
 }
 
 pub struct Clash {
@@ -64,6 +71,7 @@ pub struct Clash {
     pub best: Best,
     pub rank: Option<usize>,
     pub outcome: Outcome,
+    pub field: usize,
     pub training: bool,
     pub help: u32,
     pub ending: f32,
@@ -77,6 +85,7 @@ pub struct Clash {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Press {
     Arena,
+    Survival,
     Tower,
     Prev,
     Next,
@@ -92,6 +101,11 @@ pub fn read_stats() -> Stats {
         eaten: crate::profile::get(GAME, "eaten").max(0) as u32,
         floor: crate::profile::get(GAME, "floor").max(0) as u32,
         games: crate::profile::get(GAME, "games").max(0) as u32,
+        wins: crate::profile::get(GAME, "wins").max(0) as u32,
+        rating: match crate::profile::get(GAME, "rating") {
+            0 => rating::START,
+            r => r.clamp(rating::FLOOR, rating::TOP),
+        },
     }
 }
 
@@ -100,6 +114,8 @@ fn write_stats(s: &Stats) {
     crate::profile::set(GAME, "eaten", s.eaten as i64);
     crate::profile::set(GAME, "floor", s.floor as i64);
     crate::profile::set(GAME, "games", s.games as i64);
+    crate::profile::set(GAME, "wins", s.wins as i64);
+    crate::profile::set(GAME, "rating", s.rating);
 }
 
 pub fn title_layout(view: &View) -> TitleLayout {
@@ -124,8 +140,9 @@ pub fn title_layout(view: &View) -> TitleLayout {
             arrow,
             arrow,
         ),
-        arena: Rect::new(cx - bw / 2.0, view.h * 0.66, bw, bh),
-        tower: Rect::new(cx - bw / 2.0, view.h * 0.66 + bh + 18.0, bw, bh),
+        arena: Rect::new(cx - bw / 2.0, view.h * 0.6, bw, bh),
+        survival: Rect::new(cx - bw / 2.0, view.h * 0.6 + bh + 14.0, bw, bh),
+        tower: Rect::new(cx - bw / 2.0, view.h * 0.6 + 2.0 * (bh + 14.0), bw, bh),
     }
 }
 
@@ -134,6 +151,7 @@ pub struct TitleLayout {
     pub prev: Rect,
     pub next: Rect,
     pub arena: Rect,
+    pub survival: Rect,
     pub tower: Rect,
 }
 
@@ -224,6 +242,7 @@ impl Clash {
             best: Best::load(GAME),
             rank: None,
             outcome: Outcome::default(),
+            field: 0,
             training: false,
             help,
             ending: 0.0,
@@ -264,6 +283,18 @@ impl Clash {
         self.combo = 0;
     }
 
+    fn with_brains(&self, spec: Spec) -> Spec {
+        let Some(p) = rl::shipped_arc() else {
+            return spec;
+        };
+        Spec {
+            rival: Some(p),
+            rival_share: 1.0,
+            effort: rating::effort(self.stats.rating),
+            ..spec
+        }
+    }
+
     pub fn start(&mut self, mode: Mode, floor: u32) {
         self.mode = mode;
         self.stats = read_stats();
@@ -272,7 +303,11 @@ impl Clash {
         let name = "You";
         match mode {
             Mode::Arena => {
-                let spec = Spec::arena(self.stats.best_level, self.training);
+                let spec = self.with_brains(Spec::arena(self.stats.best_level, self.training));
+                self.world = World::new(spec, name, self.skin);
+            }
+            Mode::Survival => {
+                let spec = self.with_brains(Spec::survival(self.stats.best_level, self.training));
                 self.world = World::new(spec, name, self.skin);
             }
             Mode::Tower => {
@@ -280,6 +315,7 @@ impl Clash {
                 self.world = self.floor.build(name, self.skin);
             }
         }
+        self.field = self.world.snakes_left();
         self.screen = Screen::Playing;
         self.run_t = 0.0;
         self.ending = 0.0;
@@ -290,6 +326,7 @@ impl Clash {
         let banner = match (mode, self.floor.goal) {
             (Mode::Tower, Goal::Boss(_)) => Some("BOSS!".to_string()),
             (Mode::Tower, _) => Some(format!("Floor {}", self.floor.n)),
+            (Mode::Survival, _) => Some("Last snake wins!".to_string()),
             _ => None,
         };
         self.toast = banner.map(|b| (b, 2.2));
@@ -298,9 +335,7 @@ impl Clash {
     }
 
     pub fn target_zoom_for(&self, size: Vec2) -> f32 {
-        let level = self.world.player().level().min(40) as f32;
-        let span = 460.0 + 15.0 * level + self.world.player().radius() * 3.0;
-        size.x.min(size.y).max(300.0) / span
+        size.x.min(size.y).max(300.0) / sight::span_of(&self.world, 0)
     }
 
     pub fn to_screen(&self, view: &View, p: Vec2) -> Vec2 {
@@ -401,6 +436,8 @@ impl Clash {
         if input.pressed {
             if l.arena.contains(input.pos) {
                 self.press = Some(Press::Arena);
+            } else if l.survival.contains(input.pos) {
+                self.press = Some(Press::Survival);
             } else if l.tower.contains(input.pos) {
                 self.press = Some(Press::Tower);
             }
@@ -412,6 +449,10 @@ impl Clash {
             Some(Press::Arena) => {
                 sfx::play(Sfx::Click);
                 self.start(Mode::Arena, 1);
+            }
+            Some(Press::Survival) => {
+                sfx::play(Sfx::Click);
+                self.start(Mode::Survival, 1);
             }
             Some(Press::Tower) => {
                 sfx::play(Sfx::Click);
@@ -515,7 +556,12 @@ impl Clash {
         for e in events {
             self.react(e);
         }
-        if self.ending == 0.0 && self.mode == Mode::Tower && self.floor.done(&self.world) {
+        let cleared = match self.mode {
+            Mode::Tower => self.floor.done(&self.world),
+            Mode::Survival => self.world.won(),
+            Mode::Arena => false,
+        };
+        if self.ending == 0.0 && cleared {
             self.ending = 0.001;
             self.celebrate();
         }
@@ -597,6 +643,30 @@ impl Clash {
                 self.fx.sparkle(at, GOLD);
                 feel::impact(Impact::Small);
             }
+            Event::Power {
+                kind, at, player, ..
+            } => {
+                let col = powers::color(kind);
+                self.fx.emit(
+                    at,
+                    &[col, WHITE],
+                    Burst {
+                        count: if player { 18 } else { 6 },
+                        speed: (90.0, 260.0),
+                        size: (4.0, 8.0),
+                        life: (0.3, 0.6),
+                        gravity: 0.0,
+                        drag: 3.5,
+                        ..Default::default()
+                    },
+                );
+                if player {
+                    sfx::play(Sfx::Magic);
+                    feel::impact(Impact::Small);
+                    self.bump.kick();
+                    self.popups.add(at, powers::label(kind), col, 46.0);
+                }
+            }
             Event::Bump { at, player } => {
                 self.fx.emit(
                     at,
@@ -615,6 +685,43 @@ impl Clash {
                     sfx::play(Sfx::Bounce);
                     self.shake.add(0.25);
                     feel::impact(Impact::Small);
+                }
+            }
+            Event::Cut {
+                at,
+                lost,
+                player,
+                by_player,
+                ..
+            } => {
+                self.fx.emit(
+                    at,
+                    &[WHITE, Color::from_rgba(255, 235, 140, 255)],
+                    Burst {
+                        count: 14,
+                        speed: (90.0, 260.0),
+                        size: (3.0, 7.0),
+                        life: (0.3, 0.6),
+                        gravity: 0.0,
+                        drag: 3.0,
+                        ..Default::default()
+                    },
+                );
+                if player {
+                    sfx::play(Sfx::Bounce);
+                    feel::impact(Impact::Medium);
+                    self.shake.add(0.45);
+                    self.combo = 0;
+                    self.popups.add(
+                        at + vec2(0.0, -40.0),
+                        format!("-{lost}"),
+                        Color::from_rgba(255, 120, 120, 255),
+                        44.0,
+                    );
+                } else if by_player {
+                    sfx::play(Sfx::Crunch);
+                    feel::impact(Impact::Small);
+                    self.shake.add(0.2);
                 }
             }
             Event::Eaten {
@@ -684,11 +791,19 @@ impl Clash {
         let before = self.stats;
         let mut s = read_stats();
         let level = self.world.player().level();
-        let cleared = self.world.player_alive() && self.mode == Mode::Tower;
+        let cleared = self.world.player_alive() && self.mode != Mode::Arena;
         s.games += 1;
         s.eaten += self.world.player_eats;
         s.best_level = s.best_level.max(level);
-        if cleared {
+        if cleared && self.mode == Mode::Survival {
+            s.wins += 1;
+        }
+        if self.mode == Mode::Survival {
+            let outlived = self.field.saturating_sub(self.world.snakes_left());
+            let place = rating::placement(outlived, self.field);
+            s.rating = rating::update(s.rating, place, cleared);
+        }
+        if cleared && self.mode == Mode::Tower {
             s.floor = s.floor.max(self.floor.n);
             crate::profile::unlock(GAME, self.floor.n + 1);
         }
@@ -712,6 +827,8 @@ impl Clash {
             new_skins: skins::newly_unlocked(&before, &s),
             new_best: self.mode == Mode::Arena && level > was_best && was_best > 0,
             floor: self.floor.n,
+            left: self.world.snakes_left(),
+            rating: (before.rating, s.rating),
         };
         if self.outcome.new_best {
             sfx::say(sfx::Say::Best);
@@ -749,7 +866,7 @@ impl Clash {
                     self.pick_floor = n;
                     self.start(Mode::Tower, n);
                 } else {
-                    self.start(Mode::Arena, 1);
+                    self.start(self.mode, 1);
                 }
             }
             Some(Press::Menu) => {
@@ -804,6 +921,64 @@ mod tests {
         assert_eq!(c.screen, Screen::Over);
         assert!(c.shows_results());
         assert_eq!(read_stats().games, 1);
+    }
+
+    #[test]
+    fn being_the_last_snake_in_survival_wins_and_counts() {
+        let mut c = fresh();
+        let v = View::ipad_landscape();
+        let l = title_layout(&v);
+        c.update(&Input::press_at(l.survival.center()), &v, 1.0 / 60.0);
+        assert_eq!((c.screen, c.mode), (Screen::Playing, Mode::Survival));
+        c.world.snakes[0].shield = 1e9;
+        for i in 1..c.world.snakes.len() {
+            c.world.kill(i, None);
+        }
+        run(&mut c, 6.0);
+        assert_eq!(c.screen, Screen::Over);
+        assert!(c.outcome.cleared);
+        assert_eq!(read_stats().wins, 1);
+    }
+
+    #[test]
+    fn every_bot_runs_the_trained_brain_at_the_players_rating() {
+        let mut c = fresh();
+        crate::profile::set(GAME, "rating", 1600);
+        c.start(Mode::Survival, 1);
+        let want = rating::effort(1600);
+        let bots: Vec<_> = c.world.bots().collect();
+        assert!(!bots.is_empty());
+        assert!(bots.iter().all(|b| b.rival.is_some() && b.effort == want));
+        run(&mut c, 2.0);
+        assert!(
+            c.world.bots().all(|b| b.rival.is_some()),
+            "bots still use the brain"
+        );
+    }
+
+    #[test]
+    fn a_survival_win_raises_the_rating_and_an_early_exit_lowers_it() {
+        let mut c = fresh();
+        let v = View::ipad_landscape();
+        c.start(Mode::Survival, 1);
+        c.world.snakes[0].shield = 1e9;
+        for i in 1..c.world.snakes.len() {
+            c.world.kill(i, None);
+        }
+        run(&mut c, 6.0);
+        let after_win = read_stats().rating;
+        assert!(after_win > rating::START, "{after_win}");
+
+        c.start(Mode::Survival, 1);
+        c.world.snakes[0].shield = 0.0;
+        let head = c.world.player().head();
+        let i = c
+            .world
+            .add_snake(head + vec2(5.0, 0.0), 30, "Big".into(), 2);
+        c.world.snakes[i].xp = sim::xp_for_level(30);
+        let _ = v;
+        run(&mut c, 3.0);
+        assert!(read_stats().rating < after_win);
     }
 
     #[test]

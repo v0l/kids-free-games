@@ -1,3 +1,4 @@
+mod admin;
 mod db;
 mod error;
 mod games;
@@ -90,6 +91,41 @@ async fn route(mut req: Request, env: &Env) -> ApiResult<Value> {
     let now = now_secs();
     let db = Db(env.d1("DB")?);
 
+    if let Endpoint::Admin(admin_endpoint) = endpoint {
+        limited(env, "RL_ADMIN", client_ip(&req)).await?;
+        let key = env.secret("ADMIN_KEY").ok().map(|k| k.to_string());
+        admin::authorize(key.as_deref(), bearer(&req).as_deref())?;
+        let params = admin::Params {
+            q: query(&req, "q"),
+            limit: query(&req, "limit"),
+            offset: query(&req, "offset"),
+            sort: query(&req, "sort"),
+        };
+        let has_body = matches!(
+            req.method(),
+            worker::Method::Post | worker::Method::Put | worker::Method::Patch
+        );
+        let text = if has_body {
+            let declared = req
+                .headers()
+                .get("Content-Length")
+                .ok()
+                .flatten()
+                .and_then(|v| v.parse::<usize>().ok());
+            if declared.is_some_and(|n| n > rules::MAX_BODY_BYTES) {
+                return Err(ApiError::too_large("request body is too large"));
+            }
+            let text = req.text().await?;
+            if text.len() > rules::MAX_BODY_BYTES {
+                return Err(ApiError::too_large("request body is too large"));
+            }
+            Some(text).filter(|t| !t.is_empty())
+        } else {
+            None
+        };
+        return admin::handle(&db, admin_endpoint, params, text, now).await;
+    }
+
     match &endpoint {
         Endpoint::Health => return Ok(serde_json::json!({ "ok": true, "time": now })),
         Endpoint::Games => return Ok(handlers::games_list()),
@@ -137,9 +173,11 @@ async fn route(mut req: Request, env: &Env) -> ApiResult<Value> {
             let b = body(&mut req).await?;
             handlers::post_playtime(&db, &auth, b, now).await
         }
-        Endpoint::Health | Endpoint::Games | Endpoint::Register | Endpoint::RedeemLink => {
-            Err(ApiError::internal("public endpoint reached auth"))
-        }
+        Endpoint::Admin(_)
+        | Endpoint::Health
+        | Endpoint::Games
+        | Endpoint::Register
+        | Endpoint::RedeemLink => Err(ApiError::internal("public endpoint reached auth")),
     }
 }
 
@@ -147,6 +185,16 @@ async fn route(mut req: Request, env: &Env) -> ApiResult<Value> {
 async fn fetch(req: Request, env: Env, _ctx: Context) -> Result<Response> {
     if req.method() == worker::Method::Options {
         return cors(Response::empty()?.with_status(204));
+    }
+    if req.method() == worker::Method::Get
+        && matches!(req.path().trim_end_matches('/'), "/admin" | "")
+    {
+        return Response::from_html(include_str!("admin.html")).map(|mut r| {
+            let _ = r.headers_mut().set("Cache-Control", "no-store");
+            let _ = r.headers_mut().set("X-Frame-Options", "DENY");
+            let _ = r.headers_mut().set("Referrer-Policy", "no-referrer");
+            r
+        });
     }
     let res = match route(req, &env).await {
         Ok(v) => Response::from_json(&v)?,

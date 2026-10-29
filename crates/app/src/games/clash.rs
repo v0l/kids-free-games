@@ -9,6 +9,7 @@ use kg_core::games::clash::sim::{level_progress, Snake};
 use kg_core::games::clash::skins::{Skin, SKINS};
 use kg_core::games::clash::tower::Goal;
 use kg_core::games::clash::*;
+use kg_core::games::clash::{rating, sight};
 use kg_core::geom::{Color, Rect, WHITE};
 use std::f32::consts::TAU;
 
@@ -17,7 +18,7 @@ const SHEET: &str = "clash";
 
 pub struct ClashPlay {
     pub g: Clash,
-    results_age: f32,
+    pub results_age: f32,
 }
 
 impl ClashPlay {
@@ -190,11 +191,82 @@ fn draw_eggs(g: &Clash, pen: &mut Pen, view: &View) {
     }
 }
 
-const SHIELD: Color = Color::new(0.6, 0.9, 1.0, 1.0);
-
-struct Look {
-    mark: Option<Color>,
+fn draw_powers(g: &Clash, pen: &mut Pen, view: &View) {
+    use kg_core::games::clash::powers::{self, Kind};
+    for p in &g.world.powers {
+        let c = g.to_screen(view, p.pos);
+        if !on_screen(view, c, 60.0) {
+            continue;
+        }
+        let col = powers::color(p.kind);
+        let pop = kg_core::fx::ease_out_back((p.age / 0.4).min(1.0)).max(0.05);
+        let r = 26.0 * g.zoom.max(0.5) * pop * (1.0 + 0.08 * (g.t * 4.0 + p.pos.x).sin());
+        let at = c + vec2(0.0, (g.t * 2.5 + p.pos.y).sin() * r * 0.15);
+        pen.soft_shadow(c + vec2(0.0, r * 0.9), r * 0.8, r * 0.3, 0.35);
+        pen.circle(at, r * 1.45, col.with_alpha(0.22));
+        pen.circle(at, r + 3.0, PLUM);
+        pen.circle(at, r, col);
+        pen.circle(
+            at - vec2(r * 0.3, r * 0.35),
+            r * 0.38,
+            col.lerp(WHITE, 0.55),
+        );
+        let ink = WHITE;
+        let w = (r * 0.16).max(2.5);
+        match p.kind {
+            Kind::Speed => {
+                let pts = [
+                    at + vec2(r * 0.15, -r * 0.6),
+                    at + vec2(-r * 0.25, r * 0.05),
+                    at + vec2(r * 0.15, r * 0.05),
+                    at + vec2(-r * 0.15, r * 0.6),
+                ];
+                for k in 0..3 {
+                    pen.line(pts[k], pts[k + 1], w, ink);
+                }
+            }
+            Kind::Magnet => {
+                pen.ring(at, r * 0.42, w, ink);
+                pen.rect(
+                    kg_core::geom::Rect::new(at.x - r * 0.5, at.y - r * 0.05, r, r * 0.55),
+                    col,
+                );
+                pen.line(
+                    at + vec2(-r * 0.42, 0.0),
+                    at + vec2(-r * 0.42, r * 0.4),
+                    w,
+                    ink,
+                );
+                pen.line(
+                    at + vec2(r * 0.42, 0.0),
+                    at + vec2(r * 0.42, r * 0.4),
+                    w,
+                    ink,
+                );
+            }
+            Kind::Shield => {
+                pen.ring(at, r * 0.55, w, ink);
+                pen.circle(at, r * 0.2, ink);
+            }
+            Kind::Grow => {
+                pen.line(
+                    at - vec2(r * 0.45, 0.0),
+                    at + vec2(r * 0.45, 0.0),
+                    w * 1.2,
+                    ink,
+                );
+                pen.line(
+                    at - vec2(0.0, r * 0.45),
+                    at + vec2(0.0, r * 0.45),
+                    w * 1.2,
+                    ink,
+                );
+            }
+        }
+    }
 }
+
+const SHIELD: Color = Color::new(0.6, 0.9, 1.0, 1.0);
 
 fn wobble(g: &Clash, s: &Snake, i: usize, dir: Vec2) -> Vec2 {
     if i == 0 {
@@ -204,7 +276,7 @@ fn wobble(g: &Clash, s: &Snake, i: usize, dir: Vec2) -> Vec2 {
     vec2(-dir.y, dir.x) * k * s.radius() * 0.07 * (i as f32 / 3.0).min(1.0)
 }
 
-fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
+fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake) {
     let zoom = g.zoom;
     let skin = SKINS[s.skin.min(SKINS.len() - 1)];
     let n = s.segs.len();
@@ -226,11 +298,17 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
     if visible.is_empty() {
         return;
     }
-    let glow = if s.shield > 0.0 {
-        0.18 + 0.18 * (g.t * 9.0).sin()
-    } else {
-        0.0
-    };
+    let glow = 0.0;
+    if s.shield > 0.0 {
+        let pulse = 0.5 + 0.5 * (g.t * 6.0).sin();
+        for &i in visible.iter().rev() {
+            pen.circle(
+                pts[i],
+                radii[i] + (8.0 + 3.0 * pulse) * zoom.max(0.6),
+                SHIELD,
+            );
+        }
+    }
     pen.soft_shadow(
         pts[0] + vec2(0.0, radii[0] * 0.5),
         radii[0] * 1.2,
@@ -258,11 +336,28 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
             col.lerp(WHITE, 0.28).with_alpha(0.8),
         );
     }
-    if let Some(mark) = look.mark {
-        pen.ring(pts[0], radii[0] * 1.35, 3.0, mark.with_alpha(0.8));
-    }
     if s.shield > 0.0 {
-        pen.ring(pts[0], radii[0] * 1.5, 4.0, SHIELD.with_alpha(0.7));
+        pen.ring(pts[0], radii[0] * 1.6, 5.0, SHIELD);
+    }
+    if s.boosts.magnet > 0.0 {
+        let pulse = (g.t * 3.0).fract();
+        let col = kg_core::games::clash::powers::color(kg_core::games::clash::powers::Kind::Magnet);
+        pen.ring(
+            pts[0],
+            radii[0] * (1.6 + 2.2 * pulse),
+            3.0,
+            col.with_alpha(0.5 * (1.0 - pulse)),
+        );
+    }
+    if s.boosts.speed > 0.0 {
+        let col = kg_core::games::clash::powers::color(kg_core::games::clash::powers::Kind::Speed);
+        let back = -s.dir();
+        let side = vec2(-back.y, back.x);
+        for k in -1..=1 {
+            let from = pts[0] + back * radii[0] * 1.1 + side * k as f32 * radii[0] * 0.5;
+            let len = radii[0] * (1.4 + 0.5 * ((g.t * 20.0 + k as f32).sin() * 0.5 + 0.5));
+            pen.line(from, from + back * len, 3.0, col.with_alpha(0.7));
+        }
     }
     draw_face(pen, pts[0], s.dir(), radii[0], s.stun > 0.0, g.t + s.phase);
 }
@@ -348,22 +443,15 @@ fn level_pill(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, mine: u32) {
 }
 
 fn draw_arrows(g: &Clash, pen: &mut Pen, view: &View) {
-    let me = g.world.player();
     let c = g.centre(view);
     let f = view.full();
     let pad = 46.0;
-    for s in g.world.bots() {
-        if s.level() <= me.level() && !s.boss {
-            continue;
-        }
-        let p = g.to_screen(view, s.head());
+    for arrow in sight::arrows(&g.world, 0) {
+        let p = g.to_screen(view, arrow.at);
         if on_screen(view, p, 0.0) {
             continue;
         }
         let d = p - c;
-        if d.length() > 1400.0 * g.zoom.max(0.5) + 600.0 {
-            continue;
-        }
         let k =
             ((f.w / 2.0 - pad) / d.x.abs().max(1.0)).min((f.h / 2.0 - pad) / d.y.abs().max(1.0));
         let at = c + d * k;
@@ -388,7 +476,7 @@ fn draw_arrows(g: &Clash, pen: &mut Pen, view: &View) {
             col,
         );
         pen.text_shadow(
-            &s.level().to_string(),
+            &arrow.level.to_string(),
             at.x - dir.x * 36.0,
             at.y - dir.y * 36.0,
             24.0,
@@ -434,22 +522,12 @@ fn draw_world(g: &Clash, pen: &mut Pen, view: &View) {
     draw_floor(g, pen, view);
     draw_rocks(g, pen, view);
     draw_eggs(g, pen, view);
+    draw_powers(g, pen, view);
     let me = g.world.player().level();
     let mut order: Vec<&Snake> = g.world.snakes.iter().filter(|s| s.alive).collect();
     order.sort_by_key(|s| (s.player, s.level()));
     for s in &order {
-        let look = Look {
-            mark: if s.player {
-                None
-            } else if s.boss || s.level() > me {
-                Some(Color::from_rgba(235, 70, 80, 255))
-            } else if s.level() < me {
-                Some(Color::from_rgba(90, 210, 110, 255))
-            } else {
-                None
-            },
-        };
-        draw_snake(g, pen, view, s, &look);
+        draw_snake(g, pen, view, s);
     }
     for s in &order {
         level_pill(g, pen, view, s, me);
@@ -489,19 +567,15 @@ fn draw_minimap(g: &Clash, pen: &mut Pen, view: &View) {
         Color::new(0.0, 0.0, 0.1, 0.3),
     );
     pen.round_rect(r, 12.0, Color::new(0.1, 0.06, 0.25, 0.62));
-    let me = g.world.player().level();
-    for s in g.world.bots() {
-        let p = r.point() + s.head() / g.world.size * d;
-        let col = if s.boss {
-            Color::from_rgba(255, 60, 80, 255)
-        } else if s.level() > me {
-            Color::from_rgba(240, 90, 100, 255)
-        } else if s.level() < me {
-            Color::from_rgba(110, 220, 130, 255)
-        } else {
-            Color::from_rgba(220, 220, 230, 255)
+    for (at, dot) in sight::minimap(&g.world, 0) {
+        let p = r.point() + at / g.world.size * d;
+        let col = match dot {
+            sight::Dot::Boss => Color::from_rgba(255, 60, 80, 255),
+            sight::Dot::Bigger => Color::from_rgba(240, 90, 100, 255),
+            sight::Dot::Smaller => Color::from_rgba(110, 220, 130, 255),
+            sight::Dot::Even => Color::from_rgba(220, 220, 230, 255),
         };
-        pen.circle(p, if s.boss { 5.5 } else { 3.0 }, col);
+        pen.circle(p, if dot == sight::Dot::Boss { 5.5 } else { 3.0 }, col);
     }
     if g.world.player_alive() {
         let p = r.point() + g.world.player().head() / g.world.size * d;
@@ -620,6 +694,23 @@ fn draw_hud(g: &Clash, pen: &mut Pen, view: &View) {
             r.x + r.w / 2.0,
             r.center().y + 1.0,
             24.0,
+            WHITE,
+        );
+    }
+    if g.mode == Mode::Survival {
+        let left = g.world.snakes_left();
+        let r = Rect::new(view.w / 2.0 - 90.0, 16.0, 180.0, 40.0);
+        pen.round_rect(
+            r.offset(vec2(0.0, 3.0)),
+            20.0,
+            Color::new(0.0, 0.0, 0.1, 0.3),
+        );
+        pen.round_rect(r, 20.0, Color::new(0.1, 0.06, 0.25, 0.7));
+        pen.text_shadow(
+            &format!("{left} left"),
+            r.x + r.w / 2.0,
+            r.center().y + 1.0,
+            26.0,
             WHITE,
         );
     }
@@ -857,10 +948,25 @@ fn draw_title(g: &Clash, pen: &mut Pen, view: &View) {
         );
     }
     pen.painted_button(l.arena, "Arena", Tone::Green, 0.0, 1.0);
+    pen.painted_button(l.survival, "Survival", Tone::Blue, 0.0, 1.0);
     pen.painted_button(l.tower, "Tower", Tone::Orange, 0.0, 1.0);
     let best = g.best.0;
     if best > 0 {
         pen.chip(view, Side::Right, "BEST LV", &best.to_string(), 1.0);
+    }
+    {
+        let r = l.survival;
+        let c = vec2(r.x + r.w - 62.0, r.y + r.h * 0.45);
+        pen.star(c, 17.0, 0.0, PLUM);
+        pen.star(c, 14.0, 0.0, Color::from_rgba(255, 214, 70, 255));
+        pen.text_outline(
+            &rating::tier(g.stats.rating).to_string(),
+            c.x + 32.0,
+            c.y,
+            30.0,
+            WHITE,
+            Color::from_rgba(20, 90, 170, 255),
+        );
     }
     if g.stats.floor > 0 {
         let r = l.tower;
@@ -951,14 +1057,16 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
         return;
     }
     let o = &g.outcome;
-    let (title, line, action) = if g.mode == Mode::Tower {
-        if o.cleared {
-            ("Floor clear!", format!("Floor {}", o.floor), "Next floor")
-        } else {
-            ("Munched!", format!("Floor {}", o.floor), "Try again")
-        }
-    } else {
-        ("Munched!", format!("Level {}", o.level), "Play again")
+    let (title, line, action) = match (g.mode, o.cleared) {
+        (Mode::Tower, true) => ("Floor clear!", format!("Floor {}", o.floor), "Next floor"),
+        (Mode::Tower, false) => ("Munched!", format!("Floor {}", o.floor), "Try again"),
+        (Mode::Survival, true) => ("You win!", rank_line(o), "Play again"),
+        (Mode::Survival, false) => (
+            "Munched!",
+            format!("{} left, {}", o.left, rank_line(o)),
+            "Try again",
+        ),
+        (Mode::Arena, _) => ("Munched!", format!("Level {}", o.level), "Play again"),
     };
     pen.results(
         view,
@@ -990,6 +1098,16 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
         );
     }
     pen.painted_round(menu, "icon_home", 0.0);
+}
+
+fn rank_line(o: &kg_core::games::clash::Outcome) -> String {
+    let (was, now) = o.rating;
+    let (a, b) = (rating::tier(was), rating::tier(now));
+    if b > a {
+        format!("Rank up! Rank {b}")
+    } else {
+        format!("Rank {b}")
+    }
 }
 
 pub fn draw(g: &Clash, pen: &mut Pen, view: &View, results_age: f32) {
@@ -1046,7 +1164,7 @@ mod tests {
             assert!(s.shield > 0.0);
             let mut pen = Pen::default();
             pen.begin(v, 1.0);
-            draw_snake(&p.g, &mut pen, &v, &s, &Look { mark: None });
+            draw_snake(&p.g, &mut pen, &v, &s);
             let see_through = pen
                 .used()
                 .iter()

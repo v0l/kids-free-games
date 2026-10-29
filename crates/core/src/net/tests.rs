@@ -14,6 +14,7 @@ struct ServerState {
     log: Vec<String>,
     down: bool,
     status_override: Option<i32>,
+    unknown_games: Vec<String>,
     next_token: u32,
 }
 
@@ -131,6 +132,14 @@ impl FakeServer {
                 )
             }
             ("POST", "/v1/playtime") => {
+                let unknown = body["sessions"].as_array().unwrap().iter().any(|x| {
+                    s.unknown_games
+                        .iter()
+                        .any(|g| x["game"].as_str() == Some(g.as_str()))
+                });
+                if unknown {
+                    return self.reply(400, json!({"error": "bad_request"}));
+                }
                 let mut applied = 0;
                 for x in body["sessions"].as_array().unwrap() {
                     let key = (player.to_string(), x["id"].as_str().unwrap().to_string());
@@ -451,6 +460,64 @@ fn play_time_is_uploaded_when_a_game_closes_and_never_twice() {
         .map(|(_, s)| *s)
         .sum();
     assert!((44..=46).contains(&total), "{total}");
+}
+
+#[test]
+fn play_time_for_a_game_the_server_does_not_know_yet_is_kept_until_it_does() {
+    let server = FakeServer::default();
+    server.0.borrow_mut().unknown_games = vec!["runner".into()];
+    let mut a = Device::new(&server);
+    let id = mia(&mut a);
+    a.step(10, true);
+    let now = a.now;
+    a.run(|n| n.begin_play("runner", now));
+    a.step(40, true);
+    a.run(|n| n.end_play());
+    a.step(30, true);
+    let now = a.now;
+    a.run(|n| n.begin_play("snake", now));
+    a.step(20, true);
+    a.run(|n| n.end_play());
+    a.step(30, true);
+    let total = |server: &FakeServer| -> i64 {
+        server
+            .0
+            .borrow()
+            .playtime
+            .iter()
+            .filter(|((p, _), _)| p == &id)
+            .map(|(_, s)| *s)
+            .sum()
+    };
+    assert!((19..=21).contains(&total(&server)), "{}", total(&server));
+    server.0.borrow_mut().unknown_games.clear();
+    a.step(1200, true);
+    assert!((59..=61).contains(&total(&server)), "{}", total(&server));
+}
+
+#[test]
+fn closing_the_app_mid_game_uploads_the_session_and_the_save() {
+    let server = FakeServer::default();
+    let mut a = Device::new(&server);
+    let id = mia(&mut a);
+    a.step(10, true);
+    let now = a.now;
+    a.run(|n| n.begin_play("snake", now));
+    a.step(40, true);
+    a.play(|| crate::profile::unlock("snake", 6));
+    let now = a.now;
+    a.run(|n| n.flush(now, &mut || {}));
+    let total: i64 = server
+        .0
+        .borrow()
+        .playtime
+        .iter()
+        .filter(|((p, _), _)| p == &id)
+        .map(|(_, s)| *s)
+        .sum();
+    assert!((39..=41).contains(&total), "{total}");
+    let saved = server.0.borrow().saves.get(&id).map(|x| x.1.clone());
+    assert!(saved.unwrap_or_default().contains("snake.unlocked=6"));
 }
 
 #[test]
