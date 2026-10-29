@@ -5,7 +5,7 @@ PROFILE=${PROFILE:-small}
 OUT=${OUT:-dist}
 start=$(date +%s)
 export KG_ASSET_VERSION=${KG_ASSET_VERSION:-$(cat assets/art/*.kga assets/*.kgs | sha1sum | cut -c1-10)}
-RUSTFLAGS="${RUSTFLAGS:-} --cfg getrandom_backend=\"wasm_js\"" \
+RUSTFLAGS="${RUSTFLAGS:-} --cfg getrandom_backend=\"wasm_js\" -C link-arg=--allow-undefined -C target-feature=+simd128" \
   cargo build -p kids_games --lib --profile "$PROFILE" --target wasm32-unknown-unknown
 rm -rf "$OUT"
 mkdir -p "$OUT"
@@ -16,7 +16,7 @@ cp assets/sound.kgs assets/sound_words.kgs "$OUT/assets/"
 wasm-bindgen --target web --no-typescript --out-dir "$OUT" --out-name kids_games \
   "target/wasm32-unknown-unknown/$PROFILE/kids_games.wasm"
 if command -v wasm-opt >/dev/null && [ "$PROFILE" != dev ]; then
-  wasm-opt -Oz --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
+  wasm-opt -Oz --enable-simd --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
     --enable-mutable-globals --enable-reference-types \
     "$OUT/kids_games_bg.wasm" -o "$OUT/kids_games_bg.wasm"
 fi

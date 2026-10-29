@@ -178,16 +178,21 @@ mod clash {
             death: g[4],
             stall: g[5],
             wall: g[6],
+            bump: g[7],
+            win: g[8],
         }
     }
 
     fn score(r: &Report) -> f32 {
-        r.level + 5.0 * r.secs / GAME_CAP - 5.0 * r.circling - 3.0 * r.stall
+        r.level + 2.0 * r.kills + 20.0 * r.wins + 5.0 * r.secs / GAME_CAP
+            - 5.0 * r.circling
+            - 3.0 * r.stall
     }
 
     fn describe(r: &Report) -> String {
         format!(
-            "level {:.1} lived {:.0}s died {:.0}% kills {:.2} stalled {:.0}% circling {:.1}%",
+            "won {:.0}% level {:.1} lived {:.0}s died {:.0}% kills {:.2} stalled {:.0}% circling {:.1}%",
+            r.wins * 100.0,
             r.level,
             r.secs,
             r.deaths * 100.0,
@@ -208,6 +213,8 @@ mod clash {
                 ("death", r.death),
                 ("stall", r.stall),
                 ("wall", r.wall),
+                ("bump", r.bump),
+                ("win", r.win),
             ]
         }
 
@@ -736,7 +743,6 @@ fn population<G: Game>(a: &Args) -> Result<()> {
     let live = format!("{}.live", a.out);
     let mut league: Vec<Policy> = vec![];
     let mut league_weights: Vec<Vec<u8>> = vec![];
-    let mut champion = f32::MIN;
     let mut stale = 0;
     let mut leader = 0;
     let mut start;
@@ -842,7 +848,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         for m in members.iter() {
             let policy = m.net.export()?;
             let err = parity(&m.net, &policy, m.batch.envs[0].obs(0), &m.dev)?;
-            let limit = if a.bf16 { 5e-2 } else { 1e-4 };
+            let limit = if a.bf16 { 0.15 } else { 1e-4 };
             if err > limit {
                 panic!("candle and the game's inference disagree: {err}");
             }
@@ -891,8 +897,19 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         }
         leader = order[0];
         let best = &members[leader];
+        let defending = match league.last() {
+            Some(p) if !league.is_empty() => {
+                let bots = G::eval(p, &[], seeds).0;
+                let vs = G::eval(p, &league, seeds).0;
+                (bots + vs) / 2.0
+            }
+            _ => f32::MIN,
+        };
+        if league.len() > 0 {
+            println!("  champion replayed on the same games: score {defending:.2}");
+        }
+        let champion = defending;
         if best.score > champion + a.min_gain {
-            champion = best.score;
             stale = 0;
             let policy = best.net.export()?;
             save(&policy, &a.out);

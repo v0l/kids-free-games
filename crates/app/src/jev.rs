@@ -386,6 +386,8 @@ pub struct BrainClash {
     reloads: u32,
     round: Option<String>,
     was_playing: bool,
+    rivals: bool,
+    shared: Option<std::sync::Arc<kg_core::brain::conv::Policy>>,
 }
 
 impl BrainClash {
@@ -415,6 +417,10 @@ impl BrainClash {
             best: 0,
             reloads: 0,
             round: None,
+            rivals: crate::web::query("rivals").is_some(),
+            shared: kg_core::games::clash::rl::shipped()
+                .cloned()
+                .map(std::sync::Arc::new),
             was_playing: true,
         };
         me.round = me.read_round();
@@ -459,6 +465,7 @@ impl BrainClash {
             .and_then(|b| kg_core::brain::conv::Policy::from_bytes(&b))
             .filter(kg_core::games::clash::rl::fits)
         {
+            self.shared = Some(std::sync::Arc::new(p.clone()));
             self.policy = Some(p);
             self.stamp = stamp;
             self.reloads += 1;
@@ -473,6 +480,18 @@ impl BrainClash {
             self.runs += 1;
         }
         self.was_playing = playing;
+        if self.rivals {
+            if let Some(p) = &self.shared {
+                for s in g
+                    .world
+                    .snakes
+                    .iter_mut()
+                    .filter(|s| !s.player && s.rival.is_none())
+                {
+                    s.rival = Some(p.clone());
+                }
+            }
+        }
         if playing && g.ending == 0.0 {
             self.since += dt;
             self.best = self.best.max(g.world.player().level());

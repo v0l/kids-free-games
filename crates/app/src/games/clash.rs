@@ -5,11 +5,11 @@ use crate::ui::{plain_score, Results, Tone};
 use glam::{vec2, Vec2};
 use kg_core::engine::{Input, View};
 use kg_core::fx::{ease_out_back, ease_out_cubic, Particle, Side};
-use kg_core::games::clash::sight;
 use kg_core::games::clash::sim::{level_progress, Snake};
 use kg_core::games::clash::skins::{Skin, SKINS};
 use kg_core::games::clash::tower::Goal;
 use kg_core::games::clash::*;
+use kg_core::games::clash::{rating, sight};
 use kg_core::geom::{Color, Rect, WHITE};
 use std::f32::consts::TAU;
 
@@ -709,6 +709,23 @@ fn draw_hud(g: &Clash, pen: &mut Pen, view: &View) {
             WHITE,
         );
     }
+    if g.mode == Mode::Survival {
+        let left = g.world.snakes_left();
+        let r = Rect::new(view.w / 2.0 - 90.0, 16.0, 180.0, 40.0);
+        pen.round_rect(
+            r.offset(vec2(0.0, 3.0)),
+            20.0,
+            Color::new(0.0, 0.0, 0.1, 0.3),
+        );
+        pen.round_rect(r, 20.0, Color::new(0.1, 0.06, 0.25, 0.7));
+        pen.text_shadow(
+            &format!("{left} left"),
+            r.x + r.w / 2.0,
+            r.center().y + 1.0,
+            26.0,
+            WHITE,
+        );
+    }
     draw_board(g, pen, view);
     draw_minimap(g, pen, view);
 }
@@ -943,10 +960,25 @@ fn draw_title(g: &Clash, pen: &mut Pen, view: &View) {
         );
     }
     pen.painted_button(l.arena, "Arena", Tone::Green, 0.0, 1.0);
+    pen.painted_button(l.survival, "Survival", Tone::Blue, 0.0, 1.0);
     pen.painted_button(l.tower, "Tower", Tone::Orange, 0.0, 1.0);
     let best = g.best.0;
     if best > 0 {
         pen.chip(view, Side::Right, "BEST LV", &best.to_string(), 1.0);
+    }
+    {
+        let r = l.survival;
+        let c = vec2(r.x + r.w - 62.0, r.y + r.h * 0.45);
+        pen.star(c, 17.0, 0.0, PLUM);
+        pen.star(c, 14.0, 0.0, Color::from_rgba(255, 214, 70, 255));
+        pen.text_outline(
+            &rating::tier(g.stats.rating).to_string(),
+            c.x + 32.0,
+            c.y,
+            30.0,
+            WHITE,
+            Color::from_rgba(20, 90, 170, 255),
+        );
     }
     if g.stats.floor > 0 {
         let r = l.tower;
@@ -1037,14 +1069,16 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
         return;
     }
     let o = &g.outcome;
-    let (title, line, action) = if g.mode == Mode::Tower {
-        if o.cleared {
-            ("Floor clear!", format!("Floor {}", o.floor), "Next floor")
-        } else {
-            ("Munched!", format!("Floor {}", o.floor), "Try again")
-        }
-    } else {
-        ("Munched!", format!("Level {}", o.level), "Play again")
+    let (title, line, action) = match (g.mode, o.cleared) {
+        (Mode::Tower, true) => ("Floor clear!", format!("Floor {}", o.floor), "Next floor"),
+        (Mode::Tower, false) => ("Munched!", format!("Floor {}", o.floor), "Try again"),
+        (Mode::Survival, true) => ("You win!", rank_line(o), "Play again"),
+        (Mode::Survival, false) => (
+            "Munched!",
+            format!("{} left, {}", o.left, rank_line(o)),
+            "Try again",
+        ),
+        (Mode::Arena, _) => ("Munched!", format!("Level {}", o.level), "Play again"),
     };
     pen.results(
         view,
@@ -1076,6 +1110,16 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
         );
     }
     pen.painted_round(menu, "icon_home", 0.0);
+}
+
+fn rank_line(o: &kg_core::games::clash::Outcome) -> String {
+    let (was, now) = o.rating;
+    let (a, b) = (rating::tier(was), rating::tier(now));
+    if b > a {
+        format!("Rank up! Rank {b}")
+    } else {
+        format!("Rank {b}")
+    }
 }
 
 pub fn draw(g: &Clash, pen: &mut Pen, view: &View, results_age: f32) {

@@ -63,6 +63,25 @@ pub fn setup(n: u32, view: &View) -> Stage {
             p.g.start(Mode::Arena, 1);
             play(&mut p, view, 60 * 3);
         }
+        231 => {
+            kg_core::profile::set("clash", "rating", 1090);
+            p = ClashPlay::new();
+            p.g.start(Mode::Survival, 1);
+            grow(&mut p, 9);
+            p.g.world.snakes[0].shield = 1e9;
+            for i in 1..p.g.world.snakes.len() {
+                p.g.world.kill(i, None);
+            }
+            play(&mut p, view, 60 * 6);
+        }
+        230 => {
+            p.g.start(Mode::Survival, 1);
+            grow(&mut p, 9);
+            for i in (1..p.g.world.snakes.len()).step_by(2) {
+                p.g.world.kill(i, None);
+            }
+            play(&mut p, view, 60 * 6);
+        }
         194 => {
             p.g.start(Mode::Arena, 1);
             grow(&mut p, 9);

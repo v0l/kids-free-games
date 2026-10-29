@@ -99,6 +99,8 @@ pub struct Snake {
     pub boosts: Boosts,
     pub rival: Option<std::sync::Arc<crate::brain::conv::Policy>>,
     pub seat: Option<usize>,
+    pub effort: crate::brain::Effort,
+    pub blunder: (usize, f32),
 }
 
 impl Snake {
@@ -210,9 +212,18 @@ pub struct Spec {
     pub rival: Option<std::sync::Arc<crate::brain::conv::Policy>>,
     pub seat: Option<usize>,
     pub rival_share: f32,
+    pub respawn: bool,
+    pub effort: crate::brain::Effort,
 }
 
 impl Spec {
+    pub fn survival(player_level: u32, training: bool) -> Self {
+        Self {
+            respawn: false,
+            ..Self::arena(player_level, training)
+        }
+    }
+
     pub fn arena(player_level: u32, training: bool) -> Self {
         let band = player_level / 5;
         let b = band as f32;
@@ -244,6 +255,8 @@ impl Spec {
             rival: None,
             seat: None,
             rival_share: 0.0,
+            respawn: true,
+            effort: crate::brain::Effort::BEST,
         }
     }
 }
@@ -414,6 +427,8 @@ impl World {
             boosts: Boosts::default(),
             rival: None,
             seat: None,
+            effort: self.spec.effort,
+            blunder: (0, 0.0),
         });
         let i = self.snakes.len() - 1;
         self.layout_tail(i);
@@ -421,11 +436,40 @@ impl World {
     }
 
     pub fn layout_tail(&mut self, i: usize) {
+        let size = self.size;
         let s = &mut self.snakes[i];
         let n = segs_for(s.xp);
-        let back = -s.dir() * s.spacing();
-        let head = s.segs[0];
-        s.segs = (0..n).map(|k| head + back * k as f32).collect();
+        let gap = s.spacing();
+        let margin = s.radius() + gap;
+        let mut at = s.segs[0];
+        let mut back = wrap_angle(s.angle + PI);
+        let mut segs = Vec::with_capacity(n);
+        segs.push(at);
+        let turn = gap / (margin * 2.0).max(1.0);
+        let mut bend = if s.phase.sin() < 0.0 { -0.3 } else { 0.3 };
+        for k in 1..n {
+            if k % 9 == 0 {
+                bend = -bend * 0.8 + (s.phase * k as f32).cos() * 0.12;
+            }
+            back = wrap_angle(back + bend * gap / 40.0);
+            let mut next = at + vec2(back.cos(), back.sin()) * gap;
+            let mut tries = 0;
+            while (next.x < margin
+                || next.y < margin
+                || next.x > size - margin
+                || next.y > size - margin)
+                && tries < 64
+            {
+                back = wrap_angle(back + turn.max(0.15));
+                next = at + vec2(back.cos(), back.sin()) * gap;
+                tries += 1;
+            }
+            next.x = next.x.clamp(0.0, size);
+            next.y = next.y.clamp(0.0, size);
+            segs.push(next);
+            at = next;
+        }
+        s.segs = segs;
     }
 
     pub fn level_for_new_bot(&self) -> u32 {
@@ -519,8 +563,9 @@ impl World {
                 let mut brain = std::mem::take(&mut self.snakes[i].brain);
                 brain.timer -= dt;
                 if brain.timer <= 0.0 {
-                    brain.timer = super::rl::DECIDE;
-                    let k = net.choose(&super::rl::observe(self, i), crate::brain::Effort::BEST);
+                    let effort = self.snakes[i].effort;
+                    brain.timer = effort.think_every(super::rl::DECIDE);
+                    let k = self.policy_turn(i, &net, effort);
                     self.snakes[i].want = wrap_angle(self.snakes[i].angle + super::rl::TURNS[k]);
                 }
                 self.snakes[i].brain = brain;
@@ -600,6 +645,9 @@ impl World {
             } else if len < 1e-3 {
                 s.segs[k] = prev - dir * gap;
             }
+            let p = &mut s.segs[k];
+            p.x = p.x.clamp(0.0, size);
+            p.y = p.y.clamp(0.0, size);
         }
         let want = segs_for(s.xp);
         while s.segs.len() < want {
@@ -728,10 +776,8 @@ impl World {
                 };
                 let (la, lb) = (self.snakes[a].level(), self.snakes[b].level());
                 let shielded = self.snakes[a].shield > 0.0 || self.snakes[b].shield > 0.0;
-                if la == lb {
-                    self.bump(a, b, at);
-                } else if shielded {
-                    continue;
+                if la == lb || shielded {
+                    self.bump(a, b, at, seg);
                 } else if la > lb {
                     if seg >= NECK {
                         self.cut(b, a, seg);
@@ -739,7 +785,7 @@ impl World {
                         self.kill(b, Some(a));
                     }
                 } else if seg >= NECK {
-                    self.bump(a, b, at);
+                    self.bump(a, b, at, seg);
                 } else {
                     self.kill(a, Some(b));
                 }
@@ -747,30 +793,52 @@ impl World {
         }
     }
 
-    fn bump(&mut self, a: usize, b: usize, at: Vec2) {
+    fn bump(&mut self, a: usize, b: usize, at: Vec2, seg: usize) {
         let key = (
             self.snakes[a].id.min(self.snakes[b].id),
             self.snakes[a].id.max(self.snakes[b].id),
         );
-        if self.bump_cd.iter().any(|c| (c.0, c.1) == key) {
-            return;
+        let fresh = !self.bump_cd.iter().any(|c| (c.0, c.1) == key);
+        if fresh {
+            self.bump_cd.push((key.0, key.1, 0.5));
         }
-        self.bump_cd.push((key.0, key.1, 0.5));
         let ha = self.snakes[a].head();
         let hb = self.snakes[b].head();
-        let away = (ha - at).normalize_or_zero();
+        let body = &self.snakes[b].segs;
+        let along = if body.len() > 1 {
+            let lo = seg.saturating_sub(1);
+            let hi = (seg + 1).min(body.len() - 1);
+            (body[lo] - body[hi]).normalize_or_zero()
+        } else {
+            Vec2::ZERO
+        };
+        let side = vec2(-along.y, along.x);
+        let off = ha - at;
+        let away = if seg >= NECK && side != Vec2::ZERO {
+            if side.dot(off) >= 0.0 {
+                side
+            } else {
+                -side
+            }
+        } else {
+            off.normalize_or_zero()
+        };
         let away = if away == Vec2::ZERO {
             (ha - hb).normalize_or_zero()
         } else {
             away
         };
-        let push = self.snakes[a].radius() + 6.0;
+        let reach = self.snakes[a].radius() * 0.8 + self.snakes[b].radius() * 0.85;
+        let push = (reach - off.dot(away)).max(0.0) + 6.0;
         let size = self.size;
         let s = &mut self.snakes[a];
         let mut h = s.segs[0] + away * push;
         h.x = h.x.clamp(5.0, size - 5.0);
         h.y = h.y.clamp(5.0, size - 5.0);
         s.segs[0] = h;
+        if !fresh {
+            return;
+        }
         s.angle = away.y.atan2(away.x);
         s.want = s.angle;
         s.stun = 0.35;
@@ -827,7 +895,7 @@ impl World {
         }
     }
 
-    fn kill(&mut self, victim: usize, by: Option<usize>) {
+    pub fn kill(&mut self, victim: usize, by: Option<usize>) {
         let v = self.snakes[victim].clone();
         self.snakes[victim].alive = false;
         let by_player = by.is_some_and(|i| self.snakes[i].player);
@@ -869,7 +937,38 @@ impl World {
         }
     }
 
+    fn policy_turn(
+        &mut self,
+        i: usize,
+        net: &crate::brain::conv::Policy,
+        effort: crate::brain::Effort,
+    ) -> usize {
+        let (held, left) = self.snakes[i].blunder;
+        if left > 0.0 {
+            self.snakes[i].blunder.1 -= effort.think_every(super::rl::DECIDE);
+            return held;
+        }
+        if rand::gen_range(0.0, 1.0) < effort.blunder() {
+            let k = rand::gen_range(0, super::rl::ACTIONS);
+            self.snakes[i].blunder = (k, rand::gen_range(0.4, 1.2));
+            return k;
+        }
+        net.choose(&super::rl::observe(self, i), effort)
+    }
+
+    pub fn snakes_left(&self) -> usize {
+        self.snakes.iter().filter(|s| s.alive).count()
+    }
+
+    pub fn won(&self) -> bool {
+        !self.spec.respawn && self.player_alive() && self.snakes_left() == 1
+    }
+
     fn respawn(&mut self, dt: f32) {
+        if !self.spec.respawn {
+            self.respawns.clear();
+            return;
+        }
         for t in &mut self.respawns {
             *t -= dt;
         }
@@ -928,6 +1027,14 @@ mod tests {
         }
     }
 
+    fn straight(w: &mut World, i: usize) {
+        let s = &mut w.snakes[i];
+        let n = segs_for(s.xp);
+        let back = -s.dir() * s.spacing();
+        let head = s.segs[0];
+        s.segs = (0..n).map(|k| head + back * k as f32).collect();
+    }
+
     fn duel(a_level: u32, b_level: u32) -> World {
         let mut w = World::new(quiet(), "Me", 0);
         w.snakes[0].shield = 0.0;
@@ -935,12 +1042,12 @@ mod tests {
         w.snakes[0].segs[0] = vec2(1000.0, 1000.0);
         w.snakes[0].angle = 0.0;
         w.snakes[0].want = 0.0;
-        w.layout_tail(0);
+        straight(&mut w, 0);
         let i = w.add_snake(vec2(1022.0, 1000.0), b_level, "Rival".into(), 1);
         w.snakes[i].xp = xp_for_level(b_level);
         w.snakes[i].angle = PI / 2.0;
         w.snakes[i].want = PI / 2.0;
-        w.layout_tail(i);
+        straight(&mut w, i);
         w
     }
 
@@ -953,6 +1060,115 @@ mod tests {
             }
             assert_eq!(level_of(xp), want, "xp {xp}");
         }
+    }
+
+    #[test]
+    fn a_long_snake_spawned_by_a_wall_keeps_its_whole_body_on_the_map() {
+        let mut w = World::new(quiet(), "Me", 0);
+        let i = w.add_snake(vec2(230.0, 1500.0), 30, "Long".into(), 0);
+        w.snakes[i].angle = 0.0;
+        w.snakes[i].want = 0.0;
+        w.layout_tail(i);
+        let s = &w.snakes[i];
+        assert!(s.segs.len() > 40);
+        let size = w.size;
+        let off = s
+            .segs
+            .iter()
+            .filter(|p| p.x < 0.0 || p.y < 0.0 || p.x > size || p.y > size)
+            .count();
+        assert_eq!(off, 0, "{off} of {} segments off the map", s.segs.len());
+        let gap = s.spacing();
+        for k in 1..s.segs.len() {
+            let d = (s.segs[k] - s.segs[k - 1]).length();
+            assert!(
+                (d - gap).abs() < 1.0,
+                "segment {k} is {d} from the last, spacing {gap}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_new_snake_spawns_curled_not_as_a_straight_line() {
+        let mut w = World::new(quiet(), "Me", 0);
+        let i = w.add_snake(vec2(1500.0, 1500.0), 20, "Wiggle".into(), 0);
+        let s = &w.snakes[i];
+        assert!(s.segs.len() > 20);
+        let first = (s.segs[1] - s.segs[0]).normalize();
+        let last = (s.segs[s.segs.len() - 1] - s.segs[s.segs.len() - 2]).normalize();
+        assert!(first.dot(last) < 0.99, "body is a straight line");
+    }
+
+    #[test]
+    fn no_snake_ever_has_segments_off_the_map() {
+        for seed in 0..2u64 {
+            crate::rng::srand(seed);
+            let (spec, _) = super::super::rl::training_spec(seed * 5 + 4);
+            let mut w = World::new(spec, "Me", 0);
+            for _ in 0..3000 {
+                let a = w.autopilot();
+                w.step(1.0 / 30.0, Some(a));
+                let size = w.size;
+                for s in w.snakes.iter().filter(|s| s.alive) {
+                    assert!(
+                        s.segs
+                            .iter()
+                            .all(|p| p.x >= 0.0 && p.y >= 0.0 && p.x <= size && p.y <= size),
+                        "seed {seed}: {} has segments off the map",
+                        s.name
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn in_survival_nobody_respawns_and_the_last_snake_wins() {
+        crate::rng::srand(9);
+        let mut w = World::new(Spec::survival(5, false), "Me", 0);
+        w.snakes[0].shield = 1e9;
+        let start = w.snakes_left();
+        assert!(start > 5 && !w.won());
+        let ids: Vec<u32> = w.snakes.iter().map(|s| s.id).collect();
+        for i in 1..w.snakes.len() {
+            w.kill(i, None);
+        }
+        for _ in 0..30 * 10 {
+            w.step(1.0 / 30.0, None);
+        }
+        assert!(
+            w.snakes.iter().all(|s| ids.contains(&s.id)),
+            "nobody new joined"
+        );
+        assert_eq!(w.snakes_left(), 1);
+        assert!(w.won());
+    }
+
+    #[test]
+    fn arena_mode_keeps_refilling_and_never_wins() {
+        crate::rng::srand(9);
+        let mut w = World::new(Spec::arena(5, false), "Me", 0);
+        w.snakes[0].shield = 1e9;
+        for i in 1..w.snakes.len() {
+            w.kill(i, None);
+        }
+        for _ in 0..30 * 10 {
+            w.step(1.0 / 30.0, None);
+        }
+        assert!(w.snakes_left() > 5);
+        assert!(!w.won());
+    }
+
+    #[test]
+    fn a_low_effort_policy_snake_blunders_and_thinks_slowly() {
+        let lazy = crate::brain::Effort::new(0.0);
+        let keen = crate::brain::Effort::BEST;
+        assert_eq!(keen.blunder(), 0.0);
+        assert!(lazy.blunder() > 0.1);
+        assert!(
+            lazy.think_every(super::super::rl::DECIDE)
+                >= 3.0 * keen.think_every(super::super::rl::DECIDE)
+        );
     }
 
     #[test]
@@ -1029,24 +1245,33 @@ mod tests {
     }
 
     #[test]
-    fn after_a_cut_the_biter_slides_through_the_rest_of_the_tail() {
+    fn a_shielded_snake_bounces_off_a_body_instead_of_crossing_it() {
+        let mut w = tail_duel(3, 8, 20);
+        w.snakes[0].shield = 3.0;
+        w.step(1.0 / 60.0, None);
+        assert!(w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Bump { player: true, .. })));
+        let head = w.snakes[0].head();
+        let r = w.snakes[0].radius() * 0.5 + w.snakes[1].radius() * 0.5;
+        let inside = w.snakes[1].segs.iter().any(|p| (*p - head).length() < r);
+        assert!(!inside, "head ended up inside the other body");
+    }
+
+    #[test]
+    fn after_a_cut_the_shielded_rest_bounces_the_biter_instead_of_letting_it_through() {
         let mut w = tail_duel(8, 3, 10);
         w.step(1.0 / 60.0, None);
         assert!(w.snakes[1].shield > 0.0);
-        let bumps_before = w
-            .events
-            .iter()
-            .filter(|e| matches!(e, Event::Bump { .. }))
-            .count();
+        let len = w.snakes[1].segs.len();
         let tail = w.snakes[1].segs[5];
         w.snakes[0].segs[0] = tail;
         w.events.clear();
         w.step(1.0 / 60.0, None);
-        assert_eq!(bumps_before, 0);
-        assert!(!w
-            .events
-            .iter()
-            .any(|e| matches!(e, Event::Bump { .. } | Event::Cut { .. })));
+        assert!(w.events.iter().any(|e| matches!(e, Event::Bump { .. })));
+        assert!(!w.events.iter().any(|e| matches!(e, Event::Cut { .. })));
+        assert_eq!(w.snakes[1].segs.len(), len);
         assert!(w.snakes[1].alive);
     }
 

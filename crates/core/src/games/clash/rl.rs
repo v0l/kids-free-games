@@ -23,6 +23,8 @@ pub struct Rewards {
     pub death: f32,
     pub stall: f32,
     pub wall: f32,
+    pub bump: f32,
+    pub win: f32,
 }
 
 impl Default for Rewards {
@@ -30,16 +32,24 @@ impl Default for Rewards {
         Self {
             xp: 0.02,
             level: 1.0,
-            kill: 1.0,
-            cut: 0.3,
+            kill: 6.0,
+            cut: 1.0,
             death: 3.0,
             stall: 0.002,
             wall: 0.3,
+            bump: 0.3,
+            win: 10.0,
         }
     }
 }
 
 static SHIPPED: &[u8] = include_bytes!("../../../../../assets/brains/clash_rl.kgb");
+
+pub fn shipped_arc() -> Option<std::sync::Arc<Policy>> {
+    static NET: std::sync::OnceLock<Option<std::sync::Arc<Policy>>> = std::sync::OnceLock::new();
+    NET.get_or_init(|| shipped().cloned().map(std::sync::Arc::new))
+        .clone()
+}
 
 pub fn shipped() -> Option<&'static Policy> {
     static NET: std::sync::OnceLock<Option<Policy>> = std::sync::OnceLock::new();
@@ -255,7 +265,7 @@ pub fn observe(w: &World, i: usize) -> Obs {
 pub fn training_spec(seed: u64) -> (Spec, u32) {
     let band = (seed % 5) as u32;
     let start = 1 + band * 4;
-    let mut spec = Spec::arena(start, band == 0 && seed.is_multiple_of(10));
+    let mut spec = Spec::survival(start, band == 0 && seed.is_multiple_of(10));
     spec.start = start;
     (spec, start)
 }
@@ -388,8 +398,12 @@ impl Arena {
                     Event::Cut {
                         by_player: true, ..
                     } => reward += self.rewards.cut,
-                    Event::Bump { player: true, at } if self.w.near_wall(at) => {
-                        reward -= self.rewards.wall
+                    Event::Bump { player: true, at } => {
+                        reward -= if self.w.near_wall(at) {
+                            self.rewards.wall
+                        } else {
+                            self.rewards.bump
+                        }
                     }
                     _ => {}
                 }
@@ -412,9 +426,13 @@ impl Arena {
         if dead {
             reward -= self.rewards.death;
         }
+        let won = self.w.won();
+        if won {
+            reward += self.rewards.win;
+        }
         self.ret += reward;
         self.steps += 1;
-        let done = dead || self.steps >= self.max_steps;
+        let done = dead || won || self.steps >= self.max_steps;
         if done {
             self.finished.push(self.ret);
             self.levels.push(self.w.snakes[0].level());
@@ -441,6 +459,7 @@ pub const GAME_CAP: f32 = 600.0;
 pub struct Report {
     pub level: f32,
     pub secs: f32,
+    pub wins: f32,
     pub deaths: f32,
     pub kills: f32,
     pub stall: f32,
@@ -464,7 +483,7 @@ pub fn evaluate_against(
     share: f32,
 ) -> Report {
     let pool: Vec<_> = rivals.iter().cloned().map(std::sync::Arc::new).collect();
-    let runs: Vec<[f32; 6]> = std::thread::scope(|s| {
+    let runs: Vec<[f32; 7]> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..seeds)
             .map(|seed| {
                 let rival = (!pool.is_empty()).then(|| pool[seed as usize % pool.len()].clone());
@@ -482,6 +501,7 @@ pub fn evaluate_against(
         stall: avg(3),
         circling: avg(4),
         secs: avg(5),
+        wins: avg(6),
     }
 }
 
@@ -491,7 +511,7 @@ fn play_one(
     secs: f32,
     rival: Option<std::sync::Arc<Policy>>,
     share: f32,
-) -> [f32; 6] {
+) -> [f32; 7] {
     rand::srand(seed);
     let spec_for = |seed: u64| {
         let (mut spec, _) = training_spec(seed * 5);
@@ -503,6 +523,7 @@ fn play_one(
     };
     let mut w = World::new(spec_for(seed), "Me", 0);
     let (mut deaths, mut kills, mut peak) = (0.0f32, 0.0f32, 0u32);
+    let mut wins = 0.0f32;
     let (mut since, mut stall, mut steps) = (0.0f32, 0.0f32, 0.0f32);
     let (mut turned, mut window, mut loops, mut windows) = (0.0f32, 0usize, 0.0f32, 0.0f32);
     let mut xp = w.snakes[0].xp;
@@ -535,7 +556,10 @@ fn play_one(
                 }
             }
         }
-        if !w.player_alive() {
+        if !w.player_alive() || w.won() {
+            if w.won() {
+                wins += 1.0;
+            }
             break;
         }
         peak = peak.max(w.snakes[0].level());
@@ -569,6 +593,7 @@ fn play_one(
         stall / steps.max(1.0),
         loops / windows.max(1.0),
         steps * DECIDE,
+        wins,
     ]
 }
 
@@ -775,6 +800,44 @@ mod tests {
         set_rivals(vec![], 0.0);
         assert!(picked.contains(&true) && picked.contains(&false));
         assert!(rival_spec(0).rival.is_none());
+    }
+
+    #[test]
+    fn bouncing_off_another_snake_costs_the_learner() {
+        let mut a = Arena::new(5, 600.0);
+        a.w.snakes.truncate(1);
+        a.w.eggs.clear();
+        a.w.powers.clear();
+        a.w.snakes[0].shield = 0.0;
+        a.w.snakes[0].segs[0] = vec2(1500.0, 1500.0);
+        a.w.snakes[0].angle = 0.0;
+        a.w.layout_tail(0);
+        let lvl = a.w.snakes[0].level();
+        let j = a.w.add_snake(vec2(1520.0, 1500.0), lvl, "Twin".into(), 0);
+        a.w.snakes[j].xp = a.w.snakes[0].xp;
+        a.w.snakes[j].angle = std::f32::consts::PI;
+        a.w.layout_tail(j);
+        a.xp = a.w.snakes[0].xp;
+        let r = a.step(2).reward;
+        assert!(r <= -Rewards::default().bump + 0.05, "reward {r}");
+    }
+
+    #[test]
+    fn outliving_every_other_snake_ends_the_game_with_a_win_bonus() {
+        let mut a = Arena::new(5, 600.0);
+        assert!(!a.w.spec.respawn, "training plays survival rules");
+        a.w.snakes[0].shield = 1e9;
+        for i in 1..a.w.snakes.len() {
+            a.w.kill(i, None);
+        }
+        a.w.events.clear();
+        let s = a.step(2);
+        assert!(s.done);
+        assert!(
+            s.reward >= Rewards::default().win - 1.0,
+            "reward {}",
+            s.reward
+        );
     }
 
     #[test]

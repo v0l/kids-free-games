@@ -147,6 +147,11 @@ impl Effort {
     pub fn stubborn(self) -> f32 {
         0.45 * (1.0 - self.0)
     }
+
+    pub fn blunder(self) -> f32 {
+        let lazy = 1.0 - self.0;
+        0.12 * lazy * lazy
+    }
 }
 
 #[derive(Clone, Debug)]
