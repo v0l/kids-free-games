@@ -8,6 +8,10 @@ Art is painted with FLUX.1-dev. Sound effects and voice lines are from [Kenney](
 
 See [GAMES.md](GAMES.md) for the list of popular games and which ones are done.
 
+## Privacy
+
+The app collects no data and uses no network. See [PRIVACY.md](PRIVACY.md).
+
 ## Games
 
 Flappy Bird, Paper Land (Paper.io), Happy Hotel (hotel management), Snake, 2048, Fruit Slice, Stack Tower, Brick Breaker, Sky Jumper (Doodle Jump), Memory Match, Road Hopper (Crossy Road), Helix Drop (Helix Jump), Block Drop (Tetris), Math Pop, Count It and Spell It (learning games).
