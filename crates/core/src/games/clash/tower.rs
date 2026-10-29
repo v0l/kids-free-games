@@ -39,6 +39,9 @@ pub fn floor(n: u32) -> Floor {
         adaptive: false,
         start,
         powerups: true,
+        rival: None,
+        seat: None,
+        rival_share: 0.0,
     };
     let goal = if is_boss(n) {
         Goal::Boss((n / 5 + 5).clamp(start + 2, 16))

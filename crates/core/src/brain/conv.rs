@@ -145,12 +145,7 @@ impl Policy {
     }
 
     pub fn choose(&self, obs: &Obs, effort: super::Effort) -> usize {
-        let logits = self.logits(obs);
-        let t = effort.temperature();
-        if t < 1e-4 {
-            return super::best(&logits);
-        }
-        sample(&logits, 1.0 + t)
+        sample(&self.logits(obs), 1.0 + effort.temperature())
     }
 
     pub fn param_count(&self) -> usize {

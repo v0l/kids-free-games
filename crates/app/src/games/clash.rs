@@ -5,6 +5,7 @@ use crate::ui::{plain_score, Results, Tone};
 use glam::{vec2, Vec2};
 use kg_core::engine::{Input, View};
 use kg_core::fx::{ease_out_back, ease_out_cubic, Particle, Side};
+use kg_core::games::clash::sight;
 use kg_core::games::clash::sim::{level_progress, Snake};
 use kg_core::games::clash::skins::{Skin, SKINS};
 use kg_core::games::clash::tower::Goal;
@@ -443,22 +444,15 @@ fn level_pill(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, mine: u32) {
 }
 
 fn draw_arrows(g: &Clash, pen: &mut Pen, view: &View) {
-    let me = g.world.player();
     let c = g.centre(view);
     let f = view.full();
     let pad = 46.0;
-    for s in g.world.bots() {
-        if s.level() <= me.level() && !s.boss {
-            continue;
-        }
-        let p = g.to_screen(view, s.head());
+    for arrow in sight::arrows(&g.world, 0) {
+        let p = g.to_screen(view, arrow.at);
         if on_screen(view, p, 0.0) {
             continue;
         }
         let d = p - c;
-        if d.length() > 1400.0 * g.zoom.max(0.5) + 600.0 {
-            continue;
-        }
         let k =
             ((f.w / 2.0 - pad) / d.x.abs().max(1.0)).min((f.h / 2.0 - pad) / d.y.abs().max(1.0));
         let at = c + d * k;
@@ -483,7 +477,7 @@ fn draw_arrows(g: &Clash, pen: &mut Pen, view: &View) {
             col,
         );
         pen.text_shadow(
-            &s.level().to_string(),
+            &arrow.level.to_string(),
             at.x - dir.x * 36.0,
             at.y - dir.y * 36.0,
             24.0,
@@ -585,19 +579,15 @@ fn draw_minimap(g: &Clash, pen: &mut Pen, view: &View) {
         Color::new(0.0, 0.0, 0.1, 0.3),
     );
     pen.round_rect(r, 12.0, Color::new(0.1, 0.06, 0.25, 0.62));
-    let me = g.world.player().level();
-    for s in g.world.bots() {
-        let p = r.point() + s.head() / g.world.size * d;
-        let col = if s.boss {
-            Color::from_rgba(255, 60, 80, 255)
-        } else if s.level() > me {
-            Color::from_rgba(240, 90, 100, 255)
-        } else if s.level() < me {
-            Color::from_rgba(110, 220, 130, 255)
-        } else {
-            Color::from_rgba(220, 220, 230, 255)
+    for (at, dot) in sight::minimap(&g.world, 0) {
+        let p = r.point() + at / g.world.size * d;
+        let col = match dot {
+            sight::Dot::Boss => Color::from_rgba(255, 60, 80, 255),
+            sight::Dot::Bigger => Color::from_rgba(240, 90, 100, 255),
+            sight::Dot::Smaller => Color::from_rgba(110, 220, 130, 255),
+            sight::Dot::Even => Color::from_rgba(220, 220, 230, 255),
         };
-        pen.circle(p, if s.boss { 5.5 } else { 3.0 }, col);
+        pen.circle(p, if dot == sight::Dot::Boss { 5.5 } else { 3.0 }, col);
     }
     if g.world.player_alive() {
         let p = r.point() + g.world.player().head() / g.world.size * d;

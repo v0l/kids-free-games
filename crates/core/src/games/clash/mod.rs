@@ -1,5 +1,7 @@
 pub mod bots;
 pub mod powers;
+pub mod rl;
+pub mod sight;
 pub mod sim;
 pub mod skins;
 pub mod tower;
@@ -299,9 +301,7 @@ impl Clash {
     }
 
     pub fn target_zoom_for(&self, size: Vec2) -> f32 {
-        let level = self.world.player().level().min(40) as f32;
-        let span = 460.0 + 15.0 * level + self.world.player().radius() * 3.0;
-        size.x.min(size.y).max(300.0) / span
+        size.x.min(size.y).max(300.0) / sight::span_of(&self.world, 0)
     }
 
     pub fn to_screen(&self, view: &View, p: Vec2) -> Vec2 {
@@ -640,6 +640,43 @@ impl Clash {
                     sfx::play(Sfx::Bounce);
                     self.shake.add(0.25);
                     feel::impact(Impact::Small);
+                }
+            }
+            Event::Cut {
+                at,
+                lost,
+                player,
+                by_player,
+                ..
+            } => {
+                self.fx.emit(
+                    at,
+                    &[WHITE, Color::from_rgba(255, 235, 140, 255)],
+                    Burst {
+                        count: 14,
+                        speed: (90.0, 260.0),
+                        size: (3.0, 7.0),
+                        life: (0.3, 0.6),
+                        gravity: 0.0,
+                        drag: 3.0,
+                        ..Default::default()
+                    },
+                );
+                if player {
+                    sfx::play(Sfx::Bounce);
+                    feel::impact(Impact::Medium);
+                    self.shake.add(0.45);
+                    self.combo = 0;
+                    self.popups.add(
+                        at + vec2(0.0, -40.0),
+                        format!("-{lost}"),
+                        Color::from_rgba(255, 120, 120, 255),
+                        44.0,
+                    );
+                } else if by_player {
+                    sfx::play(Sfx::Crunch);
+                    feel::impact(Impact::Small);
+                    self.shake.add(0.2);
                 }
             }
             Event::Eaten {

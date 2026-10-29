@@ -487,6 +487,41 @@ pub fn baseline(seeds: u64, secs: f32) -> (f32, f32, f32, f32) {
     )
 }
 
+impl crate::brain::learn::Learner for Arena {
+    fn spec() -> crate::brain::learn::Spec {
+        crate::brain::learn::Spec {
+            channels: CHANNELS,
+            side: VIEW,
+            scalars: SCALARS,
+            actions: ACTIONS,
+        }
+    }
+
+    fn agents(&self) -> usize {
+        BOTS
+    }
+
+    fn obs(&self, agent: usize) -> &Obs {
+        &self.obs[agent]
+    }
+
+    fn step(&mut self, actions: &[usize], out: &mut [crate::brain::learn::Tick]) {
+        let s = Arena::step(self, actions);
+        for (o, (r, d)) in out.iter_mut().zip(s.reward.iter().zip(&s.done)) {
+            *o = crate::brain::learn::Tick {
+                reward: *r,
+                done: *d,
+            };
+        }
+    }
+
+    fn drain_episodes(&mut self) -> Vec<(f32, f32)> {
+        let r = std::mem::take(&mut self.finished);
+        let p = std::mem::take(&mut self.peaks);
+        r.into_iter().zip(p).collect()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::world::{cell_at, idx};

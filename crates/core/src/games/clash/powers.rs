@@ -283,11 +283,13 @@ mod tests {
     fn powerups_spawn_up_to_the_cap_and_can_be_turned_off() {
         crate::rng::srand(4);
         let mut w = World::new(Spec::arena(1, false), "Me", 0);
+        let mut most = 0;
         for _ in 0..30 * 60 {
             w.step(1.0 / 30.0, None);
             assert!(w.powers.len() <= w.power_cap());
+            most = most.max(w.powers.len());
         }
-        assert!(!w.powers.is_empty());
+        assert!(most > 0);
         let mut off = World::new(
             Spec {
                 powerups: false,

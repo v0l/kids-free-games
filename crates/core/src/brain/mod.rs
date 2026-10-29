@@ -1,4 +1,6 @@
 pub mod conv;
+pub mod learn;
+pub mod state;
 pub mod train;
 
 use crate::rng as rand;

@@ -18,7 +18,10 @@ pub fn xp_for_level(level: u32) -> u32 {
 }
 
 pub fn level_of(xp: u32) -> u32 {
-    let mut l = 1;
+    let mut l = ((((9.0 + 4.0 * xp as f64).sqrt() - 1.0) / 2.0) as u32).max(1);
+    while l > 1 && xp_for_level(l) > xp {
+        l -= 1;
+    }
     while xp_for_level(l + 1) <= xp {
         l += 1;
     }
@@ -46,6 +49,24 @@ pub fn turn_for(level: u32) -> f32 {
 pub fn segs_for(xp: u32) -> usize {
     (8.0 + (xp as f32).powf(0.78) * 0.8).min(110.0) as usize
 }
+
+pub fn xp_for_length(len: usize) -> u32 {
+    let (mut lo, mut hi) = (0u32, 1u32 << 16);
+    while lo < hi {
+        let mid = (lo + hi).div_ceil(2);
+        if segs_for(mid) <= len {
+            lo = mid;
+        } else {
+            hi = mid - 1;
+        }
+    }
+    lo
+}
+
+pub const NECK: usize = 8;
+pub const WALL_PUSH: f32 = 30.0;
+pub const WALL_STUN: f32 = 0.35;
+pub const CUT_SHIELD: f32 = 1.5;
 
 pub fn wrap_angle(a: f32) -> f32 {
     (a + PI).rem_euclid(TAU) - PI
@@ -76,6 +97,8 @@ pub struct Snake {
     pub age: f32,
     pub brain: Brain,
     pub boosts: Boosts,
+    pub rival: Option<std::sync::Arc<crate::brain::conv::Policy>>,
+    pub seat: Option<usize>,
 }
 
 impl Snake {
@@ -154,6 +177,14 @@ pub enum Event {
         at: Vec2,
         player: bool,
     },
+    Cut {
+        victim: u32,
+        by: u32,
+        at: Vec2,
+        lost: u32,
+        player: bool,
+        by_player: bool,
+    },
     Power {
         id: u32,
         kind: Kind,
@@ -176,6 +207,9 @@ pub struct Spec {
     pub adaptive: bool,
     pub start: u32,
     pub powerups: bool,
+    pub rival: Option<std::sync::Arc<crate::brain::conv::Policy>>,
+    pub seat: Option<usize>,
+    pub rival_share: f32,
 }
 
 impl Spec {
@@ -207,6 +241,9 @@ impl Spec {
             adaptive: true,
             start: 1,
             powerups: true,
+            rival: None,
+            seat: None,
+            rival_share: 0.0,
         }
     }
 }
@@ -292,6 +329,11 @@ impl World {
         &self.snakes[0]
     }
 
+    pub fn near_wall(&self, p: Vec2) -> bool {
+        let m = WALL_PUSH + radius_for(40) * 1.5;
+        p.x < m || p.y < m || p.x > self.size - m || p.y > self.size - m
+    }
+
     pub fn player_alive(&self) -> bool {
         self.snakes[0].alive
     }
@@ -370,6 +412,8 @@ impl World {
             age: 0.0,
             brain: Brain::new(self.spec.skill, self.spec.aggression),
             boosts: Boosts::default(),
+            rival: None,
+            seat: None,
         });
         let i = self.snakes.len() - 1;
         self.layout_tail(i);
@@ -437,6 +481,11 @@ impl World {
         let skin = rand::gen_range(0usize, super::skins::SKINS.len());
         let i = self.add_snake(pos, level, name, skin);
         self.snakes[i].shield = 1.2;
+        let rivals = self.spec.rival.is_some() || self.spec.seat.is_some();
+        if rivals && rand::gen_range(0.0, 1.0) < self.spec.rival_share {
+            self.snakes[i].rival = self.spec.rival.clone();
+            self.snakes[i].seat = self.spec.seat;
+        }
     }
 
     pub fn spawn_boss(&mut self, level: u32, skin: usize) {
@@ -465,6 +514,16 @@ impl World {
                 if let Some(a) = steer {
                     self.snakes[i].want = a;
                 }
+            } else if self.snakes[i].seat.is_some() {
+            } else if let Some(net) = self.snakes[i].rival.clone() {
+                let mut brain = std::mem::take(&mut self.snakes[i].brain);
+                brain.timer -= dt;
+                if brain.timer <= 0.0 {
+                    brain.timer = super::rl::DECIDE;
+                    let k = net.choose(&super::rl::observe(self, i), crate::brain::Effort::BEST);
+                    self.snakes[i].want = wrap_angle(self.snakes[i].angle + super::rl::TURNS[k]);
+                }
+                self.snakes[i].brain = brain;
             } else {
                 let mut brain = std::mem::take(&mut self.snakes[i].brain);
                 brain.timer -= dt;
@@ -486,6 +545,7 @@ impl World {
 
     fn advance(&mut self, i: usize, dt: f32) {
         let size = self.size;
+        let mut wall_hit = None;
         let rocks = self.rocks.clone();
         let s = &mut self.snakes[i];
         s.age += dt;
@@ -502,8 +562,25 @@ impl World {
         let sp = s.speed() * if s.stun > 0.0 { 0.5 } else { 1.0 };
         let r = s.radius();
         let mut head = s.segs[0] + s.dir() * sp * dt;
-        head.x = head.x.clamp(r, size - r);
-        head.y = head.y.clamp(r, size - r);
+        let mut dir = s.dir();
+        let mut hit = false;
+        for (p, d) in [(&mut head.x, &mut dir.x), (&mut head.y, &mut dir.y)] {
+            if *p < r {
+                *p = r + WALL_PUSH;
+                *d = d.abs();
+                hit = true;
+            } else if *p > size - r {
+                *p = size - r - WALL_PUSH;
+                *d = -d.abs();
+                hit = true;
+            }
+        }
+        if hit {
+            s.angle = dir.y.atan2(dir.x);
+            s.want = s.angle;
+            s.stun = s.stun.max(WALL_STUN);
+            wall_hit = Some((head, s.player));
+        }
         for k in &rocks {
             let d = head - k.pos;
             let min = k.r + r * 0.8;
@@ -528,6 +605,9 @@ impl World {
         while s.segs.len() < want {
             let tail = *s.segs.last().unwrap();
             s.segs.push(tail);
+        }
+        if let Some((at, player)) = wall_hit {
+            self.events.push(Event::Bump { at, player });
         }
     }
 
@@ -575,8 +655,13 @@ impl World {
             let pull_speed = self.snakes[i].speed() * 1.8;
             let mut got = 0;
             let mut k = 0;
+            let far = magnet.max(reach);
             while k < self.eggs.len() {
                 let d = self.eggs[k].pos - head;
+                if d.x.abs() >= far || d.y.abs() >= far {
+                    k += 1;
+                    continue;
+                }
                 let len = d.length();
                 if len < reach {
                     got += self.eggs[k].value;
@@ -600,16 +685,31 @@ impl World {
         }
     }
 
-    fn contact(&self, a: usize, b: usize) -> Option<Vec2> {
+    fn contact(&self, a: usize, b: usize) -> Option<(usize, Vec2)> {
         let sa = &self.snakes[a];
         let sb = &self.snakes[b];
         let ha = sa.head();
         let ra = sa.radius() * 0.8;
-        sb.segs
-            .iter()
-            .enumerate()
-            .find(|(j, p)| (ha - **p).length() < ra + sb.seg_radius(*j) * 0.85)
-            .map(|(_, p)| *p)
+        let rb = sb.radius() * 0.85;
+        let n = sb.segs.len();
+        let body = sb.spacing() * n as f32 + rb;
+        if (ha - sb.head()).length_squared() > (body + ra) * (body + ra) {
+            return None;
+        }
+        let step = sb.spacing().max(1e-3);
+        let most = ra + rb;
+        let mut j = 0;
+        while j < n {
+            let p = sb.segs[j];
+            let d2 = (ha - p).length_squared();
+            let reach = ra + rb * taper(j, n);
+            if d2 < reach * reach {
+                return Some((j, p));
+            }
+            let skip = (d2.sqrt() - most) / step;
+            j += if skip > 1.0 { skip as usize } else { 1 };
+        }
+        None
     }
 
     fn collisions(&mut self, dt: f32) {
@@ -623,18 +723,23 @@ impl World {
                 if a == b || !self.snakes[a].alive || !self.snakes[b].alive {
                     continue;
                 }
-                let Some(at) = self.contact(a, b) else {
+                let Some((seg, at)) = self.contact(a, b) else {
                     continue;
                 };
                 let (la, lb) = (self.snakes[a].level(), self.snakes[b].level());
-                if la == lb || (la < lb && self.snakes[a].shield > 0.0) {
+                let shielded = self.snakes[a].shield > 0.0 || self.snakes[b].shield > 0.0;
+                if la == lb {
                     self.bump(a, b, at);
+                } else if shielded {
+                    continue;
                 } else if la > lb {
-                    if self.snakes[b].shield > 0.0 {
-                        self.bump(a, b, at);
+                    if seg >= NECK {
+                        self.cut(b, a, seg);
                     } else {
                         self.kill(b, Some(a));
                     }
+                } else if seg >= NECK {
+                    self.bump(a, b, at);
                 } else {
                     self.kill(a, Some(b));
                 }
@@ -673,6 +778,55 @@ impl World {
         self.events.push(Event::Bump { at, player });
     }
 
+    fn cut(&mut self, victim: usize, by: usize, seg: usize) {
+        let s = &self.snakes[victim];
+        let seg = seg.clamp(NECK, s.segs.len());
+        let lost = s.xp - xp_for_length(seg).min(s.xp);
+        if lost == 0 {
+            return;
+        }
+        let at = s.segs[seg];
+        let tail: Vec<Vec2> = s.segs[seg..].to_vec();
+        let by_player = self.snakes[by].player;
+        let by_id = self.snakes[by].id;
+        let s = &mut self.snakes[victim];
+        s.xp -= lost;
+        s.segs.truncate(seg);
+        s.shield = CUT_SHIELD;
+        s.pop = 1.0;
+        self.events.push(Event::Cut {
+            victim: s.id,
+            by: by_id,
+            at,
+            lost,
+            player: s.player,
+            by_player,
+        });
+        self.drop_trail(&tail, lost / 2 + 1);
+    }
+
+    fn drop_trail(&mut self, segs: &[Vec2], total: u32) {
+        let drops = (segs.len() / 2).clamp(3, 40) as u32;
+        let each = (total / drops).max(1);
+        let mut left = total;
+        for k in 0..drops {
+            if left == 0 {
+                break;
+            }
+            let value = each.min(left);
+            left -= value;
+            let at = segs[(k as usize * segs.len() / drops as usize).min(segs.len() - 1)];
+            let a = rand::gen_range(0.0, TAU);
+            self.eggs.push(Egg {
+                pos: at,
+                vel: vec2(a.cos(), a.sin()) * rand::gen_range(60.0, 200.0),
+                value,
+                kind: rand::gen_range(0u8, 4),
+                age: 0.0,
+            });
+        }
+    }
+
     fn kill(&mut self, victim: usize, by: Option<usize>) {
         let v = self.snakes[victim].clone();
         self.snakes[victim].alive = false;
@@ -697,26 +851,7 @@ impl World {
                 }
             }
         }
-        let total = v.xp / 2 + 2;
-        let drops = (v.segs.len() / 2).clamp(3, 40) as u32;
-        let each = (total / drops).max(1);
-        let mut left = total;
-        for k in 0..drops {
-            if left == 0 {
-                break;
-            }
-            let value = each.min(left);
-            left -= value;
-            let at = v.segs[(k as usize * v.segs.len() / drops as usize).min(v.segs.len() - 1)];
-            let a = rand::gen_range(0.0, TAU);
-            self.eggs.push(Egg {
-                pos: at,
-                vel: vec2(a.cos(), a.sin()) * rand::gen_range(60.0, 200.0),
-                value,
-                kind: rand::gen_range(0u8, 4),
-                age: 0.0,
-            });
-        }
+        self.drop_trail(&v.segs, v.xp / 2 + 2);
         if !v.player && !v.boss {
             self.respawns.push(rand::gen_range(2.0, 4.0));
         }
@@ -765,11 +900,16 @@ impl World {
     }
 
     pub fn leaderboard(&self) -> Vec<(u32, String, u32, bool)> {
+        self.leaderboard_for(0)
+    }
+
+    pub fn leaderboard_for(&self, me: usize) -> Vec<(u32, String, u32, bool)> {
         let mut v: Vec<_> = self
             .snakes
             .iter()
-            .filter(|s| s.alive)
-            .map(|s| (s.id, s.name.clone(), s.xp, s.player))
+            .enumerate()
+            .filter(|(_, s)| s.alive)
+            .map(|(k, s)| (s.id, s.name.clone(), s.xp, k == me))
             .collect();
         v.sort_by_key(|e| std::cmp::Reverse(e.2));
         v
@@ -805,6 +945,17 @@ mod tests {
     }
 
     #[test]
+    fn level_of_matches_counting_up_for_every_xp() {
+        let mut want = 1;
+        for xp in 0..200_000u32 {
+            while xp_for_level(want + 1) <= xp {
+                want += 1;
+            }
+            assert_eq!(level_of(xp), want, "xp {xp}");
+        }
+    }
+
+    #[test]
     fn the_bigger_snake_eats_the_smaller_on_head_contact() {
         let mut w = duel(5, 2);
         w.step(1.0 / 60.0, None);
@@ -819,6 +970,196 @@ mod tests {
             }
         )));
         assert!(w.eggs.len() >= 3);
+    }
+
+    fn tail_duel(a_level: u32, b_level: u32, seg: usize) -> World {
+        let mut w = duel(a_level, b_level);
+        let i = w.snakes.len() - 1;
+        let target = w.snakes[i].segs[seg];
+        let sp = w.snakes[0].spacing();
+        w.snakes[0].segs[0] = target - vec2(w.snakes[0].radius() * 0.5, 0.0);
+        let head = w.snakes[0].segs[0];
+        for k in 1..w.snakes[0].segs.len() {
+            w.snakes[0].segs[k] = head - vec2(sp * k as f32, 0.0);
+        }
+        w
+    }
+
+    #[test]
+    fn biting_a_tail_cuts_it_off_and_nobody_dies() {
+        let mut w = tail_duel(8, 3, 10);
+        let (xp, len) = (w.snakes[1].xp, w.snakes[1].segs.len());
+        assert!(len > 10);
+        w.step(1.0 / 60.0, None);
+        let v = &w.snakes[1];
+        assert!(v.alive && w.player_alive());
+        assert!(v.xp < xp && v.xp > 0, "lost some xp: {} -> {}", xp, v.xp);
+        assert!(v.segs.len() <= 10 && v.segs.len() < len);
+        assert!(v.shield > 0.0, "a cut snake gets a moment of safety");
+        assert!(w.events.iter().any(|e| matches!(
+            e,
+            Event::Cut {
+                by_player: true,
+                ..
+            }
+        )));
+        assert!(!w.events.iter().any(|e| matches!(e, Event::Eaten { .. })));
+    }
+
+    #[test]
+    fn a_bite_splits_the_snake_at_the_bitten_segment() {
+        for bite in [10, 20, 30] {
+            let mut w = tail_duel(12, 9, bite);
+            let len = w.snakes[1].segs.len();
+            assert!(len > 30, "victim long enough: {len}");
+            w.step(1.0 / 60.0, None);
+            w.snakes[0].alive = false;
+            w.eggs.clear();
+            for _ in 0..10 {
+                w.step(1.0 / 60.0, None);
+            }
+            let v = &w.snakes[1];
+            assert!(
+                v.segs.len().abs_diff(bite) <= 1,
+                "bite at {bite} of {len} left {} segments",
+                v.segs.len()
+            );
+            assert!(segs_for(v.xp) <= bite + 1);
+        }
+    }
+
+    #[test]
+    fn after_a_cut_the_biter_slides_through_the_rest_of_the_tail() {
+        let mut w = tail_duel(8, 3, 10);
+        w.step(1.0 / 60.0, None);
+        assert!(w.snakes[1].shield > 0.0);
+        let bumps_before = w
+            .events
+            .iter()
+            .filter(|e| matches!(e, Event::Bump { .. }))
+            .count();
+        let tail = w.snakes[1].segs[5];
+        w.snakes[0].segs[0] = tail;
+        w.events.clear();
+        w.step(1.0 / 60.0, None);
+        assert_eq!(bumps_before, 0);
+        assert!(!w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Bump { .. } | Event::Cut { .. })));
+        assert!(w.snakes[1].alive);
+    }
+
+    #[test]
+    fn a_cut_tail_drops_a_string_of_eggs_like_a_kill_does() {
+        let mut w = tail_duel(12, 9, 10);
+        w.eggs.clear();
+        let (xp, tail) = (w.snakes[1].xp, w.snakes[1].segs[10..].to_vec());
+        w.step(1.0 / 60.0, None);
+        let lost = xp - w.snakes[1].xp;
+        let eaten: u32 = w
+            .events
+            .iter()
+            .map(|e| match e {
+                Event::Egg { value, .. } => *value,
+                _ => 0,
+            })
+            .sum();
+        let laid: u32 = w.eggs.iter().map(|e| e.value).sum::<u32>() + eaten;
+        let drops = (tail.len() / 2).clamp(3, 40) as u32;
+        let want = lost / 2 + 1;
+        assert!(laid <= want && laid + drops > want, "laid {laid} of {want}");
+        assert!(w.eggs.len() as u32 >= drops - 2);
+        let start = tail[0];
+        let end = *tail.last().unwrap();
+        let spread = w
+            .eggs
+            .iter()
+            .map(|e| (e.pos - start).length())
+            .fold(0.0, f32::max);
+        assert!(
+            spread > (end - start).length() * 0.5,
+            "eggs string along the cut tail"
+        );
+    }
+
+    #[test]
+    fn a_bigger_snake_biting_the_players_tail_does_not_end_the_run() {
+        let mut w = tail_duel(8, 3, 10);
+        w.snakes[0].player = false;
+        w.snakes[1].player = true;
+        w.snakes[1].shield = 0.0;
+        w.step(1.0 / 60.0, None);
+        assert!(w.snakes[1].alive);
+        assert!(w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Cut { player: true, .. })));
+    }
+
+    #[test]
+    fn hitting_the_neck_still_eats_the_whole_snake() {
+        let mut w = tail_duel(8, 3, 2);
+        w.step(1.0 / 60.0, None);
+        assert!(w.by_id(2).is_none());
+    }
+
+    #[test]
+    fn a_snake_driving_into_a_wall_bounces_back_into_the_arena() {
+        let mut w = World::new(quiet(), "Me", 0);
+        w.snakes.truncate(1);
+        w.snakes[0].shield = 0.0;
+        w.snakes[0].segs[0] = vec2(w.size - 40.0, 1000.0);
+        w.snakes[0].angle = 0.0;
+        w.layout_tail(0);
+        for _ in 0..30 {
+            w.step(1.0 / 30.0, Some(0.0));
+        }
+        let s = &w.snakes[0];
+        assert!(
+            s.head().x < w.size - s.radius() - 20.0,
+            "pushed off the wall: {}",
+            s.head().x
+        );
+        assert!(w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Bump { player: true, .. })));
+    }
+
+    #[test]
+    fn a_snake_cannot_park_in_a_corner() {
+        let mut w = World::new(quiet(), "Me", 0);
+        w.snakes.truncate(1);
+        w.snakes[0].segs[0] = vec2(60.0, 60.0);
+        w.snakes[0].angle = -2.4;
+        w.layout_tail(0);
+        let mut near = 0;
+        for _ in 0..300 {
+            w.step(1.0 / 30.0, Some(-2.4));
+            let h = w.snakes[0].head();
+            if h.x < 80.0 && h.y < 80.0 {
+                near += 1;
+            }
+        }
+        assert!(near < 150, "frames hugging the corner: {near}/300");
+    }
+
+    #[test]
+    fn running_into_a_bigger_snakes_tail_bounces_off() {
+        let mut w = tail_duel(3, 12, 20);
+        let xp = w.snakes[0].xp;
+        w.step(1.0 / 60.0, None);
+        assert!(w.player_alive());
+        assert_eq!(w.snakes[0].xp, xp);
+        assert!(w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Bump { player: true, .. })));
+        assert!(!w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Eaten { .. } | Event::Cut { .. })));
     }
 
     #[test]
