@@ -127,6 +127,7 @@ impl Paper {
     pub fn with_best(best: i64) -> Self {
         let skill = arena::skill(best);
         let mut w = World::new(skill);
+        w.rl_effort = Some(arena::rl_effort(skill));
         let n = arena::bots_for(skill);
         let spots = world::spread_spots(n + 1);
         w.add_player(spots[0], 0.0, false);

@@ -273,8 +273,7 @@ impl BrainPaper {
                         self.since = 0.0;
                         if let Some(net) = kg_core::games::paper::rl::shipped() {
                             use kg_core::games::paper::rl;
-                            let coarse = rl::Coarse::of(&g.w);
-                            let a = net.choose(&rl::observe(&g.w, 0, &coarse), effort);
+                            let a = net.choose(&rl::observe(&g.w, 0), effort);
                             let me = g.me();
                             let want = me.angle + rl::TURNS[a];
                             g.aim(kg_core::games::paper::world::wrap_angle(want));

@@ -1,5 +1,5 @@
 use kg_core::brain::Effort;
-use kg_core::games::paper::rl::{observe, shipped, Coarse, DECIDE, TURNS};
+use kg_core::games::paper::rl::{observe, shipped, DECIDE, TURNS};
 use kg_core::games::paper::world::{wrap_angle, SUB};
 use kg_core::rng as rand;
 
@@ -37,7 +37,7 @@ fn main() {
                     break;
                 }
                 if rl {
-                    let o = observe(&w, 0, &Coarse::of(&w));
+                    let o = observe(&w, 0);
                     let a = policy.choose(&o, Effort::BEST);
                     let p = &mut w.players[0];
                     p.want = wrap_angle(p.angle + TURNS[a]);

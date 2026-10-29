@@ -76,6 +76,10 @@ pub fn tuning(p: Persona, skill: f32) -> Tuning {
     }
 }
 
+pub fn rl_effort(skill: f32) -> f32 {
+    skill.clamp(0.0, 1.0).sqrt()
+}
+
 pub fn hunts_player(skill: f32, player_age: f32) -> bool {
     skill >= 0.2 && player_age >= CALM_SECS
 }

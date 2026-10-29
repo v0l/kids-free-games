@@ -1,6 +1,6 @@
 # Kids Free Games
 
-Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, Android, the web and desktop. No ads, no purchases, no accounts, no network.
+Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, Android, the web and desktop. No ads, no purchases, no email or passwords. Progress and leaderboards sync through a small server (see [PRIVACY.md](PRIVACY.md)); the games also work offline.
 
 Written in Rust. This `bevy` branch moves the app to [Bevy](https://bevy.org) 0.20: `crates/core` holds the game logic, save, profiles and sync with no drawing, and `crates/app` is the Bevy app. Flappy Bird is ported; the other games are in `legacy/` until they move over. `docs/BEVY.md` is the porting guide.
 
@@ -10,7 +10,7 @@ See [GAMES.md](GAMES.md) for the list of popular games and which ones are done.
 
 ## Privacy
 
-The app collects no data and uses no network. See [PRIVACY.md](PRIVACY.md).
+No ads or third-party tracking. The app syncs a random player ID, name, avatar, saves, scores and play time to our own server. See [PRIVACY.md](PRIVACY.md).
 
 ## Games
 

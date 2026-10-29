@@ -250,40 +250,78 @@ mod clash {
 
 mod paper {
     use super::*;
-    use kg_core::games::paper::rl::{baseline, evaluate, Arena};
+    use kg_core::games::paper::rl::{evaluate_against, Arena, Pilot, Report, Rewards};
+
+    fn rewards(g: &[f32]) -> Rewards {
+        Rewards {
+            land: g[0],
+            kill: g[1],
+            death: g[2],
+            idle: g[3],
+            linger: g[4],
+            win: g[5],
+            outlive: g[6],
+        }
+    }
+
+    fn score(r: &Report) -> f32 {
+        (20.0 * r.wins + 10.0 * r.outlived) * (1.0 - r.circling) + 200.0 * r.peak + r.kills
+            - 30.0 * r.circling
+    }
+
+    fn describe(r: &Report) -> String {
+        format!(
+            "won {:.0}% outlived {:.0}% peak {:.1}% lived {:.0}s kills {:.2} inside {:.0}% circling {:.1}%",
+            r.wins * 100.0,
+            r.outlived * 100.0,
+            r.peak * 100.0,
+            r.secs,
+            r.kills,
+            r.inside * 100.0,
+            r.circling * 100.0
+        )
+    }
 
     impl Game for Arena {
         fn genes() -> Vec<(&'static str, f32)> {
-            vec![]
+            let r = Rewards::default();
+            vec![
+                ("land", r.land),
+                ("kill", r.kill),
+                ("death", r.death),
+                ("idle", r.idle),
+                ("linger", r.linger),
+                ("win", r.win),
+                ("outlive", r.outlive),
+            ]
         }
 
-        fn make(seed: u64, secs: f32, _: &[f32]) -> Self {
-            Arena::new(seed, 1.0, secs)
+        fn make(seed: u64, secs: f32, genes: &[f32]) -> Self {
+            Arena::with(seed, secs, rewards(genes))
         }
 
-        fn set_genes(&mut self, _: &[f32]) {}
+        fn set_genes(&mut self, genes: &[f32]) {
+            self.rewards = rewards(genes);
+        }
 
         fn baseline(seeds: u64) -> (f32, String) {
-            let r = baseline(seeds, 90.0);
-            (
-                r.0 * 100.0 - 2.0 * r.1,
-                format!("peak {:.2}% deaths {:.2}", r.0 * 100.0, r.1),
-            )
+            let r = evaluate_against(&Pilot::Bot, seeds, None, &[], 0.0);
+            (score(&r), describe(&r))
         }
 
-        fn eval(policy: &Policy, _: &[Policy], seeds: u64) -> (f32, String) {
-            let r = evaluate(policy, seeds, 90.0, Effort::BEST, false);
-            (
-                r.peak * 100.0 - 2.0 * r.deaths - 5.0 * r.circling,
-                format!(
-                    "peak {:.2}% deaths {:.2} kills {:.2} inside {:.0}% circling {:.1}%",
-                    r.peak * 100.0,
-                    r.deaths,
-                    r.kills,
-                    r.inside * 100.0,
-                    r.circling * 100.0
-                ),
-            )
+        fn eval(policy: &Policy, rivals: &[Policy], seeds: u64) -> (f32, String) {
+            let r = evaluate_against(
+                &Pilot::Policy(policy, Effort::BEST),
+                seeds,
+                None,
+                rivals,
+                0.5,
+            );
+            (score(&r), describe(&r))
+        }
+
+        fn set_seats(n: usize) {
+            kg_core::games::paper::rl::set_seats(n, 0.3);
         }
     }
 }

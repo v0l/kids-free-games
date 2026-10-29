@@ -152,6 +152,7 @@ pub struct Player {
     plan: Plan,
     pub brain: Option<Brain>,
     pub rl: Option<Effort>,
+    pub blunder: (usize, f32),
     pub manual: bool,
 }
 
@@ -187,6 +188,7 @@ impl Player {
             plan: Plan::Home,
             brain: None,
             rl: None,
+            blunder: (0, 0.0),
             manual: false,
         }
     }
@@ -235,6 +237,7 @@ pub struct World {
     pub skill: f32,
     pub brains: bool,
     pub effort: Option<f32>,
+    pub rl_effort: Option<f32>,
     pub lessons: Option<Vec<Lesson>>,
     acc: f32,
     name_turn: usize,
@@ -268,6 +271,7 @@ impl World {
             skill,
             brains: true,
             effort: None,
+            rl_effort: None,
             lessons: None,
             acc: 0.0,
             name_turn: rand::gen_range(0, NAMES.len()),
@@ -379,6 +383,7 @@ impl World {
         let tune = arena::tuning(PERSONAS[persona], self.skill);
         let mut p = Player::new(name, bot, persona, tune, at, angle);
         p.brain = self.brain_for(bot, tune);
+        p.rl = self.rl_for(bot);
         self.players.push(p);
         self.stake(id, at);
         id
@@ -390,6 +395,13 @@ impl World {
         }
         shipped_net()
             .map(|n| Brain::new(n.clone(), Effort::new(self.effort.unwrap_or(tune.effort))))
+    }
+
+    fn rl_for(&self, bot: bool) -> Option<Effort> {
+        let e = self
+            .rl_effort
+            .filter(|_| bot && super::rl::shipped().is_some())?;
+        Some(Effort::new(e))
     }
 
     pub fn fresh_name(&mut self) -> &'static str {
@@ -459,6 +471,7 @@ impl World {
         let tune = arena::tuning(PERSONAS[persona], self.skill);
         let mut p = Player::new(name, bot, persona, tune, at, angle);
         p.brain = self.brain_for(bot, tune);
+        p.rl = self.rl_for(bot);
         self.players[id] = p;
         self.stake(id, at);
     }
@@ -1042,13 +1055,28 @@ impl World {
     }
 
     fn rl_think(&mut self, id: usize, effort: Effort) {
-        let Some(net) = super::rl::shipped() else {
-            return;
+        if let Some(net) = super::rl::shipped() {
+            self.rl_steer(id, net, effort);
+        }
+    }
+
+    pub fn rl_steer(&mut self, id: usize, net: &crate::brain::conv::Policy, effort: Effort) {
+        let (held, left) = self.players[id].blunder;
+        let a = if left > 0.0 {
+            self.players[id].blunder.1 -= effort.think_every(super::rl::DECIDE);
+            held
+        } else if rand::gen_range(0.0, 1.0) < effort.blunder() {
+            let k = rand::gen_range(0, super::rl::ACTIONS);
+            self.players[id].blunder = (k, rand::gen_range(0.4, 1.2));
+            k
+        } else {
+            net.choose(&super::rl::observe(self, id), effort)
         };
-        let coarse = super::rl::Coarse::of(self);
-        let a = net.choose(&super::rl::observe(self, id, &coarse), effort);
-        let p = &mut self.players[id];
-        p.want = wrap_angle(p.angle + super::rl::TURNS[a]);
+        let mut aim = wrap_angle(self.players[id].angle + super::rl::TURNS[a]);
+        if self.hits_gentle(id, aim) {
+            aim = self.safe_aim(id, aim, false);
+        }
+        self.players[id].want = aim;
     }
 
     fn bot_think(&mut self, id: usize, policy: Policy) {

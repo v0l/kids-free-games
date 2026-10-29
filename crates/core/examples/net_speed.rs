@@ -1,11 +1,11 @@
 use kg_core::brain::conv::{Layer, Obs};
-use kg_core::games::paper::rl::{observe, shipped, Arena, Coarse};
+use kg_core::games::paper::rl::{observe, shipped, Arena};
 use std::time::Instant;
 
 fn main() {
-    let a = Arena::new(1, 1.0, 60.0);
+    let a = Arena::new(1, 60.0);
     let p = shipped().expect("policy");
-    let o = observe(&a.w, 0, &Coarse::of(&a.w));
+    let o = observe(&a.w, 0);
     let n = 500;
     let t = Instant::now();
     let mut sink = 0.0;

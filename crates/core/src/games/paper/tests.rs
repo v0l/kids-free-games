@@ -810,3 +810,109 @@ fn block_counts_track_the_land_and_trail_grids_through_a_busy_game() {
     assert_eq!(trails, g.w.block_trail);
     assert!(trails.iter().any(|t| *t > 0) || owners.iter().any(|o| o[1] > 0));
 }
+
+fn rl_bots_only(effort: f32, seed: u64, secs: usize) -> (World, usize) {
+    rand::srand(seed);
+    let mut w = World::new(0.0);
+    w.rl_effort = Some(effort);
+    for s in spread_spots(10) {
+        w.add_player(s, rand::gen_range(-PI, PI), true);
+    }
+    let mut stuck = 0;
+    let mut last: Vec<Vec2> = w.players.iter().map(|p| p.pos).collect();
+    let mut still_for = vec![0usize; w.players.len()];
+    for frame in 0..secs * 60 {
+        w.advance(1.0 / 60.0);
+        w.deaths.clear();
+        w.claims.clear();
+        if frame % 60 == 0 {
+            for (id, p) in w.players.iter().enumerate() {
+                if p.alive && p.pos.distance(last[id]) < 0.5 {
+                    still_for[id] += 1;
+                    stuck = stuck.max(still_for[id]);
+                } else {
+                    still_for[id] = 0;
+                }
+                last[id] = p.pos;
+            }
+        }
+    }
+    (w, stuck)
+}
+
+fn rl_fitness(r: &rl::Report) -> f32 {
+    r.wins + r.outlived + 5.0 * r.peak - r.circling
+}
+
+#[test]
+fn the_shipped_rl_brain_fits_the_survival_view() {
+    let p = rl::shipped().expect("assets/brains/paper_rl.kgb fits rl::fits");
+    assert!(rl::fits(p));
+}
+
+#[test]
+fn every_bot_runs_the_rl_brain_at_the_players_skill() {
+    fresh_player();
+    for best in [0, 120, 400] {
+        let g = Paper::with_best(best);
+        let want = crate::brain::Effort::new(arena::rl_effort(g.skill));
+        assert!(g.w.players[0].rl.is_none());
+        assert!(g.w.players.iter().skip(1).all(|p| p.rl == Some(want)));
+    }
+    assert!(arena::rl_effort(0.0) < arena::rl_effort(0.5));
+    assert!(arena::rl_effort(0.5) < arena::rl_effort(1.0));
+}
+
+#[test]
+fn at_full_effort_the_rl_brain_outlives_the_hand_written_bot() {
+    let p = rl::shipped().expect("policy");
+    let bot = rl::evaluate(&rl::Pilot::Bot, 20, None);
+    let brain = rl::evaluate(&rl::Pilot::Policy(p, crate::brain::Effort::BEST), 20, None);
+    assert!(
+        rl_fitness(&brain) > rl_fitness(&bot),
+        "brain {brain:?} vs bot {bot:?}"
+    );
+    assert!(brain.outlived > bot.outlived && brain.circling < 0.25);
+}
+
+#[test]
+fn rl_fitness_rises_with_effort() {
+    let p = rl::shipped().expect("policy");
+    let at = |e: f32| {
+        rl_fitness(&rl::evaluate(
+            &rl::Pilot::Policy(p, crate::brain::Effort::new(e)),
+            64,
+            None,
+        ))
+    };
+    let (lazy, mid, best) = (at(0.0), at(0.8), at(1.0));
+    assert!(lazy < mid && mid < best, "{lazy:.3} {mid:.3} {best:.3}");
+}
+
+#[test]
+fn low_effort_rl_bots_never_get_stuck() {
+    for seed in 0..3 {
+        let (_, stuck) = rl_bots_only(0.15, seed, 60);
+        assert!(stuck <= 1, "seed {seed}: a bot sat still {stuck}s");
+    }
+}
+
+#[test]
+fn rl_bots_leave_a_new_beginner_alone() {
+    rand::srand(2);
+    let mut w = World::new(0.0);
+    w.rl_effort = Some(arena::rl_effort(0.0));
+    w.add_player(vec2(55.0, 55.0), RIGHT, false);
+    for s in spread_spots(9).into_iter().skip(1) {
+        w.add_player(s, UP, true);
+    }
+    go(&mut w, 0, DOWN, 5.0);
+    go(&mut w, 0, LEFT, 15.0);
+    still(&mut w, 0);
+    assert!(w.players[0].out());
+    for _ in 0..60 * 30 {
+        w.advance(1.0 / 60.0);
+    }
+    let by_bot = w.deaths.iter().any(|d| d.victim == 0 && d.killer.is_some());
+    assert!(!by_bot, "{:?}", w.deaths);
+}
