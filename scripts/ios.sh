@@ -37,7 +37,7 @@ if [ "$TARGET" = aarch64-apple-ios ]; then
   sdk_build=$(xcrun --sdk iphoneos --show-sdk-build-version)
   sdk_ver=$(xcrun --sdk iphoneos --show-sdk-version)
   xc_ver=$(/usr/libexec/PlistBuddy -c "Print :DTXcode" /Applications/Xcode.app/Contents/Info.plist)
-  xc_build=$(/usr/libexec/PlistBuddy -c "Print :DTXcodeBuild" /Applications/Xcode.app/Contents/Info.plist)
+  xc_build=$(/usr/libexec/PlistBuddy -c "Print :ProductBuildVersion" /Applications/Xcode.app/Contents/version.plist)
   for kv in "DTPlatformName:iphoneos" "DTSDKName:iphoneos$sdk_ver" "DTSDKBuild:$sdk_build" "DTPlatformVersion:$sdk_ver" "DTPlatformBuild:$sdk_build" "DTXcode:$xc_ver" "DTXcodeBuild:$xc_build" "DTCompiler:com.apple.compilers.llvm.clang.1_0" "BuildMachineOSBuild:$(sw_vers -buildVersion)"; do
     /usr/libexec/PlistBuddy -c "Add :${kv%%:*} string ${kv#*:}" "$APP/Info.plist" 2>/dev/null || true
   done
