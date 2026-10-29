@@ -207,7 +207,11 @@ pub const MAX_SPEED: f32 = 32.0;
 
 pub struct BrainPaper {
     pub brain: Option<kg_core::brain::Brain>,
-    pub rl: bool,
+    pub rl: Option<kg_core::brain::conv::Policy>,
+    watch: Option<String>,
+    stamp: Option<std::time::SystemTime>,
+    check: f32,
+    reloads: u32,
     pub game: crate::games::paper::PaperPlay,
     pub effort: f32,
     pub speed: f32,
@@ -229,11 +233,17 @@ impl BrainPaper {
             .unwrap_or(1.0);
         let brain = kg_core::games::paper::world::shipped_net()
             .map(|n| kg_core::brain::Brain::new(n.clone(), kg_core::brain::Effort::new(effort)));
-        let rl = crate::web::query("model").is_some_and(|m| m == "rl")
-            && kg_core::games::paper::rl::shipped().is_some();
-        Self {
+        let watch = crate::web::query("watch").filter(|w| !w.is_empty());
+        let rl = (watch.is_some() || crate::web::query("model").is_some_and(|m| m == "rl"))
+            .then(|| kg_core::games::paper::rl::shipped().cloned())
+            .flatten();
+        let mut me = Self {
             brain,
             rl,
+            watch,
+            stamp: None,
+            check: 0.0,
+            reloads: 0,
             game: crate::games::paper::PaperPlay::new(),
             effort,
             speed: crate::web::query("speed")
@@ -245,6 +255,25 @@ impl BrainPaper {
             runs: 0,
             best: 0.0,
             was_dead: false,
+        };
+        me.reload();
+        me
+    }
+
+    fn reload(&mut self) {
+        let Some(path) = &self.watch else { return };
+        let stamp = std::fs::metadata(path).and_then(|m| m.modified()).ok();
+        if stamp.is_none() || stamp == self.stamp {
+            return;
+        }
+        if let Some(p) = std::fs::read(path)
+            .ok()
+            .and_then(|b| kg_core::brain::conv::Policy::from_bytes(&b))
+            .filter(kg_core::games::paper::rl::fits)
+        {
+            self.rl = Some(p);
+            self.stamp = stamp;
+            self.reloads += 1;
         }
     }
 
@@ -267,11 +296,11 @@ impl BrainPaper {
             }
             State::Playing => {
                 self.since += dt;
-                if self.rl {
+                if let Some(net) = &self.rl {
                     let effort = kg_core::brain::Effort::new(self.effort);
                     if self.since >= effort.think_every(kg_core::games::paper::rl::DECIDE) {
                         self.since = 0.0;
-                        if let Some(net) = kg_core::games::paper::rl::shipped() {
+                        {
                             use kg_core::games::paper::rl;
                             let a = net.choose(&rl::observe(&g.w, 0), effort);
                             let me = g.me();
@@ -304,6 +333,11 @@ impl BrainPaper {
                 _ => {}
             }
         }
+        self.check += dt;
+        if self.check > 2.0 {
+            self.check = 0.0;
+            self.reload();
+        }
         let steps = self.speed.round().max(1.0) as usize;
         for _ in 0..steps {
             self.step(view, dt);
@@ -328,11 +362,16 @@ impl BrainPaper {
                 false,
             ),
             (
-                match (&self.brain, self.rl) {
-                    (_, true) => format!(
-                        "{} weights, conv net on a 32x32 view",
-                        kg_core::games::paper::rl::shipped().map_or(0, |p| p.param_count())
-                    ),
+                match (&self.brain, &self.rl) {
+                    (_, Some(p)) => match &self.watch {
+                        Some(w) => format!(
+                            "{} weights, {} reloads of {}",
+                            p.param_count(),
+                            self.reloads,
+                            w.rsplit('/').next().unwrap_or(w)
+                        ),
+                        None => format!("{} weights, conv net on a 32x32 view", p.param_count()),
+                    },
                     (Some(b), _) => format!(
                         "{} weights, thinks every {:.2} s",
                         b.net.weights.len(),
