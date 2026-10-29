@@ -49,14 +49,14 @@ pub enum State {
 pub fn ball_color(c: u8) -> Color {
     const PALETTE: [(u8, u8, u8); 10] = [
         (235, 55, 60),
-        (255, 150, 35),
-        (255, 214, 40),
-        (150, 215, 50),
-        (35, 170, 85),
-        (45, 205, 225),
         (55, 105, 240),
+        (255, 214, 40),
+        (35, 170, 85),
         (150, 85, 225),
+        (255, 150, 35),
+        (45, 205, 225),
         (255, 115, 185),
+        (150, 215, 50),
         (150, 95, 55),
     ];
     let p = PALETTE[c as usize % PALETTE.len()];
@@ -104,6 +104,52 @@ impl Cam {
             target,
         }
     }
+}
+
+const TAP_SLACK: f32 = 14.0;
+
+fn hull(mut pts: Vec<Vec2>) -> Vec<Vec2> {
+    pts.sort_by(|a, b| a.x.total_cmp(&b.x).then(a.y.total_cmp(&b.y)));
+    let cross = |o: Vec2, a: Vec2, b: Vec2| (a - o).perp_dot(b - o);
+    let mut lower: Vec<Vec2> = vec![];
+    for &p in &pts {
+        while lower.len() >= 2 && cross(lower[lower.len() - 2], lower[lower.len() - 1], p) <= 0.0 {
+            lower.pop();
+        }
+        lower.push(p);
+    }
+    let mut upper: Vec<Vec2> = vec![];
+    for &p in pts.iter().rev() {
+        while upper.len() >= 2 && cross(upper[upper.len() - 2], upper[upper.len() - 1], p) <= 0.0 {
+            upper.pop();
+        }
+        upper.push(p);
+    }
+    lower.pop();
+    upper.pop();
+    lower.extend(upper);
+    lower
+}
+
+fn inside_convex(poly: &[Vec2], p: Vec2) -> bool {
+    let n = poly.len();
+    n >= 3
+        && (0..n).all(|i| {
+            let (a, b) = (poly[i], poly[(i + 1) % n]);
+            (b - a).perp_dot(p - a) >= 0.0
+        })
+}
+
+fn edge_distance(poly: &[Vec2], p: Vec2) -> f32 {
+    let n = poly.len();
+    (0..n)
+        .map(|i| {
+            let (a, b) = (poly[i], poly[(i + 1) % n]);
+            let ab = b - a;
+            let t = ((p - a).dot(ab) / ab.length_squared().max(1e-6)).clamp(0.0, 1.0);
+            (a + ab * t - p).length()
+        })
+        .fold(f32::MAX, f32::min)
 }
 
 pub fn layout(n: usize, landscape: bool) -> Vec<Vec2> {
@@ -559,30 +605,56 @@ impl BallSort {
         out
     }
 
+    pub fn tube_outline(&self, view: &View, tube: usize) -> Vec<Vec2> {
+        self.outline(view, tube, HOVER + 0.3)
+    }
+
+    fn glass_outline(&self, view: &View, tube: usize) -> Vec<Vec2> {
+        self.outline(view, tube, TUBE_H + 0.1)
+    }
+
+    fn outline(&self, view: &View, tube: usize, top: f32) -> Vec<Vec2> {
+        let s = self.spot(tube);
+        let r = TUBE_R + 0.12;
+        let ring = |y: f32| -> Vec<Vec2> {
+            (0..16)
+                .map(|k| {
+                    let a = k as f32 / 16.0 * std::f32::consts::TAU;
+                    self.cam
+                        .project(view, vec3(s.x + a.cos() * r, y, s.y + a.sin() * r))
+                })
+                .collect()
+        };
+        let mut pts = ring(-0.1);
+        pts.extend(ring(top));
+        hull(pts)
+    }
+
     pub fn tube_at(&self, view: &View, p: Vec2) -> Option<usize> {
-        let mut best: Option<(usize, f32, f32)> = None;
+        let mut best: Option<(usize, f32)> = None;
         for i in 0..self.tubes.len() {
-            let s = self.spot(i);
-            let bottom = self.cam.project(view, vec3(s.x, 0.0, s.y));
-            let top = self.cam.project(view, vec3(s.x, HOVER + 0.3, s.y));
-            let edge = self.cam.project(view, vec3(s.x + TUBE_R, 0.0, s.y));
-            let half = ((edge.x - bottom.x).abs() * 1.3).max(30.0);
-            let (y0, y1) = (top.y.min(bottom.y) - 8.0, top.y.max(bottom.y) + 14.0);
-            if p.y < y0 || p.y > y1 {
-                continue;
-            }
-            let t = ((p.y - top.y) / (bottom.y - top.y).abs().max(1.0)).clamp(0.0, 1.0);
-            let cx = top.x + (bottom.x - top.x) * t;
-            let dx = (p.x - cx).abs();
-            if dx > half {
-                continue;
-            }
-            let better = match best {
-                None => true,
-                Some((_, bd, bz)) => dx < bd - 0.5 * half || (dx <= bd + 0.5 * half && s.y > bz),
+            let outline = self.tube_outline(view, i);
+            let inside = inside_convex(&outline, p);
+            let gap = if inside {
+                0.0
+            } else {
+                edge_distance(&outline, p)
             };
-            if better {
-                best = Some((i, dx, s.y));
+            if gap > TAP_SLACK {
+                continue;
+            }
+            let on_glass = inside_convex(&self.glass_outline(view, i), p);
+            let tier = if on_glass {
+                0.0
+            } else if inside {
+                1.0
+            } else {
+                2.0 + gap
+            };
+            let s = self.spot(i);
+            let score = tier * 1000.0 - s.y;
+            if best.is_none_or(|(_, b)| score < b) {
+                best = Some((i, score));
             }
         }
         best.map(|b| b.0)
@@ -1440,6 +1512,85 @@ mod tests {
                 );
                 let mid = g.cam.project(&v, vec3(s.x, TUBE_H * 0.5, s.y));
                 assert_eq!(g.tube_at(&v, mid), Some(i), "tube {i}");
+            }
+        }
+    }
+
+    #[test]
+    fn every_point_on_a_tubes_glass_picks_that_tube() {
+        let mut views = views().to_vec();
+        views.push(View::fit(1280.0, 720.0));
+        views.push(View::fit(1920.0, 1080.0));
+        for v in views {
+            for level in [1, 8, MAX_LEVEL] {
+                let mut g = BallSort::with_level(level);
+                g.ensure_cam(&v);
+                let mut wrong = vec![];
+                for i in 0..g.tubes.len() {
+                    let s = g.spot(i);
+                    for ky in 0..=8 {
+                        let y = TUBE_H * ky as f32 / 8.0;
+                        for kx in -3..=3 {
+                            let x = s.x + TUBE_R * 0.9 * kx as f32 / 3.0;
+                            for z in [s.y - TUBE_R * 0.9, s.y, s.y + TUBE_R * 0.9] {
+                                let p = g.cam.project(&v, vec3(x, y, z));
+                                let hidden = (0..g.tubes.len()).any(|j| {
+                                    j != i
+                                        && g.spot(j).y > s.y
+                                        && inside_convex(&g.glass_outline(&v, j), p)
+                                });
+                                if hidden {
+                                    continue;
+                                }
+                                let got = g.tube_at(&v, p);
+                                if got != Some(i) {
+                                    wrong.push((i, ky, kx, got));
+                                }
+                            }
+                        }
+                    }
+                }
+                let mut rows = std::collections::BTreeMap::new();
+                for w in &wrong {
+                    *rows.entry((w.1, w.3.is_some())).or_insert(0) += 1;
+                }
+                assert!(
+                    wrong.is_empty(),
+                    "{}x{} level {level}: {} misses by (height, picked another) {rows:?}, first {:?}",
+                    v.w,
+                    v.h,
+                    wrong.len(),
+                    &wrong[..wrong.len().min(6)]
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_first_colours_are_far_apart_so_early_levels_read_clearly() {
+        let hue = |c: Color| {
+            let (r, g, b) = (c.r, c.g, c.b);
+            let (mx, mn) = (r.max(g).max(b), r.min(g).min(b));
+            let d = (mx - mn).max(1e-6);
+            let h = if mx == r {
+                ((g - b) / d).rem_euclid(6.0)
+            } else if mx == g {
+                (b - r) / d + 2.0
+            } else {
+                (r - g) / d + 4.0
+            };
+            h * 60.0
+        };
+        for n in [3usize, 4] {
+            for a in 0..n {
+                for b in a + 1..n {
+                    let d = (hue(ball_color(a as u8)) - hue(ball_color(b as u8))).abs();
+                    let d = d.min(360.0 - d);
+                    assert!(
+                        d >= 40.0,
+                        "colours {a} and {b} are only {d:.0} degrees apart"
+                    );
+                }
             }
         }
     }
