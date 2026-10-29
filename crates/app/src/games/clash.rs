@@ -268,10 +268,6 @@ fn draw_powers(g: &Clash, pen: &mut Pen, view: &View) {
 
 const SHIELD: Color = Color::new(0.6, 0.9, 1.0, 1.0);
 
-struct Look {
-    mark: Option<Color>,
-}
-
 fn wobble(g: &Clash, s: &Snake, i: usize, dir: Vec2) -> Vec2 {
     if i == 0 {
         return Vec2::ZERO;
@@ -280,7 +276,7 @@ fn wobble(g: &Clash, s: &Snake, i: usize, dir: Vec2) -> Vec2 {
     vec2(-dir.y, dir.x) * k * s.radius() * 0.07 * (i as f32 / 3.0).min(1.0)
 }
 
-fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
+fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake) {
     let zoom = g.zoom;
     let skin = SKINS[s.skin.min(SKINS.len() - 1)];
     let n = s.segs.len();
@@ -339,9 +335,6 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
             radii[i] * 0.52,
             col.lerp(WHITE, 0.28).with_alpha(0.8),
         );
-    }
-    if let Some(mark) = look.mark {
-        pen.ring(pts[0], radii[0] * 1.35, 3.0, mark.with_alpha(0.8));
     }
     if s.shield > 0.0 {
         pen.ring(pts[0], radii[0] * 1.6, 5.0, SHIELD);
@@ -534,18 +527,7 @@ fn draw_world(g: &Clash, pen: &mut Pen, view: &View) {
     let mut order: Vec<&Snake> = g.world.snakes.iter().filter(|s| s.alive).collect();
     order.sort_by_key(|s| (s.player, s.level()));
     for s in &order {
-        let look = Look {
-            mark: if s.player {
-                None
-            } else if s.boss || s.level() > me {
-                Some(Color::from_rgba(235, 70, 80, 255))
-            } else if s.level() < me {
-                Some(Color::from_rgba(90, 210, 110, 255))
-            } else {
-                None
-            },
-        };
-        draw_snake(g, pen, view, s, &look);
+        draw_snake(g, pen, view, s);
     }
     for s in &order {
         level_pill(g, pen, view, s, me);
@@ -1182,7 +1164,7 @@ mod tests {
             assert!(s.shield > 0.0);
             let mut pen = Pen::default();
             pen.begin(v, 1.0);
-            draw_snake(&p.g, &mut pen, &v, &s, &Look { mark: None });
+            draw_snake(&p.g, &mut pen, &v, &s);
             let see_through = pen
                 .used()
                 .iter()

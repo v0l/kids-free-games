@@ -882,7 +882,7 @@ impl World {
         s.angle = away.y.atan2(away.x);
         s.want = s.angle;
         s.stun = 0.35;
-        let player = s.player || self.snakes[b].player;
+        let player = s.player;
         self.events.push(Event::Bump { at, player });
     }
 
@@ -1486,6 +1486,26 @@ mod tests {
             }
         }
         assert!(checked > 50, "only {checked} hits");
+    }
+
+    #[test]
+    fn a_small_snake_bouncing_off_the_players_tail_is_not_the_players_bounce() {
+        let mut w = tail_duel(3, 30, 20);
+        w.snakes[0].player = false;
+        w.snakes[1].player = true;
+        w.snakes[1].shield = 0.0;
+        w.step(1.0 / 60.0, None);
+        assert!(
+            w.events.iter().any(|e| matches!(e, Event::Bump { .. })),
+            "the small snake bounced"
+        );
+        assert!(
+            !w.events
+                .iter()
+                .any(|e| matches!(e, Event::Bump { player: true, .. })),
+            "reported as the player's bounce"
+        );
+        assert_eq!(w.snakes[1].stun, 0.0);
     }
 
     #[test]
