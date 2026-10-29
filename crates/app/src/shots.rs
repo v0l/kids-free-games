@@ -178,6 +178,7 @@ pub const SCENES: &[(u32, &str)] = &[
     (179, "hotel pool with swimmers"),
     (230, "clash survival with snakes left"),
     (231, "clash survival win with a rank up"),
+    (232, "clash shielded snake beside a sky skin"),
     (190, "clash title with the skin picker"),
     (191, "clash locked skin"),
     (192, "clash tower floor picker"),
@@ -479,7 +480,7 @@ fn setup(n: u32, view: &View) -> Stage {
         90..=99 => memory_scene::setup(n, view),
         170..=189 => hotel_scene::setup(n, view),
         160..=169 => spell_scene::setup(n, view),
-        190..=199 | 230 | 231 => clash_scene::setup(n, view),
+        190..=199 | 230..=232 => clash_scene::setup(n, view),
         220..=229 => trains_scene::setup(n, view),
         _ => {
             kg_core::save::reset_for_test();

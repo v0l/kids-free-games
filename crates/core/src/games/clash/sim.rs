@@ -66,7 +66,6 @@ pub fn xp_for_length(len: usize) -> u32 {
 pub const NECK: usize = 8;
 pub const WALL_PUSH: f32 = 30.0;
 pub const WALL_STUN: f32 = 0.35;
-pub const CUT_SHIELD: f32 = 1.5;
 
 pub fn wrap_angle(a: f32) -> f32 {
     (a + PI).rem_euclid(TAU) - PI
@@ -278,6 +277,24 @@ pub struct World {
     name_at: usize,
     egg_budget: f32,
     bump_cd: Vec<(u32, u32, f32)>,
+    #[cfg(test)]
+    pub hits: Vec<Hit>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    Bounce,
+    Cut,
+    Eat,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Hit {
+    pub biter: u32,
+    pub bitten: u32,
+    pub shielded: bool,
+    pub seg: usize,
+    pub outcome: Outcome,
 }
 
 impl World {
@@ -298,6 +315,8 @@ impl World {
             name_at: rand::gen_range(0usize, NAMES.len()),
             egg_budget: 0.0,
             bump_cd: vec![],
+            #[cfg(test)]
+            hits: vec![],
             spec,
         };
         w.scatter_rocks();
@@ -766,6 +785,11 @@ impl World {
         }
         self.bump_cd.retain(|c| c.2 > 0.0);
         let n = self.snakes.len();
+        let frame: Vec<(u32, bool)> = self
+            .snakes
+            .iter()
+            .map(|s| (s.level(), s.shield > 0.0))
+            .collect();
         for a in 0..n {
             for b in 0..n {
                 if a == b || !self.snakes[a].alive || !self.snakes[b].alive {
@@ -774,20 +798,36 @@ impl World {
                 let Some((seg, at)) = self.contact(a, b) else {
                     continue;
                 };
-                let (la, lb) = (self.snakes[a].level(), self.snakes[b].level());
-                let shielded = self.snakes[a].shield > 0.0 || self.snakes[b].shield > 0.0;
-                if la == lb || shielded {
-                    self.bump(a, b, at, seg);
-                } else if la > lb {
-                    if seg >= NECK {
-                        self.cut(b, a, seg);
-                    } else {
-                        self.kill(b, Some(a));
-                    }
-                } else if seg >= NECK {
-                    self.bump(a, b, at, seg);
+                let ((la, sa), (lb, sb)) = (frame[a], frame[b]);
+                let shielded = sa || sb;
+                let outcome = if la == lb || shielded || (la < lb && seg >= NECK) {
+                    Outcome::Bounce
+                } else if la > lb && seg >= NECK {
+                    Outcome::Cut
                 } else {
-                    self.kill(a, Some(b));
+                    Outcome::Eat
+                };
+                #[cfg(test)]
+                self.hits.push(Hit {
+                    biter: if la < lb && outcome == Outcome::Eat {
+                        lb
+                    } else {
+                        la
+                    },
+                    bitten: if la < lb && outcome == Outcome::Eat {
+                        la
+                    } else {
+                        lb
+                    },
+                    shielded,
+                    seg,
+                    outcome,
+                });
+                match outcome {
+                    Outcome::Bounce => self.bump(a, b, at, seg),
+                    Outcome::Cut => self.cut(b, a, seg),
+                    Outcome::Eat if la > lb => self.kill(b, Some(a)),
+                    Outcome::Eat => self.kill(a, Some(b)),
                 }
             }
         }
@@ -860,7 +900,6 @@ impl World {
         let s = &mut self.snakes[victim];
         s.xp -= lost;
         s.segs.truncate(seg);
-        s.shield = CUT_SHIELD;
         s.pop = 1.0;
         self.events.push(Event::Cut {
             victim: s.id,
@@ -1211,7 +1250,7 @@ mod tests {
         assert!(v.alive && w.player_alive());
         assert!(v.xp < xp && v.xp > 0, "lost some xp: {} -> {}", xp, v.xp);
         assert!(v.segs.len() <= 10 && v.segs.len() < len);
-        assert!(v.shield > 0.0, "a cut snake gets a moment of safety");
+        assert_eq!(v.shield, 0.0, "a cut snake gets no shield");
         assert!(w.events.iter().any(|e| matches!(
             e,
             Event::Cut {
@@ -1260,19 +1299,16 @@ mod tests {
     }
 
     #[test]
-    fn after_a_cut_the_shielded_rest_bounces_the_biter_instead_of_letting_it_through() {
-        let mut w = tail_duel(8, 3, 10);
+    fn a_cut_snake_can_be_bitten_again_right_away() {
+        let mut w = tail_duel(12, 9, 30);
         w.step(1.0 / 60.0, None);
-        assert!(w.snakes[1].shield > 0.0);
+        assert!(w.events.iter().any(|e| matches!(e, Event::Cut { .. })));
         let len = w.snakes[1].segs.len();
-        let tail = w.snakes[1].segs[5];
-        w.snakes[0].segs[0] = tail;
+        w.snakes[0].segs[0] = w.snakes[1].segs[15];
         w.events.clear();
         w.step(1.0 / 60.0, None);
-        assert!(w.events.iter().any(|e| matches!(e, Event::Bump { .. })));
-        assert!(!w.events.iter().any(|e| matches!(e, Event::Cut { .. })));
-        assert_eq!(w.snakes[1].segs.len(), len);
-        assert!(w.snakes[1].alive);
+        assert!(w.events.iter().any(|e| matches!(e, Event::Cut { .. })));
+        assert!(w.snakes[1].segs.len() < len);
     }
 
     #[test]
@@ -1368,6 +1404,88 @@ mod tests {
             }
         }
         assert!(near < 150, "frames hugging the corner: {near}/300");
+    }
+
+    #[test]
+    fn a_bigger_snake_never_bounces_off_a_smaller_open_one() {
+        for seg in [0, 2, 5, 10, 20] {
+            let mut w = tail_duel(12, 6, seg);
+            w.snakes[1].shield = 0.0;
+            w.step(1.0 / 60.0, None);
+            assert!(
+                !w.events.iter().any(|e| matches!(e, Event::Bump { .. })),
+                "hit at segment {seg} bounced"
+            );
+            assert!(
+                w.events
+                    .iter()
+                    .any(|e| matches!(e, Event::Cut { .. } | Event::Eaten { .. })),
+                "hit at segment {seg} did nothing"
+            );
+        }
+    }
+
+    #[test]
+    fn a_shielded_snake_is_never_cut_or_eaten() {
+        for seg in [0, 2, 5, 10, 20] {
+            let mut w = tail_duel(12, 6, seg);
+            w.snakes[1].shield = 2.0;
+            let xp = w.snakes[1].xp;
+            for _ in 0..20 {
+                w.step(1.0 / 60.0, None);
+                assert!(
+                    !w.events
+                        .iter()
+                        .any(|e| matches!(e, Event::Cut { .. } | Event::Eaten { .. })),
+                    "segment {seg}: shielded snake hurt"
+                );
+            }
+            assert!(w.snakes[1].alive && w.snakes[1].xp >= xp);
+        }
+    }
+
+    #[test]
+    fn a_shielded_small_snake_ramming_a_big_head_survives() {
+        let mut w = duel(3, 12);
+        w.snakes[0].shield = 2.0;
+        for _ in 0..30 {
+            w.step(1.0 / 60.0, None);
+        }
+        assert!(w.player_alive());
+        assert!(!w
+            .events
+            .iter()
+            .any(|e| matches!(e, Event::Eaten { .. } | Event::Cut { .. })));
+    }
+
+    #[test]
+    fn collisions_follow_the_rules_in_real_games() {
+        let mut checked = 0;
+        for seed in 0..4u64 {
+            crate::rng::srand(seed);
+            let mut w = World::new(Spec::arena(10, false), "Me", 0);
+            w.snakes[0].shield = 1e9;
+            for _ in 0..60 * 60 {
+                w.step(1.0 / 60.0, None);
+                w.events.clear();
+                for h in std::mem::take(&mut w.hits) {
+                    checked += 1;
+                    match h.outcome {
+                        Outcome::Cut | Outcome::Eat => {
+                            assert!(!h.shielded, "seed {seed}: shielded snake hurt: {h:?}");
+                            assert!(h.biter > h.bitten, "seed {seed}: {h:?}");
+                        }
+                        Outcome::Bounce => {
+                            assert!(
+                                h.shielded || h.biter <= h.bitten,
+                                "seed {seed}: a bigger snake bounced off an open smaller one: {h:?}"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(checked > 50, "only {checked} hits");
     }
 
     #[test]

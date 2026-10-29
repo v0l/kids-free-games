@@ -302,11 +302,17 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
     if visible.is_empty() {
         return;
     }
-    let glow = if s.shield > 0.0 {
-        0.18 + 0.18 * (g.t * 9.0).sin()
-    } else {
-        0.0
-    };
+    let glow = 0.0;
+    if s.shield > 0.0 {
+        let pulse = 0.5 + 0.5 * (g.t * 6.0).sin();
+        for &i in visible.iter().rev() {
+            pen.circle(
+                pts[i],
+                radii[i] + (8.0 + 3.0 * pulse) * zoom.max(0.6),
+                SHIELD,
+            );
+        }
+    }
     pen.soft_shadow(
         pts[0] + vec2(0.0, radii[0] * 0.5),
         radii[0] * 1.2,
@@ -338,7 +344,7 @@ fn draw_snake(g: &Clash, pen: &mut Pen, view: &View, s: &Snake, look: &Look) {
         pen.ring(pts[0], radii[0] * 1.35, 3.0, mark.with_alpha(0.8));
     }
     if s.shield > 0.0 {
-        pen.ring(pts[0], radii[0] * 1.5, 4.0, SHIELD.with_alpha(0.7));
+        pen.ring(pts[0], radii[0] * 1.6, 5.0, SHIELD);
     }
     if s.boosts.magnet > 0.0 {
         let pulse = (g.t * 3.0).fract();
