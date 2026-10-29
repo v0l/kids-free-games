@@ -299,14 +299,19 @@ fn sync_on_close(
     }
 }
 
+fn asset_plugin() -> AssetPlugin {
+    AssetPlugin {
+        file_path: asset_root(),
+        meta_check: bevy::asset::AssetMetaCheck::Never,
+        ..default()
+    }
+}
+
 pub fn build(scene: Scene, with_audio: bool) -> App {
     let mut app = App::new();
     app.add_plugins(
         DefaultPlugins
-            .set(AssetPlugin {
-                file_path: asset_root(),
-                ..default()
-            })
+            .set(asset_plugin())
             .set(WindowPlugin {
                 primary_window: Some(window()),
                 ..default()
@@ -362,4 +367,15 @@ pub fn main() {
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
     run();
+}
+
+#[cfg(test)]
+mod asset_tests {
+    use super::*;
+    use bevy::asset::AssetMetaCheck;
+
+    #[test]
+    fn never_requests_meta_files_because_the_web_host_answers_them_with_html() {
+        assert!(matches!(asset_plugin().meta_check, AssetMetaCheck::Never));
+    }
 }
