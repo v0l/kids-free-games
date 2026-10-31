@@ -173,6 +173,7 @@ pub async fn delete_player(db: &Db, player_id: &str) -> ApiResult<usize> {
         "DELETE FROM scores WHERE player_id = ?1",
         "DELETE FROM play_sessions WHERE player_id = ?1",
         "DELETE FROM link_codes WHERE player_id = ?1",
+        "DELETE FROM reports WHERE reporter_id = ?1 OR reported_id = ?1",
         "DELETE FROM tokens WHERE player_id = ?1",
         "DELETE FROM players WHERE id = ?1",
     ];
@@ -344,6 +345,46 @@ pub async fn put_save(
         .with_extra(json!({ "rev": rev, "updated_at": updated })));
     }
     Ok(json!({ "slot": slot, "rev": body.base_rev + 1, "updated_at": now }))
+}
+
+#[derive(Deserialize)]
+pub struct TargetBody {
+    pub player_id: String,
+    pub game: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct IdRow {
+    id: String,
+}
+
+async fn valid_target(db: &Db, auth: &Auth, body: &TargetBody) -> ApiResult<String> {
+    if !is_uuid(&body.player_id) {
+        return Err(ApiError::bad_request("player_id must be a lowercase uuid"));
+    }
+    if body.player_id == auth.player_id {
+        return Err(ApiError::bad_request("that is you"));
+    }
+    let found: Option<IdRow> = db
+        .one("SELECT id FROM players WHERE id = ?1", &[s(&body.player_id)])
+        .await?;
+    found
+        .map(|r| r.id)
+        .ok_or_else(|| ApiError::not_found("no such player"))
+}
+
+pub async fn post_report(db: &Db, auth: &Auth, body: TargetBody, now: i64) -> ApiResult<Value> {
+    let target = valid_target(db, auth, &body).await?;
+    let game = body.game.unwrap_or_default();
+    if !game.is_empty() {
+        game_direction(&game)?;
+    }
+    db.run(
+        "INSERT OR IGNORE INTO reports (reporter_id, reported_id, game, created_at) VALUES (?1, ?2, ?3, ?4)",
+        &[s(&auth.player_id), s(&target), s(&game), n(now)],
+    )
+    .await?;
+    Ok(json!({ "reported": target }))
 }
 
 #[derive(Deserialize)]

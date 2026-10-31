@@ -1,7 +1,7 @@
 use crate::draw::{measure, Draw};
 use crate::games::{self, Entry, Play};
 use crate::paint::Pen;
-use crate::ui::Tone;
+use crate::ui::{ReportHit, Tone};
 use glam::{vec2, Vec2};
 use kg_core::engine::*;
 use kg_core::feel::Feel;
@@ -149,6 +149,7 @@ pub struct App {
     pub profiles: Option<crate::profiles::Profiles>,
     soon: Option<(usize, f32)>,
     pub loading: Option<usize>,
+    pub reporting: Option<(ReportHit, f32)>,
 }
 
 impl Default for App {
@@ -182,6 +183,7 @@ impl App {
                 .then(crate::profiles::Profiles::new),
             soon: None,
             loading: None,
+            reporting: None,
         }
     }
 
@@ -284,9 +286,29 @@ impl App {
                 20.0,
                 dt,
             );
-            if input.tapped_in(HOME) || input.back {
+            if self.reporting.is_none() && (input.tapped_in(HOME) || input.back) {
                 self.go_home();
                 return;
+            }
+            if let Some((hit, age)) = &mut self.reporting {
+                *age += dt;
+                let (_, yes, no) = report_rects(view);
+                if input.tapped_in(yes) {
+                    kg_core::net::block_player(&hit.player, &hit.game);
+                    sfx::play(Sfx::Pop);
+                    self.reporting = None;
+                } else if input.tapped_in(no) || input.back {
+                    sfx::play(Sfx::Tap);
+                    self.reporting = None;
+                }
+                return;
+            }
+            if input.pressed {
+                if let Some(hit) = crate::ui::report_hit_at(input.pos) {
+                    sfx::play(Sfx::Tap);
+                    self.reporting = Some((hit, 0.0));
+                    return;
+                }
             }
             game.update(input, view, game_dt);
             return;
@@ -387,9 +409,13 @@ impl App {
     }
 
     pub fn draw(&self, pen: &mut Pen, view: &View) {
+        crate::ui::clear_report_hits();
         if let Some((_, game)) = &self.current {
             game.draw(pen, view);
             pen.offset = Vec2::ZERO;
+            if let Some((hit, age)) = &self.reporting {
+                draw_report_sheet(pen, view, hit, *age);
+            }
             if self.feel.flash_alpha() > 0.0 {
                 pen.fill_screen(
                     view,
@@ -628,6 +654,39 @@ impl App {
         let rad = k * view.full().w.hypot(view.full().h) * 0.6;
         pen.circle(view.center(), rad, color);
     }
+}
+
+pub fn report_rects(view: &View) -> (Rect, Rect, Rect) {
+    let w = 560.0f32.min(view.w - 30.0);
+    let panel = Rect::new(view.center().x - w / 2.0, view.center().y - 190.0, w, 380.0);
+    let bw = w - 80.0;
+    let yes = Rect::new(panel.x + 40.0, panel.y + 160.0, bw, 78.0);
+    let no = Rect::new(panel.x + 40.0, panel.y + 262.0, bw, 78.0);
+    (panel, yes, no)
+}
+
+fn draw_report_sheet(pen: &mut Pen, view: &View, hit: &ReportHit, age: f32) {
+    let fade = ease_out_cubic(age / 0.15);
+    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.6 * fade));
+    let (panel, yes, no) = report_rects(view);
+    pen.painted_panel(panel, WHITE);
+    let c = panel.center().x;
+    pen.text_center(
+        &format!("Report {}?", hit.name),
+        c,
+        panel.y + 56.0,
+        38.0,
+        crate::ui::INK,
+    );
+    pen.text_center(
+        "We hide them from your boards and tell a grown up.",
+        c,
+        panel.y + 108.0,
+        22.0,
+        crate::ui::BODY,
+    );
+    pen.painted_button(yes, "Hide and report", Tone::Orange, 0.0, 1.0);
+    pen.painted_button(no, "Cancel", Tone::Blue, 0.0, 1.0);
 }
 
 fn progress_bar(pen: &mut Pen, ir: Rect, progress: f32) {
@@ -950,6 +1009,54 @@ mod tests {
             .iter()
             .position(|e| e.info.key == key)
             .unwrap()
+    }
+
+    fn hit(player: &str) -> ReportHit {
+        ReportHit {
+            rect: Rect::new(0.0, 0.0, 1.0, 1.0),
+            player: player.into(),
+            name: "Leo".into(),
+            game: "snake".into(),
+        }
+    }
+
+    #[test]
+    fn confirming_a_report_hides_the_player_and_queues_it() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        app.open(app_index("snake"));
+        let leo = "123e4567-e89b-42d3-a456-426614174000";
+        app.reporting = Some((hit(leo), 0.0));
+        let (_, yes, _) = report_rects(&v);
+        app.update(&Input::press_at(yes.center()), &v, 1.0 / 60.0);
+        assert!(app.reporting.is_none());
+        assert!(kg_core::net::is_blocked(leo));
+        assert!(app.current.is_some());
+    }
+
+    #[test]
+    fn cancelling_a_report_changes_nothing_and_keeps_the_game_open() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        app.open(app_index("snake"));
+        let leo = "123e4567-e89b-42d3-a456-426614174000";
+        app.reporting = Some((hit(leo), 0.0));
+        let (_, _, no) = report_rects(&v);
+        app.update(&Input::press_at(no.center()), &v, 1.0 / 60.0);
+        assert!(app.reporting.is_none());
+        assert!(!kg_core::net::is_blocked(leo));
+        assert!(app.current.is_some());
+    }
+
+    #[test]
+    fn the_report_sheet_swallows_taps_meant_for_home() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        app.open(app_index("snake"));
+        app.reporting = Some((hit("123e4567-e89b-42d3-a456-426614174000"), 0.0));
+        app.update(&Input::press_at(HOME.center()), &v, 1.0 / 60.0);
+        assert!(app.current.is_some());
+        assert!(app.reporting.is_some());
     }
 
     #[test]

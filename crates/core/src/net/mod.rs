@@ -20,6 +20,7 @@ const CONFLICT_LIMIT: u32 = 5;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BoardRow {
+    pub player: String,
     pub place: usize,
     pub name: String,
     pub avatar: usize,
@@ -41,6 +42,13 @@ pub enum Code {
     Working,
     Ready { code: String, until: i64 },
     Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ModEntry {
+    pub me: String,
+    pub target: String,
+    pub game: String,
 }
 
 struct Board {
@@ -67,6 +75,9 @@ enum Job {
         sent: Vec<(String, i64)>,
     },
     Board(String),
+    Moderate {
+        entry: ModEntry,
+    },
     Delete(String),
     MakeCode(String),
     Redeem,
@@ -185,6 +196,91 @@ pub fn queue_score(player: &str, game: &str, score: i64) {
     set_outbox(&items);
 }
 
+fn parse_mods(text: &str) -> Vec<ModEntry> {
+    text.split(';')
+        .filter_map(|e| {
+            let mut f = e.split(',');
+            let me = f.next().filter(|p| crate::profile::is_uuid(p))?;
+            let target = f.next().filter(|p| crate::profile::is_uuid(p))?;
+            Some(ModEntry {
+                me: me.to_string(),
+                target: target.to_string(),
+                game: f.next().unwrap_or_default().to_string(),
+            })
+        })
+        .collect()
+}
+
+fn mods() -> Vec<ModEntry> {
+    parse_mods(&save::get_str("net.mod").unwrap_or_default())
+}
+
+fn set_mods(items: &[ModEntry]) {
+    let text = items
+        .iter()
+        .map(|m| {
+            format!("{},{},{}", m.me, m.target, m.game)
+        })
+        .collect::<Vec<_>>()
+        .join(";");
+    save::set_str("net.mod", &text);
+}
+
+fn queue_mod(entry: ModEntry) {
+    let mut items = mods();
+    if !items.contains(&entry) {
+        items.push(entry);
+    }
+    let drop = items.len().saturating_sub(OUTBOX_MAX);
+    items.drain(..drop);
+    set_mods(&items);
+}
+
+pub fn blocked_players() -> Vec<String> {
+    save::get_str("net.blocked")
+        .unwrap_or_default()
+        .split(',')
+        .filter(|p| crate::profile::is_uuid(p))
+        .map(String::from)
+        .collect()
+}
+
+pub fn is_blocked(player: &str) -> bool {
+    blocked_players().iter().any(|p| p == player)
+}
+
+pub fn block_player(target: &str, game: &str) {
+    if !crate::profile::is_uuid(target) {
+        return;
+    }
+    let mut all = blocked_players();
+    if !all.iter().any(|p| p == target) {
+        all.push(target.to_string());
+        save::set_str("net.blocked", &all.join(","));
+    }
+    report_player(target, game);
+}
+
+pub fn report_player(target: &str, game: &str) {
+    if !crate::profile::is_uuid(target) {
+        return;
+    }
+    if let Some(me) = crate::profile::current_id() {
+        queue_mod(ModEntry {
+            me,
+            target: target.to_string(),
+            game: game.to_string(),
+        });
+    }
+}
+
+pub fn unblocked(rows: Vec<BoardRow>) -> Vec<BoardRow> {
+    let blocked = blocked_players();
+    rows.into_iter()
+        .filter(|r| r.mine || !blocked.contains(&r.player))
+        .collect()
+}
+
 fn deletions() -> Vec<String> {
     save::get_str("net.deletions")
         .unwrap_or_default()
@@ -201,6 +297,7 @@ fn set_deletions(tokens: &[String]) {
 pub fn board_rows(v: &Value, avatars: usize) -> Vec<BoardRow> {
     let row = |e: &Value, mine: bool| -> Option<BoardRow> {
         Some(BoardRow {
+            player: e["player_id"].as_str().unwrap_or_default().to_string(),
             place: e["rank"].as_u64()? as usize,
             name: e["name"].as_str()?.to_string(),
             avatar: (e["avatar"].as_u64()? as usize).min(avatars.saturating_sub(1)),
@@ -220,6 +317,7 @@ pub fn board_rows(v: &Value, avatars: usize) -> Vec<BoardRow> {
         if let Some(p) = crate::profile::current() {
             rows.pop();
             rows.push(BoardRow {
+                player: p.id.clone(),
                 place: rank as usize,
                 name: p.name,
                 avatar: p.avatar,
@@ -439,6 +537,9 @@ impl Net {
                 score,
             });
         }
+        if let Some(entry) = mods().into_iter().find(|m| m.me == p) {
+            return Some(Job::Moderate { entry });
+        }
         let include_open = self.clock - self.open_sent_at >= OPEN_SESSION_EVERY;
         let pending = self.tracker.pending(&p, include_open, self.clock);
         if !pending.is_empty() {
@@ -518,6 +619,13 @@ impl Net {
                 self.player().and_then(|p| token(&p)),
                 None,
             ),
+            Job::Moderate { entry } => {
+                let mut body = json!({ "player_id": entry.target });
+                if !entry.game.is_empty() {
+                    body["game"] = json!(entry.game);
+                }
+                post("/v1/reports", token(&entry.me), body)
+            }
             Job::Delete(t) => request("DELETE", "/v1/me".into(), Some(t.clone()), None),
             Job::MakeCode(p) => request("POST", "/v1/link".into(), token(p), None),
             Job::Redeem => post(
@@ -708,6 +816,17 @@ impl Net {
                 }
                 self.wanted_boards.retain(|g| g != &game);
             }
+            Job::Moderate { entry } => match status {
+                401 => self.lost_account(&entry.me),
+                s if Self::retryable(s) => self.back_off(),
+                s => {
+                    let rest: Vec<_> = mods().into_iter().filter(|m| m != &entry).collect();
+                    set_mods(&rest);
+                    if s == 200 {
+                        self.succeeded();
+                    }
+                }
+            },
             Job::Delete(t) => {
                 if status == 200 || status == 401 {
                     let rest: Vec<String> = deletions().into_iter().filter(|x| x != &t).collect();
@@ -840,7 +959,9 @@ pub fn forget_profile(id: &str) {
 }
 
 pub fn online_board(game: &str) -> Option<Vec<BoardRow>> {
-    with(|n| n.board(game).map(|b| b.to_vec())).flatten()
+    with(|n| n.board(game).map(|b| b.to_vec()))
+        .flatten()
+        .map(unblocked)
 }
 
 pub fn is_online() -> bool {

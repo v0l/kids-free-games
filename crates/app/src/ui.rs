@@ -9,7 +9,7 @@ pub const INK: Color = Color::new(0.16, 0.12, 0.24, 1.0);
 pub const BODY: Color = Color::new(0.33, 0.30, 0.42, 1.0);
 pub const GOLD_TEXT: Color = Color::from_rgba(255, 200, 40, 255);
 
-pub const SPRITES: [&str; 22] = [
+pub const SPRITES: [&str; 23] = [
     "p_panel",
     "p_btn_green",
     "p_btn_orange",
@@ -25,6 +25,7 @@ pub const SPRITES: [&str; 22] = [
     "icon_audio",
     "icon_audio_off",
     "icon_gear",
+    "icon_report",
     "medal_gold",
     "medal_silver",
     "medal_bronze",
@@ -104,6 +105,7 @@ pub fn results_rows(board_len: usize, rank: Option<usize>) -> Vec<usize> {
 }
 
 pub struct ShownRow {
+    pub player: String,
     pub place: usize,
     pub name: String,
     pub avatar: usize,
@@ -116,6 +118,7 @@ pub fn shown_rows(game: &str, rank: Option<usize>) -> Vec<ShownRow> {
         return online
             .into_iter()
             .map(|r| ShownRow {
+                player: if r.mine { String::new() } else { r.player },
                 place: r.place,
                 name: r.name,
                 avatar: r.avatar,
@@ -128,6 +131,7 @@ pub fn shown_rows(game: &str, rank: Option<usize>) -> Vec<ShownRow> {
     results_rows(board.len(), rank)
         .into_iter()
         .map(|i| ShownRow {
+            player: String::new(),
             place: i + 1,
             name: kg_core::profile::player_name(&board[i].player),
             avatar: kg_core::profile::player_avatar(&board[i].player),
@@ -135,6 +139,26 @@ pub fn shown_rows(game: &str, rank: Option<usize>) -> Vec<ShownRow> {
             mine: Some(i) == rank,
         })
         .collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct ReportHit {
+    pub rect: Rect,
+    pub player: String,
+    pub name: String,
+    pub game: String,
+}
+
+thread_local! {
+    static REPORT_HITS: std::cell::RefCell<Vec<ReportHit>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub fn clear_report_hits() {
+    REPORT_HITS.with(|h| h.borrow_mut().clear());
+}
+
+pub fn report_hit_at(p: Vec2) -> Option<ReportHit> {
+    REPORT_HITS.with(|h| h.borrow().iter().find(|r| r.rect.contains(p)).cloned())
 }
 
 pub fn chip_rect(view: &View, side: Side, label: &str, value: &str) -> Rect {
@@ -362,6 +386,10 @@ impl Pen {
 
     pub fn results(&mut self, view: &View, r: &Results, age: f32) {
         let board = shown_rows(r.game, r.rank);
+        self.results_with(view, r, age, board);
+    }
+
+    pub fn results_with(&mut self, view: &View, r: &Results, age: f32, board: Vec<ShownRow>) {
         let fade = ease_out_cubic(age / 0.2);
         self.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55 * fade));
         let row_h = 46.0;
@@ -436,6 +464,28 @@ impl Pen {
             );
             let sc = (r.format)(e.score);
             let sw = measure(&sc, 30.0) * s;
+            if !e.player.is_empty() {
+                let hit = Rect::new(
+                    row.x + row.w - 18.0 * s - sw - 56.0 * s,
+                    row.y,
+                    48.0 * s,
+                    row.h,
+                );
+                let ic = 26.0 * s;
+                self.ui(
+                    "icon_report",
+                    Rect::new(hit.center().x - ic / 2.0, cy - ic / 2.0, ic, ic),
+                    Draw::tint(Color::new(0.45, 0.35, 0.6, 0.55 * la)),
+                );
+                REPORT_HITS.with(|h| {
+                    h.borrow_mut().push(ReportHit {
+                        rect: hit,
+                        player: e.player.clone(),
+                        name: e.name.clone(),
+                        game: r.game.to_string(),
+                    })
+                });
+            }
             self.text_outline(
                 &sc,
                 row.x + row.w - 18.0 * s - sw / 2.0,
@@ -568,5 +618,41 @@ mod tests {
             1.0,
         );
         assert!(p.vertex_count() > 200);
+    }
+
+    fn row(place: usize, name: &str, player: &str, mine: bool) -> ShownRow {
+        ShownRow {
+            player: player.into(),
+            place,
+            name: name.into(),
+            avatar: 0,
+            score: 10,
+            mine,
+        }
+    }
+
+    #[test]
+    fn other_players_rows_get_a_report_button_and_mine_does_not() {
+        clear_report_hits();
+        let v = View::ipad_landscape();
+        let mut p = Pen::default();
+        p.begin(v, 1.0);
+        let r = Results {
+            game: "snake",
+            title: "Ouch!",
+            line: "",
+            rank: Some(1),
+            action: "Again",
+            format: plain_score,
+        };
+        let other = "123e4567-e89b-42d3-a456-426614174000";
+        let rows = vec![row(1, "Leo", other, false), row(2, "Mia", "", true)];
+        p.results_with(&v, &r, 1.0, rows);
+        let hits: Vec<_> = REPORT_HITS.with(|h| h.borrow().clone());
+        assert_eq!(hits.len(), 1);
+        assert_eq!(hits[0].player, other);
+        assert_eq!(hits[0].game, "snake");
+        assert_eq!(report_hit_at(hits[0].rect.center()).unwrap().name, "Leo");
+        assert!(report_hit_at(vec2(-5.0, -5.0)).is_none());
     }
 }

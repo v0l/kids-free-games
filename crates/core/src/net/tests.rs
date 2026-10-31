@@ -12,6 +12,7 @@ struct ServerState {
     playtime: HashMap<(String, String), i64>,
     codes: HashMap<String, String>,
     log: Vec<String>,
+    reports: Vec<(String, String)>,
     down: bool,
     status_override: Option<i32>,
     unknown_games: Vec<String>,
@@ -123,6 +124,11 @@ impl FakeServer {
                 );
                 self.reply(200, json!({"rev": cur + 1}))
             }
+            ("POST", "/v1/reports") => {
+                let target = body["player_id"].as_str().unwrap().to_string();
+                s.reports.push((player.to_string(), target));
+                self.reply(200, json!({}))
+            }
             ("POST", "/v1/link") => {
                 let code = format!("CODE{:04}", s.codes.len());
                 s.codes.insert(code.clone(), player.to_string());
@@ -183,7 +189,7 @@ impl FakeServer {
                     .enumerate()
                     .map(|(i, (pl, sc))| {
                         let (name, avatar) = s.players[pl].clone();
-                        json!({"rank": i + 1, "name": name, "avatar": avatar, "score": sc, "you": pl == player})
+                        json!({"rank": i + 1, "player_id": pl, "name": name, "avatar": avatar, "score": sc, "you": pl == player})
                     })
                     .collect();
                 self.reply(200, json!({"entries": entries, "me": null}))
@@ -671,4 +677,94 @@ fn the_score_outbox_round_trips_and_ignores_junk() {
     ];
     assert_eq!(parse_outbox(&format_outbox(&items)), items);
     assert!(parse_outbox("junk;a,b,c;,,1").is_empty());
+}
+
+#[test]
+fn reports_reach_the_server_and_survive_going_offline() {
+    let server = FakeServer::default();
+    let mut a = Device::new(&server);
+    let mut b = Device::new(&server);
+    let a_id = mia(&mut a);
+    let leo = b.play(|| crate::profile::create("Leo", 1).unwrap().id);
+    a.step(10, true);
+    b.step(10, true);
+    server.0.borrow_mut().down = true;
+    a.play(|| report_player(&leo, "snake"));
+    a.step(30, true);
+    assert!(server.0.borrow().reports.is_empty());
+    server.0.borrow_mut().down = false;
+    a.step(200, true);
+    let s = server.0.borrow();
+    assert_eq!(s.reports, [(a_id, leo.clone())]);
+    drop(s);
+    assert!(a.play(mods).is_empty());
+}
+
+#[test]
+fn a_blocked_player_vanishes_from_my_board_but_not_from_theirs() {
+    let server = FakeServer::default();
+    let mut a = Device::new(&server);
+    let mut b = Device::new(&server);
+    mia(&mut a);
+    let leo = b.play(|| crate::profile::create("Leo", 1).unwrap().id);
+    a.step(10, true);
+    b.step(10, true);
+    a.play(|| crate::profile::submit("snake", 10, crate::profile::Better::Higher));
+    b.play(|| crate::profile::submit("snake", 20, crate::profile::Better::Higher));
+    a.step(10, true);
+    b.step(10, true);
+    a.run(|n| n.request_board("snake"));
+    a.step(30, true);
+    let names: Vec<_> = a
+        .run(|n| n.board("snake").map(|b| b.to_vec()))
+        .unwrap()
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+    assert_eq!(names, ["Leo", "Mia"]);
+    a.play(|| block_player(&leo, "snake"));
+    let shown = a.play(|| {
+        unblocked(
+            vec![BoardRow {
+                player: leo.clone(),
+                place: 1,
+                name: "Leo".into(),
+                avatar: 1,
+                score: 20,
+                mine: false,
+            }]
+        )
+    });
+    assert!(shown.is_empty());
+}
+
+#[test]
+fn blocking_is_remembered_and_ignores_junk_ids() {
+    crate::save::reset_for_test();
+    crate::profile::create("Mia", 0).unwrap();
+    block_player("not-a-uuid", "snake");
+    assert!(blocked_players().is_empty());
+    let id = "123e4567-e89b-42d3-a456-426614174000";
+    block_player(id, "snake");
+    block_player(id, "snake");
+    assert_eq!(blocked_players(), [id]);
+    assert!(is_blocked(id));
+    assert_eq!(mods().len(), 1);
+    assert_eq!(mods()[0].target, id);
+}
+
+#[test]
+fn my_own_row_is_never_hidden_by_a_block() {
+    crate::save::reset_for_test();
+    let me = crate::profile::create("Mia", 0).unwrap().id;
+    save::set_str("net.blocked", &me);
+    let row = BoardRow {
+        player: me,
+        place: 1,
+        name: "Mia".into(),
+        avatar: 0,
+        score: 1,
+        mine: true,
+    };
+    assert_eq!(unblocked(vec![row]).len(), 1);
 }

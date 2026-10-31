@@ -17,6 +17,10 @@ Player name, avatar and scores are visible to other players on the leaderboards.
 
 Cloudflare, which hosts the server, sees the IP address of each request as part of normal operation. We do not use it to identify anyone.
 
+## Reporting and blocking
+
+On a results board, tap the warning icon next to another player's name to hide them. They disappear from that device's boards, and we get a report (your player ID, theirs and the game) so we can remove the name. Names are also checked against a bad word list in many languages before they are accepted.
+
 ## What we do not collect
 
 No email, phone number, real name, location, contacts, photos, microphone or camera data, advertising identifier or browsing history. No data is sold or shared with advertisers or data brokers.

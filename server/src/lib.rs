@@ -173,6 +173,10 @@ async fn route(mut req: Request, env: &Env) -> ApiResult<Value> {
             let b = body(&mut req).await?;
             handlers::post_playtime(&db, &auth, b, now).await
         }
+        Endpoint::PostReport => {
+            let b = body(&mut req).await?;
+            handlers::post_report(&db, &auth, b, now).await
+        }
         Endpoint::Admin(_)
         | Endpoint::Health
         | Endpoint::Games

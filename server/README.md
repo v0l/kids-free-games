@@ -42,6 +42,8 @@ All bodies are JSON. Errors are `{"error": "code", "message": "..."}`. Send `Aut
 | `GET /v1/scores/{game}?limit=10` | yes | top entries plus your own rank |
 | `POST /v1/playtime` `{sessions: [{id, game, started_at, seconds}]}` | yes | upload play sessions |
 | `GET /v1/playtime?days=14` | yes | totals by game and by UTC day |
+| `POST /v1/reports` `{player_id, game?}` | yes | report a player from a leaderboard (one per reporter and player) |
+| `GET /v1/admin/reports` | admin | reported players, most reports first |
 
 ### Saves
 

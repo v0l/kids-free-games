@@ -134,6 +134,9 @@ req POST /v1/link "$A"; req POST /v1/link "$A"
 OLD=$CODE; CODE=$(echo "$BODY" | jq -r .code)
 req POST /v1/link/redeem "" "{\"code\":\"$OLD\"}"; expect "new code replaces the old" 404 .error not_found
 
+req POST /v1/reports "$A" "{\"player_id\":\"$B_ID\",\"game\":\"snake\"}"; expect "report leo" 200 .reported "$B_ID"
+req POST /v1/reports "$A" "{\"player_id\":\"$A_ID\"}"; expect "cannot report yourself" 400 .error bad_request
+req POST /v1/reports "$A" '{"player_id":"00000000-0000-4000-8000-000000000000"}'; expect "report unknown player" 404 .error not_found
 req DELETE /v1/me "$B"; expect "delete leo" 200 .deleted true
 req GET /v1/me "$B"; expect "deleted token dead" 401 .error unauthorized
 req GET /v1/scores/snake "$A"; expect "deleted player leaves the board" 200 '.entries | length' 1

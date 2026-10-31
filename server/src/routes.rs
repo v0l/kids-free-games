@@ -18,12 +18,14 @@ pub enum Endpoint {
     PostScore(String),
     GetPlaytime,
     PostPlaytime,
+    PostReport,
     Admin(Admin),
 }
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum Admin {
     Stats,
+    Reports,
     ListPlayers,
     CreatePlayer,
     GetPlayer(String),
@@ -47,6 +49,7 @@ fn resolve_admin(method: &Method, rest: &[&str]) -> ApiResult<Endpoint> {
     let id = |v: &&str| v.to_string();
     let found = match rest {
         ["stats"] if get => Admin::Stats,
+        ["reports"] if get => Admin::Reports,
         ["players"] if get => Admin::ListPlayers,
         ["players"] if post => Admin::CreatePlayer,
         ["players", p] if get => Admin::GetPlayer(id(p)),
@@ -60,6 +63,7 @@ fn resolve_admin(method: &Method, rest: &[&str]) -> ApiResult<Endpoint> {
         ["scores", game, p] if put => Admin::PutScore(id(game), id(p)),
         ["scores", game, p] if delete => Admin::DeleteScore(id(game), id(p)),
         ["stats"]
+        | ["reports"]
         | ["players"]
         | ["players", _]
         | ["players", _, "link"]
@@ -115,6 +119,7 @@ pub fn resolve(method: &Method, path: &str) -> ApiResult<Endpoint> {
             _ if post => Ok(Endpoint::PostPlaytime),
             _ => Err(ApiError::method_not_allowed()),
         },
+        ["v1", "reports"] => pick(post, Endpoint::PostReport),
         _ => Err(ApiError::not_found("no such endpoint")),
     }
 }
@@ -152,6 +157,18 @@ mod tests {
         assert_eq!(
             resolve(&Method::Post, "/v1/link").unwrap(),
             Endpoint::CreateLink
+        );
+    }
+
+    #[test]
+    fn moderation_routes_resolve() {
+        assert_eq!(
+            resolve(&Method::Post, "/v1/reports").unwrap(),
+            Endpoint::PostReport
+        );
+        assert_eq!(
+            resolve(&Method::Get, "/v1/admin/reports").unwrap(),
+            Endpoint::Admin(Admin::Reports)
         );
     }
 

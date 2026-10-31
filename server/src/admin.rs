@@ -198,6 +198,25 @@ fn check_slot(slot: &str) -> ApiResult<()> {
     }
 }
 
+#[derive(Deserialize, serde::Serialize)]
+struct ReportRow {
+    reported_id: String,
+    name: Option<String>,
+    reports: i64,
+    last_at: i64,
+}
+
+async fn reports(db: &Db, params: &Params) -> ApiResult<Value> {
+    let limit = clamp_limit(params.limit.as_deref(), DEFAULT_ADMIN_PAGE, MAX_ADMIN_PAGE);
+    let rows: Vec<ReportRow> = db
+        .all(
+            "SELECT r.reported_id, p.name, COUNT(*) AS reports, MAX(r.created_at) AS last_at FROM reports r LEFT JOIN players p ON p.id = r.reported_id GROUP BY r.reported_id ORDER BY reports DESC, last_at DESC LIMIT ?1",
+            &[n(limit)],
+        )
+        .await?;
+    Ok(json!({ "reports": rows }))
+}
+
 async fn stats(db: &Db, now: i64) -> ApiResult<Value> {
     let players = count(db.one("SELECT COUNT(*) AS c FROM players", &[]).await?);
     let active_day = count(
@@ -510,6 +529,7 @@ pub async fn handle(
     };
     match endpoint {
         Admin::Stats => stats(db, now).await,
+        Admin::Reports => reports(db, &params).await,
         Admin::ListPlayers => list_players(db, &params).await,
         Admin::CreatePlayer => {
             create_player(db, serde_json::from_str(&json_body(body)?)?, now).await
