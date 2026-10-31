@@ -74,6 +74,57 @@ pub fn new_player_id() -> ApiResult<String> {
     ))
 }
 
+const PROFANITY: &str = include_str!("../../crates/core/src/profanity.txt");
+
+fn fold(c: char) -> char {
+    match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
+        'è' | 'é' | 'ê' | 'ë' => 'e',
+        'ì' | 'í' | 'î' | 'ï' | 'ı' => 'i',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' => 'u',
+        'ç' => 'c',
+        'ñ' => 'n',
+        'ß' => 's',
+        c => c,
+    }
+}
+
+fn collapse(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        if out.chars().last() != Some(c) {
+            out.push(c);
+        }
+    }
+    out
+}
+
+pub fn is_profane(name: &str) -> bool {
+    let lower: String = name.to_lowercase().chars().map(fold).collect();
+    let words: Vec<String> = lower
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|w| !w.is_empty())
+        .map(String::from)
+        .collect();
+    let squashed: String = words.concat();
+    let squashed_collapsed = collapse(&squashed);
+    PROFANITY
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .any(|entry| match entry.strip_prefix('=') {
+            Some(word) => words
+                .iter()
+                .any(|w| w == word || collapse(w) == collapse(word))
+                || squashed == word,
+            None => {
+                let e: String = entry.chars().filter(|c| *c != ' ').map(fold).collect();
+                squashed.contains(&e) || squashed_collapsed.contains(&collapse(&e))
+            }
+        })
+}
+
 pub fn clean_name(raw: &str) -> String {
     let s: String = raw
         .chars()
@@ -84,13 +135,16 @@ pub fn clean_name(raw: &str) -> String {
     if let Some(f) = s.chars().next() {
         s = f.to_uppercase().collect::<String>() + &s[f.len_utf8()..];
     }
+    if is_profane(&s) {
+        return String::new();
+    }
     s
 }
 
 pub fn valid_name(raw: &str) -> ApiResult<String> {
     let name = clean_name(raw);
     if name.is_empty() {
-        return Err(ApiError::bad_request("name needs at least one letter"));
+        return Err(ApiError::bad_request("name needs letters and no bad words"));
     }
     Ok(name)
 }
@@ -251,6 +305,15 @@ mod tests {
         assert!(!is_uuid("guest"));
         assert!(!is_uuid(&id.to_uppercase()));
         assert!(!is_uuid("zzzzzzzz-zzzz-zzzz-zzzz-zzzzzzzzzzzz"));
+    }
+
+    #[test]
+    fn bad_words_are_refused_as_names() {
+        for bad in ["Fuck", "f u c k", "Scheisse", "Puta", "Блядь", "傻逼", "Dick"] {
+            assert!(valid_name(bad).is_err(), "{bad}");
+        }
+        assert!(valid_name("Mia").is_ok());
+        assert!(valid_name("Dickens").is_ok());
     }
 
     #[test]

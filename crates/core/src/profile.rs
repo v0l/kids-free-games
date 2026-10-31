@@ -71,6 +71,57 @@ pub(crate) fn entropy() -> [u8; 16] {
     })
 }
 
+const PROFANITY: &str = include_str!("profanity.txt");
+
+fn fold(c: char) -> char {
+    match c {
+        'à' | 'á' | 'â' | 'ã' | 'ä' | 'å' => 'a',
+        'è' | 'é' | 'ê' | 'ë' => 'e',
+        'ì' | 'í' | 'î' | 'ï' | 'ı' => 'i',
+        'ò' | 'ó' | 'ô' | 'õ' | 'ö' | 'ø' => 'o',
+        'ù' | 'ú' | 'û' | 'ü' => 'u',
+        'ç' => 'c',
+        'ñ' => 'n',
+        'ß' => 's',
+        c => c,
+    }
+}
+
+fn collapse(s: &str) -> String {
+    let mut out = String::new();
+    for c in s.chars() {
+        if out.chars().last() != Some(c) {
+            out.push(c);
+        }
+    }
+    out
+}
+
+pub fn is_profane(name: &str) -> bool {
+    let lower: String = name.to_lowercase().chars().map(fold).collect();
+    let words: Vec<String> = lower
+        .split(|c: char| !c.is_alphabetic())
+        .filter(|w| !w.is_empty())
+        .map(String::from)
+        .collect();
+    let squashed: String = words.concat();
+    let squashed_collapsed = collapse(&squashed);
+    PROFANITY
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .any(|entry| match entry.strip_prefix('=') {
+            Some(word) => words
+                .iter()
+                .any(|w| w == word || collapse(w) == collapse(word))
+                || squashed == word,
+            None => {
+                let e: String = entry.chars().filter(|c| *c != ' ').map(fold).collect();
+                squashed.contains(&e) || squashed_collapsed.contains(&collapse(&e))
+            }
+        })
+}
+
 pub fn clean_name(raw: &str) -> String {
     let s: String = raw
         .chars()
@@ -80,6 +131,9 @@ pub fn clean_name(raw: &str) -> String {
     let mut s: String = s.chars().take(MAX_NAME).collect();
     if let Some(f) = s.chars().next() {
         s = f.to_uppercase().collect::<String>() + &s[f.len_utf8()..];
+    }
+    if is_profane(&s) {
+        return String::new();
     }
     s
 }
@@ -385,6 +439,20 @@ mod tests {
         assert!("89ab".contains(&u[19..20]));
         assert_ne!(uuid_v4(entropy()), uuid_v4(entropy()));
         assert!(!is_uuid("guest"));
+    }
+
+    #[test]
+    fn bad_words_are_refused_as_names() {
+        for bad in [
+            "Fuck", "f u c k", "Fuuuck", "shiit", "Scheisse", "Arschloch", "Puta", "connard", "Kurwa",
+            "Блядь", "傻逼", "Mr Cunt", "ass", "Dick",
+        ] {
+            assert_eq!(clean_name(bad), "", "{bad}");
+        }
+        for ok in ["Mia", "Classic", "Dickens", "Bassam", "Cassie", "Hello", "Tit"] {
+            let expect = ok != "Tit";
+            assert_eq!(!clean_name(ok).is_empty(), expect, "{ok}");
+        }
     }
 
     #[test]
