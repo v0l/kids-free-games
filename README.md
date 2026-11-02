@@ -1,4 +1,4 @@
-# Kids Open Games
+# Learn and Play Kids Games
 
 Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, Android, the web and desktop. No ads, no purchases, no email or passwords. Progress and leaderboards sync through a small server (see [PRIVACY.md](PRIVACY.md)); the games also work offline.
 

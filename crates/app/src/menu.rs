@@ -16,6 +16,7 @@ const LAUNCH_TIME: f32 = 0.22;
 const WAVE: f32 = 6.0;
 const TAG_SIZE: f32 = 26.0;
 pub const TAGLINE: &str = "No ads. No tracking. Just play.";
+pub const TITLE: &str = "Learn and Play Kids Games";
 pub const LABEL_H: f32 = 46.0;
 pub const SCROLL_ROOM: f32 = 1.3;
 
@@ -33,7 +34,8 @@ pub struct Header {
 }
 
 pub fn header(view: &View) -> Header {
-    let title_size = (view.w / 13.0).min(64.0);
+    let fit = view.w * 0.9 / measure(TITLE, 1.0);
+    let title_size = (view.w / 13.0).min(64.0).min(fit);
     let reach = title_size * (0.5 + kg_core::outline::OUTLINE_FRAC + 0.08) + WAVE;
     let title_y = 14.0 + reach;
     let title_band = (title_y - reach, title_y + reach);
@@ -589,7 +591,7 @@ impl App {
     }
 
     fn draw_title(&self, pen: &mut Pen, view: &View) {
-        let title = "Kids Open Games";
+        let title = TITLE;
         let h = header(view);
         let size = h.title_size;
         let total = measure(title, size);
@@ -792,8 +794,27 @@ mod tests {
             );
             assert!(
                 h.title_band.1 < HOME.y + HOME.h
-                    || mute_rect(&v).x > v.w / 2.0 + measure("Kids Open Games", h.title_size) / 2.0,
+                    || mute_rect(&v).x > v.w / 2.0 + measure(TITLE, h.title_size) / 2.0,
                 "title runs under the mute button in {v:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_title_always_fits_inside_the_screen_width() {
+        for v in [
+            View::fit(375.0, 667.0),
+            View::fit(1024.0, 768.0),
+            View::ipad_portrait(),
+            View::ipad_landscape(),
+            View::fit(2992.0 / 2.625, 1344.0 / 2.625),
+        ] {
+            let h = header(&v);
+            assert!(
+                measure(TITLE, h.title_size) <= v.w,
+                "title overflows {v:?}: {} > {}",
+                measure(TITLE, h.title_size),
+                v.w
             );
         }
     }
