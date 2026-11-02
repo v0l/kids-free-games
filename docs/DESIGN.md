@@ -1,6 +1,6 @@
 # Design process
 
-How the look and sound of Kids Free Games were made, and how to make more in the same way. `docs/STYLE.md` holds the rules; this file holds the method.
+How the look and sound of Kids Open Games were made, and how to make more in the same way. `docs/STYLE.md` holds the rules; this file holds the method.
 
 ## What we tried, in order
 

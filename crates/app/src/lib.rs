@@ -268,7 +268,7 @@ fn asset_root() -> String {
 
 pub fn window() -> Window {
     Window {
-        title: "Kids Free Games".into(),
+        title: "Kids Open Games".into(),
         canvas: Some("#bevy".into()),
         fit_canvas_to_parent: true,
         prevent_default_event_handling: true,

@@ -1,6 +1,6 @@
 # Privacy policy
 
-Kids Free Games has no ads, no in-app purchases, no third-party analytics and no tracking across other apps or websites.
+Kids Open Games has no ads, no in-app purchases, no third-party analytics and no tracking across other apps or websites.
 
 ## What the app sends to our server
 

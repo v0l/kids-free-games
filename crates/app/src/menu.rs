@@ -589,7 +589,7 @@ impl App {
     }
 
     fn draw_title(&self, pen: &mut Pen, view: &View) {
-        let title = "Kids Free Games";
+        let title = "Kids Open Games";
         let h = header(view);
         let size = h.title_size;
         let total = measure(title, size);
@@ -792,7 +792,7 @@ mod tests {
             );
             assert!(
                 h.title_band.1 < HOME.y + HOME.h
-                    || mute_rect(&v).x > v.w / 2.0 + measure("Kids Free Games", h.title_size) / 2.0,
+                    || mute_rect(&v).x > v.w / 2.0 + measure("Kids Open Games", h.title_size) / 2.0,
                 "title runs under the mute button in {v:?}"
             );
         }
