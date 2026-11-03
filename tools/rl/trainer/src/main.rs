@@ -1,5 +1,6 @@
 mod net;
 
+mod devices;
 use candle_core::{Device, Result, Tensor, D};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarMap};
 use kg_core::brain::conv::{Obs, Policy};
@@ -31,6 +32,7 @@ struct Args {
     minibatch: usize,
     bf16: bool,
     league_servers: usize,
+    device: String,
 }
 
 fn args() -> Args {
@@ -56,6 +58,7 @@ fn args() -> Args {
         minibatch: 4096,
         bf16: false,
         league_servers: 4,
+        device: devices::best().into(),
     };
     let v: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -82,6 +85,7 @@ fn args() -> Args {
             "--warmup" => a.warmup = x.parse().unwrap(),
             "--minibatch" => a.minibatch = x.parse().unwrap(),
             "--bf16" => a.bf16 = x == "1" || x == "true",
+            "--device" => a.device = x,
             "--league-servers" => a.league_servers = x.parse().unwrap(),
             other => panic!("unknown flag {other}"),
         }
@@ -466,10 +470,7 @@ fn adam(vm: &VarMap, lr: f64) -> Result<AdamW> {
 
 impl<G: Game> Member<G> {
     fn new(id: usize, a: &Args, genes: Vec<f32>, lr: f64, ent: f32) -> Result<Self> {
-        let dev = Device::new_cuda_with_stream(0)?;
-        if let Device::Cuda(c) = &dev {
-            unsafe { c.cuda_stream().context().disable_event_tracking() };
-        }
+        let dev = devices::open(&a.device, true)?;
         let (mut vm, mut net) = net::build(G::spec(), &dev)?;
         if a.bf16 {
             net.dtype = candle_core::DType::BF16;
@@ -774,7 +775,7 @@ impl<G: Game> Member<G> {
 }
 
 fn population<G: Game>(a: &Args) -> Result<()> {
-    let dev = Device::new_cuda(0)?;
+    let dev = devices::open(&a.device, false)?;
     let mut rng = Rng(0x9e3779b97f4a7c15);
     let defaults: Vec<f32> = G::genes().iter().map(|g| g.1).collect();
     let mut members: Vec<Member<G>> = vec![];
@@ -816,7 +817,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         }
         let mut servers = vec![];
         for _ in 0..a.league_servers {
-            let dev = Device::new_cuda_with_stream(0)?;
+            let dev = devices::open(&a.device, true)?;
             let nets = league_nets::<G>(&league_weights, a.bf16, &dev)?;
             servers.push((dev, nets));
         }
@@ -1032,7 +1033,13 @@ fn population<G: Game>(a: &Args) -> Result<()> {
 fn main() -> Result<()> {
     let a = args();
     kg_core::save::use_memory_only();
-    candle_core::cuda::set_gemm_reduced_precision_f32(std::env::var("KG_TF32").is_ok());
+    devices::setup();
+    let mut a = a;
+    if a.bf16 && !devices::bf16_works(&a.device) {
+        println!("bf16 does not work on {}, falling back to f32", a.device);
+        a.bf16 = false;
+    }
+    let a = a;
     match a.game.as_str() {
         "clash" => population::<kg_core::games::clash::rl::Arena>(&a),
         "paper" => population::<kg_core::games::paper::rl::Arena>(&a),
