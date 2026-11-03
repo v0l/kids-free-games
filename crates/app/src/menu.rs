@@ -792,7 +792,9 @@ fn draw_lock_sheet(pen: &mut Pen, view: &View, sheet: &LockSheet, name: &str) {
         38.0,
         crate::ui::INK,
     );
-    let line = if have >= cost {
+    let line = if cost == 0 {
+        "Your first arcade game is free.".to_string()
+    } else if have >= cost {
         format!("Spend {cost} learning stars to play it. You have {have}.")
     } else {
         format!("Learn to earn {cost} stars. You have {have}.")

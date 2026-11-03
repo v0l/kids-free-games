@@ -41,6 +41,7 @@ pub const SCENES: &[(u32, &str)] = &[
     (4, "new player"),
     (5, "link: show code"),
     (6, "link: type code"),
+    (7, "menu with the lock sheet"),
     (10, "flappy ready"),
     (11, "flappy first flight with the hint"),
     (12, "flappy mid run"),
@@ -432,10 +433,22 @@ fn crossy_scene(n: u32, view: &View) -> Stage {
 fn setup(n: u32, view: &View) -> Stage {
     kg_core::rng::srand(7);
     match n {
-        0..=2 => {
+        0..=2 | 7 => {
             players();
             let mut app = App::new();
             match n {
+                7 => {
+                    let game = (0..app.entries.len())
+                        .find(|&i| {
+                            app.entries[i].ready() && !kg_core::gate::open(app.entries[i].info.key)
+                        })
+                        .unwrap_or(0);
+                    app.locked = Some(crate::menu::LockSheet {
+                        game,
+                        age: 1.0,
+                        hold: 0.0,
+                    });
+                }
                 1 => app.scroll_to_end(view),
                 2 => {
                     app.update(&Input::key(kg_core::engine::Dir::Right), view, DT);
