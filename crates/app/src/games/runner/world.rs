@@ -1,17 +1,17 @@
 use super::{RunnerPlay, SHEET};
 use crate::game3d::*;
-use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::animation::graph::AnimationGraphHandle;
 use bevy::animation::transition::AnimationTransitions;
+use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::gltf::GltfAssetLabel;
 use bevy::pbr::{DistanceFog, FogFalloff};
-use std::collections::HashMap;
-use std::time::Duration;
 use bevy::prelude::*;
 use kg_core::engine::View;
 use kg_core::games::runner::State as Phase;
 use kg_core::games::runner::*;
 use kg_core::geom::{Color as Col, WHITE};
+use std::collections::HashMap;
+use std::time::Duration;
 
 const SKY: Col = Col::new(0.66, 0.88, 0.99, 1.0);
 const SKY_DEPTH: f32 = 140.0;
@@ -203,9 +203,7 @@ fn spawn(
 const HERO_H: f32 = 1.8;
 const STRIDE_METRES: f32 = 6.0;
 const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
-const PROPS: [&str; 7] = [
-    "barrier", "hurdle", "gate", "train", "coin", "tree", "arch",
-];
+const PROPS: [&str; 7] = ["barrier", "hurdle", "gate", "train", "coin", "tree", "arch"];
 
 #[derive(Resource, Default, Clone)]
 pub struct Models {
@@ -336,9 +334,10 @@ fn animate_hero(
         return;
     };
     for e in &fresh {
-        commands
-            .entity(e)
-            .insert((AnimationGraphHandle(graph.clone()), AnimationTransitions::new()));
+        commands.entity(e).insert((
+            AnimationGraphHandle(graph.clone()),
+            AnimationTransitions::new(),
+        ));
     }
     let Some(p) = playing::<RunnerPlay>(&frame) else {
         return;
@@ -663,7 +662,11 @@ mod tests {
 
     #[test]
     fn every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips() {
-        for name in PROPS.iter().map(|p| format!("prop_{p}")).chain(["hero".to_string()]) {
+        for name in PROPS
+            .iter()
+            .map(|p| format!("prop_{p}"))
+            .chain(["hero".to_string()])
+        {
             let bytes = kg_core::assets::read(&format!("models/{name}.glb"))
                 .unwrap_or_else(|| panic!("models/{name}.glb missing"));
             assert_eq!(&bytes[..4], b"glTF", "{name} is not a glb");
@@ -671,7 +674,10 @@ mod tests {
         let hero = kg_core::assets::read("models/hero.glb").unwrap();
         let json = String::from_utf8_lossy(&hero);
         for clip in HERO_CLIPS {
-            assert!(json.contains(&format!("\"name\":\"{clip}\"")), "hero has no {clip} clip");
+            assert!(
+                json.contains(&format!("\"name\":\"{clip}\"")),
+                "hero has no {clip} clip"
+            );
         }
     }
 
@@ -765,8 +771,16 @@ mod tests {
                 .find(|(r, _)| **r == Role::Body)
                 .unwrap()
                 .1;
-            assert!(t.rotation.angle_between(Quat::IDENTITY) < 1e-3, "body tilts {:?}", t.rotation);
-            assert!(t.translation.y.abs() < 1e-3, "body dips {}", t.translation.y);
+            assert!(
+                t.rotation.angle_between(Quat::IDENTITY) < 1e-3,
+                "body tilts {:?}",
+                t.rotation
+            );
+            assert!(
+                t.translation.y.abs() < 1e-3,
+                "body dips {}",
+                t.translation.y
+            );
         }
     }
 

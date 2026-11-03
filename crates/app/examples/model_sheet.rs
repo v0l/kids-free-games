@@ -360,12 +360,8 @@ fn drive(
         let centre = Vec3::new(0.0, 0.5 * plan.height, 0.0);
         let dist = 1.9 * plan.height;
         let (yaw, elev) = (job.yaw.to_radians(), job.elev.to_radians());
-        let eye = centre
-            + Vec3::new(
-                yaw.sin() * elev.cos(),
-                elev.sin(),
-                yaw.cos() * elev.cos(),
-            ) * dist;
+        let eye =
+            centre + Vec3::new(yaw.sin() * elev.cos(), elev.sin(), yaw.cos() * elev.cos()) * dist;
         for mut t in &mut cam {
             *t = Transform::from_translation(eye).looking_at(centre, Vec3::Y);
         }
@@ -377,10 +373,7 @@ fn drive(
         commands.spawn(Screenshot::image(target.0.clone())).observe(
             move |cap: On<ScreenshotCaptured>| {
                 if let Ok(img) = cap.image.clone().try_into_dynamic() {
-                    sink.images
-                        .lock()
-                        .unwrap()
-                        .push((row, col, img.to_rgba8()));
+                    sink.images.lock().unwrap().push((row, col, img.to_rgba8()));
                 }
                 sink.done.fetch_add(1, Ordering::SeqCst);
             },
@@ -394,7 +387,12 @@ fn write_sheet(shots: &Shots, out: &Output) {
     let s = out.size;
     let mut sheet = image::RgbaImage::new(s * out.cols as u32, s * out.rows as u32);
     for (row, col, img) in shots.images.lock().unwrap().iter() {
-        image::imageops::replace(&mut sheet, img, (*col as u32 * s) as i64, (*row as u32 * s) as i64);
+        image::imageops::replace(
+            &mut sheet,
+            img,
+            (*col as u32 * s) as i64,
+            (*row as u32 * s) as i64,
+        );
     }
     if let Some(dir) = out.path.parent() {
         let _ = std::fs::create_dir_all(dir);
