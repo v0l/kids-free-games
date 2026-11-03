@@ -4,6 +4,12 @@ use glam::{vec2, vec3, Vec2, Vec3};
 pub const FOV: f32 = 0.62;
 pub const PITCH: f32 = 1.12;
 pub const SLAB: f32 = 0.5;
+pub const MIN_SPAN: f32 = 17.0;
+pub const MAX_SPAN: f32 = 46.0;
+
+pub fn zoom_for(share: f32) -> f32 {
+    MIN_SPAN + (MAX_SPAN - MIN_SPAN) * (share.max(0.0) / 0.4).min(1.0).sqrt()
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cam {

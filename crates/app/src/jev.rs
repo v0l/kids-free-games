@@ -271,6 +271,7 @@ impl BrainPaper {
             .and_then(|b| kg_core::brain::conv::Policy::from_bytes(&b))
             .filter(kg_core::games::paper::rl::fits)
         {
+            kg_core::games::paper::rl::use_policy(p.clone());
             self.rl = Some(p);
             self.stamp = stamp;
             self.reloads += 1;

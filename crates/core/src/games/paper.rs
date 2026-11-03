@@ -22,8 +22,6 @@ pub const TOP: f32 = 96.0;
 pub const RESPAWN_WAIT: f32 = 0.9;
 pub const FEED_LIFE: f32 = 3.2;
 pub const FEED_MAX: usize = 3;
-const MIN_CELLS: f32 = 17.0;
-const MAX_CELLS: f32 = 46.0;
 const THREAT_RANGE: f32 = 26.0;
 const WIN_DELAY: f32 = 1.4;
 const STEER_DEAD_MM: f32 = 2.5;
@@ -142,7 +140,7 @@ impl Paper {
             state: State::Ready,
             clock: 0.0,
             since: 0.0,
-            zoom: MIN_CELLS,
+            zoom: camera::MIN_SPAN,
             cam: start,
             particles: Particles::default(),
             chunks: vec![],
@@ -188,8 +186,7 @@ impl Paper {
     }
 
     pub fn target_zoom(&self) -> f32 {
-        let s = self.share(0).max(0.0);
-        MIN_CELLS + (MAX_CELLS - MIN_CELLS) * (s / 0.4).min(1.0).sqrt()
+        camera::zoom_for(self.share(0))
     }
 
     pub fn cell_px(&self, view: &View) -> f32 {

@@ -400,7 +400,7 @@ impl World {
     fn rl_for(&self, bot: bool) -> Option<Effort> {
         let e = self
             .rl_effort
-            .filter(|_| bot && super::rl::shipped().is_some())?;
+            .filter(|_| bot && super::rl::active().is_some())?;
         Some(Effort::new(e))
     }
 
@@ -517,6 +517,11 @@ impl World {
         });
     }
 
+    #[cfg(test)]
+    pub fn set_trail_for_test(&mut self, i: usize, id: usize) {
+        self.set_trail(i, Some(id as u8));
+    }
+
     pub fn close_loop(&mut self, id: usize) {
         let me = Some(id as u8);
         let cells = std::mem::take(&mut self.players[id].cells);
@@ -531,11 +536,13 @@ impl World {
             self.set_owner(i, me, 0.0);
         }
         let (mut lo, mut hi) = (ivec2(N, N), ivec2(-1, -1));
-        for (i, o) in self.owner.iter().enumerate() {
-            if *o == me {
-                let c = cell_of(i);
-                lo = lo.min(c);
-                hi = hi.max(c);
+        for (b, counts) in self.block_owner.iter().enumerate() {
+            if counts[id] > 0 {
+                let k = ivec2((b % BLOCKS) as i32, (b / BLOCKS) as i32);
+                let last = IVec2::splat(BLOCKS as i32 - 1);
+                let end = (k + 1) * BLOCK as i32 - 1;
+                lo = lo.min(k * BLOCK as i32);
+                hi = hi.max(IVec2::select(k.cmpeq(last), IVec2::splat(N - 1), end));
             }
         }
         let lo = lo - 1;
@@ -823,17 +830,6 @@ impl World {
 }
 
 impl World {
-    fn unit_blocked(&self, id: usize, u: IVec2) -> bool {
-        let me = Some(id as u8);
-        let fresh = self.players[id].odo - 1.0;
-        (0..RES).any(|y| {
-            (0..RES).any(|x| {
-                let i = idx(u * RES + ivec2(x, y));
-                self.trail[i] == me && self.laid[i] < fresh
-            })
-        })
-    }
-
     fn route(&self, id: usize, goal: impl Fn(IVec2) -> bool, budget: usize) -> Option<(f32, f32)> {
         let p = &self.players[id];
         let unit = |v: Vec2| {
@@ -843,20 +839,36 @@ impl World {
         };
         let start = unit(p.pos);
         thread_local! {
-            static SCRATCH: std::cell::RefCell<(Vec<i32>, Vec<u16>, Vec<usize>)> =
-                const { std::cell::RefCell::new((Vec::new(), Vec::new(), Vec::new())) };
+            static SCRATCH: std::cell::RefCell<(Vec<i32>, Vec<u16>, Vec<usize>, Vec<bool>, Vec<usize>)> =
+                const { std::cell::RefCell::new((Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new())) };
         }
         SCRATCH.with(|scratch| {
             let mut scratch = scratch.borrow_mut();
-            let (parent, depth, touched) = &mut *scratch;
+            let (parent, depth, touched, blocked, marked) = &mut *scratch;
             if parent.len() != (UNITS * UNITS) as usize {
                 *parent = vec![-1; (UNITS * UNITS) as usize];
                 *depth = vec![0; (UNITS * UNITS) as usize];
+                *blocked = vec![false; (UNITS * UNITS) as usize];
             }
-            let out = self.route_in(id, &goal, budget, start, parent, depth, touched);
+            let me = Some(id as u8);
+            let fresh = p.odo - 1.0;
+            for &i in &p.cells {
+                if self.trail[i] == me && self.laid[i] < fresh {
+                    let u = cell_of(i) / RES;
+                    let k = (u.y * UNITS + u.x) as usize;
+                    if !blocked[k] {
+                        blocked[k] = true;
+                        marked.push(k);
+                    }
+                }
+            }
+            let out = self.route_in(id, &goal, budget, start, parent, depth, touched, blocked);
             for i in touched.drain(..) {
                 parent[i] = -1;
                 depth[i] = 0;
+            }
+            for k in marked.drain(..) {
+                blocked[k] = false;
             }
             out
         })
@@ -872,6 +884,7 @@ impl World {
         parent: &mut [i32],
         depth: &mut [u16],
         touched: &mut Vec<usize>,
+        blocked: &[bool],
     ) -> Option<(f32, f32)> {
         let p = &self.players[id];
         let at = |u: IVec2| (u.y * UNITS + u.x) as usize;
@@ -903,7 +916,7 @@ impl World {
                 if n.x < 0 || n.y < 0 || n.x >= UNITS || n.y >= UNITS || parent[at(n)] >= 0 {
                     continue;
                 }
-                if self.unit_blocked(id, n) {
+                if blocked[at(n)] {
                     continue;
                 }
                 parent[at(n)] = at(c) as i32;
@@ -1055,8 +1068,8 @@ impl World {
     }
 
     fn rl_think(&mut self, id: usize, effort: Effort) {
-        if let Some(net) = super::rl::shipped() {
-            self.rl_steer(id, net, effort);
+        if let Some(net) = super::rl::active() {
+            self.rl_steer(id, &net, effort);
         }
     }
 
@@ -1073,13 +1086,18 @@ impl World {
             net.choose(&super::rl::observe(self, id), effort)
         };
         let mut aim = wrap_angle(self.players[id].angle + super::rl::TURNS[a]);
-        if self.hits_gentle(id, aim) {
+        if self.hits_gentle(id, aim) || self.probe(id, aim, false) < LOOK {
             aim = self.safe_aim(id, aim, false);
         }
         self.players[id].want = aim;
     }
 
     fn bot_think(&mut self, id: usize, policy: Policy) {
+        let scripted = self.players[id].brain.is_none() && self.lessons.is_none();
+        if scripted && policy(id, &[]).is_none() {
+            self.plan_think(id);
+            return;
+        }
         let (aims, feats) = self.options(id);
         let picked = match policy(id, &feats) {
             Some(k) => Some(k),

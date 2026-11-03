@@ -1,3 +1,4 @@
+use glam::ivec2;
 use super::pilot::Pilot;
 use super::world::*;
 use super::*;
@@ -85,6 +86,46 @@ fn closing_a_loop_fills_the_inside_and_clears_the_trail() {
         w.owner.iter().filter(|o| **o == Some(0)).count()
     );
     assert_eq!(w.claims.len(), 1);
+}
+
+#[test]
+fn a_loop_reaching_far_beyond_your_land_fills_all_of_its_inside() {
+    let mut w = solo();
+    go(&mut w, 0, RIGHT, 2.0);
+    go(&mut w, 0, DOWN, 30.0);
+    go(&mut w, 0, RIGHT, 30.0);
+    go(&mut w, 0, UP, 30.0);
+    go(&mut w, 0, LEFT, 30.0);
+    go(&mut w, 0, LEFT, 2.0);
+    assert!(w.players[0].alive);
+    assert!(!w.players[0].out(), "the loop closed");
+    for p in [vec2(35.0, 35.0), vec2(45.0, 45.0), vec2(48.0, 22.0), vec2(25.0, 48.0)] {
+        assert!(owned(&w, p, 0), "{p} inside the loop is not filled");
+    }
+}
+
+#[test]
+fn a_loop_in_the_strip_past_the_last_whole_block_fills_its_inside() {
+    let mut w = World::new(0.5);
+    let id = w.add_player(vec2(60.0, 60.0), RIGHT, false);
+    still(&mut w, id);
+    let me = Some(id as u8);
+    let strip = (BLOCKS * BLOCK) as i32;
+    for y in (strip - 20)..N {
+        for x in 200..240 {
+            if y < strip - 16 || x < 204 || x >= 236 || y >= N - 2 {
+                w.claim(idx(ivec2(x, y)), me);
+            }
+        }
+    }
+    let empty = idx(ivec2(220, N - 3));
+    assert!(w.owner[empty].is_none());
+    let p = &mut w.players[id];
+    p.pos = cell_center(ivec2(220, strip - 18));
+    p.cells = vec![idx(ivec2(220, strip - 17))];
+    w.set_trail_for_test(idx(ivec2(220, strip - 17)), id);
+    w.close_loop(id);
+    assert_eq!(w.owner[empty], me, "a cell under the last whole block row stayed empty");
 }
 
 #[test]
@@ -873,6 +914,14 @@ fn at_full_effort_the_rl_brain_outlives_the_hand_written_bot() {
         "brain {brain:?} vs bot {bot:?}"
     );
     assert!(brain.outlived > bot.outlived && brain.circling < 0.25);
+    let per_min = |r: &rl::Report| r.kills / r.secs.max(1.0) * 60.0;
+    assert!(
+        per_min(&brain) >= per_min(&bot),
+        "brain {:.2} kills/min vs bot {:.2}",
+        per_min(&brain),
+        per_min(&bot)
+    );
+    assert!(brain.stolen >= bot.stolen, "{} vs {}", brain.stolen, bot.stolen);
 }
 
 #[test]
