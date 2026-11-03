@@ -7,6 +7,7 @@ pub mod feel;
 pub mod font;
 pub mod fx;
 pub mod games;
+pub mod gate;
 pub mod geom;
 pub mod jev;
 pub mod learn;

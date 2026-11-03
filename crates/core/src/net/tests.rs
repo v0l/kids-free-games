@@ -724,16 +724,14 @@ fn a_blocked_player_vanishes_from_my_board_but_not_from_theirs() {
     assert_eq!(names, ["Leo", "Mia"]);
     a.play(|| block_player(&leo, "snake"));
     let shown = a.play(|| {
-        unblocked(
-            vec![BoardRow {
-                player: leo.clone(),
-                place: 1,
-                name: "Leo".into(),
-                avatar: 1,
-                score: 20,
-                mine: false,
-            }]
-        )
+        unblocked(vec![BoardRow {
+            player: leo.clone(),
+            place: 1,
+            name: "Leo".into(),
+            avatar: 1,
+            score: 20,
+            mine: false,
+        }])
     });
     assert!(shown.is_empty());
 }

@@ -152,6 +152,14 @@ pub struct App {
     soon: Option<(usize, f32)>,
     pub loading: Option<usize>,
     pub reporting: Option<(ReportHit, f32)>,
+    pub locked: Option<LockSheet>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct LockSheet {
+    pub game: usize,
+    pub age: f32,
+    pub hold: f32,
 }
 
 impl Default for App {
@@ -186,6 +194,7 @@ impl App {
             soon: None,
             loading: None,
             reporting: None,
+            locked: None,
         }
     }
 
@@ -232,6 +241,15 @@ impl App {
     }
 
     fn pick(&mut self, i: usize, rects: &[Rect]) {
+        if self.entries[i].ready() && !kg_core::gate::open(self.entries[i].info.key) {
+            sfx::play(Sfx::Tap);
+            self.locked = Some(LockSheet {
+                game: i,
+                age: 0.0,
+                hold: 0.0,
+            });
+            return;
+        }
         let r = rects[i];
         let at = vec2(r.center().x, r.center().y - self.scroll);
         if self.entries[i].ready() {
@@ -313,6 +331,10 @@ impl App {
                 }
             }
             game.update(input, view, game_dt);
+            return;
+        }
+        if let Some(sheet) = self.locked.clone() {
+            self.update_lock(sheet, input, view, dt);
             return;
         }
         if let Some(p) = &mut self.profiles {
@@ -408,6 +430,48 @@ impl App {
             *p = approach(*p, if held { 1.0 } else { 0.0 }, 18.0, dt);
         }
         self.scroll = self.scroll.clamp(0.0, self.max_scroll(view));
+    }
+
+    fn update_lock(&mut self, mut sheet: LockSheet, input: &Input, view: &View, dt: f32) {
+        sheet.age += dt;
+        let r = lock_rects(view);
+        let game = self.entries[sheet.game].info.key;
+        sheet.hold = if input.down && r.hold.contains(input.pos) {
+            sheet.hold + dt
+        } else {
+            0.0
+        };
+        if sheet.hold >= kg_core::gate::HOLD_SECS {
+            kg_core::gate::set_enabled(false);
+            sfx::play(Sfx::Right);
+            self.locked = None;
+            return;
+        }
+        let cost = kg_core::gate::cost();
+        if input.back || input.tapped_in(r.close) {
+            sfx::play(Sfx::Tap);
+            self.locked = None;
+            return;
+        }
+        if input.tapped_in(r.primary) {
+            if kg_core::gate::can_afford() {
+                kg_core::gate::unlock(game);
+                sfx::play(Sfx::Right);
+                self.locked = None;
+                self.launch = Some((sheet.game, 0.0));
+            } else if let Some(l) = self
+                .entries
+                .iter()
+                .position(|e| e.info.key == kg_core::gate::first_learning_game() && e.ready())
+            {
+                sfx::play(Sfx::Pop);
+                self.locked = None;
+                self.launch = Some((l, 0.0));
+            }
+            let _ = cost;
+            return;
+        }
+        self.locked = Some(sheet);
     }
 
     pub fn draw(&self, pen: &mut Pen, view: &View) {
@@ -550,6 +614,9 @@ impl App {
                 pen.circle(c, rad, self.entries[i].info.color);
             }
         }
+        if let Some(sheet) = &self.locked {
+            draw_lock_sheet(pen, view, sheet, self.entries[sheet.game].info.name);
+        }
         self.draw_curtain(pen, view);
     }
 
@@ -691,6 +758,69 @@ fn draw_report_sheet(pen: &mut Pen, view: &View, hit: &ReportHit, age: f32) {
     pen.painted_button(no, "Cancel", Tone::Blue, 0.0, 1.0);
 }
 
+pub struct LockRects {
+    pub panel: Rect,
+    pub primary: Rect,
+    pub close: Rect,
+    pub hold: Rect,
+}
+
+pub fn lock_rects(view: &View) -> LockRects {
+    let w = 580.0f32.min(view.w - 30.0);
+    let panel = Rect::new(view.center().x - w / 2.0, view.center().y - 230.0, w, 460.0);
+    let bw = w - 80.0;
+    LockRects {
+        panel,
+        primary: Rect::new(panel.x + 40.0, panel.y + 190.0, bw, 78.0),
+        close: Rect::new(panel.x + 40.0, panel.y + 284.0, bw, 62.0),
+        hold: Rect::new(panel.x + 40.0, panel.y + 370.0, bw, 62.0),
+    }
+}
+
+fn draw_lock_sheet(pen: &mut Pen, view: &View, sheet: &LockSheet, name: &str) {
+    let fade = ease_out_cubic(sheet.age / 0.15);
+    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.6 * fade));
+    let r = lock_rects(view);
+    pen.painted_panel(r.panel, WHITE);
+    let c = r.panel.center().x;
+    let cost = kg_core::gate::cost();
+    let have = kg_core::gate::available();
+    pen.text_center(
+        &format!("{name} is locked"),
+        c,
+        r.panel.y + 52.0,
+        38.0,
+        crate::ui::INK,
+    );
+    let line = if have >= cost {
+        format!("Spend {cost} learning stars to play it. You have {have}.")
+    } else {
+        format!("Learn to earn {cost} stars. You have {have}.")
+    };
+    pen.text_center(&line, c, r.panel.y + 104.0, 24.0, crate::ui::BODY);
+    pen.text_center(
+        "Get questions right, quickly, to earn stars.",
+        c,
+        r.panel.y + 140.0,
+        22.0,
+        crate::ui::BODY,
+    );
+    if have >= cost {
+        pen.painted_button(r.primary, "Unlock and play", Tone::Green, 0.0, 1.0);
+    } else {
+        pen.painted_button(r.primary, "Learn to unlock", Tone::Green, 0.0, 1.0);
+    }
+    pen.painted_button(r.close, "Not now", Tone::Blue, 0.0, 1.0);
+    let held = (sheet.hold / kg_core::gate::HOLD_SECS).clamp(0.0, 1.0);
+    pen.painted_button(
+        r.hold,
+        "Grown up? Hold to open all",
+        Tone::Orange,
+        held,
+        0.8,
+    );
+}
+
 fn progress_bar(pen: &mut Pen, ir: Rect, progress: f32) {
     let h = ir.h * 0.1;
     let bar = Rect::new(ir.x + ir.w * 0.12, ir.y + ir.h - h * 1.7, ir.w * 0.76, h);
@@ -726,6 +856,39 @@ fn draw_tile(pen: &mut Pen, r: Rect, e: &Entry, shine: Option<f32>) {
     if let Some(bands) = kg_core::mastery::bands_of(e.info.key) {
         progress_bar(pen, ir, kg_core::mastery::game_progress(e.info.key, bands));
     }
+    if e.ready() && !kg_core::gate::open(e.info.key) {
+        pen.round_rect(ir, ir.w * 0.22, Color::new(0.1, 0.03, 0.22, 0.55));
+        let c = ir.center();
+        let u = ir.w * 0.1;
+        pen.round_rect(
+            Rect::new(c.x - u * 1.5, c.y - u * 2.2, u * 3.0, u * 3.0),
+            u * 1.5,
+            Color::from_rgba(255, 210, 60, 255),
+        );
+        pen.round_rect(
+            Rect::new(c.x - u * 0.9, c.y - u * 1.6, u * 1.8, u * 2.4),
+            u * 0.9,
+            Color::new(0.1, 0.03, 0.22, 0.9),
+        );
+        pen.round_rect(
+            Rect::new(c.x - u * 2.2, c.y - u * 0.4, u * 4.4, u * 3.2),
+            u * 0.6,
+            Color::from_rgba(255, 190, 40, 255),
+        );
+        pen.circle(
+            vec2(c.x, c.y + u * 1.0),
+            u * 0.45,
+            Color::new(0.35, 0.2, 0.05, 1.0),
+        );
+        pen.text_outline(
+            "Learn to unlock",
+            c.x,
+            ir.y + ir.h - u * 1.2,
+            (ir.w * 0.13).min(26.0),
+            WHITE,
+            Color::from_rgba(50, 15, 80, 255),
+        );
+    }
     let label_y = ir.y + ir.h + (r.h - ir.h) * 0.5;
     let size = (r.w * 0.9 / measure(e.info.name, 10.0) * 10.0).min(r.w * 0.16);
     pen.text_outline(
@@ -745,6 +908,7 @@ mod tests {
     fn menu() -> App {
         kg_core::save::reset_for_test();
         kg_core::profile::create("Mia", 0);
+        kg_core::gate::set_enabled(false);
         App::new()
     }
 
@@ -1209,5 +1373,92 @@ mod tests {
             make: None,
         };
         assert!(count(learn, lay.tiles[0]) > count(&plain, lay.tiles[0]));
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::*;
+
+    fn menu() -> App {
+        kg_core::save::reset_for_test();
+        kg_core::profile::create("Mia", 0);
+        App::new()
+    }
+
+    fn arcade_index(app: &App) -> usize {
+        app.entries
+            .iter()
+            .position(|e| e.info.kind == Kind::Arcade && e.ready())
+            .unwrap()
+    }
+
+    fn tap(app: &mut App, v: &View, at: Vec2) {
+        app.update(&Input::press_at(at), v, 1.0 / 60.0);
+        app.update(&Input::default(), v, 1.0 / 60.0);
+    }
+
+    #[test]
+    fn tapping_a_locked_tile_shows_the_sheet_and_offers_learning() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        let i = arcade_index(&app);
+        kg_core::gate::unlock(
+            app.entries[(i + 1)..]
+                .iter()
+                .find(|e| e.info.kind == Kind::Arcade)
+                .unwrap()
+                .info
+                .key,
+        );
+        let c = app.layout(&v).tiles[i].center();
+        app.pick(i, &app.layout(&v).tiles);
+        assert!(app.locked.is_some());
+        assert!(app.launch.is_none());
+        let _ = c;
+        let r = lock_rects(&v);
+        tap(&mut app, &v, r.primary.center());
+        assert!(app.locked.is_none());
+        let (l, _) = app.launch.unwrap();
+        assert_eq!(app.entries[l].info.kind, Kind::Learn);
+    }
+
+    #[test]
+    fn an_affordable_locked_tile_unlocks_and_launches() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        let i = arcade_index(&app);
+        app.pick(i, &app.layout(&v).tiles);
+        assert!(app.locked.is_some());
+        tap(&mut app, &v, lock_rects(&v).primary.center());
+        assert_eq!(app.launch.map(|l| l.0), Some(i));
+        assert!(kg_core::gate::open(app.entries[i].info.key));
+    }
+
+    #[test]
+    fn not_now_closes_the_sheet_without_unlocking() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        let i = arcade_index(&app);
+        app.pick(i, &app.layout(&v).tiles);
+        tap(&mut app, &v, lock_rects(&v).close.center());
+        assert!(app.locked.is_none());
+        assert!(!kg_core::gate::open(app.entries[i].info.key));
+    }
+
+    #[test]
+    fn holding_open_all_on_the_sheet_switches_gating_off() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        let i = arcade_index(&app);
+        app.pick(i, &app.layout(&v).tiles);
+        let at = lock_rects(&v).hold.center();
+        for _ in 0..4 {
+            let mut held = Input::press_at(at);
+            held.pressed = false;
+            app.update(&held, &v, 0.5);
+        }
+        assert!(app.locked.is_none());
+        assert!(kg_core::gate::open(app.entries[i].info.key));
     }
 }

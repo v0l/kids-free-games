@@ -218,9 +218,7 @@ fn mods() -> Vec<ModEntry> {
 fn set_mods(items: &[ModEntry]) {
     let text = items
         .iter()
-        .map(|m| {
-            format!("{},{},{}", m.me, m.target, m.game)
-        })
+        .map(|m| format!("{},{},{}", m.me, m.target, m.game))
         .collect::<Vec<_>>()
         .join(";");
     save::set_str("net.mod", &text);

@@ -111,10 +111,12 @@ pub fn is_profane(name: &str) -> bool {
         .map(str::trim)
         .filter(|l| !l.is_empty())
         .any(|entry| match entry.strip_prefix('=') {
-            Some(word) => words
-                .iter()
-                .any(|w| w == word || collapse(w) == collapse(word))
-                || squashed == word,
+            Some(word) => {
+                words
+                    .iter()
+                    .any(|w| w == word || collapse(w) == collapse(word))
+                    || squashed == word
+            }
             None => {
                 let e: String = entry.chars().filter(|c| *c != ' ').map(fold).collect();
                 squashed.contains(&e) || squashed_collapsed.contains(&collapse(&e))
@@ -444,12 +446,26 @@ mod tests {
     #[test]
     fn bad_words_are_refused_as_names() {
         for bad in [
-            "Fuck", "f u c k", "Fuuuck", "shiit", "Scheisse", "Arschloch", "Puta", "connard", "Kurwa",
-            "Блядь", "傻逼", "Mr Cunt", "ass", "Dick",
+            "Fuck",
+            "f u c k",
+            "Fuuuck",
+            "shiit",
+            "Scheisse",
+            "Arschloch",
+            "Puta",
+            "connard",
+            "Kurwa",
+            "Блядь",
+            "傻逼",
+            "Mr Cunt",
+            "ass",
+            "Dick",
         ] {
             assert_eq!(clean_name(bad), "", "{bad}");
         }
-        for ok in ["Mia", "Classic", "Dickens", "Bassam", "Cassie", "Hello", "Tit"] {
+        for ok in [
+            "Mia", "Classic", "Dickens", "Bassam", "Cassie", "Hello", "Tit",
+        ] {
             let expect = ok != "Tit";
             assert_eq!(!clean_name(ok).is_empty(), expect, "{ok}");
         }

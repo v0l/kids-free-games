@@ -27,6 +27,7 @@ pub struct Profiles {
     pub done: bool,
     pub link: Option<crate::link::Link>,
     press: Option<Rect>,
+    pub gate_hold: f32,
 }
 
 pub const KEYS: [&str; 3] = ["QWERTYUIOP", "ASDFGHJKL", "ZXCVBNM"];
@@ -55,7 +56,12 @@ impl Profiles {
             done: false,
             link: None,
             press: None,
+            gate_hold: 0.0,
         }
+    }
+
+    pub fn gate_rect(_view: &View) -> Rect {
+        Rect::new(10.0, 10.0, 200.0, 52.0)
     }
 
     pub fn link_rect(view: &View) -> Rect {
@@ -171,6 +177,7 @@ impl Profiles {
             .down
             .then_some(input.pos)
             .and_then(|p| self.hit_rect(view, p));
+        self.update_gate(input, view, dt);
         match self.mode.clone() {
             Mode::Pick => self.update_pick(input, view),
             Mode::Edit {
@@ -179,6 +186,23 @@ impl Profiles {
                 avatar,
                 confirm_delete,
             } => self.update_edit(input, view, id, name, avatar, confirm_delete),
+        }
+    }
+
+    fn update_gate(&mut self, input: &Input, view: &View, dt: f32) {
+        let Mode::Edit { id: Some(id), .. } = &self.mode else {
+            self.gate_hold = 0.0;
+            return;
+        };
+        if input.down && Self::gate_rect(view).contains(input.pos) {
+            self.gate_hold += dt;
+            if self.gate_hold >= kg_core::gate::HOLD_SECS {
+                self.gate_hold = f32::NEG_INFINITY;
+                kg_core::gate::set_enabled_for(id, !kg_core::gate::enabled_for(id));
+                sfx::play(Sfx::Pop);
+            }
+        } else {
+            self.gate_hold = 0.0;
         }
     }
 
@@ -455,7 +479,20 @@ impl Profiles {
                 if !profile::list().is_empty() {
                     pen.painted_button(back, "Back", Tone::Blue, pressed(back), 1.0);
                 }
-                if id.is_some() {
+                if let Some(pid) = id {
+                    let on = kg_core::gate::enabled_for(pid);
+                    let g = Self::gate_rect(view);
+                    pen.painted_button(
+                        g,
+                        if on {
+                            "Hold: unlock all"
+                        } else {
+                            "Hold: lock again"
+                        },
+                        Tone::Blue,
+                        (self.gate_hold / kg_core::gate::HOLD_SECS).clamp(0.0, 1.0),
+                        0.85,
+                    );
                     pen.painted_button(
                         delete,
                         if *confirm_delete { "Sure?" } else { "Delete" },
@@ -646,6 +683,31 @@ mod tests {
         tap(&mut p, &v, cards[0].center());
         assert!(p.done);
         assert_eq!(profile::current_id(), Some(a.id));
+    }
+
+    #[test]
+    fn holding_the_grown_up_button_toggles_gating_for_that_player_only() {
+        kg_core::save::reset_for_test();
+        let mia = profile::create("Mia", 0).unwrap();
+        let leo = profile::create("Leo", 0).unwrap();
+        let v = View::ipad_landscape();
+        let mut p = Profiles::new();
+        p.mode = Mode::Edit {
+            id: Some(mia.id.clone()),
+            name: "Mia".into(),
+            avatar: 0,
+            confirm_delete: false,
+        };
+        let at = Profiles::gate_rect(&v).center();
+        p.update(&Input::press_at(at), &v, 0.5);
+        assert!(kg_core::gate::enabled_for(&mia.id));
+        for _ in 0..4 {
+            let mut held = Input::press_at(at);
+            held.pressed = false;
+            p.update(&held, &v, 0.5);
+        }
+        assert!(!kg_core::gate::enabled_for(&mia.id));
+        assert!(kg_core::gate::enabled_for(&leo.id));
     }
 
     #[test]
