@@ -70,7 +70,10 @@ impl Sim {
         match self.waiting_line().first() {
             Some(&g) => {
                 let g = &self.guests[g];
-                (1.0 - g.patience / g.max, (g.patience / 20.0).clamp(0.0, 1.0))
+                (
+                    1.0 - g.patience / g.max,
+                    (g.patience / 20.0).clamp(0.0, 1.0),
+                )
             }
             None => (0.0, 1.0),
         }
@@ -105,11 +108,9 @@ impl Sim {
             Build::Janitor => {
                 for k in 0..self.stalls.len() {
                     let paper = self.stalls[k].paper;
-                    let taken = self
-                        .staff
-                        .iter()
-                        .enumerate()
-                        .any(|(o, st)| o != s && st.role == role && st.job != Job::Idle && st.pick == Some(k));
+                    let taken = self.staff.iter().enumerate().any(|(o, st)| {
+                        o != s && st.role == role && st.job != Job::Idle && st.pick == Some(k)
+                    });
                     if paper >= PAPER_MAX || taken {
                         continue;
                     }
@@ -174,7 +175,9 @@ impl Sim {
         let open = (jobs.len() as f32 / 6.0).min(1.0);
         let queue = self.waiting_line().len() as f32 / MAX_QUEUE as f32;
         let spare = (0..self.rooms.len())
-            .filter(|&k| self.room_open(k) && !self.rooms[k].is_dirty() && self.rooms[k].guest.is_none())
+            .filter(|&k| {
+                self.room_open(k) && !self.rooms[k].is_dirty() && self.rooms[k].guest.is_none()
+            })
             .count() as f32
             / 4.0;
         let blocked = (self.front_ready().is_some() && self.free_room().is_none()) as u8 as f32;

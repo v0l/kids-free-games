@@ -14,12 +14,20 @@ fn main() {
         .iter()
         .map(|s| play_net(hotel_for(*s), *s, EPISODE_SECS, None, Effort::BEST).fitness())
         .sum();
-    eprintln!("first-found rules: fitness {:.2}", rules / seeds.len() as f32);
+    eprintln!(
+        "first-found rules: fitness {:.2}",
+        rules / seeds.len() as f32
+    );
     for e in [0.0f32, 0.25, 0.5, 0.75, 1.0] {
         let total: f32 = seeds
             .iter()
-            .map(|s| play_net(hotel_for(*s), *s, EPISODE_SECS, Some(&net), Effort::new(e)).fitness())
+            .map(|s| {
+                play_net(hotel_for(*s), *s, EPISODE_SECS, Some(&net), Effort::new(e)).fitness()
+            })
             .sum();
-        eprintln!("full effort model e={e:.2}: fitness {:.2}", total / seeds.len() as f32);
+        eprintln!(
+            "full effort model e={e:.2}: fitness {:.2}",
+            total / seeds.len() as f32
+        );
     }
 }

@@ -79,7 +79,10 @@ impl Env for HotelEnv {
     fn episode(&mut self, seed: u64, policy: &mut dyn FnMut(&[Vec<f32>]) -> usize) -> f32 {
         let mut sim = staffed_sim(hotel_for(seed), seed);
         sim.effort = Some(Effort::BEST);
-        play(&mut sim, EPISODE_SECS, &mut |_, options| Some(policy(options))).fitness()
+        play(&mut sim, EPISODE_SECS, &mut |_, options| {
+            Some(policy(options))
+        })
+        .fitness()
     }
 }
 
@@ -104,7 +107,9 @@ mod tests {
     }
 
     fn shipped() -> Arc<Net> {
-        Sim::new(1, &[], 0, 1).net.expect("assets/brains/hotel.kgb loads")
+        Sim::new(1, &[], 0, 1)
+            .net
+            .expect("assets/brains/hotel.kgb loads")
     }
 
     #[test]
@@ -148,7 +153,11 @@ mod tests {
                 for (k, st) in sim.staff.iter().enumerate() {
                     if sim.job_open_for(k) && st.job == Job::Idle && st.path.is_empty() {
                         idle_for[k] += dt;
-                        assert!(idle_for[k] < limit, "staff {k} idle {} s at effort {effort:?}", idle_for[k]);
+                        assert!(
+                            idle_for[k] < limit,
+                            "staff {k} idle {} s at effort {effort:?}",
+                            idle_for[k]
+                        );
                     } else {
                         idle_for[k] = 0.0;
                     }

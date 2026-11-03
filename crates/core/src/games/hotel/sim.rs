@@ -1,13 +1,13 @@
 use super::layout::*;
 use super::nav::Nav;
-use crate::geom::*;
 use crate::brain::{Effort, Net};
+use crate::geom::*;
 use glam::{vec2, Vec2};
 use std::sync::{Arc, OnceLock};
 
 mod crew;
-pub use crew::{Chooser, CREW_FEATURES, THINK_FASTEST};
 use crew::Pick;
+pub use crew::{Chooser, CREW_FEATURES, THINK_FASTEST};
 
 pub const LOOKS: usize = 10;
 pub const PLAYER_R: f32 = 0.32;
@@ -1392,7 +1392,9 @@ impl Sim {
         match self.staff[s].job {
             Job::Fetch => {
                 self.staff[s].carry = Some(Item::Paper);
-                let wanted = self.staff[s].pick.filter(|&k| self.stalls[k].paper < PAPER_MAX);
+                let wanted = self.staff[s]
+                    .pick
+                    .filter(|&k| self.stalls[k].paper < PAPER_MAX);
                 let need = wanted
                     .or_else(|| (0..self.stalls.len()).find(|&k| self.stalls[k].paper < PAPER_MAX));
                 match need {
@@ -1417,17 +1419,15 @@ impl Sim {
                 self.staff[s].carry = None;
                 self.go_home(s);
             }
-            _ => {
-                match self.crew_pick(s, choose) {
-                    Some(Pick::Stall(k)) => {
-                        self.staff[s].pick = Some(k);
-                        self.staff[s].job = Job::Fetch;
-                        let to = self.lay.paper_shelf + vec2(0.0, 0.8);
-                        self.go(s, to);
-                    }
-                    _ => self.go_home(s),
+            _ => match self.crew_pick(s, choose) {
+                Some(Pick::Stall(k)) => {
+                    self.staff[s].pick = Some(k);
+                    self.staff[s].job = Job::Fetch;
+                    let to = self.lay.paper_shelf + vec2(0.0, 0.8);
+                    self.go(s, to);
                 }
-            }
+                _ => self.go_home(s),
+            },
         }
     }
 
