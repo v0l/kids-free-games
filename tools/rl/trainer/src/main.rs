@@ -161,6 +161,7 @@ trait Game: Learner + Sized {
     fn baseline(seeds: u64) -> (f32, String);
     fn eval(policy: &Policy, rivals: &[Policy], seeds: u64) -> (f32, String);
     fn set_seats(_: usize) {}
+    fn set_eval_threads(_: usize) {}
 }
 
 mod clash {
@@ -184,7 +185,7 @@ mod clash {
     }
 
     fn score(r: &Report) -> f32 {
-        r.level + 2.0 * r.kills + 20.0 * r.wins + 5.0 * r.secs / GAME_CAP
+        r.level + 5.0 * r.kills + 20.0 * r.wins + 5.0 * r.secs / GAME_CAP
             - 5.0 * r.circling
             - 3.0 * r.stall
     }
@@ -261,24 +262,38 @@ mod paper {
             linger: g[4],
             win: g[5],
             outlive: g[6],
+            stall: g[7],
+            trip: g[8],
+            wobble: g[9],
+            steal: g[10],
         }
     }
 
     fn score(r: &Report) -> f32 {
-        (20.0 * r.wins + 10.0 * r.outlived) * (1.0 - r.circling) + 200.0 * r.peak + r.kills
+        (20.0 * r.wins + 10.0 * r.outlived) * (1.0 - r.circling) * (1.0 - r.stall)
+            + 200.0 * r.peak
+            + 300.0 * r.claim
+            + 400.0 * r.stolen
+            + 5.0 * r.kills
             - 30.0 * r.circling
+            - 15.0 * r.stall
+            - 20.0 * r.wobble
     }
 
     fn describe(r: &Report) -> String {
         format!(
-            "won {:.0}% outlived {:.0}% peak {:.1}% lived {:.0}s kills {:.2} inside {:.0}% circling {:.1}%",
+            "won {:.0}% outlived {:.0}% peak {:.1}% lived {:.0}s kills {:.2} inside {:.0}% circling {:.1}% stalled {:.0}% claim {:.2}% wobble {:.0}% stolen {:.2}%",
             r.wins * 100.0,
             r.outlived * 100.0,
             r.peak * 100.0,
             r.secs,
             r.kills,
             r.inside * 100.0,
-            r.circling * 100.0
+            r.circling * 100.0,
+            r.stall * 100.0,
+            r.claim * 100.0,
+            r.wobble * 100.0,
+            r.stolen * 100.0
         )
     }
 
@@ -293,6 +308,10 @@ mod paper {
                 ("linger", r.linger),
                 ("win", r.win),
                 ("outlive", r.outlive),
+                ("stall", r.stall),
+                ("trip", r.trip),
+                ("wobble", r.wobble),
+                ("steal", r.steal),
             ]
         }
 
@@ -321,7 +340,11 @@ mod paper {
         }
 
         fn set_seats(n: usize) {
-            kg_core::games::paper::rl::set_seats(n, 0.3);
+            kg_core::games::paper::rl::set_seats(n, 0.7);
+        }
+
+        fn set_eval_threads(n: usize) {
+            kg_core::games::paper::rl::set_eval_threads(n);
         }
     }
 }
@@ -767,6 +790,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         };
         members.push(Member::new(id, a, genes, lr, ent)?);
     }
+    G::set_eval_threads((a.threads / (2 * a.pop.max(1))).max(1));
     let params = members[0].net.export()?.param_count();
     let (base, base_text) = G::baseline(a.eval_seeds);
     println!(
