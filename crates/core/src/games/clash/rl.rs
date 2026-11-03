@@ -32,8 +32,8 @@ impl Default for Rewards {
         Self {
             xp: 0.02,
             level: 1.0,
-            kill: 6.0,
-            cut: 1.0,
+            kill: 12.0,
+            cut: 2.5,
             death: 3.0,
             stall: 0.002,
             wall: 0.3,
@@ -753,6 +753,21 @@ mod tests {
                 .sum();
             assert_eq!(sum, 1.0, "power kind {k}");
         }
+    }
+
+    #[test]
+    fn the_shipped_brain_hunts_at_least_as_hard_as_the_hand_written_bot() {
+        let p = shipped().expect("clash_rl.kgb");
+        let bot = evaluate(&Pilot::Bot, 32, GAME_CAP);
+        let brain = evaluate(&Pilot::Policy(p, Effort::BEST), 32, GAME_CAP);
+        let per_min = |r: &Report| r.kills / r.secs.max(1.0) * 60.0;
+        assert!(
+            per_min(&brain) >= per_min(&bot),
+            "brain {:.2} kills/min vs bot {:.2}",
+            per_min(&brain),
+            per_min(&bot)
+        );
+        assert!(brain.level >= bot.level);
     }
 
     #[test]
