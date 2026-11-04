@@ -92,6 +92,42 @@ async function run(wsUrl) {
     }
     await new Promise((r) => setTimeout(r, 3000));
   }
+  if (process.env.STEPS) {
+    const kc = { ArrowUp: 38, ArrowRight: 39, ArrowLeft: 37, Enter: 13 };
+    for (const st of JSON.parse(process.env.STEPS)) {
+      if (st.t) {
+        await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: st.t[0], y: st.t[1], id: 1 }] });
+        await new Promise((r) => setTimeout(r, 80));
+        await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      } else if (st.k) {
+        const k = st.k;
+        const code = k.length === 1 ? "Key" + k.toUpperCase() : k;
+        const p = { key: k, code, windowsVirtualKeyCode: kc[k] || k.toUpperCase().charCodeAt(0), text: k.length === 1 ? k : undefined };
+        await send("Input.dispatchKeyEvent", { type: k.length === 1 ? "keyDown" : "rawKeyDown", ...p });
+        await new Promise((r) => setTimeout(r, 80));
+        await send("Input.dispatchKeyEvent", { type: "keyUp", ...p });
+      } else if (st.shot) {
+        const sh = await send("Page.captureScreenshot", { format: "png" });
+        fs.writeFileSync(st.shot, Buffer.from(sh.result.data, "base64"));
+      }
+      await new Promise((r) => setTimeout(r, st.wait || 400));
+    }
+  }
+  if (process.env.TOUCH) {
+    const [x, y] = process.env.TOUCH.split(",").map(Number);
+    await send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y, id: 1 }] });
+    await new Promise((r) => setTimeout(r, 80));
+    await send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (process.env.KEY) {
+    const key = process.env.KEY;
+    const code = key.startsWith("Arrow") ? key : "Key" + key.toUpperCase();
+    await send("Input.dispatchKeyEvent", { type: "rawKeyDown", key, code, windowsVirtualKeyCode: { ArrowUp: 38, ArrowRight: 39, W: 87 }[key] });
+    await new Promise((r) => setTimeout(r, 80));
+    await send("Input.dispatchKeyEvent", { type: "keyUp", key, code, windowsVirtualKeyCode: { ArrowUp: 38, ArrowRight: 39, W: 87 }[key] });
+    await new Promise((r) => setTimeout(r, 1500));
+  }
   if (process.env.EVAL) {
     const r = await send("Runtime.evaluate", { expression: process.env.EVAL, returnByValue: true, awaitPromise: true });
     console.log(`[eval] ${JSON.stringify(r.result.result.value)}`);

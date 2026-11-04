@@ -152,6 +152,7 @@ pub struct App {
     soon: Option<(usize, f32)>,
     pub loading: Option<usize>,
     pub reporting: Option<(ReportHit, f32)>,
+    ui_owned: bool,
     pub locked: Option<LockSheet>,
 }
 
@@ -194,6 +195,7 @@ impl App {
             soon: None,
             loading: None,
             reporting: None,
+            ui_owned: false,
             locked: None,
         }
     }
@@ -306,6 +308,9 @@ impl App {
                 20.0,
                 dt,
             );
+            if self.reporting.is_none() && input.tapped_in(HOME) {
+                self.ui_owned = true;
+            }
             if self.reporting.is_none() && (input.tapped_in(HOME) || input.back) {
                 self.go_home();
                 return;
@@ -313,6 +318,9 @@ impl App {
             if let Some((hit, age)) = &mut self.reporting {
                 *age += dt;
                 let (_, yes, no) = report_rects(view);
+                if input.pressed {
+                    self.ui_owned = true;
+                }
                 if input.tapped_in(yes) {
                     kg_core::net::block_player(&hit.player, &hit.game);
                     sfx::play(Sfx::Pop);
@@ -324,11 +332,20 @@ impl App {
                 return;
             }
             if input.pressed {
+                self.ui_owned =
+                    HOME.contains(input.pos) || crate::ui::report_hit_at(input.pos).is_some();
                 if let Some(hit) = crate::ui::report_hit_at(input.pos) {
                     sfx::play(Sfx::Tap);
                     self.reporting = Some((hit, 0.0));
                     return;
                 }
+            }
+            if self.ui_owned {
+                if input.released || !input.down {
+                    self.ui_owned = false;
+                }
+                game.update(&input.masked(), view, game_dt);
+                return;
             }
             game.update(input, view, game_dt);
             return;
@@ -1244,6 +1261,34 @@ mod tests {
         app.update(&Input::press_at(HOME.center()), &v, 1.0 / 60.0);
         assert!(app.current.is_some());
         assert!(app.reporting.is_some());
+    }
+
+    #[test]
+    fn a_finger_that_dismissed_the_report_sheet_does_not_drag_in_the_game() {
+        let v = View::ipad_landscape();
+        let mut app = menu();
+        app.open(app_index("fruit"));
+        app.reporting = Some((hit("123e4567-e89b-42d3-a456-426614174000"), 0.0));
+        let (_, _, no) = report_rects(&v);
+        let mut s = kg_core::engine::Script::new(v);
+        app.update(&s.press(no.center()), &v, 1.0 / 60.0);
+        assert!(app.reporting.is_none());
+        let play = |app: &mut App| -> usize {
+            let (_, g) = app.current.as_mut().unwrap();
+            g.as_any()
+                .downcast_mut::<crate::games::fruit::FruitPlay>()
+                .unwrap()
+                .g
+                .blade
+                .len()
+        };
+        for _ in 0..5 {
+            app.update(&s.drag_to(vec2(400.0, 400.0)), &v, 1.0 / 60.0);
+        }
+        assert_eq!(play(&mut app), 0);
+        app.update(&s.release(), &v, 1.0 / 60.0);
+        app.update(&s.press(vec2(400.0, 400.0)), &v, 1.0 / 60.0);
+        assert_eq!(play(&mut app), 1);
     }
 
     #[test]

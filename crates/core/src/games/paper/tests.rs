@@ -118,7 +118,7 @@ fn a_loop_in_the_strip_past_the_last_whole_block_fills_its_inside() {
     let strip = (BLOCKS * BLOCK) as i32;
     for y in (strip - 20)..N {
         for x in 200..240 {
-            if y < strip - 16 || x < 204 || x >= 236 || y >= N - 2 {
+            if y < strip - 16 || !(204..236).contains(&x) || y >= N - 2 {
                 w.claim(idx(ivec2(x, y)), me);
             }
         }
