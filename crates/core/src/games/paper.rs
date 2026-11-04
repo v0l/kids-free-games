@@ -230,24 +230,18 @@ impl Paper {
     }
 
     fn read_input(&self, input: &Input, view: &View) -> Option<f32> {
-        let keys = vec2(
-            (input.right as i32 - input.left as i32) as f32,
-            (input.down_key as i32 - input.up as i32) as f32,
-        );
-        let keys = if keys == Vec2::ZERO {
-            input.key_dir.map_or(Vec2::ZERO, |d| d.delta().as_vec2())
+        let keys = if input.axis != Vec2::ZERO {
+            input.axis
         } else {
-            keys
+            input.key_dir.map_or(Vec2::ZERO, |d| d.delta().as_vec2())
         };
         if keys != Vec2::ZERO {
             return Some(world::angle_of(keys));
         }
-        if input.down {
-            let head = self.to_screen(view, self.me().pos);
-            if (input.pos - head).length() > STEER_DEAD_MM * input.mm() {
-                let at = self.eye(view).ground(view, input.pos, camera::SLAB)?;
-                return Some(world::angle_of(at - self.me().pos));
-            }
+        let head = self.to_screen(view, self.me().pos);
+        if let Some(finger) = input.aim(head, STEER_DEAD_MM) {
+            let at = self.eye(view).ground(view, finger, camera::SLAB)?;
+            return Some(world::angle_of(at - self.me().pos));
         }
         input.swipe.map(|d| world::angle_of(d.delta().as_vec2()))
     }

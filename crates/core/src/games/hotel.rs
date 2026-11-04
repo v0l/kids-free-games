@@ -14,56 +14,11 @@ use layout::*;
 use sim::*;
 
 pub const GAME: &str = "hotel";
-pub const STICK_MM: f32 = 9.0;
 pub const SAVE_EVERY: f32 = 4.0;
 pub const FLY_TIME: f32 = 0.55;
 pub const CAM_PITCH: f32 = 0.95;
 pub const CAM_PITCH_TALL: f32 = 1.05;
 pub const CAM_FOV: f32 = 0.82;
-
-#[derive(Clone, Copy, Debug, Default)]
-pub struct Stick {
-    pub origin: Vec2,
-    pub knob: Vec2,
-    pub active: bool,
-}
-
-impl Stick {
-    pub fn update(&mut self, input: &Input) -> Option<Vec2> {
-        let radius = STICK_MM * input.mm();
-        if input.pressed {
-            self.origin = input.pos;
-            self.active = true;
-        }
-        if !input.down {
-            self.active = false;
-            return None;
-        }
-        if !self.active {
-            self.origin = input.pos;
-            self.active = true;
-        }
-        let d = input.pos - self.origin;
-        let len = d.length();
-        if len > radius {
-            self.origin += d / len * (len - radius);
-        }
-        self.knob = input.pos - self.origin;
-        let dead = radius * 0.12;
-        (self.knob.length() > dead).then(|| self.knob / radius)
-    }
-
-    pub fn radius_px(input_mm: f32) -> f32 {
-        STICK_MM * input_mm
-    }
-}
-
-pub fn key_dir(input: &Input) -> Option<Vec2> {
-    let x = input.right as i32 as f32 - input.left as i32 as f32;
-    let y = input.down_key as i32 as f32 - input.up as i32 as f32;
-    let v = vec2(x, y);
-    (v != Vec2::ZERO).then(|| v.normalize())
-}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Cam {
@@ -195,7 +150,7 @@ pub enum Mode {
 pub struct Hotel {
     pub sim: Sim,
     pub mode: Mode,
-    pub stick: Stick,
+    pub stick: DirControl,
     pub focus: Vec2,
     pub zoom: f32,
     pub t: f32,
@@ -379,7 +334,7 @@ impl Hotel {
         Self {
             sim,
             mode: Mode::Play,
-            stick: Stick::default(),
+            stick: DirControl::new(DirectionMode::Stick),
             focus,
             zoom: 1.0,
             t: 0.0,
@@ -660,7 +615,7 @@ impl Game for Hotel {
         self.age_effects(dt);
         match self.mode {
             Mode::Play => {
-                let dir = key_dir(input).or_else(|| self.stick.update(input));
+                let dir = self.stick.read(input, Vec2::ZERO, dt).opt();
                 let world = dir.map(|d| self.cam(view).ground_dir(d));
                 if world.is_some() && !self.learned_move {
                     self.learned_move = true;
@@ -674,7 +629,7 @@ impl Game for Hotel {
                 self.mode = Mode::LevelUp(l, t + dt);
                 if t > 2.2 || (t > 0.6 && input.pressed) {
                     self.mode = Mode::Play;
-                    self.stick.active = false;
+                    self.stick.reset();
                 }
             }
             Mode::Moving(t) => {
@@ -863,7 +818,7 @@ mod tests {
         let start = h.sim.player.pos;
         for _ in 0..20 {
             let i = Input {
-                left: true,
+                axis: vec2(-1.0, 0.0),
                 ..Default::default()
             };
             h.update(&i, &view, 1.0 / 60.0);

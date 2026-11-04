@@ -1,4 +1,4 @@
-use glam::ivec2;
+use glam::{ivec2, vec2};
 use super::pilot::Pilot;
 use super::world::*;
 use super::*;
@@ -673,8 +673,7 @@ fn arrow_keys_steer_in_eight_directions() {
     let mut g = Paper::new();
     g.state = State::Playing;
     let keys = Input {
-        right: true,
-        down_key: true,
+        axis: vec2(1.0, 1.0).normalize(),
         ..Default::default()
     };
     g.update(&keys, &v, 1.0 / 60.0);

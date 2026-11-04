@@ -533,12 +533,7 @@ impl Clash {
                 }
             } else {
                 let turn = sim::turn_for(self.world.player().level()) * dt * 0.8;
-                if input.left {
-                    self.steer = sim::wrap_angle(self.steer - turn);
-                }
-                if input.right {
-                    self.steer = sim::wrap_angle(self.steer + turn);
-                }
+                self.steer = sim::wrap_angle(self.steer + turn * input.axis.x);
             }
         }
         let steer = if self.world.player_alive() {

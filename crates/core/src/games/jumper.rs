@@ -668,10 +668,8 @@ impl Game for Jumper {
         if (view.w - self.width).abs() > 1.0 && self.state == State::Ready {
             self.reset(view);
         }
-        let steer = if input.left {
-            -1.0
-        } else if input.right {
-            1.0
+        let steer = if input.axis.x != 0.0 {
+            input.axis.x
         } else if input.down {
             if input.pos.x < view.w / 2.0 {
                 -1.0

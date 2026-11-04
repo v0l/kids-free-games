@@ -391,7 +391,7 @@ impl Hud<'_> {
         if !s.active || self.h.mode != Mode::Play {
             return;
         }
-        let r = Stick::radius_px(mm).max(30.0);
+        let r = (kg_core::engine::STICK_MM * mm).max(30.0);
         pen.circle(s.origin, r, Color::new(1.0, 1.0, 1.0, 0.18));
         let k = s.origin + s.knob.clamp_length_max(r);
         pen.circle(k, r * 0.45, Color::new(1.0, 1.0, 1.0, 0.55));

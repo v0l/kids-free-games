@@ -670,12 +670,7 @@ impl Game for Breakout {
         if input.down {
             self.paddle_x = approach(self.paddle_x, input.pos.x, PADDLE_EASE, dt);
         }
-        if input.left {
-            self.paddle_x -= 700.0 * dt;
-        }
-        if input.right {
-            self.paddle_x += 700.0 * dt;
-        }
+        self.paddle_x += 700.0 * input.axis.x * dt;
         let half = self.paddle_w() / 2.0;
         self.paddle_x = self.paddle_x.clamp(half, view.w - half);
         match self.state {

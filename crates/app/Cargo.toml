@@ -39,6 +39,7 @@ bevy = { version = "0.20", default-features = false, features = [
   "mouse",
   "keyboard",
   "touch",
+  "gamepad",
 ] }
 
 [target.'cfg(all(unix, not(target_os = "android"), not(target_os = "ios"), not(target_os = "macos")))'.dependencies]

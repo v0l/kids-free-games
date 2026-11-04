@@ -3,6 +3,7 @@ pub mod audio;
 pub mod draw;
 pub mod game3d;
 pub mod games;
+pub mod input;
 pub mod jev;
 pub mod link;
 pub mod menu;
@@ -15,13 +16,9 @@ pub mod text;
 pub mod ui;
 pub mod web;
 
-use bevy::input::keyboard::{Key as BKey, KeyboardInput};
-use bevy::input::touch::TouchPhase;
-use bevy::input::ButtonState;
 use bevy::prelude::*;
 use bevy::window::{PrimaryWindow, WindowResolution};
-use glam::vec2;
-use kg_core::engine::{Finger, InputTracker, Key, Pointer, Raw, View};
+use kg_core::engine::{InputTracker, Key, Pointer, Raw, View};
 use kg_core::safe::SafeArea;
 
 pub enum Scene {
@@ -37,6 +34,7 @@ pub struct Frame {
     pub scene: Scene,
     demo: Option<u32>,
     tracker: InputTracker,
+    gather: input::Gather,
     safe: SafeArea,
     audio: Option<audio::Audio>,
     per_mm: Option<Option<f32>>,
@@ -49,6 +47,7 @@ impl Frame {
             scene,
             demo: web::query("demo").map(|_| 0),
             tracker: InputTracker::default(),
+            gather: input::Gather::default(),
             safe: SafeArea::default(),
             audio: None,
             per_mm: None,
@@ -82,57 +81,13 @@ impl Frame {
     }
 }
 
-#[derive(Default)]
-struct Gathered {
-    touches: Vec<(u64, Finger, glam::Vec2)>,
-    typed: Vec<char>,
-    pressed: Vec<Key>,
-}
-
-fn map_key(k: KeyCode) -> Option<Key> {
-    Some(match k {
-        KeyCode::ArrowUp => Key::Up,
-        KeyCode::ArrowDown => Key::Down,
-        KeyCode::ArrowLeft => Key::Left,
-        KeyCode::ArrowRight => Key::Right,
-        KeyCode::KeyW => Key::W,
-        KeyCode::KeyA => Key::A,
-        KeyCode::KeyS => Key::S,
-        KeyCode::KeyD => Key::D,
-        KeyCode::Space => Key::Space,
-        KeyCode::Enter | KeyCode::NumpadEnter => Key::Enter,
-        KeyCode::Escape => Key::Escape,
-        KeyCode::Backspace => Key::Backspace,
-        _ => return None,
-    })
-}
-
-const KEYS: [KeyCode; 13] = [
-    KeyCode::ArrowUp,
-    KeyCode::ArrowDown,
-    KeyCode::ArrowLeft,
-    KeyCode::ArrowRight,
-    KeyCode::KeyW,
-    KeyCode::KeyA,
-    KeyCode::KeyS,
-    KeyCode::KeyD,
-    KeyCode::Space,
-    KeyCode::Enter,
-    KeyCode::NumpadEnter,
-    KeyCode::Escape,
-    KeyCode::Backspace,
-];
-
 #[allow(clippy::too_many_arguments)]
 fn frame(
     mut state: NonSendMut<Frame>,
     mut pen: ResMut<paint::Pen>,
     time: Res<Time<Real>>,
     window: Query<&Window, With<PrimaryWindow>>,
-    keys: Res<ButtonInput<KeyCode>>,
-    mouse: Res<ButtonInput<MouseButton>>,
-    mut touch_events: MessageReader<TouchInput>,
-    mut key_events: MessageReader<KeyboardInput>,
+    mut devices: input::Devices,
     mut clear: ResMut<ClearColor>,
 ) {
     packs::pump();
@@ -143,29 +98,6 @@ fn frame(
         return;
     }
     let state = &mut *state;
-    let mut g = Gathered::default();
-    let events: Vec<(u64, Finger, glam::Vec2)> = touch_events
-        .read()
-        .map(|t| {
-            let f = match t.phase {
-                TouchPhase::Started => Finger::Started,
-                TouchPhase::Moved => Finger::Held,
-                TouchPhase::Ended | TouchPhase::Canceled => Finger::Ended,
-            };
-            (t.id, f, t.position)
-        })
-        .collect();
-    g.touches = events;
-    for e in key_events.read() {
-        if e.state != ButtonState::Pressed {
-            continue;
-        }
-        if e.key_code == KeyCode::Backspace {
-            g.typed.push(profiles::BACKSPACE);
-        } else if let BKey::Character(s) = &e.logical_key {
-            g.typed.extend(s.chars().filter(|c| !c.is_control()));
-        }
-    }
     let px_size = (lw * dpi, lh * dpi);
     if px_size != state.last_size {
         state.last_size = px_size;
@@ -178,29 +110,12 @@ fn frame(
     let per_mm = *state
         .per_mm
         .get_or_insert_with(|| platform::units_per_mm_px().map(|px| px / dpi));
-    for k in KEYS {
-        if keys.just_pressed(k) {
-            g.pressed.extend(map_key(k));
-        }
-    }
-    let raw = Raw {
-        touches: g.touches,
-        mouse: Pointer {
-            pos: win.cursor_position().unwrap_or_default(),
-            down: mouse.pressed(MouseButton::Left),
-            pressed: mouse.just_pressed(MouseButton::Left),
-            released: mouse.just_released(MouseButton::Left),
-        },
-        keys_down: KEYS
-            .iter()
-            .filter(|k| keys.pressed(**k))
-            .filter_map(|k| map_key(*k))
-            .collect(),
-        keys_pressed: g.pressed,
-        typed: g.typed,
-        units_per_mm: per_mm,
-        screen: vec2(lw, lh),
-    };
+    let raw = state.gather.raw(
+        &mut devices,
+        win,
+        per_mm,
+        time.delta_secs().min(1.0 / 20.0),
+    );
     let mut raw = raw;
     if let Some(f) = &mut state.demo {
         *f += 1;

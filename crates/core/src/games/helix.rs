@@ -419,12 +419,7 @@ impl Game for Helix {
             }
         }
         self.follow_finger(input, dt);
-        if input.left {
-            self.angle -= 3.5 * dt;
-        }
-        if input.right {
-            self.angle += 3.5 * dt;
-        }
+        self.angle += 3.5 * input.axis.x * dt;
         let target = self.y - view.h * 0.35;
         if target > self.cam {
             self.cam = approach(self.cam, target, 10.0, dt);
@@ -790,8 +785,7 @@ mod tests {
                 d += TAU;
             }
             let input = Input {
-                left: d < -0.05,
-                right: d > 0.05,
+                axis: vec2(if d < -0.05 { -1.0 } else if d > 0.05 { 1.0 } else { 0.0 }, 0.0),
                 ..Default::default()
             };
             g.update(&input, view, dt);
