@@ -105,7 +105,7 @@ pub const HOLD_SECS: f32 = 0.45;
 pub const PAD_DEAD: f32 = 0.2;
 pub const STICK_MM: f32 = 9.0;
 pub const STICK_DEAD: f32 = 0.12;
-pub const STEER_DEAD_MM: f32 = 6.0;
+pub const STEER_DEAD_MM: f32 = 2.5;
 pub const AXIS_ON: f32 = 0.5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -153,7 +153,10 @@ impl Direction {
         }
         let a = self.vec.y.atan2(self.vec.x);
         let step = (a / std::f32::consts::FRAC_PI_4).round() as i32;
-        let (s, c) = ((step as f32 * std::f32::consts::FRAC_PI_4).sin(), (step as f32 * std::f32::consts::FRAC_PI_4).cos());
+        let (s, c) = (
+            (step as f32 * std::f32::consts::FRAC_PI_4).sin(),
+            (step as f32 * std::f32::consts::FRAC_PI_4).cos(),
+        );
         Some(ivec2(c.round() as i32, s.round() as i32))
     }
 }
@@ -228,7 +231,9 @@ impl DirControl {
                 .map_or(Direction::NONE, |d| Direction::new(d.delta().as_vec2())),
             DirectionMode::Steer => input
                 .aim(centre, STEER_DEAD_MM)
-                .map_or(Direction::NONE, |p| Direction::new((p - centre).normalize())),
+                .map_or(Direction::NONE, |p| {
+                    Direction::new((p - centre).normalize())
+                }),
             DirectionMode::Stick => self.stick(input),
         }
     }
@@ -1420,11 +1425,20 @@ mod tests {
             ..Default::default()
         };
         let a = vec2(100.0, 100.0);
-        let p = t.poll(&Raw { touches: vec![(1, Finger::Started, a)], ..base.clone() }, &v);
+        let p = t.poll(
+            &Raw {
+                touches: vec![(1, Finger::Started, a)],
+                ..base.clone()
+            },
+            &v,
+        );
         assert!(p.pressed);
         let p = t.poll(
             &Raw {
-                touches: vec![(1, Finger::Held, a), (2, Finger::Started, vec2(800.0, 600.0))],
+                touches: vec![
+                    (1, Finger::Held, a),
+                    (2, Finger::Started, vec2(800.0, 600.0)),
+                ],
                 ..base
             },
             &v,

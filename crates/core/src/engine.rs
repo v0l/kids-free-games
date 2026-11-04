@@ -75,7 +75,6 @@ impl View {
     }
 }
 
-
 #[derive(Clone, Copy, Debug, Default)]
 pub struct Best(pub u32);
 
@@ -151,5 +150,4 @@ mod tests {
         let wide = View::fit(1920.0, 1080.0);
         assert!((wide.h - 720.0).abs() < 0.01 && wide.w > 1200.0);
     }
-
 }

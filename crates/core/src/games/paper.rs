@@ -24,7 +24,6 @@ pub const FEED_LIFE: f32 = 3.2;
 pub const FEED_MAX: usize = 3;
 const THREAT_RANGE: f32 = 26.0;
 const WIN_DELAY: f32 = 1.4;
-const STEER_DEAD_MM: f32 = 2.5;
 const MIN_CLAIM_PCT: f32 = 0.05;
 
 pub const COLORS: [(u8, u8, u8); 12] = [

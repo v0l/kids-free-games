@@ -785,7 +785,16 @@ mod tests {
                 d += TAU;
             }
             let input = Input {
-                axis: vec2(if d < -0.05 { -1.0 } else if d > 0.05 { 1.0 } else { 0.0 }, 0.0),
+                axis: vec2(
+                    if d < -0.05 {
+                        -1.0
+                    } else if d > 0.05 {
+                        1.0
+                    } else {
+                        0.0
+                    },
+                    0.0,
+                ),
                 ..Default::default()
             };
             g.update(&input, view, dt);

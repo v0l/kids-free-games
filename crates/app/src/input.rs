@@ -138,3 +138,84 @@ impl Gather {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use std::path::{Path, PathBuf};
+
+    const PLATFORM_CALLS: [&str; 10] = [
+        "ButtonInput",
+        "MouseButton",
+        "KeyCode",
+        "TouchInput",
+        "Gamepad",
+        "cursor_position",
+        "KeyboardInput",
+        "MouseWheel",
+        "CursorMoved",
+        "WindowFocused",
+    ];
+
+    const ALLOWED: [&str; 1] = ["input.rs"];
+
+    fn rust_files(dir: &Path, out: &mut Vec<PathBuf>) {
+        for e in std::fs::read_dir(dir).unwrap().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                rust_files(&p, out);
+            } else if p.extension().is_some_and(|x| x == "rs") {
+                out.push(p);
+            }
+        }
+    }
+
+    fn offenders(root: &Path) -> Vec<String> {
+        let mut files = Vec::new();
+        rust_files(root, &mut files);
+        let mut bad = Vec::new();
+        for f in files {
+            let name = f.file_name().unwrap().to_string_lossy().to_string();
+            if f.parent() == Some(root) && ALLOWED.contains(&name.as_str()) {
+                continue;
+            }
+            let text = std::fs::read_to_string(&f).unwrap();
+            for (i, line) in text.lines().enumerate() {
+                if PLATFORM_CALLS.iter().any(|c| line.contains(c)) {
+                    bad.push(format!("{}:{}: {}", f.display(), i + 1, line.trim()));
+                }
+            }
+        }
+        bad
+    }
+
+    #[test]
+    fn games_never_call_the_platform_for_pointer_or_key_input() {
+        let app = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let core = Path::new(env!("CARGO_MANIFEST_DIR")).join("../core/src");
+        let mut bad = offenders(&app.join("games"));
+        bad.extend(offenders(&core.join("games")));
+        assert!(bad.is_empty(), "direct platform input:\n{}", bad.join("\n"));
+    }
+
+    #[test]
+    fn the_only_bevy_input_reader_is_the_input_module() {
+        let app = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let bad: Vec<String> = offenders(&app)
+            .into_iter()
+            .filter(|l| !l.contains("/src/input.rs"))
+            .collect();
+        assert!(bad.is_empty(), "direct platform input:\n{}", bad.join("\n"));
+    }
+
+    #[test]
+    fn the_scan_would_catch_a_violation() {
+        let dir = std::env::temp_dir().join("kg_input_scan");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(
+            dir.join("bad.rs"),
+            "fn f(k: Res<ButtonInput<KeyCode>>) {}\n",
+        )
+        .unwrap();
+        assert_eq!(offenders(&dir).len(), 1);
+    }
+}

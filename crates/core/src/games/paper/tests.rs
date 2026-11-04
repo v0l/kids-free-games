@@ -1,8 +1,8 @@
-use glam::{ivec2, vec2};
 use super::pilot::Pilot;
 use super::world::*;
 use super::*;
 use crate::rng as rand;
+use glam::{ivec2, vec2};
 use std::f32::consts::{FRAC_PI_2, PI};
 
 const RIGHT: f32 = 0.0;
@@ -99,7 +99,12 @@ fn a_loop_reaching_far_beyond_your_land_fills_all_of_its_inside() {
     go(&mut w, 0, LEFT, 2.0);
     assert!(w.players[0].alive);
     assert!(!w.players[0].out(), "the loop closed");
-    for p in [vec2(35.0, 35.0), vec2(45.0, 45.0), vec2(48.0, 22.0), vec2(25.0, 48.0)] {
+    for p in [
+        vec2(35.0, 35.0),
+        vec2(45.0, 45.0),
+        vec2(48.0, 22.0),
+        vec2(25.0, 48.0),
+    ] {
         assert!(owned(&w, p, 0), "{p} inside the loop is not filled");
     }
 }
@@ -125,7 +130,10 @@ fn a_loop_in_the_strip_past_the_last_whole_block_fills_its_inside() {
     p.cells = vec![idx(ivec2(220, strip - 17))];
     w.set_trail_for_test(idx(ivec2(220, strip - 17)), id);
     w.close_loop(id);
-    assert_eq!(w.owner[empty], me, "a cell under the last whole block row stayed empty");
+    assert_eq!(
+        w.owner[empty], me,
+        "a cell under the last whole block row stayed empty"
+    );
 }
 
 #[test]
@@ -920,7 +928,12 @@ fn at_full_effort_the_rl_brain_outlives_the_hand_written_bot() {
         per_min(&brain),
         per_min(&bot)
     );
-    assert!(brain.stolen >= bot.stolen, "{} vs {}", brain.stolen, bot.stolen);
+    assert!(
+        brain.stolen >= bot.stolen,
+        "{} vs {}",
+        brain.stolen,
+        bot.stolen
+    );
 }
 
 #[test]

@@ -526,12 +526,10 @@ impl Clash {
         }
         self.run_t += dt;
         if self.ending == 0.0 {
-            if input.down {
-                let d = input.pos - self.centre(view);
-                if d.length() > 12.0 {
-                    self.steer = d.y.atan2(d.x);
-                }
-            } else {
+            if let Some(at) = input.aim(self.centre(view), STEER_DEAD_MM) {
+                let d = at - self.centre(view);
+                self.steer = d.y.atan2(d.x);
+            } else if !input.down {
                 let turn = sim::turn_for(self.world.player().level()) * dt * 0.8;
                 self.steer = sim::wrap_angle(self.steer + turn * input.axis.x);
             }

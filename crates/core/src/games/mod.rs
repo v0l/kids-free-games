@@ -237,3 +237,6 @@ mod tests {
         assert_eq!(find("flappy").unwrap().name, "Flappy Bird");
     }
 }
+
+#[cfg(test)]
+mod input_tests;

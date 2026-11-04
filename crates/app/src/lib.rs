@@ -110,12 +110,9 @@ fn frame(
     let per_mm = *state
         .per_mm
         .get_or_insert_with(|| platform::units_per_mm_px().map(|px| px / dpi));
-    let raw = state.gather.raw(
-        &mut devices,
-        win,
-        per_mm,
-        time.delta_secs().min(1.0 / 20.0),
-    );
+    let raw = state
+        .gather
+        .raw(&mut devices, win, per_mm, time.delta_secs().min(1.0 / 20.0));
     let mut raw = raw;
     if let Some(f) = &mut state.demo {
         *f += 1;
