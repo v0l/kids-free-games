@@ -33,6 +33,10 @@ struct Args {
     bf16: bool,
     league_servers: usize,
     device: String,
+    demos: String,
+    bc_epochs: usize,
+    gene_set: Vec<(String, f32)>,
+    critic_rounds: usize,
 }
 
 fn args() -> Args {
@@ -59,6 +63,10 @@ fn args() -> Args {
         bf16: false,
         league_servers: 4,
         device: devices::best().into(),
+        demos: String::new(),
+        bc_epochs: 4,
+        gene_set: vec![],
+        critic_rounds: 0,
     };
     let v: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -86,6 +94,13 @@ fn args() -> Args {
             "--minibatch" => a.minibatch = x.parse().unwrap(),
             "--bf16" => a.bf16 = x == "1" || x == "true",
             "--device" => a.device = x,
+            "--gene" => {
+                let (k, v) = x.split_once('=').unwrap();
+                a.gene_set.push((k.to_string(), v.parse().unwrap()));
+            }
+            "--critic-rounds" => a.critic_rounds = x.parse().unwrap(),
+            "--demos" => a.demos = x,
+            "--bc-epochs" => a.bc_epochs = x.parse().unwrap(),
             "--league-servers" => a.league_servers = x.parse().unwrap(),
             other => panic!("unknown flag {other}"),
         }
@@ -274,11 +289,12 @@ mod paper {
     }
 
     fn score(r: &Report) -> f32 {
-        (20.0 * r.wins + 10.0 * r.outlived) * (1.0 - r.circling) * (1.0 - r.stall)
-            + 200.0 * r.peak
+        let per_min = r.kills / r.secs.max(1.0) * 60.0;
+        100.0 * (r.wins + r.outlived) * (1.0 - r.circling) * (1.0 - r.stall)
+            + 300.0 * r.peak
             + 300.0 * r.claim
-            + 400.0 * r.stolen
-            + 5.0 * r.kills
+            + 800.0 * r.stolen
+            + 8.0 * per_min
             - 30.0 * r.circling
             - 15.0 * r.stall
             - 20.0 * r.wobble
@@ -375,6 +391,7 @@ struct Member<G: Game> {
     episodes: (f32, f32, usize),
     timing: (f64, f64, f64, f64, f64),
     league_size: usize,
+    pg_scale: f32,
 }
 
 struct SeatJob {
@@ -512,6 +529,7 @@ impl<G: Game> Member<G> {
             episodes: (0.0, 0.0, 0),
             timing: (0.0, 0.0, 0.0, 0.0, 0.0),
             league_size: 0,
+            pg_scale: 1.0,
         };
         m.batch.write_obs(&mut m.grid, &mut m.scal);
         Ok(m)
@@ -669,7 +687,7 @@ impl<G: Game> Member<G> {
                 let pg = s1.minimum(&s2)?.mean_all()?.neg()?;
                 let vl = (v - bret.index_select(&idx, 0)?)?.sqr()?.mean_all()?;
                 let ent = (lsm.exp()? * &lsm)?.sum(D::Minus1)?.mean_all()?.neg()?;
-                let loss = ((&pg + (&vl * 0.5)?)? - (&ent * (self.ent * ent_boost) as f64)?)?;
+                let loss = (((&pg * self.pg_scale as f64)? + (&vl * 0.5)?)? - (&ent * (self.ent * ent_boost) as f64)?)?;
                 self.opt.backward_step(&loss)?;
                 stats = (ent.to_scalar::<f32>()?, vl.to_scalar::<f32>()?);
             }
@@ -756,7 +774,7 @@ impl<G: Game> Member<G> {
         for g in &mut self.genes {
             *g *= rng.jiggle(0.8, 1.25);
         }
-        self.lr = (self.lr * rng.jiggle(0.8, 1.25) as f64).clamp(2e-5, 1e-3);
+        self.lr = (self.lr * rng.jiggle(0.8, 1.25) as f64).clamp(1e-6, 1e-3);
         self.ent = (self.ent * rng.jiggle(0.8, 1.25)).clamp(0.002, 0.05);
         let genes = self.genes.clone();
         for e in &mut self.batch.envs {
@@ -777,7 +795,10 @@ impl<G: Game> Member<G> {
 fn population<G: Game>(a: &Args) -> Result<()> {
     let dev = devices::open(&a.device, false)?;
     let mut rng = Rng(0x9e3779b97f4a7c15);
-    let defaults: Vec<f32> = G::genes().iter().map(|g| g.1).collect();
+    let defaults: Vec<f32> = G::genes()
+        .iter()
+        .map(|g| a.gene_set.iter().find(|s| s.0 == g.0).map_or(g.1, |s| s.1))
+        .collect();
     let mut members: Vec<Member<G>> = vec![];
     for id in 0..a.pop {
         let (genes, lr, ent) = if id == 0 {
@@ -833,7 +854,10 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         );
         let fresh = 1.0 - ((round - 1) as f32 / a.warmup.max(1) as f32).min(1.0);
         let explore = 0.01 + (a.explore - 0.01) * fresh;
-        let ent_boost = 1.0;
+        let ent_boost = if round <= a.critic_rounds { 0.0 } else { 1.0 };
+        for m in members.iter_mut() {
+            m.pg_scale = if round <= a.critic_rounds { 0.0 } else { 1.0 };
+        }
         println!("  explore {explore:.3}");
         let train_from = Instant::now();
         start = Instant::now();
@@ -1030,6 +1054,63 @@ fn population<G: Game>(a: &Args) -> Result<()> {
     Ok(())
 }
 
+fn clone_demos<G: Game>(a: &Args, out: &str) -> Result<()> {
+    let spec = G::spec();
+    let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+    let row = gsize + ns * 4 + 1;
+    let bytes = std::fs::read(&a.demos).unwrap();
+    let n = bytes.len() / row;
+    let dev = devices::open(&a.device, false)?;
+    let (vm, net) = net::build(spec, &dev)?;
+    let mut opt = adam(&vm, 1e-3)?;
+    let mut rng = Rng(0x2545f4914f6cdd1d);
+    let mut counts = vec![0usize; G::spec().actions];
+    for i in 0..n {
+        counts[bytes[i * row + row - 1] as usize] += 1;
+    }
+    println!("cloning {n} demos, action counts {counts:?}");
+    let mb = 512;
+    for epoch in 0..a.bc_epochs {
+        let mut order: Vec<usize> = (0..n).collect();
+        for i in (1..n).rev() {
+            order.swap(i, rng.below(i + 1));
+        }
+        let (mut loss_sum, mut hits, mut seen) = (0.0f32, 0usize, 0usize);
+        for chunk in order.chunks(mb) {
+            let mut g = Vec::with_capacity(chunk.len() * gsize);
+            let mut sc = Vec::with_capacity(chunk.len() * ns);
+            let mut act = Vec::with_capacity(chunk.len());
+            for &i in chunk {
+                let r = &bytes[i * row..(i + 1) * row];
+                g.extend(r[..gsize].iter().map(|v| *v as f32 / 255.0));
+                for k in 0..ns {
+                    let o = gsize + k * 4;
+                    sc.push(f32::from_le_bytes([r[o], r[o + 1], r[o + 2], r[o + 3]]));
+                }
+                act.push(r[row - 1] as u32);
+            }
+            let gt = Tensor::from_slice(&g, (chunk.len(), gsize), &dev)?;
+            let st = Tensor::from_slice(&sc, (chunk.len(), ns), &dev)?;
+            let at = Tensor::from_slice(&act, chunk.len(), &dev)?;
+            let (logits, _) = net.forward(&gt, &st)?;
+            let lsm = candle_nn::ops::log_softmax(&logits, D::Minus1)?;
+            let nll = lsm.gather(&at.unsqueeze(1)?, 1)?.squeeze(1)?.neg()?.mean_all()?;
+            opt.backward_step(&nll)?;
+            loss_sum += nll.to_scalar::<f32>()? * chunk.len() as f32;
+            let pred: Vec<u32> = logits.argmax(D::Minus1)?.to_vec1()?;
+            hits += pred.iter().zip(&act).filter(|(p, q)| p == q).count();
+            seen += chunk.len();
+        }
+        println!(
+            "clone epoch {epoch}: loss {:.4} accuracy {:.1}%",
+            loss_sum / seen as f32,
+            hits as f32 * 100.0 / seen as f32
+        );
+    }
+    vm.save(out)?;
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let a = args();
     kg_core::save::use_memory_only();
@@ -1038,6 +1119,15 @@ fn main() -> Result<()> {
     if a.bf16 && !devices::bf16_works(&a.device) {
         println!("bf16 does not work on {}, falling back to f32", a.device);
         a.bf16 = false;
+    }
+    if !a.demos.is_empty() && a.resume.is_empty() {
+        let start = format!("{}.bc.safetensors", a.out);
+        match a.game.as_str() {
+            "clash" => clone_demos::<kg_core::games::clash::rl::Arena>(&a, &start)?,
+            "paper" => clone_demos::<kg_core::games::paper::rl::Arena>(&a, &start)?,
+            g => panic!("unknown game {g}"),
+        }
+        a.resume = start;
     }
     let a = a;
     match a.game.as_str() {
