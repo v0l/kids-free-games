@@ -29,7 +29,7 @@ Sizes: the three `.gcad` files are 132315 B (26582 B gzipped); the GLBs they rep
 
 Tests in `crates/app/src/games/runner/world.rs` build every `.gcad` and check the rig (15 bones), the six clip names, triangle budgets, height and feet, and that a clip moves the rig. `a_tap_does_not_start_the_run_before_the_hero_is_built` covers the loading gate. `docs/hero/glb_vs_gcad.png` compares the old GLB (top) with the gcad build (bottom) for every clip from the game camera: 99.8% of pixels within 16 levels, mean difference 0.1.
 
-The eight solid-part props still ship as GLBs: gcad-mesh runs only the mesh subset (gcad issue #271 asks for flat solid profiles). `art/3d/props/build.sh` exports them with `gcad export` and `art/3d/scale_glb.py` scales them.
+The eight solid-part props still ship as GLBs: gcad-mesh runs only the mesh subset (gcad issue #271 asks for flat solid profiles). `art/3d/props/build.sh` exports them with `gcad export` with `--height 1 --centre` (`--scale 0.01 --centre` for road and buildings).
 
 ## Hero motion
 
