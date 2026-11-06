@@ -16,7 +16,7 @@ mkdir -p "$OUT/assets/models"
 cp assets/models/* "$OUT/assets/models/"
 cp assets/sound.kgs assets/sound_words.kgs "$OUT/assets/"
 wasm-bindgen --target web --no-typescript --out-dir "$OUT" --out-name kids_games \
-  "target/wasm32-unknown-unknown/$PROFILE/kids_games.wasm"
+  "${CARGO_TARGET_DIR:-target}/wasm32-unknown-unknown/$PROFILE/kids_games.wasm"
 if command -v wasm-opt >/dev/null && [ "$PROFILE" != dev ]; then
   wasm-opt -Oz --enable-simd --enable-bulk-memory --enable-nontrapping-float-to-int --enable-sign-ext \
     --enable-mutable-globals --enable-reference-types \

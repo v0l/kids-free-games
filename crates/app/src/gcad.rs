@@ -409,8 +409,42 @@ impl AssetLoader for GcadLoader {
 
 pub struct GcadPlugin;
 
+pub const WARM: [&str; 2] = ["models/hero.gcad", "models/prop_tree.gcad"];
+
+#[cfg(not(target_arch = "wasm32"))]
+pub fn source_of(rel: &str) -> Option<String> {
+    let text = String::from_utf8(kg_core::assets::read(rel)?).ok()?;
+    let dir = rel.rsplit_once('/').map_or("", |(d, _)| d).to_string();
+    expand_includes(&text, &mut |name| {
+        kg_core::assets::read(&format!("{dir}/{name}"))
+            .and_then(|b| String::from_utf8(b).ok())
+            .ok_or_else(|| GcadError(format!("{dir}/{name} missing")))
+    })
+    .ok()
+}
+
+fn warm_up() {
+    #[cfg(not(target_arch = "wasm32"))]
+    bevy::tasks::AsyncComputeTaskPool::get()
+        .spawn(async {
+            for rel in WARM {
+                if let Some(source) = source_of(rel) {
+                    let started = bevy::platform::time::Instant::now();
+                    if build(&source, 1.0).is_ok() {
+                        info!(
+                            "warmed {rel} in {:.0} ms",
+                            started.elapsed().as_secs_f64() * 1000.0
+                        );
+                    }
+                }
+            }
+        })
+        .detach();
+}
+
 impl Plugin for GcadPlugin {
     fn build(&self, app: &mut App) {
-        app.init_asset_loader::<GcadLoader>();
+        app.init_asset_loader::<GcadLoader>()
+            .add_systems(Startup, warm_up);
     }
 }

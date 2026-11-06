@@ -3,7 +3,7 @@ set -e
 cd "$(dirname "$0")"
 OUT=${OUT:-../../../assets/models}
 audit() { python3 ../../../scripts/glb_audit.py "$1" 4000 | grep -v TEXCOORD || true; }
-for name in ${@:-barrier hurdle gate train coin tree arch road buildings}; do
+for name in ${@:-barrier hurdle gate train coin arch road buildings}; do
   case $name in
     road)
       gcad export road.gcad /tmp/prop_road.raw.glb

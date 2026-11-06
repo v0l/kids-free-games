@@ -1,45 +1,48 @@
 # Lane Runner asset pipeline
 
-Every visual in Lane Runner is generated in-house. Nothing is Kenney or stock.
+Every visual in Lane Runner is made in-house. Nothing is Kenney or stock.
 
 | Asset | Source | Files |
 |---|---|---|
-| Sky, road, pavement, wall tile | FLUX.1-dev, mirror-tiled sprites | `art/gen/prompts/runner.json`, `art/runner.txt` |
-| Props (barrier, hurdle, gate, train, coin, tree, finish arch), road, buildings | gcad: solid parts (extrude, fillet) for everything flat-sided, a mesh only for the tree | `art/3d/props/*.gcad`, `art/3d/props/build.sh`, `assets/models/prop_*.glb` |
-| Hero | gcad mesh and rig, hand keyed clips | `art/3d/hero/hero.gcad`, `art/3d/hero/build.sh`, `assets/models/hero.glb` |
+| Sky backdrop | FLUX.1-dev sprite | `art/gen/prompts/runner.json`, `art/runner.txt` |
+| Hero, motion clips, tree | gcad mesh text, built at startup by gcad-mesh | `assets/models/hero.gcad`, `assets/models/motion.gcad`, `assets/models/prop_tree.gcad` |
+| Barrier, hurdle, gate, train, coin, finish arch, road, buildings | gcad solid parts, exported to GLB | `art/3d/props/*.gcad`, `art/3d/props/build.sh`, `assets/models/prop_*.glb` |
 
-The runner loads the glbs with `bevy_gltf` (`Models` in `crates/app/src/games/runner/world.rs`) and plays the hero clips with an `AnimationGraph`. `every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips` checks the files.
+## Models built at startup
 
-## Hero mesh
+The hero and the tree ship as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh` like the GLBs). `crates/app/src/gcad.rs` is a Bevy asset loader for `.gcad`: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with `gcad_mesh::build_with` (gcad pinned by git rev in `crates/app/Cargo.toml`), and turns the result into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The model is scaled to 1 unit high with its feet at 0 (the runner then scales it to `HERO_H`); unrigged models are centred on x and z.
 
-1. `art/gen/make.sh art/gen/prompts/player3d.json` renders four concepts (`art/3d/hero/concept.json`). Pick the cleanest A-pose.
-2. Hunyuan3D-2 on spark (`/tmp/Hunyuan3D-2`, venv `/tmp/3d`) makes the shape, then the texture, from the cut image.
+`GcadPlugin` warms both models on a background task at app start, and the loader runs on Bevy's asset threads, so nothing builds on the main thread. A process-wide cache keyed by the text and detail level builds each model once even when the scene and its six clips are requested separately. The runner stays on "Getting ready..." and ignores taps until the hero has loaded (`RunnerPlay::loaded`).
 
-## Hero motion (Kimodo)
+Build time per model (release, best of three; the hero includes its clips):
 
-1. Kimodo lives on spark: repo `/tmp/kimodo`, venv `/tmp/kmv` (needs HF access to `meta-llama/Meta-Llama-3-8B-Instruct`). Its `MotionCorrection` package builds on ARM with x86 intrinsics mapped by SIMDe (`#include <simde/x86/avx2.h>` in `src/cpp/Math/SIMD.h`, `-msse4.1 -mavx` removed from CMakeLists).
-2. `TEXT_ENCODER_MODE=local PYTHONPATH=/tmp/kimodo /tmp/kmv/bin/python art/3d/motion/kimodo_batch.py art/3d/motion/hero.json out/` renders several seeds per prompt (the encoder takes about 8 minutes to load, then seconds per clip). The chosen takes are kept in `art/3d/motion/bvh`.
-3. `art/3d/motion/hero_clips.json` picks one take per game clip: `loop` cuts a seamless cycle at the closest matching pose pair, `trim: air|low` keeps the airborne or crouched span, `lift: false` pins the hips, `arm_clear` (degrees, default 30) keeps the arms off the wide jacket, `amp` scales a bone's rotation.
+| | hero | tree | total |
+|---|---|---|---|
+| Desktop, 48 threads (`cargo run --release -p kids_games --example gcad_timing`) | 384 ms | 97 ms | 480 ms |
+| Desktop, one core (`taskset -c 0`) | 773 ms | 279 ms | 1052 ms |
+| Android emulator `kidsgames-test` (x86_64, 4 cores, swiftshader), three cold starts | 463-1095 ms | 138-475 ms | 0.6-1.6 s |
+| Web, headless Chrome (wasm32, single thread) | 829 ms | 272 ms | 1.1 s |
 
-## Rig and retarget
+All of it is under the 2 s budget and off the main thread, so there is no on-disk cache. `GcadSettings::detail` (2 halves the grid) is there for slow devices: one core drops from 1052 ms to 488 ms at detail 2.
 
-`blender -b -P art/3d/hero/build.py -- tex.glb assets/models/hero.glb art/3d/motion/hero_clips.json`
+Sizes: the three `.gcad` files are 132315 B (26582 B gzipped); the GLBs they replace were 722524 B (`hero.glb` 645104 B, `prop_tree.glb` 77420 B).
 
-- Cleans and decimates the mesh to 5000 tris, builds a 16 bone rig (hips, chest, head, upper arm, forearm, hand, thigh, shin, foot) with joints placed on the mesh, and skins it with automatic weights.
-- Copies rotations, not directions: each frame, every source bone's world rotation relative to its BVH rest pose is applied to the matching bone, after a fixed rest offset that lines our bone up with the source bone. Wrist turns, elbow direction and shoulder twist come through as captured.
-- The only chibi correction is `arm_clear`: if an upper arm would swing into the torso it is turned outward just enough, carrying the forearm and hand with it.
-- Exports at 30 fps. The runner scales jump and slide playback to the game's air time and slide time, and the run to ground speed. The game adds nothing but the landing squash on top.
+Tests in `crates/app/src/games/runner/world.rs` build every `.gcad` and check the rig (15 bones), the six clip names, triangle budgets, height and feet, and that a clip moves the rig. `a_tap_does_not_start_the_run_before_the_hero_is_built` covers the loading gate. `docs/hero/glb_vs_gcad.png` compares the old GLB (top) with the gcad build (bottom) for every clip from the game camera: 99.8% of pixels within 16 levels, mean difference 0.1.
+
+The eight solid-part props still ship as GLBs: gcad-mesh runs only the mesh subset (gcad issue #271 asks for flat solid profiles). `art/3d/props/build.sh` exports them with `gcad export` and `art/3d/scale_glb.py` scales them.
+
+## Hero motion
+
+1. Kimodo (NVIDIA, model under the NVIDIA Open Model License, outputs unrestricted) renders takes from text prompts on spark: repo `/tmp/kimodo`, venv `/tmp/kmv`; `art/3d/motion/kimodo_batch.py art/3d/motion/hero.json out/`. The chosen takes are kept in `art/3d/motion/bvh`.
+2. `python3 art/3d/hero/retarget.py` retargets them onto the rig in `assets/models/hero.gcad` and writes `assets/models/motion.gcad`. `art/3d/hero/clips.json` picks one take per clip: `trim` frame range, `loop`, `amp` per bone, `arm_clear` degrees, `lift` plant or ground, `upright: false` to keep the take's own spine lean (otherwise spine and head lean is scaled down so the chibi does not hunch).
+3. Keys are reduced per bone: a key is dropped when slerping its neighbours stays within `ANGLE_TOLERANCE` (0.4 degrees) of every frame between them, and the hip lift within `LIFT_TOLERANCE` (0.3 cm); numbers are rounded to 0.1 degree and 1 ms. That took motion.gcad from 271780 B (4224 keys) to 126538 B (2798 keys). `cargo run --release -p kids_games --example motion_error -- full.gcad assets/models/motion.gcad` skins both at 120 Hz: worst vertex error 0.67 cm on the 134 cm hero.
 
 ## Seeing a model
 
-`cargo run -p kids_games --example model_sheet -- models/hero.glb --clips run,jump --views game,side --out /tmp/sheet.png`
+`cargo run --release -p kids_games --example model_sheet -- models/hero.gcad --clips run,jump --views game,side --out /tmp/sheet.png`
 
-Renders the glb through Bevy's own glTF and animation path, headless (no window, so it never touches the desktop), and writes one PNG: a row per clip and view, a column per frame. Without `--clips` a model with no animations gets a turntable per view. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. Read the PNG with an image viewer tool to check poses, the real in-game result. `python3 scripts/glb_audit.py file.glb 5000` checks budgets.
+Renders a `.gcad` or `.glb` through the game's own loader and animation path, headless, into one PNG: a row per clip and view, a column per frame. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. `gcad render` and `gcad inspect` show the source with grids and part names; `gcad view` opens the live viewer.
 
-## Hero rebuild (gcad)
+## History
 
-`art/3d/hero/hero.gcad` is the hero: blobs and limbs for the shape, vertex colours per part, a 15 bone rig, hands, feet and head parts bound rigidly to their bones. `art/3d/hero/build.sh` runs `retarget.py`, which retargets the Kimodo takes in `art/3d/motion/bvh` (picked in `art/3d/hero/clips.json`: `trim` frame range, `loop`, `amp` per bone, `arm_clear` degrees, `lift` plant or ground, `upright: false` to keep the take's own spine lean; otherwise the spine and head lean is scaled down so the chibi does not hunch) onto that rig as gcad `key` lines in `motion.gcad`, then `gcad export`, `scale_glb.py` (scales to 1 unit high) and the audit at 14000 tris; the source is in centimetres (a 1.3 m boy) and `scale_glb.py` scales it to 1 unit high. Needs gcad master with `key move=`. Before and after: `docs/hero/before.png`, `docs/hero/after.png`, in game `docs/hero/in_game.png`.
-
-## Props (gcad)
-
-Each prop is `art/3d/props/<name>.gcad`, modelled in centimetres with one `body` per colour. Only the tree is a mesh body (blobs, noise); the rest are solid parts, which gcad tessellates flat-shaded for the GLB. `art/3d/props/build.sh [names]` exports each with `gcad export`, then `art/3d/scale_glb.py` scales it to 1 unit high, centred on x and z, feet at 0, and runs the audit. The train is the whole 9 m carriage, so the runner no longer draws a box behind it. `road.gcad` is a 9 m piece of road, kerbs and paving laid end to end; `building.gcad` takes `floors` and `style` and `build.sh` exports five of them (`prop_building1..5`), which the runner picks per slot. Road and buildings keep real size (`metres`), the rest scale to 1 unit high.
+Before November 2026 the hero and props were Hunyuan3D-2 meshes (`art/3d/hero/build.py`, `art/3d/props.py`, `art/3d/prop_build.py`, kept for reference). See `docs/LICENSES.md` for why none of that output ships any more.
