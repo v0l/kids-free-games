@@ -213,7 +213,9 @@ CONTACTS = [
 
 def lowest(bones, wr, wt):
     out = math.inf
+    unit = bones["thigh_l"]["head"][2] / 10.0
     for bone, end, pad in CONTACTS:
+        pad *= unit
         b = bones[bone]
         at = b["tail"] if end == "tail" else b["head"] if end == "head" else (b["head"] + b["tail"]) / 2
         out = min(out, point(bones, wr, wt, bone, at)[2] - pad)
