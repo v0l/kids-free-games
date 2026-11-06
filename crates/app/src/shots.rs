@@ -467,7 +467,7 @@ fn setup(n: u32, view: &View) -> Stage {
             match n {
                 4 => {
                     p.mode = Mode::Edit {
-                        id: None,
+                        id: profile::list().first().map(|p| p.id.clone()),
                         name: "Zoe".into(),
                         avatar: 7,
                         confirm_delete: false,

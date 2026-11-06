@@ -5,6 +5,8 @@ members = ["crates/core", "crates/app"]
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/v0l/kids-free-games"
 
 [workspace.dependencies]
 glam = { version = "0.33", default-features = false, features = ["std", "i32"] }

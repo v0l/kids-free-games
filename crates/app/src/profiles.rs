@@ -480,6 +480,13 @@ impl Profiles {
                     pen.painted_button(back, "Back", Tone::Blue, pressed(back), 1.0);
                 }
                 if let Some(pid) = id {
+                    pen.text_center(
+                        SOURCE_NOTE,
+                        view.w / 2.0,
+                        (ok.y + ok.h + 22.0).min(view.h - 12.0),
+                        18.0,
+                        Color::new(1.0, 1.0, 1.0, 0.75),
+                    );
                     let on = kg_core::gate::enabled_for(pid);
                     let g = Self::gate_rect(view);
                     pen.painted_button(
@@ -507,6 +514,7 @@ impl Profiles {
 }
 
 pub const CHIP_H: f32 = 60.0;
+pub const SOURCE_NOTE: &str = "Free software (GPL-3.0). Source: github.com/v0l/kids-free-games";
 
 pub fn chip_label(name: &str) -> String {
     format!("Playing as {name}")

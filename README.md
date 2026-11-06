@@ -8,6 +8,10 @@ Art is painted with FLUX.1-dev. Sound effects and voice lines are from [Kenney](
 
 See [GAMES.md](GAMES.md) for the list of popular games and which ones are done.
 
+## Licence
+
+GPL-3.0-or-later, see [LICENSE](LICENSE). Asset sources and their licences, and the app store question, are in [docs/LICENSES.md](docs/LICENSES.md).
+
 ## Privacy
 
 No ads or third-party tracking. The app syncs a random player ID, name, avatar, saves, scores and play time to our own server. See [PRIVACY.md](PRIVACY.md).
