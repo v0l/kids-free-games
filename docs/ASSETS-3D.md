@@ -6,7 +6,7 @@ Every visual in Lane Runner is generated in-house. Nothing is Kenney or stock.
 |---|---|---|
 | Sky, road, pavement, wall tile | FLUX.1-dev, mirror-tiled sprites | `art/gen/prompts/runner.json`, `art/runner.txt` |
 | Props (barrier, hurdle, gate, train, coin, tree, finish arch) | FLUX.1-dev concept, Hunyuan3D-2 mesh and texture | `art/gen/prompts/runner_props.json`, `art/3d/props.py`, `art/3d/prop_build.py`, `assets/models/prop_*.glb` |
-| Hero | FLUX concept, Hunyuan3D-2 mesh and texture, Kimodo motion | `art/3d/hero/`, `art/3d/motion/`, `assets/models/hero.glb` |
+| Hero | gcad mesh and rig, hand keyed clips | `art/3d/hero/hero.gcad`, `art/3d/hero/build.sh`, `assets/models/hero.glb` |
 
 The runner loads the glbs with `bevy_gltf` (`Models` in `crates/app/src/games/runner/world.rs`) and plays the hero clips with an `AnimationGraph`. `every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips` checks the files.
 
@@ -35,3 +35,7 @@ The runner loads the glbs with `bevy_gltf` (`Models` in `crates/app/src/games/ru
 `cargo run -p kids_games --example model_sheet -- models/hero.glb --clips run,jump --views game,side --out /tmp/sheet.png`
 
 Renders the glb through Bevy's own glTF and animation path, headless (no window, so it never touches the desktop), and writes one PNG: a row per clip and view, a column per frame. Without `--clips` a model with no animations gets a turntable per view. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. Read the PNG with an image viewer tool to check poses, the real in-game result. `python3 scripts/glb_audit.py file.glb 5000` checks budgets.
+
+## Hero rebuild (gcad)
+
+The hero is now modelled in `art/3d/hero/hero.gcad` (blobs and limbs, vertex colours, 15 bone rig, clips fail happy idle jump run slide). `art/3d/hero/build.sh` exports it with `gcad export` and `scale_glb.py` wraps it in a root node scaled to 1 unit high, then runs the audit (5000 tris). The old Hunyuan/Kimodo files stay for reference. Before and after sheets: `docs/hero/before.png`, `docs/hero/after.png`, in game `docs/hero/in_game.png`.
