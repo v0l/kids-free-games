@@ -2,8 +2,8 @@ hips: blob 0,0,10.5 r=4.4,3.4,3.2
 torso: blob 0,0,14.8 r=4.8,3.6,4.4 blend=2
 hood: blob 0,2.4,18.4 r=4,2,2 blend=1.5
 head: blob 0,-0.5,23.5 r=7,6.5,6.4 blend=1.5
-hair: blob 0,2.2,25 r=6.6,5,4.4 blend=1
-cap: blob 0,0.8,27.2 r=7.3,6.9,4.2 blend=0.6
+hair: blob 0,0.4,24.2 r=7,6.4,4.6 blend=1
+cap: blob 0,1.2,27.6 r=7.2,6.6,4 blend=0.6
 brim: blob 0,-6.4,26.6 r=4.4,3.4,0.7 blend=0.6
 ear_l: blob 6.9,-0.2,22.8 r=1,0.8,1.5 blend=0.5
 mirror x of=ear_l
@@ -27,38 +27,40 @@ mirror x of=shine_l
 remesh 0.3
 cheeks: select sphere=4.3,-5.2,20.8 r=1.4 mirror=x falloff=1.5
 inflate 0.25
-mouth: select sphere=0,-6.4,20.2 r=1.2 falloff=0.4
-crease -1.2,-6.6,20.4 0,-6.8,19.9 depth=0.12 width=0.25
-crease 0,-6.8,19.9 1.2,-6.6,20.4 depth=0.12 width=0.25
+mouth: select sphere=0,-6.4,19.6 r=2.2 falloff=0.4
+refine 0.12
+crease -1.8,-6.5,19.9 -0.8,-6.8,19.1 depth=0.2 width=0.2
+crease -0.8,-6.8,19.1 0.8,-6.8,19.1 depth=0.2 width=0.2
+crease 0.8,-6.8,19.1 1.8,-6.5,19.9 depth=0.2 width=0.2
 select all
-color #f2b48a part=head
-color #f2b48a part=ear_l
-color #f2b48a part=ear_r
+color #f2b48a part=head soft=1.3
+color #f2b48a part=ear_l soft=1.3
+color #f2b48a part=ear_r soft=1.3
 color #e8968a part=nose
-color #3a2216 part=hair
-color #e8264a part=cap
-color #e8264a part=brim
-color #f6c61a part=torso
-color #f6c61a part=hood
-color #f6c61a part=arm_l soft=0.6
-color #f6c61a part=arm_r soft=0.6
-color #f2b48a part=hand_l
-color #f2b48a part=hand_r
-color #2f6fb8 part=hips
-color #2f6fb8 part=leg_l
-color #2f6fb8 part=leg_r
-color #ffffff part=shoe_l
-color #ffffff part=shoe_r
-color #e8264a part=sole_l
-color #e8264a part=sole_r
+color #3a2216 part=hair soft=1.3
+color #e8264a part=cap soft=1.3
+color #e8264a part=brim soft=1.3
+color #f6c61a part=torso soft=1.3
+color #f6c61a part=hood soft=1.3
+color #f6c61a part=arm_l soft=1.3
+color #f6c61a part=arm_r soft=1.3
+color #f2b48a part=hand_l soft=1.3
+color #f2b48a part=hand_r soft=1.3
+color #2f6fb8 part=hips soft=0.5
+color #2f6fb8 part=leg_l soft=0.5
+color #2f6fb8 part=leg_r soft=0.5
+color #ffffff part=shoe_l soft=0.5
+color #ffffff part=shoe_r soft=0.5
+color #e8264a part=sole_l soft=0.5
+color #e8264a part=sole_r soft=0.5
 color #ffffff part=eye_l gloss=0.8
 color #ffffff part=eye_r gloss=0.8
 color #1d1410 part=pupil_l gloss=0.8
 color #1d1410 part=pupil_r gloss=0.8
 color #ffffff part=shine_l gloss=0.9
 color #ffffff part=shine_r gloss=0.9
-smooth 2
-decimate 5000
+smooth 3
+decimate 12000
 bone hips_b head=0,0,10.5 tail=0,0,13
 bone chest parent=hips_b tail=0,0,19
 bone head_b parent=chest tail=0,-0.5,30
