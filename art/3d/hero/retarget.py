@@ -27,6 +27,15 @@ SOURCE_OF = {
     "foot_r": ("RightFoot", "RightToeBase"),
 }
 
+AIM = {
+    "hips_b": ("Hips", "Spine2"),
+    "chest": ("Spine2", "Neck2"),
+    "head_b": ("Neck2", "HeadEnd"),
+}
+
+UPRIGHT = {"hips_b": 0.5, "chest": 0.35, "head_b": 0.4}
+UPRIGHT_LIMIT = {"hips_b": 30.0, "chest": 30.0, "head_b": 8.0}
+
 BVH_TO_GCAD = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
 
 
@@ -270,6 +279,18 @@ def retarget(name, spec, bones, order):
         for b in order:
             a, _ = SOURCE_OF[b]
             world[b] = yaw @ rots[src.index[a]] @ yaw.T @ fitted[b]
+        for b, (a, tip) in AIM.items():
+            want = yaw @ (pos[src.index[tip]] - pos[src.index[a]])
+            rest = bones[b]["tail"] - bones[b]["head"]
+            world[b] = between(world[b] @ rest, want) @ world[b]
+        for b in AIM if spec.get("upright", True) else ():
+            rest = bones[b]["tail"] - bones[b]["head"]
+            d = world[b] @ rest
+            pitch = math.degrees(math.atan2(-d[1], d[2]))
+            keep = UPRIGHT[b]
+            limit = UPRIGHT_LIMIT[b]
+            target = max(-limit, min(limit, pitch * keep))
+            world[b] = rot_axis([1, 0, 0], target - pitch) @ world[b]
         amp = spec.get("amp", {})
         for b, s in amp.items():
             p = bones[b]["parent"]

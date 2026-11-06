@@ -24,7 +24,8 @@
    "thigh_r": 1.5,
    "shin_l": 1.5,
    "shin_r": 1.5
-  }
+  },
+  "upright": false
  },
  "idle": {
   "file": "art/3d/motion/bvh/idle_1.bvh",
@@ -45,6 +46,7 @@
  },
  "fail": {
   "file": "art/3d/motion/bvh/fail_1.bvh",
-  "lift": "plant"
+  "lift": "plant",
+  "upright": false
  }
 }
