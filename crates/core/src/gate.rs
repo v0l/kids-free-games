@@ -7,8 +7,14 @@ fn flag(game: &str) -> String {
     format!("gate.open.{game}")
 }
 
+static FORCED_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn force_off(off: bool) {
+    FORCED_OFF.store(off, std::sync::atomic::Ordering::Relaxed);
+}
+
 pub fn enabled() -> bool {
-    save::player_get("gate.off") == 0
+    !FORCED_OFF.load(std::sync::atomic::Ordering::Relaxed) && save::player_get("gate.off") == 0
 }
 
 pub fn set_enabled(on: bool) {
@@ -108,6 +114,17 @@ mod tests {
 
     fn fresh_player(name: &str) {
         profile::create(name, 0);
+    }
+
+    #[test]
+    fn forcing_the_gate_off_opens_every_game() {
+        save::reset_for_test();
+        fresh_player("Mia");
+        assert!(!open(arcade(0)));
+        force_off(true);
+        let opened = open(arcade(0));
+        force_off(false);
+        assert!(opened);
     }
 
     #[test]

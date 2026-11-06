@@ -250,6 +250,9 @@ pub fn run() {
     if let Some(d) = platform::save_dir() {
         kg_core::save::set_dir(d);
     }
+    if std::env::args().any(|a| a == "--no-gate") {
+        kg_core::gate::force_off(true);
+    }
     platform::install_asset_reader();
     art::predecode();
     packs::begin();
