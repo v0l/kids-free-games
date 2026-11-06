@@ -104,25 +104,6 @@ fn matte(c: Col) -> Paint {
     Paint::new(Finish::Matte, c)
 }
 
-fn gloss(c: Col) -> Paint {
-    Paint::new(Finish::Gloss, c)
-}
-
-fn put(
-    out: &mut ChildSpawnerCommands,
-    kit: &mut Kit,
-    shape: Shape,
-    paint: Paint,
-    at: Vec3,
-    size: Vec3,
-) {
-    out.spawn(kit.part(
-        shape,
-        paint,
-        Transform::from_translation(at).with_scale(size),
-    ));
-}
-
 fn node(out: &mut ChildSpawnerCommands, role: Role, at: Transform) -> Entity {
     out.spawn((role, at, Visibility::default())).id()
 }
@@ -201,6 +182,7 @@ fn spawn(
 }
 
 const HERO_H: f32 = 1.8;
+const TRAIN_H: f32 = 1.9;
 const STRIDE_METRES: f32 = 6.0;
 const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
 const PROPS: [&str; 7] = ["barrier", "hurdle", "gate", "train", "coin", "tree", "arch"];
@@ -277,28 +259,12 @@ fn prop(c: &mut ChildSpawnerCommands, models: &Models, name: &'static str, h: f3
     );
 }
 
-fn obstacle(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, kind: Kind) {
+fn obstacle(c: &mut ChildSpawnerCommands, models: &Models, kind: Kind) {
     match kind {
         Kind::Barrier => prop(c, models, "barrier", 1.25, Vec3::ZERO),
         Kind::Hurdle => prop(c, models, "hurdle", 0.8, Vec3::ZERO),
         Kind::Overhead => prop(c, models, "gate", 2.5, Vec3::ZERO),
-        Kind::Train => {
-            put(
-                c,
-                kit,
-                Shape::Cube,
-                gloss(Col::new(0.23, 0.5, 0.88, 1.0)),
-                Vec3::new(0.0, 0.95, -0.05),
-                Vec3::new(1.3, 1.9, TRAIN_LEN - 0.1),
-            );
-            prop(
-                c,
-                models,
-                "train",
-                2.0,
-                Vec3::new(0.0, 0.0, TRAIN_LEN / 2.0 + 0.02),
-            );
-        }
+        Kind::Train => prop(c, models, "train", TRAIN_H, Vec3::ZERO),
     }
 }
 
@@ -420,7 +386,7 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, g: &Runn
             let kind = *kind;
             c.commands()
                 .entity(n)
-                .with_children(|o| obstacle(o, kit, models, kind));
+                .with_children(|o| obstacle(o, models, kind));
         }
     }
     for (i, coin) in g.coins_list.iter().enumerate() {

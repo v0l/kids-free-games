@@ -1,0 +1,33 @@
+trunk: limb 0,0,4 0,0,40 2,0,95 r=13,9,8 blend=2
+root_a: limb 0,0,8 18,4,3 r=7,4 blend=3
+root_b: limb 0,0,8 -14,12,3 r=7,4 blend=3
+root_c: limb 0,0,8 -6,-17,3 r=7,4 blend=3
+branch_a: limb 1,0,70 -26,4,112 r=6,4 blend=2.5
+branch_b: limb 1,0,78 28,-6,118 r=6,4 blend=2.5
+leaf_c: blob 0,0,150 r=48,46,42 blend=4
+leaf_a: blob -34,6,122 r=34,32,30 blend=6
+leaf_b: blob 34,-8,128 r=34,32,30 blend=6
+leaf_d: blob 6,30,130 r=32,30,28 blend=6
+leaf_e: blob -6,-30,132 r=32,30,28 blend=6
+leaf_t: blob 4,2,186 r=30,28,24 blend=6
+remesh 2
+leaves: select leaf_c,leaf_a,leaf_b,leaf_d,leaf_e,leaf_t
+noise 2.2 size=12 seed=3
+bark: select trunk,root_a,root_b,root_c,branch_a,branch_b
+noise 0.7 size=4 seed=5
+base: select all
+flatten cut at=0,0,0 normal=0,0,1
+smooth 1
+decimate 3000
+color #8a5a34 part=trunk
+color #8a5a34 part=root_a
+color #8a5a34 part=root_b
+color #8a5a34 part=root_c
+color #8a5a34 part=branch_a
+color #8a5a34 part=branch_b
+color #5cc24a part=leaf_c
+color #4cae3e part=leaf_a
+color #4cae3e part=leaf_b
+color #56b844 part=leaf_d
+color #56b844 part=leaf_e
+color #7ad85a part=leaf_t

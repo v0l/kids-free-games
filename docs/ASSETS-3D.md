@@ -5,7 +5,7 @@ Every visual in Lane Runner is generated in-house. Nothing is Kenney or stock.
 | Asset | Source | Files |
 |---|---|---|
 | Sky, road, pavement, wall tile | FLUX.1-dev, mirror-tiled sprites | `art/gen/prompts/runner.json`, `art/runner.txt` |
-| Props (barrier, hurdle, gate, train, coin, tree, finish arch) | FLUX.1-dev concept, Hunyuan3D-2 mesh and texture | `art/gen/prompts/runner_props.json`, `art/3d/props.py`, `art/3d/prop_build.py`, `assets/models/prop_*.glb` |
+| Props (barrier, hurdle, gate, train, coin, tree, finish arch) | gcad: solid parts (extrude, fillet) for everything flat-sided, a mesh only for the tree | `art/3d/props/*.gcad`, `art/3d/props/build.sh`, `assets/models/prop_*.glb` |
 | Hero | gcad mesh and rig, hand keyed clips | `art/3d/hero/hero.gcad`, `art/3d/hero/build.sh`, `assets/models/hero.glb` |
 
 The runner loads the glbs with `bevy_gltf` (`Models` in `crates/app/src/games/runner/world.rs`) and plays the hero clips with an `AnimationGraph`. `every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips` checks the files.
@@ -39,3 +39,7 @@ Renders the glb through Bevy's own glTF and animation path, headless (no window,
 ## Hero rebuild (gcad)
 
 `art/3d/hero/hero.gcad` is the hero: blobs and limbs for the shape, vertex colours per part, a 15 bone rig, hands, feet and head parts bound rigidly to their bones. `art/3d/hero/build.sh` runs `retarget.py`, which retargets the Kimodo takes in `art/3d/motion/bvh` (picked in `art/3d/hero/clips.json`: `trim` frame range, `loop`, `amp` per bone, `arm_clear` degrees, `lift` plant or ground, `upright: false` to keep the take's own spine lean; otherwise the spine and head lean is scaled down so the chibi does not hunch) onto that rig as gcad `key` lines in `motion.gcad`, then `gcad export`, `scale_glb.py` (scales to 1 unit high) and the audit at 14000 tris; the source is in centimetres (a 1.3 m boy) and `scale_glb.py` scales it to 1 unit high. Needs gcad master with `key move=`. Before and after: `docs/hero/before.png`, `docs/hero/after.png`, in game `docs/hero/in_game.png`.
+
+## Props (gcad)
+
+Each prop is `art/3d/props/<name>.gcad`, modelled in centimetres with one `body` per colour. Only the tree is a mesh body (blobs, noise); the rest are solid parts, which gcad tessellates flat-shaded for the GLB. `art/3d/props/build.sh [names]` exports each with `gcad export`, then `art/3d/scale_glb.py` scales it to 1 unit high, centred on x and z, feet at 0, and runs the audit. The train is the whole 9 m carriage, so the runner no longer draws a box behind it.
