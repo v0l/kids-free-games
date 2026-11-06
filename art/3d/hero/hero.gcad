@@ -1,342 +1,97 @@
-hips: blob 0,0,10.5 r=4.4,3.4,3.2
-torso: blob 0,0,14.8 r=4.8,3.6,4.4 blend=2
-hood: blob 0,2.4,18.4 r=4,2,2 blend=1.5
-head: blob 0,-0.5,23.5 r=7,6.5,6.4 blend=1.5
-hair: blob 0,0.4,24.2 r=7,6.4,4.6 blend=1
-cap: blob 0,1.2,27.6 r=7.2,6.6,4 blend=0.6
-brim: blob 0,-6.4,26.6 r=4.4,3.4,0.7 blend=0.6
-ear_l: blob 6.9,-0.2,22.8 r=1,0.8,1.5 blend=0.5
+hips: blob 0,0,10.2 r=4.2,3.3,3.2
+torso: blob 0,0,15 r=4.9,3.8,4.6 blend=0.25
+hood: blob 0,2.2,18.6 r=3.8,2,1.8 blend=1
+head: blob 0,-0.5,24 r=7,6.5,6.4 blend=0.2
+hair: blob 0,0.6,24.8 r=7.1,6.5,4.6 blend=0.15
+cap: blob 0,1.2,28 r=7.3,6.8,4.1 blend=0.15
+brim: blob 0,-6.6,27 r=4.4,3.4,0.7 blend=0.4
+ear_l: blob 6.9,-0.2,23.3 r=1,0.8,1.5 blend=0.5
 mirror x of=ear_l
-nose: blob 0,-7,21.4 r=0.9,0.7,0.8 blend=0.4
-arm_l: limb 5,0,17.6 6.7,0,13.4 7,-0.8,9.8 r=2,1.7,1.4 blend=1.4
+nose: blob 0,-7,21.9 r=0.9,0.7,0.8 blend=0.4
+arm_l: limb 5.2,0,18.2 8,0,14.6 10.2,-0.6,11.2 r=1.9,1.6,1.4 blend=0.8
 mirror x of=arm_l
-hand_l: blob 7.1,-1,8.4 r=1.6,1.5,1.6 blend=0.8
+hand_l: blob 10.9,-0.8,9.9 r=1.6,1.5,1.7 ry=30 blend=0.15
 mirror x of=hand_l
 leg_l: limb 2.7,0,10 2.7,0,5.6 2.7,0,2.6 r=2.3,2,1.8 blend=1.2
 mirror x of=leg_l
-shoe_l: blob 2.7,-1.4,1.3 r=2.3,3.6,1.6 blend=0.8
+shoe_l: blob 2.7,-1.4,1.4 r=2.4,3.6,1.7 blend=0.15
 mirror x of=shoe_l
-sole_l: blob 2.7,-1.4,0.5 r=2.4,3.7,0.6 blend=0.2
+sole_l: blob 2.7,-1.4,0.5 r=2.5,3.7,0.6 blend=0.1
 mirror x of=sole_l
-eye_l: blob 2.5,-6.3,23 r=1.5,0.9,1.9 mode=shell
+eye_l: blob 2.5,-6.3,23.5 r=1.5,0.9,1.9 mode=shell
 mirror x of=eye_l
-pupil_l: blob 2.5,-7.0,22.9 r=1,0.5,1.4 mode=shell
+pupil_l: blob 2.5,-7.0,23.4 r=1,0.5,1.4 mode=shell
 mirror x of=pupil_l
-shine_l: blob 2.9,-7.4,23.6 r=0.4,0.3,0.45 mode=shell
+shine_l: blob 2.9,-7.4,24.1 r=0.4,0.3,0.45 mode=shell
 mirror x of=shine_l
 remesh 0.3
-cheeks: select sphere=4.3,-5.2,20.8 r=1.4 mirror=x falloff=1.5
+cheeks: select sphere=4.3,-5.2,21.3 r=1.4 mirror=x falloff=1.5
 inflate 0.25
-mouth: select sphere=0,-6.4,19.6 r=2.2 falloff=0.4
+mouth: select sphere=0,-6.4,20.1 r=2.2 falloff=0.4
 refine 0.12
-crease -1.8,-6.5,19.9 -0.8,-6.8,19.1 depth=0.2 width=0.2
-crease -0.8,-6.8,19.1 0.8,-6.8,19.1 depth=0.2 width=0.2
-crease 0.8,-6.8,19.1 1.8,-6.5,19.9 depth=0.2 width=0.2
+crease -1.8,-6.5,20.4 -0.8,-6.8,19.6 depth=0.2 width=0.2
+crease -0.8,-6.8,19.6 0.8,-6.8,19.6 depth=0.2 width=0.2
+crease 0.8,-6.8,19.6 1.8,-6.5,20.4 depth=0.2 width=0.2
 select all
-color #f2b48a part=head soft=1.3
-color #f2b48a part=ear_l soft=1.3
-color #f2b48a part=ear_r soft=1.3
+color #f2b48a part=head
+color #f2b48a part=ear_l
+color #f2b48a part=ear_r
 color #e8968a part=nose
-color #3a2216 part=hair soft=1.3
-color #e8264a part=cap soft=1.3
-color #e8264a part=brim soft=1.3
-color #f6c61a part=torso soft=1.3
-color #f6c61a part=hood soft=1.3
-color #f6c61a part=arm_l soft=1.3
-color #f6c61a part=arm_r soft=1.3
-color #f2b48a part=hand_l soft=1.3
-color #f2b48a part=hand_r soft=1.3
-color #2f6fb8 part=hips soft=0.5
-color #2f6fb8 part=leg_l soft=0.5
-color #2f6fb8 part=leg_r soft=0.5
-color #ffffff part=shoe_l soft=0.5
-color #ffffff part=shoe_r soft=0.5
-color #e8264a part=sole_l soft=0.5
-color #e8264a part=sole_r soft=0.5
+color #3a2216 part=hair
+color #e8264a part=cap
+color #e8264a part=brim
+color #f6c61a part=torso
+color #f6c61a part=hood
+color #f6c61a part=arm_l
+color #f6c61a part=arm_r
+color #f2b48a part=hand_l
+color #f2b48a part=hand_r
+color #2f6fb8 part=hips
+color #2f6fb8 part=leg_l
+color #2f6fb8 part=leg_r
+color #ffffff part=shoe_l
+color #ffffff part=shoe_r
+color #e8264a part=sole_l
+color #e8264a part=sole_r
 color #ffffff part=eye_l gloss=0.8
 color #ffffff part=eye_r gloss=0.8
 color #1d1410 part=pupil_l gloss=0.8
 color #1d1410 part=pupil_r gloss=0.8
 color #ffffff part=shine_l gloss=0.9
 color #ffffff part=shine_r gloss=0.9
-smooth 3
+smooth 2
 decimate 12000
 bone hips_b head=0,0,10.5 tail=0,0,13
 bone chest parent=hips_b tail=0,0,19
-bone head_b parent=chest tail=0,-0.5,30
-bone arm_l parent=chest head=5,0,17.6 tail=6.7,0,13.4
-bone forearm_l parent=arm_l tail=7,-0.8,9.8
-bone hand_b_l parent=forearm_l tail=7.1,-1,7.2
+bone head_b parent=chest head=0,0,19.6 tail=0,-0.5,30
+bone arm_l parent=chest head=5.4,0,17.8 tail=8,0,14.6
+bone forearm_l parent=arm_l tail=10.2,-0.6,11.2
+bone hand_b_l parent=forearm_l tail=11.6,-0.9,8.6
 mirror x of=arm_l
 bone thigh_l parent=hips_b head=2.7,0,10 tail=2.7,0,5.6
 bone shin_l parent=thigh_l tail=2.7,0,2.6
 bone foot_l parent=shin_l tail=2.7,-4.5,1
 mirror x of=thigh_l
 skin auto
-clip fail fps=30
-key t=0 bone=hips_b rotate=0 axis=x
-key t=0.2 bone=hips_b rotate=-25 axis=x
-key t=0.6 bone=hips_b rotate=-80 axis=x
-key t=1.0 bone=hips_b rotate=-75 axis=x
-key t=1.6 bone=hips_b rotate=-75 axis=x
-key t=0 bone=arm_l rotate=0 axis=x
-key t=0.2 bone=arm_l rotate=-120 axis=x
-key t=0.6 bone=arm_l rotate=-160 axis=x
-key t=1.0 bone=arm_l rotate=-100 axis=x
-key t=1.6 bone=arm_l rotate=-100 axis=x
-key t=0 bone=thigh_l rotate=0 axis=x
-key t=0.6 bone=thigh_l rotate=-20 axis=x
-key t=1.6 bone=thigh_l rotate=-20 axis=x
-key t=0 bone=shin_l rotate=0 axis=x
-key t=0.6 bone=shin_l rotate=40 axis=x
-key t=1.6 bone=shin_l rotate=40 axis=x
-key t=0 bone=arm_r rotate=0 axis=x
-key t=0.2 bone=arm_r rotate=-120 axis=x
-key t=0.6 bone=arm_r rotate=-160 axis=x
-key t=1.0 bone=arm_r rotate=-100 axis=x
-key t=1.6 bone=arm_r rotate=-100 axis=x
-key t=0 bone=thigh_r rotate=0 axis=x
-key t=0.6 bone=thigh_r rotate=-20 axis=x
-key t=1.6 bone=thigh_r rotate=-20 axis=x
-key t=0 bone=shin_r rotate=0 axis=x
-key t=0.6 bone=shin_r rotate=40 axis=x
-key t=1.6 bone=shin_r rotate=40 axis=x
-key t=0 bone=head_b rotate=0 axis=x
-key t=0.2 bone=head_b rotate=-20 axis=x
-key t=0.6 bone=head_b rotate=20 axis=x
-key t=1.0 bone=head_b rotate=35 axis=x
-key t=1.6 bone=head_b rotate=35 axis=x
-key t=0 bone=chest rotate=0 axis=x
-key t=0.6 bone=chest rotate=-15 axis=x
-key t=1.6 bone=chest rotate=-15 axis=x
-clip happy fps=30
-key t=0 bone=arm_l rotate=0 axis=x
-key t=0.25 bone=arm_l rotate=-170 axis=x
-key t=0.5 bone=arm_l rotate=-150 axis=x
-key t=0.75 bone=arm_l rotate=-170 axis=x
-key t=1.0 bone=arm_l rotate=-150 axis=x
-key t=1.25 bone=arm_l rotate=-170 axis=x
-key t=1.6 bone=arm_l rotate=0 axis=x
-key t=0 bone=forearm_l rotate=0 axis=x
-key t=0.3 bone=forearm_l rotate=-10 axis=x
-key t=1.6 bone=forearm_l rotate=0 axis=x
-key t=0 bone=thigh_l rotate=0 axis=x
-key t=0.15 bone=thigh_l rotate=30 axis=x
-key t=0.3 bone=thigh_l rotate=-30 axis=x
-key t=0.5 bone=thigh_l rotate=0 axis=x
-key t=0.65 bone=thigh_l rotate=30 axis=x
-key t=0.8 bone=thigh_l rotate=-30 axis=x
-key t=1.0 bone=thigh_l rotate=0 axis=x
-key t=1.6 bone=thigh_l rotate=0 axis=x
-key t=0 bone=shin_l rotate=0 axis=x
-key t=0.15 bone=shin_l rotate=40 axis=x
-key t=0.3 bone=shin_l rotate=40 axis=x
-key t=0.5 bone=shin_l rotate=0 axis=x
-key t=0.65 bone=shin_l rotate=40 axis=x
-key t=0.8 bone=shin_l rotate=40 axis=x
-key t=1.0 bone=shin_l rotate=0 axis=x
-key t=1.6 bone=shin_l rotate=0 axis=x
-key t=0 bone=arm_r rotate=0 axis=x
-key t=0.25 bone=arm_r rotate=-170 axis=x
-key t=0.5 bone=arm_r rotate=-150 axis=x
-key t=0.75 bone=arm_r rotate=-170 axis=x
-key t=1.0 bone=arm_r rotate=-150 axis=x
-key t=1.25 bone=arm_r rotate=-170 axis=x
-key t=1.6 bone=arm_r rotate=0 axis=x
-key t=0 bone=forearm_r rotate=0 axis=x
-key t=0.3 bone=forearm_r rotate=-10 axis=x
-key t=1.6 bone=forearm_r rotate=0 axis=x
-key t=0 bone=thigh_r rotate=0 axis=x
-key t=0.15 bone=thigh_r rotate=30 axis=x
-key t=0.3 bone=thigh_r rotate=-30 axis=x
-key t=0.5 bone=thigh_r rotate=0 axis=x
-key t=0.65 bone=thigh_r rotate=30 axis=x
-key t=0.8 bone=thigh_r rotate=-30 axis=x
-key t=1.0 bone=thigh_r rotate=0 axis=x
-key t=1.6 bone=thigh_r rotate=0 axis=x
-key t=0 bone=shin_r rotate=0 axis=x
-key t=0.15 bone=shin_r rotate=40 axis=x
-key t=0.3 bone=shin_r rotate=40 axis=x
-key t=0.5 bone=shin_r rotate=0 axis=x
-key t=0.65 bone=shin_r rotate=40 axis=x
-key t=0.8 bone=shin_r rotate=40 axis=x
-key t=1.0 bone=shin_r rotate=0 axis=x
-key t=1.6 bone=shin_r rotate=0 axis=x
-key t=0 bone=hips_b rotate=0 axis=x
-key t=0.15 bone=hips_b rotate=10 axis=x
-key t=0.3 bone=hips_b rotate=-5 axis=x
-key t=0.5 bone=hips_b rotate=0 axis=x
-key t=0.65 bone=hips_b rotate=10 axis=x
-key t=0.8 bone=hips_b rotate=-5 axis=x
-key t=1.0 bone=hips_b rotate=0 axis=x
-key t=1.6 bone=hips_b rotate=0 axis=x
-key t=0 bone=head_b rotate=0 axis=x
-key t=0.3 bone=head_b rotate=-15 axis=x
-key t=1.2 bone=head_b rotate=-15 axis=x
-key t=1.6 bone=head_b rotate=0 axis=x
-key t=0 bone=chest rotate=-8 axis=z
-key t=0.4 bone=chest rotate=8 axis=z
-key t=0.8 bone=chest rotate=-8 axis=z
-key t=1.2 bone=chest rotate=8 axis=z
-key t=1.6 bone=chest rotate=0 axis=z
-clip idle fps=30
-key t=0 bone=chest rotate=0 axis=x
-key t=0.6 bone=chest rotate=3 axis=x
-key t=1.2 bone=chest rotate=0 axis=x
-key t=0 bone=head_b rotate=0 axis=x
-key t=0.6 bone=head_b rotate=-4 axis=x
-key t=1.2 bone=head_b rotate=0 axis=x
-key t=0 bone=arm_l rotate=0 axis=y
-key t=0.6 bone=arm_l rotate=6 axis=y
-key t=1.2 bone=arm_l rotate=0 axis=y
-key t=0 bone=arm_l rotate=5 axis=x
-key t=0.6 bone=arm_l rotate=-5 axis=x
-key t=1.2 bone=arm_l rotate=5 axis=x
-key t=0 bone=arm_r rotate=0 axis=y
-key t=0.6 bone=arm_r rotate=-6 axis=y
-key t=1.2 bone=arm_r rotate=0 axis=y
-key t=0 bone=arm_r rotate=5 axis=x
-key t=0.6 bone=arm_r rotate=-5 axis=x
-key t=1.2 bone=arm_r rotate=5 axis=x
-clip jump fps=30
-key t=0 bone=thigh_l rotate=0 axis=x
-key t=0.2 bone=thigh_l rotate=25 axis=x
-key t=0.4 bone=thigh_l rotate=-70 axis=x
-key t=0.8 bone=thigh_l rotate=-60 axis=x
-key t=1.1 bone=thigh_l rotate=-10 axis=x
-key t=1.3 bone=thigh_l rotate=10 axis=x
-key t=1.5 bone=thigh_l rotate=0 axis=x
-key t=0 bone=shin_l rotate=0 axis=x
-key t=0.2 bone=shin_l rotate=40 axis=x
-key t=0.4 bone=shin_l rotate=80 axis=x
-key t=0.8 bone=shin_l rotate=70 axis=x
-key t=1.1 bone=shin_l rotate=20 axis=x
-key t=1.3 bone=shin_l rotate=30 axis=x
-key t=1.5 bone=shin_l rotate=0 axis=x
-key t=0 bone=thigh_r rotate=0 axis=x
-key t=0.2 bone=thigh_r rotate=25 axis=x
-key t=0.4 bone=thigh_r rotate=-70 axis=x
-key t=0.8 bone=thigh_r rotate=-60 axis=x
-key t=1.1 bone=thigh_r rotate=-10 axis=x
-key t=1.3 bone=thigh_r rotate=10 axis=x
-key t=1.5 bone=thigh_r rotate=0 axis=x
-key t=0 bone=shin_r rotate=0 axis=x
-key t=0.2 bone=shin_r rotate=40 axis=x
-key t=0.4 bone=shin_r rotate=80 axis=x
-key t=0.8 bone=shin_r rotate=70 axis=x
-key t=1.1 bone=shin_r rotate=20 axis=x
-key t=1.3 bone=shin_r rotate=30 axis=x
-key t=1.5 bone=shin_r rotate=0 axis=x
-key t=0 bone=arm_l rotate=0 axis=x
-key t=0.2 bone=arm_l rotate=40 axis=x
-key t=0.4 bone=arm_l rotate=-150 axis=x
-key t=0.8 bone=arm_l rotate=-130 axis=x
-key t=1.1 bone=arm_l rotate=-30 axis=x
-key t=1.3 bone=arm_l rotate=20 axis=x
-key t=1.5 bone=arm_l rotate=0 axis=x
-key t=0 bone=forearm_l rotate=0 axis=x
-key t=0.4 bone=forearm_l rotate=-20 axis=x
-key t=1.5 bone=forearm_l rotate=0 axis=x
-key t=0 bone=arm_l rotate=0 axis=y
-key t=0.4 bone=arm_l rotate=-25 axis=y
-key t=0.8 bone=arm_l rotate=-25 axis=y
-key t=1.5 bone=arm_l rotate=0 axis=y
-key t=0 bone=arm_r rotate=0 axis=x
-key t=0.2 bone=arm_r rotate=40 axis=x
-key t=0.4 bone=arm_r rotate=-150 axis=x
-key t=0.8 bone=arm_r rotate=-130 axis=x
-key t=1.1 bone=arm_r rotate=-30 axis=x
-key t=1.3 bone=arm_r rotate=20 axis=x
-key t=1.5 bone=arm_r rotate=0 axis=x
-key t=0 bone=forearm_r rotate=0 axis=x
-key t=0.4 bone=forearm_r rotate=-20 axis=x
-key t=1.5 bone=forearm_r rotate=0 axis=x
-key t=0 bone=arm_r rotate=0 axis=y
-key t=0.4 bone=arm_r rotate=25 axis=y
-key t=0.8 bone=arm_r rotate=25 axis=y
-key t=1.5 bone=arm_r rotate=0 axis=y
-key t=0 bone=hips_b rotate=0 axis=x
-key t=0.2 bone=hips_b rotate=25 axis=x
-key t=0.4 bone=hips_b rotate=-8 axis=x
-key t=0.8 bone=hips_b rotate=-5 axis=x
-key t=1.1 bone=hips_b rotate=10 axis=x
-key t=1.3 bone=hips_b rotate=18 axis=x
-key t=1.5 bone=hips_b rotate=0 axis=x
-key t=0 bone=head_b rotate=0 axis=x
-key t=0.2 bone=head_b rotate=10 axis=x
-key t=0.4 bone=head_b rotate=-10 axis=x
-key t=1.5 bone=head_b rotate=0 axis=x
-clip run fps=30
-key t=0 bone=thigh_l rotate=-40 axis=x
-key t=0.3 bone=thigh_l rotate=40 axis=x
-key t=0.6 bone=thigh_l rotate=-40 axis=x
-key t=0 bone=shin_l rotate=10 axis=x
-key t=0.15 bone=shin_l rotate=60 axis=x
-key t=0.3 bone=shin_l rotate=70 axis=x
-key t=0.44999999999999996 bone=shin_l rotate=10 axis=x
-key t=0.6 bone=shin_l rotate=10 axis=x
-key t=0 bone=arm_l rotate=45 axis=x
-key t=0.3 bone=arm_l rotate=-45 axis=x
-key t=0.6 bone=arm_l rotate=45 axis=x
-key t=0 bone=forearm_l rotate=-70 axis=x
-key t=0.6 bone=forearm_l rotate=-70 axis=x
-key t=0 bone=thigh_r rotate=40 axis=x
-key t=0.3 bone=thigh_r rotate=-40 axis=x
-key t=0.6 bone=thigh_r rotate=40 axis=x
-key t=0 bone=shin_r rotate=70 axis=x
-key t=0.15 bone=shin_r rotate=10 axis=x
-key t=0.3 bone=shin_r rotate=10 axis=x
-key t=0.44999999999999996 bone=shin_r rotate=60 axis=x
-key t=0.6 bone=shin_r rotate=70 axis=x
-key t=0 bone=arm_r rotate=-45 axis=x
-key t=0.3 bone=arm_r rotate=45 axis=x
-key t=0.6 bone=arm_r rotate=-45 axis=x
-key t=0 bone=forearm_r rotate=-70 axis=x
-key t=0.6 bone=forearm_r rotate=-70 axis=x
-key t=0 bone=hips_b rotate=12 axis=x
-key t=0.6 bone=hips_b rotate=12 axis=x
-key t=0 bone=chest rotate=0 axis=x
-key t=0.3 bone=chest rotate=0 axis=x
-key t=0.6 bone=chest rotate=0 axis=x
-key t=0 bone=chest rotate=-8 axis=z
-key t=0.3 bone=chest rotate=8 axis=z
-key t=0.6 bone=chest rotate=-8 axis=z
-key t=0 bone=head_b rotate=-10 axis=x
-key t=0.6 bone=head_b rotate=-10 axis=x
-clip slide fps=30
-key t=0 bone=thigh_l rotate=0 axis=x
-key t=0.2 bone=thigh_l rotate=-5 axis=x
-key t=0.7 bone=thigh_l rotate=-5 axis=x
-key t=0.9 bone=thigh_l rotate=0 axis=x
-key t=0 bone=shin_l rotate=0 axis=x
-key t=0.2 bone=shin_l rotate=20 axis=x
-key t=0.7 bone=shin_l rotate=20 axis=x
-key t=0.9 bone=shin_l rotate=0 axis=x
-key t=0 bone=arm_l rotate=0 axis=x
-key t=0.2 bone=arm_l rotate=-60 axis=x
-key t=0.7 bone=arm_l rotate=-60 axis=x
-key t=0.9 bone=arm_l rotate=0 axis=x
-key t=0 bone=thigh_r rotate=0 axis=x
-key t=0.2 bone=thigh_r rotate=-5 axis=x
-key t=0.7 bone=thigh_r rotate=-5 axis=x
-key t=0.9 bone=thigh_r rotate=0 axis=x
-key t=0 bone=shin_r rotate=0 axis=x
-key t=0.2 bone=shin_r rotate=20 axis=x
-key t=0.7 bone=shin_r rotate=20 axis=x
-key t=0.9 bone=shin_r rotate=0 axis=x
-key t=0 bone=arm_r rotate=0 axis=x
-key t=0.2 bone=arm_r rotate=-60 axis=x
-key t=0.7 bone=arm_r rotate=-60 axis=x
-key t=0.9 bone=arm_r rotate=0 axis=x
-key t=0 bone=hips_b rotate=0 axis=x
-key t=0.2 bone=hips_b rotate=-50 axis=x
-key t=0.7 bone=hips_b rotate=-50 axis=x
-key t=0.9 bone=hips_b rotate=0 axis=x
-key t=0 bone=chest rotate=0 axis=x
-key t=0.2 bone=chest rotate=30 axis=x
-key t=0.7 bone=chest rotate=30 axis=x
-key t=0.9 bone=chest rotate=0 axis=x
-key t=0 bone=head_b rotate=0 axis=x
-key t=0.2 bone=head_b rotate=25 axis=x
-key t=0.7 bone=head_b rotate=25 axis=x
-key t=0.9 bone=head_b rotate=0 axis=x
+skin part=torso bone=chest
+skin part=hood bone=chest
+skin part=head bone=head_b
+skin part=hair bone=head_b
+skin part=cap bone=head_b
+skin part=brim bone=head_b
+skin part=nose bone=head_b
+skin part=ear_l bone=head_b
+skin part=ear_r bone=head_b
+skin part=eye_l bone=head_b
+skin part=eye_r bone=head_b
+skin part=pupil_l bone=head_b
+skin part=pupil_r bone=head_b
+skin part=shine_l bone=head_b
+skin part=shine_r bone=head_b
+skin part=hand_l bone=hand_b_l
+skin part=hand_r bone=hand_b_r
+skin part=shoe_l bone=foot_l
+skin part=shoe_r bone=foot_r
+skin part=sole_l bone=foot_l
+skin part=sole_r bone=foot_r
+include motion.gcad

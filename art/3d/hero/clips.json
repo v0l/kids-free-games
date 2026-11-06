@@ -1,0 +1,51 @@
+{
+ "run": {
+  "file": "art/3d/motion/bvh/sprint_13.bvh",
+  "loop": true,
+  "lift": "plant"
+ },
+ "jump": {
+  "file": "art/3d/motion/bvh/hop_11.bvh",
+  "trim": [
+   22,
+   44
+  ],
+  "lift": "plant"
+ },
+ "slide": {
+  "file": "art/3d/motion/bvh/duck_11.bvh",
+  "trim": [
+   8,
+   40
+  ],
+  "lift": "plant",
+  "amp": {
+   "thigh_l": 1.8,
+   "thigh_r": 1.8,
+   "shin_l": 1.7,
+   "shin_r": 1.7,
+   "chest": 1.4
+  }
+ },
+ "idle": {
+  "file": "art/3d/motion/bvh/idle_1.bvh",
+  "loop": true,
+  "lift": "plant",
+  "search": [
+   0.05,
+   0.5
+  ],
+  "span": [
+   30,
+   60
+  ]
+ },
+ "happy": {
+  "file": "art/3d/motion/bvh/cheer_12.bvh",
+  "lift": "ground"
+ },
+ "fail": {
+  "file": "art/3d/motion/bvh/fail_1.bvh",
+  "lift": "plant"
+ }
+}
