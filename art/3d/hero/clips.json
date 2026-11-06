@@ -20,11 +20,10 @@
   ],
   "lift": "plant",
   "amp": {
-   "thigh_l": 1.8,
-   "thigh_r": 1.8,
-   "shin_l": 1.7,
-   "shin_r": 1.7,
-   "chest": 1.4
+   "thigh_l": 1.5,
+   "thigh_r": 1.5,
+   "shin_l": 1.5,
+   "shin_r": 1.5
   }
  },
  "idle": {

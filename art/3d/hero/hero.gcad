@@ -1,7 +1,7 @@
-hips: blob 0,0.5,63 r=13,9,9.5
-torso: blob 0,0.5,79 r=14.5,9.8,14.5 blend=4
-chest: blob 0,-1,84 r=13.5,9,9 blend=3
-band: blob 0,0.5,67.5 r=14,9.7,2.8 blend=1.5
+hips: blob 0,0.5,63 r=12.5,8.5,9
+torso: blob 0,0.5,79 r=12.2,9,14 blend=4
+chest: blob 0,-1,84 r=11.8,8.4,8.6 blend=3
+band: blob 0,0.5,67.5 r=13,9.2,2.6 blend=1.5
 collar: blob 0,0.5,91 r=8.5,7.5,2.6 blend=2
 neck: limb 0,0.5,89 0,0.5,101 r=5 blend=2
 head: blob 0,-1,111 r=13.5,13,14 blend=2.5
@@ -13,25 +13,27 @@ brim: blob 0,-14.5,116.4 r=10.5,8,1.8 rx=8 blend=1.5
 ear_l: blob 13.4,0.5,108 r=1.8,2.6,3.6 blend=1.2
 mirror x of=ear_l
 nose: blob 0,-13.9,105.5 r=1.9,1.5,1.6 blend=1
-arm_l: limb 13.5,0.5,86 19.5,0.5,73 22,-1.5,61 r=5.4,4.4,3.9 blend=4
+shoulder_l: blob 12.6,0.5,86.5 r=4.6 blend=2.5
+mirror x of=shoulder_l
+arm_l: limb 14.5,0.5,86 19,0.5,74 21.5,-1.5,62 r=4.4,4,3.6 blend=1.2
 mirror x of=arm_l
-cuff_l: limb 21.6,-1.2,62.5 22.3,-1.7,58.5 r=4.4 blend=1
+cuff_l: limb 21.3,-1.2,63 21.9,-1.7,59 r=4 blend=0.8
 mirror x of=cuff_l
-hand_l: blob 22.9,-2.3,52.5 r=3.6,3.3,4.8 blend=1.4
+hand_l: blob 22.4,-2.3,53 r=3.6,3.3,4.8 blend=1.4
 mirror x of=hand_l
-thumb_l: limb 21.4,-4.6,55 20.9,-5.6,51.5 r=1.5,1.2 blend=0.8
+thumb_l: limb 20.9,-4.6,55.5 20.4,-5.6,52 r=1.5,1.2 blend=0.8
 mirror x of=thumb_l
-leg_l: limb 7,0,58 7.4,-0.5,34 7.6,0.5,14 r=7.6,6.3,5.5 blend=3
+leg_l: limb 6.8,0,60 8.2,-0.5,34 8.4,0.5,14 r=6.6,5.6,5 blend=1.2
 mirror x of=leg_l
-hem_l: limb 7.6,0.4,16.5 7.6,0.5,12.5 r=6.4 blend=1
+hem_l: limb 8.4,0.4,17 8.4,0.5,12.5 r=5.8 blend=0.8
 mirror x of=hem_l
-shoe_l: blob 7.6,-2.5,6.4 r=6.3,10.8,5.2 blend=1.5
+shoe_l: blob 8.4,-2.5,6.4 r=6.3,10.8,5.2 blend=1.5
 mirror x of=shoe_l
-toe_l: blob 7.6,-9.5,4.6 r=5.5,5,3.8 blend=1.5
+toe_l: blob 8.4,-9.5,4.6 r=5.5,5,3.8 blend=1.5
 mirror x of=toe_l
-heel_l: blob 7.6,7.6,7 r=3.4,1.6,3.4 blend=0.6
+heel_l: blob 8.4,7.6,7 r=3.4,1.6,3.4 blend=0.6
 mirror x of=heel_l
-sole_l: blob 7.6,-2.7,2.2 r=6.8,11.5,2.3 blend=1
+sole_l: blob 8.4,-2.7,2.2 r=6.5,11.3,2.3 blend=1
 mirror x of=sole_l
 eye_l: blob 5.3,-12.4,109.5 r=3.5,2,4.3 mode=shell
 mirror x of=eye_l
@@ -64,6 +66,8 @@ color #ffcf2e part=torso
 color #ffcf2e part=chest
 color #ffcf2e part=arm_l
 color #ffcf2e part=arm_r
+color #ffcf2e part=shoulder_l
+color #ffcf2e part=shoulder_r
 color #f2f2f2 part=collar
 color #f2f2f2 part=band
 color #f2f2f2 part=cuff_l
@@ -96,13 +100,13 @@ decimate 14000
 bone hips_b head=0,0.5,62 tail=0,0.5,72
 bone chest parent=hips_b tail=0,0.5,90
 bone head_b parent=chest head=0,0.5,93 tail=0,0,136
-bone arm_l parent=chest head=14,0.5,86 tail=19.5,0.5,73
-bone forearm_l parent=arm_l tail=22,-1.5,61
-bone hand_b_l parent=forearm_l tail=23,-2.5,47
+bone arm_l parent=chest head=13.5,0.5,86.5 tail=19,0.5,74
+bone forearm_l parent=arm_l tail=21.5,-1.5,62
+bone hand_b_l parent=forearm_l tail=22.6,-2.5,47.5
 mirror x of=arm_l
-bone thigh_l parent=hips_b head=7,0,57 tail=7.4,-0.5,34
-bone shin_l parent=thigh_l tail=7.6,0.5,9
-bone foot_l parent=shin_l tail=7.6,-12,3
+bone thigh_l parent=hips_b head=7,0,57 tail=8.2,-0.5,34
+bone shin_l parent=thigh_l tail=8.4,0.5,9
+bone foot_l parent=shin_l tail=8.4,-12,3
 mirror x of=thigh_l
 skin auto
 skin part=head bone=head_b
