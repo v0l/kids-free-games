@@ -693,15 +693,18 @@ mod tests {
                 let mut app = crate::game3d::testing::shot(n, v);
                 crate::game3d::testing::step(&mut app, 3);
                 let world = crate::game3d::testing::open(&app);
-                let parts = crate::game3d::testing::parts(&mut app).len();
+                let parts = crate::game3d::testing::parts(&mut app).len()
+                    + crate::games::runner::world::scenery(&mut app);
                 let (want, least) = if (150..=159).contains(&n) {
                     (crate::game3d::World3d::Paper, 10)
                 } else if n >= 250 {
                     (crate::game3d::World3d::BallSort, 40)
                 } else if n >= 220 {
                     (crate::game3d::World3d::Trains, 150)
-                } else if n >= 200 {
+                } else if n == 209 {
                     (crate::game3d::World3d::Runner, 12)
+                } else if n >= 200 {
+                    (crate::game3d::World3d::Runner, 25)
                 } else if n >= 170 {
                     (crate::game3d::World3d::Hotel, 150)
                 } else {

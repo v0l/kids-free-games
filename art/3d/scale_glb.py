@@ -10,9 +10,10 @@ rest = d[20 + n:]
 positions = [p["attributes"]["POSITION"] for m in j["meshes"] for p in m["primitives"]]
 lo = [min(j["accessors"][a]["min"][k] for a in positions) for k in range(3)]
 hi = [max(j["accessors"][a]["max"][k] for a in positions) for k in range(3)]
-k = 1.0 / (hi[1] - lo[1])
+k = 0.01 if "metres" in sys.argv[3:] else 1.0 / (hi[1] - lo[1])
 centre = "centre" in sys.argv[3:]
-offset = [-(lo[0] + hi[0]) / 2 * k, -lo[1] * k, -(lo[2] + hi[2]) / 2 * k] if centre else [0.0, -lo[1] * k, 0.0]
+floor = -lo[1] * k
+offset = [-(lo[0] + hi[0]) / 2 * k, floor, -(lo[2] + hi[2]) / 2 * k] if centre else [0.0, floor, 0.0]
 roots = j["scenes"][0]["nodes"]
 j["nodes"].append({"name": "model", "children": roots, "scale": [k, k, k], "translation": offset})
 j["scenes"][0]["nodes"] = [len(j["nodes"]) - 1]

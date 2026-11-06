@@ -22,16 +22,9 @@ const TREES: usize = 9;
 const BEHIND: f32 = 14.0;
 const WHOLE: [f32; 4] = [0.0, 0.0, 1.0, 1.0];
 const ROAD_W: f32 = 5.4;
-const ROAD_TILE: f32 = 8.0;
+const ROAD_PIECE: f32 = 9.0;
+const ROAD_SINK: f32 = 0.04;
 const WALK_W: f32 = 2.0;
-const HEIGHTS: [f32; 4] = [5.0, 7.5, 10.0, 13.0];
-const TINTS: [Col; 5] = [
-    Col::new(1.0, 0.82, 0.78, 1.0),
-    Col::new(0.84, 0.92, 1.0, 1.0),
-    Col::new(1.0, 0.94, 0.72, 1.0),
-    Col::new(0.82, 1.0, 0.86, 1.0),
-    Col::new(0.94, 0.84, 1.0, 1.0),
-];
 
 pub struct RunnerWorld;
 
@@ -65,6 +58,7 @@ pub enum Role {
     Obstacle(usize, usize),
     Coin(usize),
     Building(usize),
+    Look(usize, usize),
     Tree(usize),
 }
 
@@ -75,10 +69,8 @@ type Parts<'w, 's> = Query<
         &'static Role,
         &'static mut Transform,
         &'static mut Visibility,
-        &'static mut Part,
-        &'static mut MeshMaterial3d<StandardMaterial>,
     ),
-    Without<Eye>,
+    (With<Part>, Without<Eye>),
 >;
 type Nodes<'w, 's> = Query<
     'w,
@@ -94,10 +86,6 @@ type Nodes<'w, 's> = Query<
 
 fn sprite(name: &'static str) -> Skin {
     Skin::Sprite(SHEET, name, WHOLE)
-}
-
-fn tile(name: &'static str, repeat: Vec2) -> Skin {
-    Skin::Tile(SHEET, name, repeat)
 }
 
 fn matte(c: Col) -> Paint {
@@ -163,14 +151,15 @@ fn spawn(
             ),
         ));
         for i in 0..SLOTS * 2 {
-            w.spawn((
-                Role::Building(i),
-                kit.part(
-                    Shape::Cube,
-                    Paint::skinned(Finish::Matte, TINTS[0], tile("wall", Vec2::new(2.0, 2.0))),
-                    Transform::default(),
-                ),
-            ));
+            let b = node(w, Role::Building(i), Transform::default());
+            w.commands().entity(b).with_children(|c| {
+                for (v, name) in BUILDINGS.iter().enumerate() {
+                    let look = node(c, Role::Look(i, v), Transform::default());
+                    c.commands().entity(look).with_children(|m| {
+                        model(m, &models, name, Transform::default());
+                    });
+                }
+            });
         }
         for i in 0..TREES * 2 {
             let t = node(w, Role::Tree(i), Transform::default());
@@ -185,7 +174,28 @@ const HERO_H: f32 = 1.8;
 const TRAIN_H: f32 = 1.9;
 const STRIDE_METRES: f32 = 6.0;
 const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
-const PROPS: [&str; 7] = ["barrier", "hurdle", "gate", "train", "coin", "tree", "arch"];
+const PROPS: [&str; 13] = [
+    "barrier",
+    "hurdle",
+    "gate",
+    "train",
+    "coin",
+    "tree",
+    "arch",
+    "road",
+    "building1",
+    "building2",
+    "building3",
+    "building4",
+    "building5",
+];
+const BUILDINGS: [&str; 5] = [
+    "building1",
+    "building2",
+    "building3",
+    "building4",
+    "building5",
+];
 
 #[derive(Resource, Default, Clone)]
 pub struct Models {
@@ -351,26 +361,10 @@ fn course(c: &mut ChildSpawnerCommands, kit: &mut Kit, models: &Models, g: &Runn
         Paint::new(Finish::Floor, Col::new(0.55, 0.82, 0.4, 1.0)),
         Transform::from_xyz(0.0, -0.04, mid).with_scale(Vec3::new(260.0, 1.0, len)),
     ));
-    c.spawn(kit.part(
-        Shape::Plane,
-        Paint::skinned(
-            Finish::Floor,
-            WHITE,
-            tile("road", Vec2::new(1.0, len / ROAD_TILE)),
-        ),
-        Transform::from_xyz(0.0, 0.0, mid).with_scale(Vec3::new(ROAD_W, 1.0, len)),
-    ));
-    for side in [-1.0, 1.0] {
-        let x = side * (ROAD_W / 2.0 + WALK_W / 2.0);
-        c.spawn(kit.part(
-            Shape::Plane,
-            Paint::skinned(
-                Finish::Floor,
-                WHITE,
-                tile("walk", Vec2::new(WALK_W / 2.0, len / 2.0)),
-            ),
-            Transform::from_xyz(x, 0.03, mid).with_scale(Vec3::new(WALK_W, 1.0, len)),
-        ));
+    let mut z = 20.0 - ROAD_PIECE / 2.0;
+    while z > -end {
+        prop(c, models, "road", 1.0, Vec3::new(0.0, -ROAD_SINK, z));
+        z -= ROAD_PIECE;
     }
     for (i, r) in g.rows.iter().enumerate() {
         for (k, kind) in r.lanes.iter().enumerate() {
@@ -448,7 +442,7 @@ fn sync(
         return;
     }
     pose_nodes(g, &mut nodes);
-    pose_parts(g, &view, &cam, &mut kit, &mut parts);
+    pose_parts(g, &view, &cam, &mut parts);
 }
 
 fn shown(on: bool) -> Visibility {
@@ -530,6 +524,25 @@ fn pose_nodes(g: &Runner, nodes: &mut Nodes<'_, '_>) {
                     t.set_if_neq(base);
                 }
             }
+            Role::Building(i) => {
+                let side = if i % 2 == 0 { -1.0 } else { 1.0 };
+                let k = i / 2;
+                let z = ring(k, SLOTS, SLOT, g.dist, 0.0);
+                let off = ROAD_W / 2.0 + WALK_W + 2.6;
+                v.set_if_neq(shown(z < g.length + FINISH_RUN + 20.0));
+                t.set_if_neq(Transform::from_xyz(side * off, 0.0, -z).with_rotation(
+                    Quat::from_rotation_y(if side > 0.0 {
+                        std::f32::consts::PI
+                    } else {
+                        0.0
+                    }),
+                ));
+            }
+            Role::Look(i, look) => {
+                let k = i / 2;
+                let n = hash(slot_index(k, SLOTS, SLOT, g.dist) * 2 + (i % 2) as i64);
+                v.set_if_neq(shown(n % BUILDINGS.len() == look));
+            }
             Role::Tree(i) => {
                 let side = if i % 2 == 0 { -1.0 } else { 1.0 };
                 let k = i / 2;
@@ -564,8 +577,8 @@ fn hash(n: i64) -> usize {
     (x.wrapping_mul(0xBF58476D1CE4E5B9) >> 33) as usize
 }
 
-fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Parts<'_, '_>) {
-    for (role, mut t, mut v, mut part, mut mat) in parts.iter_mut() {
+fn pose_parts(g: &Runner, view: &View, cam: &Cam, parts: &mut Parts<'_, '_>) {
+    for (role, mut t, mut v) in parts.iter_mut() {
         match *role {
             Role::Sky => {
                 let f = view.full();
@@ -593,30 +606,23 @@ fn pose_parts(g: &Runner, view: &View, cam: &Cam, kit: &mut Kit, parts: &mut Par
                 );
                 v.set_if_neq(shown(g.state != Phase::Select));
             }
-            Role::Building(i) => {
-                let side = if i % 2 == 0 { -1.0 } else { 1.0 };
-                let k = i / 2;
-                let z = ring(k, SLOTS, SLOT, g.dist, 0.0);
-                let n = hash(slot_index(k, SLOTS, SLOT, g.dist) * 2 + (i % 2) as i64);
-                let h = HEIGHTS[n % HEIGHTS.len()];
-                let tint = TINTS[(n / 7) % TINTS.len()];
-                let depth = SLOT - 1.4;
-                let off = ROAD_W / 2.0 + WALK_W + 2.6;
-                v.set_if_neq(shown(z < g.length + FINISH_RUN + 20.0));
-                t.set_if_neq(
-                    Transform::from_xyz(side * off, h / 2.0, -z)
-                        .with_scale(Vec3::new(5.2, h, depth)),
-                );
-                let paint = Paint::skinned(
-                    Finish::Matte,
-                    tint,
-                    Skin::Tile(SHEET, "wall", Vec2::new(2.0, (h / 2.5).round())),
-                );
-                kit.repaint(&mut part, &mut mat, paint);
-            }
             _ => {}
         }
     }
+}
+
+#[cfg(test)]
+pub fn scenery(app: &mut App) -> usize {
+    let w = app.world_mut();
+    let all: Vec<Entity> = w
+        .query::<(Entity, &Role)>()
+        .iter(w)
+        .filter(|(_, r)| matches!(r, Role::Building(_) | Role::Tree(_)))
+        .map(|(e, _)| e)
+        .collect();
+    all.into_iter()
+        .filter(|e| crate::game3d::visible(w, *e))
+        .count()
 }
 
 #[cfg(test)]
