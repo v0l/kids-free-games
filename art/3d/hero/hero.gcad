@@ -109,6 +109,10 @@ bone shin_l parent=thigh_l tail=8.4,0.5,9
 bone foot_l parent=shin_l tail=8.4,-12,3
 mirror x of=thigh_l
 skin auto
+skin part=torso bone=chest
+skin part=chest bone=chest
+skin part=band bone=hips_b
+skin part=hips bone=hips_b
 skin part=head bone=head_b
 skin part=jaw bone=head_b
 skin part=hair bone=head_b
