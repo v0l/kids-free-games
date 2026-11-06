@@ -36,6 +36,7 @@ impl Plugin for RunnerWorld {
                 spawn.run_if(opened(World3d::Runner)),
                 sync.run_if(is_open(World3d::Runner)),
                 animate_hero.run_if(is_open(World3d::Runner)),
+                mark_loaded.run_if(is_open(World3d::Runner)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -298,6 +299,26 @@ fn clip_secs(
             _ => None,
         })
         .map_or(1.0, |c| c.duration())
+}
+
+fn mark_loaded(
+    mut frame: NonSendMut<crate::Frame>,
+    models: Res<Models>,
+    assets: Option<Res<AssetServer>>,
+) {
+    let Some(p) = frame
+        .play_mut()
+        .and_then(|p| p.as_any().downcast_mut::<RunnerPlay>())
+    else {
+        return;
+    };
+    if p.loaded {
+        return;
+    }
+    p.loaded = match (assets, models.scenes.get("hero")) {
+        (Some(a), Some(h)) => a.is_loaded_with_dependencies(h),
+        _ => true,
+    };
 }
 
 fn animate_hero(

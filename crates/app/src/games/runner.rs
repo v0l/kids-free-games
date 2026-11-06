@@ -16,6 +16,7 @@ const SHEET: &str = "runner";
 
 pub struct RunnerPlay {
     pub g: Runner,
+    pub loaded: bool,
     results_age: f32,
 }
 
@@ -23,6 +24,7 @@ impl RunnerPlay {
     pub fn new() -> Self {
         Self {
             g: Runner::new(),
+            loaded: false,
             results_age: 0.0,
         }
     }
@@ -37,6 +39,10 @@ impl Default for RunnerPlay {
 impl Play for RunnerPlay {
     fn update(&mut self, input: &Input, view: &View, dt: f32) {
         let showing = self.g.shows_results();
+        if !self.loaded && self.g.state == State::Ready {
+            self.g.update(&Input::default(), view, dt);
+            return;
+        }
         self.g.update(input, view, dt);
         if self.g.shows_results() {
             if !showing {
@@ -48,7 +54,7 @@ impl Play for RunnerPlay {
     }
 
     fn draw(&self, pen: &mut Pen, view: &View) {
-        draw(&self.g, pen, view, self.results_age);
+        draw(&self.g, pen, view, self.results_age, self.loaded);
     }
 
     fn score(&self) -> u32 {
@@ -325,7 +331,7 @@ fn draw_progress(g: &Runner, pen: &mut Pen, view: &View) {
     pen.text_shadow(&goal, view.w / 2.0, 72.0, 24.0, WHITE);
 }
 
-pub fn draw(g: &Runner, pen: &mut Pen, view: &View, results_age: f32) {
+pub fn draw(g: &Runner, pen: &mut Pen, view: &View, results_age: f32, loaded: bool) {
     if g.state == State::Select {
         draw_select(g, pen, view);
         return;
@@ -352,6 +358,9 @@ pub fn draw(g: &Runner, pen: &mut Pen, view: &View, results_age: f32) {
     }
     let pulse = 1.0 + (g.t * 3.0).sin() * 0.03;
     match g.state {
+        State::Ready if !loaded => {
+            pen.hint("Getting ready...", vec2(view.w / 2.0, view.h * 0.8), pulse);
+        }
         State::Ready => {
             pen.hint(
                 "Tap to run! Swipe to dodge",
@@ -393,7 +402,7 @@ mod tests {
     fn drawn(g: &Runner, v: View) -> Pen {
         let mut pen = Pen::default();
         pen.begin(v, 1.0);
-        draw(g, &mut pen, &v, 1.0);
+        draw(g, &mut pen, &v, 1.0, true);
         pen
     }
 
@@ -419,10 +428,23 @@ mod tests {
     }
 
     #[test]
+    fn a_tap_does_not_start_the_run_before_the_hero_is_built() {
+        kg_core::save::reset_for_test();
+        let v = View::ipad_portrait();
+        let mut p = RunnerPlay::new();
+        p.update(&Input::press_at(v.center()), &v, 1.0 / 60.0);
+        assert_eq!(p.g.state, State::Ready);
+        p.loaded = true;
+        p.update(&Input::press_at(v.center()), &v, 1.0 / 60.0);
+        assert_eq!(p.g.state, State::Playing);
+    }
+
+    #[test]
     fn a_minute_of_play_with_the_autopilot_draws_every_frame() {
         kg_core::save::reset_for_test();
         let v = View::ipad_portrait();
         let mut p = RunnerPlay::new();
+        p.loaded = true;
         p.update(&Input::press_at(v.center()), &v, 1.0 / 60.0);
         for _ in 0..3600 {
             let i = p.g.autopilot(1.0);

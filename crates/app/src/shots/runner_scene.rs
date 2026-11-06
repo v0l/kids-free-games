@@ -79,6 +79,7 @@ pub fn setup(n: u32, view: &View) -> Stage {
         profile::set(GAME, "taught_slide", 1);
     }
     let mut p = RunnerPlay::new();
+    p.loaded = true;
     p.g = Runner::with_level(level);
     p.g.best = kg_core::engine::Best(900);
     match n {
