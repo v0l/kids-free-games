@@ -12,7 +12,7 @@ rm -rf android/app/src/main/jniLibs android/app/src/main/assets
 mkdir -p android/app/src/main/assets/art
 cp assets/art/*.kga android/app/src/main/assets/art/
 mkdir -p android/app/src/main/assets/models
-cp assets/models/*.glb android/app/src/main/assets/models/
+cp assets/models/* android/app/src/main/assets/models/
 cp assets/sound.kgs assets/sound_words.kgs android/app/src/main/assets/
 cargo ndk -t "$ABI" -P 26 -o android/app/src/main/jniLibs \
   build -p kids_games --lib --profile "$PROFILE"

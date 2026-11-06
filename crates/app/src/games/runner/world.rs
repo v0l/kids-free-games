@@ -189,6 +189,7 @@ const PROPS: [&str; 13] = [
     "building4",
     "building5",
 ];
+const GCAD: [&str; 2] = ["hero", "prop_tree"];
 const BUILDINGS: [&str; 5] = [
     "building1",
     "building2",
@@ -207,15 +208,20 @@ pub struct Models {
 impl Models {
     fn load(assets: &AssetServer, graphs: &mut Assets<AnimationGraph>) -> Self {
         let scene = |file: &str| {
-            assets.load(GltfAssetLabel::Scene(0).from_asset(format!("models/{file}.glb")))
+            if GCAD.contains(&file) {
+                assets.load(format!("models/{file}.gcad"))
+            } else {
+                assets.load(GltfAssetLabel::Scene(0).from_asset(format!("models/{file}.glb")))
+            }
         };
         let mut scenes = HashMap::new();
         scenes.insert("hero", scene("hero"));
         for name in PROPS {
             scenes.insert(name, scene(&format!("prop_{name}")));
         }
-        let clips = (0..HERO_CLIPS.len())
-            .map(|i| assets.load(GltfAssetLabel::Animation(i).from_asset("models/hero.glb")));
+        let clips = HERO_CLIPS
+            .iter()
+            .map(|c| assets.load(format!("models/hero.gcad#Animation/{c}")));
         let (graph, clips) = AnimationGraph::from_clips(clips);
         Self {
             scenes,
@@ -632,25 +638,81 @@ mod tests {
     use crate::games::Play;
     use kg_core::engine::{Dir, Input};
 
+    fn gcad_source(name: &str) -> String {
+        let text = kg_core::assets::read(&format!("models/{name}.gcad"))
+            .unwrap_or_else(|| panic!("models/{name}.gcad missing"));
+        crate::gcad::expand_includes(&String::from_utf8(text).unwrap(), &mut |inc| {
+            kg_core::assets::read(&format!("models/{inc}"))
+                .map(|b| String::from_utf8(b).unwrap())
+                .ok_or_else(|| crate::gcad::GcadError(format!("models/{inc} missing")))
+        })
+        .unwrap()
+    }
+
+    fn triangles(model: &gcad_mesh::Model) -> usize {
+        model.bodies.iter().map(|b| b.indices.len() / 3).sum()
+    }
+
     #[test]
-    fn every_model_the_runner_loads_is_a_glb_on_disk_with_its_clips() {
+    fn every_model_the_runner_loads_is_on_disk() {
         for name in PROPS
             .iter()
             .map(|p| format!("prop_{p}"))
             .chain(["hero".to_string()])
         {
-            let bytes = kg_core::assets::read(&format!("models/{name}.glb"))
-                .unwrap_or_else(|| panic!("models/{name}.glb missing"));
-            assert_eq!(&bytes[..4], b"glTF", "{name} is not a glb");
+            let ext = if GCAD.contains(&name.as_str()) {
+                "gcad"
+            } else {
+                "glb"
+            };
+            let bytes = kg_core::assets::read(&format!("models/{name}.{ext}"))
+                .unwrap_or_else(|| panic!("models/{name}.{ext} missing"));
+            if ext == "glb" {
+                assert_eq!(&bytes[..4], b"glTF", "{name} is not a glb");
+            }
         }
-        let hero = kg_core::assets::read("models/hero.glb").unwrap();
-        let json = String::from_utf8_lossy(&hero);
-        for clip in HERO_CLIPS {
+    }
+
+    #[test]
+    fn the_hero_builds_from_gcad_with_every_clip_on_its_rig() {
+        let model = crate::gcad::build(&gcad_source("hero"), 1.0).unwrap();
+        assert_eq!(model.bodies.len(), 1);
+        let body = &model.bodies[0];
+        assert_eq!(body.joints.len(), 15);
+        assert_eq!(crate::gcad::clip_names(&model), HERO_CLIPS);
+        for clip in &body.clips {
+            assert!(clip.duration > 0.3, "{} lasts {}", clip.name, clip.duration);
             assert!(
-                json.contains(&format!("\"name\":\"{clip}\"")),
-                "hero has no {clip} clip"
+                clip.tracks.len() >= 10,
+                "{} keys {} bones",
+                clip.name,
+                clip.tracks.len()
             );
         }
+        assert!(
+            triangles(&model) <= 14_000,
+            "{} triangles",
+            triangles(&model)
+        );
+        let (height, base) = crate::gcad::fit(&model);
+        assert!((100.0..160.0).contains(&height), "hero is {height} tall");
+        assert!(base.y.abs() < 1.0, "hero feet at {}", base.y);
+        let rest = body.bone_matrices(None, 0.0);
+        let run = body.bone_matrices(body.clip_index("run"), 0.1);
+        assert_eq!(rest.len(), 15);
+        assert_ne!(rest, run, "the run clip does not move the rig");
+    }
+
+    #[test]
+    fn the_tree_builds_from_gcad_inside_its_budget() {
+        let model = crate::gcad::build(&gcad_source("prop_tree"), 1.0).unwrap();
+        assert!(
+            triangles(&model) <= 4_000,
+            "{} triangles",
+            triangles(&model)
+        );
+        let (height, _) = crate::gcad::fit(&model);
+        assert!((150.0..300.0).contains(&height), "tree is {height} tall");
     }
 
     #[test]

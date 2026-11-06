@@ -13,7 +13,7 @@ cp "target/$TARGET/$PROFILE/kids_games" "$APP/KidsGames"
 mkdir -p "$APP/assets/art"
 cp assets/art/*.kga "$APP/assets/art/"
 mkdir -p "$APP/assets/models"
-cp assets/models/*.glb "$APP/assets/models/"
+cp assets/models/* "$APP/assets/models/"
 cp assets/sound.kgs assets/sound_words.kgs "$APP/assets/"
 sed "s/__BUNDLE_ID__/$BUNDLE_ID/" ios/Info.plist > "$APP/Info.plist"
 if [ "$TARGET" = aarch64-apple-ios ]; then

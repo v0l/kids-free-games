@@ -3,6 +3,7 @@ pub mod audio;
 pub mod draw;
 pub mod game3d;
 pub mod games;
+pub mod gcad;
 pub mod input;
 pub mod jev;
 pub mod link;
@@ -231,6 +232,7 @@ pub fn build(scene: Scene, with_audio: bool) -> App {
     )
     .insert_resource(ClearColor(Color::srgb(1.0, 0.7, 0.47)))
     .add_plugins(paint::PaintPlugin)
+    .add_plugins(gcad::GcadPlugin)
     .insert_non_send(Frame::new(scene))
     .add_systems(Update, frame.in_set(game3d::Step))
     .add_systems(

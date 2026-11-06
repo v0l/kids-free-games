@@ -84,7 +84,25 @@ fn parse() -> Args {
     a
 }
 
+fn gcad_source(path: &std::path::Path) -> String {
+    let text = std::fs::read_to_string(path).unwrap();
+    let dir = path.parent().unwrap().to_path_buf();
+    kids_games::gcad::expand_includes(&text, &mut |name| {
+        std::fs::read_to_string(dir.join(name))
+            .map_err(|e| kids_games::gcad::GcadError(e.to_string()))
+    })
+    .unwrap()
+}
+
+fn is_gcad(path: &std::path::Path) -> bool {
+    path.extension().is_some_and(|e| e == "gcad")
+}
+
 fn animation_names(path: &std::path::Path) -> Vec<String> {
+    if is_gcad(path) {
+        let model = kids_games::gcad::build(&gcad_source(path), 1.0).unwrap();
+        return kids_games::gcad::clip_names(&model);
+    }
     let Ok(bytes) = std::fs::read(path) else {
         return vec![];
     };
@@ -214,6 +232,7 @@ fn main() {
     let size = args.size;
     let model = args.model.clone();
     let picked2 = picked.clone();
+    let names2 = all.clone();
 
     App::new()
         .add_plugins(
@@ -230,6 +249,7 @@ fn main() {
                 .disable::<WinitPlugin>(),
         )
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(5)))
+        .add_plugins(kids_games::gcad::GcadPlugin)
         .insert_resource(ClearColor(Color::srgb(0.78, 0.78, 0.8)))
         .insert_resource(GlobalAmbientLight {
             color: Color::WHITE,
@@ -280,12 +300,21 @@ fn main() {
                     },
                     Transform::from_xyz(2.0, 4.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
                 ));
-                commands.spawn(WorldAssetRoot(
-                    assets.load(GltfAssetLabel::Scene(0).from_asset(model.clone())),
-                ));
+                let gcad = model.ends_with(".gcad");
+                commands.spawn(WorldAssetRoot(if gcad {
+                    assets.load(model.clone())
+                } else {
+                    assets.load(GltfAssetLabel::Scene(0).from_asset(model.clone()))
+                }));
                 let clips: Vec<Handle<AnimationClip>> = picked2
                     .iter()
-                    .map(|i| assets.load(GltfAssetLabel::Animation(*i).from_asset(model.clone())))
+                    .map(|i| {
+                        if gcad {
+                            assets.load(format!("{model}#Animation/{}", names2[*i]))
+                        } else {
+                            assets.load(GltfAssetLabel::Animation(*i).from_asset(model.clone()))
+                        }
+                    })
                     .collect();
                 let (graph, nodes) = AnimationGraph::from_clips(clips.clone());
                 commands.insert_resource(Rig {

@@ -8,6 +8,7 @@ import numpy as np
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
+MODELS = ROOT / "assets" / "models"
 
 SOURCE_OF = {
     "hips_b": ("Hips", "Spine1"),
@@ -244,6 +245,80 @@ def clear_arm(r_arm, rest_dir, chest_r, side, least):
     return chest_r @ between(d, fixed) @ chest_r.T @ r_arm
 
 
+ANGLE_TOLERANCE = 0.4
+LIFT_TOLERANCE = 0.3
+
+
+def num(v, places):
+    text = f"{v:.{places}f}".rstrip("0").rstrip(".")
+    return "0" if text in ("-0", "") else text
+
+
+def quat_of(r):
+    w = math.sqrt(max(0.0, 1 + r[0, 0] + r[1, 1] + r[2, 2])) / 2
+    x = math.copysign(math.sqrt(max(0.0, 1 + r[0, 0] - r[1, 1] - r[2, 2])) / 2, r[2, 1] - r[1, 2])
+    y = math.copysign(math.sqrt(max(0.0, 1 - r[0, 0] + r[1, 1] - r[2, 2])) / 2, r[0, 2] - r[2, 0])
+    z = math.copysign(math.sqrt(max(0.0, 1 - r[0, 0] - r[1, 1] + r[2, 2])) / 2, r[1, 0] - r[0, 1])
+    q = np.array([x, y, z, w])
+    return q / np.linalg.norm(q)
+
+
+def slerp(a, b, t):
+    d = float(np.dot(a, b))
+    if d < 0:
+        b, d = -b, -d
+    if d > 0.9995:
+        q = a + t * (b - a)
+        return q / np.linalg.norm(q)
+    th = math.acos(d)
+    return (math.sin((1 - t) * th) * a + math.sin(t * th) * b) / math.sin(th)
+
+
+def quat_error(a, b):
+    return math.degrees(2 * math.acos(min(1.0, abs(float(np.dot(a, b))))))
+
+
+def lerp_any(a, b, t):
+    if isinstance(a, np.ndarray):
+        return slerp(a, b, t)
+    return a + (b - a) * t
+
+
+def simplify(times, values, error, tolerance):
+    keep = [0]
+    while keep[-1] < len(values) - 1:
+        start = keep[-1]
+        end = start + 1
+        while end + 1 < len(values):
+            trial = end + 1
+            ok = all(
+                error(
+                    lerp_any(values[start], values[trial], (times[k] - times[start]) / (times[trial] - times[start])),
+                    values[k],
+                )
+                <= tolerance
+                for k in range(start + 1, trial)
+            )
+            if not ok:
+                break
+            end = trial
+        keep.append(end)
+    if len(keep) == 2 and error(values[0], values[-1]) <= tolerance and all(error(values[0], v) <= tolerance for v in values):
+        keep = [0, len(values) - 1]
+    return keep
+
+
+def euler_zyx(r):
+    ry = math.degrees(math.asin(max(-1.0, min(1.0, -r[2, 0]))))
+    if abs(r[2, 0]) < 0.99999:
+        rx = math.degrees(math.atan2(r[2, 1], r[2, 2]))
+        rz = math.degrees(math.atan2(r[1, 0], r[0, 0]))
+    else:
+        rx = math.degrees(math.atan2(-r[1, 2], r[1, 1]))
+        rz = 0.0
+    return rx, ry, rz
+
+
 def best_loop(poses, lo, hi, span):
     keys = ["thigh_l", "thigh_r", "shin_l", "shin_r", "arm_l", "arm_r", "hips_b"]
     best = None
@@ -315,33 +390,39 @@ def retarget(name, spec, bones, order):
         frames = frames[i:j] + [frames[i]]
         print(name, "loop", i, j, file=sys.stderr)
     lift_mode = spec.get("lift", "ground")
-    out = [f"clip {name} fps=30"]
-    for t, (local, target) in enumerate(frames):
+    lifts = []
+    for local, target in frames:
         wr, wt = fk(bones, order, local)
         low = lowest(bones, wr, wt)
         if lift_mode == "ground":
-            lift = target - low
+            lifts.append(target - low)
         elif lift_mode == "plant":
-            lift = -low
+            lifts.append(-low)
         else:
-            lift = 0.0
-        time = f"{t / 30:.4f}".rstrip("0").rstrip(".")
-        for b in order:
-            ang, axis = axis_angle(local[b])
-            ax = ",".join(f"{v:.4f}" for v in axis)
-            out.append(f"key t={time} bone={b} rotate={ang:.3f} axis={ax}")
-        out.append(f"key t={time} bone=hips_b move=0,0,{lift:.3f}")
-    print(name, "frames", len(frames), file=sys.stderr)
+            lifts.append(0.0)
+    out = [f"clip {name} fps=30"]
+    times = [t / 30 for t in range(len(frames))]
+    kept = 0
+    for b in order:
+        quats = [quat_of(f[0][b]) for f in frames]
+        for i in simplify(times, quats, quat_error, ANGLE_TOLERANCE):
+            rx, ry, rz = euler_zyx(frames[i][0][b])
+            out.append(f"key t={num(times[i], 3)} bone={b} rotate={num(rx, 1)},{num(ry, 1)},{num(rz, 1)}")
+            kept += 1
+    for i in simplify(times, lifts, lambda a, b: abs(a - b), LIFT_TOLERANCE):
+        out.append(f"key t={num(times[i], 3)} bone=hips_b move=0,0,{num(lifts[i], 1)}")
+        kept += 1
+    print(name, "frames", len(frames), "keys", kept, file=sys.stderr)
     return out
 
 
 def main():
     spec = json.loads((HERE / "clips.json").read_text())
-    bones, order = read_rig(HERE / "hero.gcad")
+    bones, order = read_rig(MODELS / "hero.gcad")
     lines = []
     for name in sorted(spec):
         lines += retarget(name, spec[name], bones, order)
-    (HERE / "motion.gcad").write_text("\n".join(lines) + "\n")
+    (MODELS / "motion.gcad").write_text("\n".join(lines) + "\n")
 
 
 main()
