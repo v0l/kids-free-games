@@ -18,13 +18,15 @@ cargo ndk -t "$ABI" -P 26 -o android/app/src/main/jniLibs \
   build -p kids_games --lib --profile "$PROFILE"
 so=android/app/src/main/jniLibs/$ABI/libkids_games.so
 "$ANDROID_NDK_HOME"/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-strip "$so"
-VERSION_CODE=${VERSION_CODE:-1}
-(cd android && ./gradlew -q assembleRelease ${BUNDLE:+bundleRelease} -Pabi="$ABI" -PversionCode="$VERSION_CODE")
+VERSION_NAME=${VERSION_NAME:-$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}
+IFS=. read -r major minor patch <<< "${VERSION_NAME%%[-+]*}"
+VERSION_CODE=${VERSION_CODE:-$(( major * 10000 + minor * 100 + patch ))}
+(cd android && ./gradlew -q assembleRelease ${BUNDLE:+bundleRelease} -Pabi="$ABI" -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME")
 mkdir -p target/android-artifacts
 cp android/app/build/outputs/apk/release/app-release.apk target/android-artifacts/kids_games.apk
 if [ -n "${BUNDLE:-}" ]; then
   cp android/app/build/outputs/bundle/release/app-release.aab target/android-artifacts/kids_games.aab
   echo target/android-artifacts/kids_games.aab
 fi
-echo "so: $(( $(stat -c %s "$so") / 1024 )) KiB, apk: $(( $(stat -c %s target/android-artifacts/kids_games.apk) / 1024 )) KiB, built in $(( $(date +%s) - start )) s"
+echo "version $VERSION_NAME code $VERSION_CODE, so: $(( $(stat -c %s "$so") / 1024 )) KiB, apk: $(( $(stat -c %s target/android-artifacts/kids_games.apk) / 1024 )) KiB, built in $(( $(date +%s) - start )) s"
 echo target/android-artifacts/kids_games.apk
