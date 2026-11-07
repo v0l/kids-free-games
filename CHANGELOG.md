@@ -6,7 +6,7 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-11-08
+## [0.1.0] - 2026-11-07
 
 ### Added
 - The games on Bevy 0.20 for Android, iOS, web and desktop, with the game logic in `kg_core` and the drawing in `kids_games`.
