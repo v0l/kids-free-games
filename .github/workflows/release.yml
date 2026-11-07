@@ -184,8 +184,27 @@ jobs:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
         run: echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
 
+      - name: Decode Play upload keystore
+        env:
+          PLAY_UPLOAD_KEYSTORE_BASE64: ${{ secrets.PLAY_UPLOAD_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$PLAY_UPLOAD_KEYSTORE_BASE64" ]; then
+            if [ "${{ github.event_name }}" = "push" ]; then
+              echo "::error::PLAY_UPLOAD_KEYSTORE_BASE64 is not set: the AAB must be signed with the Play upload key."
+              exit 1
+            fi
+            echo "::warning::PLAY_UPLOAD_* secrets are not set: this dry run signs the AAB with the APK key."
+          else
+            echo "$PLAY_UPLOAD_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/play-upload.keystore"
+            echo "KG_BUNDLE_KEYSTORE=$RUNNER_TEMP/play-upload.keystore" >> "$GITHUB_ENV"
+          fi
+
       - name: Build and sign
         env:
+          BUNDLE: "1"
+          KG_BUNDLE_KEYSTORE_PASSWORD: ${{ secrets.PLAY_UPLOAD_STORE_PASSWORD }}
+          KG_BUNDLE_KEY_PASSWORD: ${{ secrets.PLAY_UPLOAD_KEY_PASSWORD }}
+          KG_BUNDLE_KEY_ALIAS: ${{ secrets.PLAY_UPLOAD_KEY_ALIAS }}
           KG_KEYSTORE: ${{ runner.temp }}/release.keystore
           KG_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           KG_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
@@ -196,6 +215,7 @@ jobs:
         run: |
           mkdir -p dist
           cp target/android-artifacts/kids_games.apk "dist/kids_games-${TAG}-android-arm64.apk"
+          cp target/android-artifacts/kids_games.aab "dist/kids_games-${TAG}-android.aab"
 
       - uses: actions/upload-artifact@v4
         with:

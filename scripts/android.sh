@@ -21,10 +21,19 @@ so=android/app/src/main/jniLibs/$ABI/libkids_games.so
 VERSION_NAME=${VERSION_NAME:-$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)}
 IFS=. read -r major minor patch <<< "${VERSION_NAME%%[-+]*}"
 VERSION_CODE=${VERSION_CODE:-$(( major * 10000 + minor * 100 + patch ))}
-(cd android && ./gradlew -q assembleRelease ${BUNDLE:+bundleRelease} -Pabi="$ABI" -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME")
+(cd android && ./gradlew -q assembleRelease -Pabi="$ABI" -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME")
 mkdir -p target/android-artifacts
 cp android/app/build/outputs/apk/release/app-release.apk target/android-artifacts/kids_games.apk
 if [ -n "${BUNDLE:-}" ]; then
+  (
+    if [ -n "${KG_BUNDLE_KEYSTORE:-}" ]; then
+      export KG_KEYSTORE=$KG_BUNDLE_KEYSTORE
+      export KG_KEYSTORE_PASSWORD=${KG_BUNDLE_KEYSTORE_PASSWORD:?}
+      export KG_KEY_ALIAS=${KG_BUNDLE_KEY_ALIAS:?}
+      export KG_KEY_PASSWORD=${KG_BUNDLE_KEY_PASSWORD:-$KG_BUNDLE_KEYSTORE_PASSWORD}
+    fi
+    cd android && ./gradlew -q bundleRelease -Pabi="$ABI" -PversionCode="$VERSION_CODE" -PversionName="$VERSION_NAME"
+  )
   cp android/app/build/outputs/bundle/release/app-release.aab target/android-artifacts/kids_games.aab
   echo target/android-artifacts/kids_games.aab
 fi
