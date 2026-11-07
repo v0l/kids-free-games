@@ -11,6 +11,7 @@ mod native {
             .and_then(|e| e.parent().map(|p| p.to_path_buf()))
         {
             out.push(dir.join("assets"));
+            out.push(dir.join("../Resources/assets"));
             out.push(dir);
         }
         out.push(PathBuf::from("assets"));

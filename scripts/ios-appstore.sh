@@ -14,6 +14,8 @@ security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr 
 IDENTITY=$(security find-identity -v -p codesigning "$KC" | grep -o 'Apple Distribution[^"]*' | head -1)
 BUILD=${BUILD:-1}
 sed -i '' "/<key>CFBundleVersion<\/key>/{n;s|<string>.*</string>|<string>$BUILD</string>|;}" ios/Info.plist
+VERSION=$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+sed -i '' "/<key>CFBundleShortVersionString<\/key>/{n;s|<string>.*</string>|<string>$VERSION</string>|;}" ios/Info.plist
 TARGET=aarch64-apple-ios PROFILE=${PROFILE:-small} KEYCHAIN="$KC" SIGN_IDENTITY="$IDENTITY" PROVISION="$DIST/kg.mobileprovision" scripts/ios.sh
 rm -rf target/ios/ipa target/ios/KidsGames.ipa
 mkdir -p target/ios/ipa/Payload

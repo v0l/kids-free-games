@@ -100,6 +100,22 @@ jobs:
           fi
           rm -rf "${name}"
 
+      - name: Build .dmg
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          BIN="target/${{ matrix.target }}/release/kids_games" VERSION="${TAG#v}" OUT=target/macos scripts/macos-app.sh
+          mkdir -p dmg
+          cp -R target/macos/KidsGames.app dmg/
+          ln -s /Applications dmg/Applications
+          cp README.md LICENSE dmg/
+          hdiutil create \
+            -volname "Kids Games" \
+            -srcfolder dmg \
+            -fs HFS+ \
+            -format UDZO \
+            -ov "dist/kids_games-${TAG}-${{ matrix.target }}.dmg"
+
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.target }}
@@ -240,7 +256,7 @@ jobs:
           awk -v v="${TAG#v}" '/^## \[/{p=index($0,"[" v "]")>0;next} /^\[[^]]*\]: /{p=0} p' CHANGELOG.md > notes.md
           {
             echo
-            echo "iOS and the app stores are not built here."
+            echo "iOS and the Mac App Store package are built on a Mac with scripts/release-apple.sh and are not part of this release unless attached by hand."
           } >> notes.md
           cd dist
           sha256sum * > SHA256SUMS
