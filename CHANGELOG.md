@@ -6,6 +6,12 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
+### Added
+
+- The release workflow builds a signed Android App Bundle (`kids_games-<tag>-android.aab`), signed with the Play upload key from the `PLAY_UPLOAD_*` secrets.
+- The macOS build ships a `KidsGames.app` in a `.dmg` next to the tar.gz.
+- `scripts/release-apple.sh` builds the signed iOS IPA and the sandboxed Mac App Store `.pkg` on the Mac and copies them to `dist/`.
+
 ## [0.1.1] - 2026-11-07
 
 ### Changed

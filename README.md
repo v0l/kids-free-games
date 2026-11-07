@@ -61,7 +61,29 @@ The APK is signed with the same release key as agentbench, from four repository 
 KEYSTORE=~/.keystores/foreman-release.jks KEYSTORE_PASS=$(cat ~/.keystores/foreman-release.pass) KEY_ALIAS=foreman scripts/release.sh
 ```
 
-iOS and the app stores are not built here.
+The same Android job also builds the App Bundle for Google Play, `kids_games-<tag>-android.aab`. Play only accepts a bundle signed with the upload key registered for the app, so it uses a second secret set, `PLAY_UPLOAD_KEYSTORE_BASE64`, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_PASSWORD` and `PLAY_UPLOAD_KEY_ALIAS`, made from the upload keystore (`~/kgdist/upload.jks`). A tag build fails without them; a manual dry run falls back to the APK key. Set them with `base64 -w0 ~/kgdist/upload.jks | gh secret set PLAY_UPLOAD_KEYSTORE_BASE64 --repo v0l/kids-free-games` and `gh secret set` for the other three.
+
+The macOS job ships `kids_games-<tag>-aarch64-apple-darwin.dmg` (a `KidsGames.app` with the icon, assets and the version in `Info.plist`, ad-hoc signed) beside the tar.gz. There is no Developer ID Application certificate, so it cannot be notarised: Gatekeeper asks the user to right-click and open it the first time.
+
+### Apple store builds
+
+CI cannot sign for Apple. From the desktop, with the Mac reachable (`ssh mac`, unlocked after a reboot, see the FileVault note in the Mac dev server memory):
+
+```sh
+scripts/release-apple.sh            # build and copy to dist/
+scripts/release-apple.sh --attach   # also gh release upload --clobber to the existing tag
+```
+
+It syncs the repo to `mac:git/kids-free-games`, runs `scripts/ios-appstore.sh` (Apple Distribution identity and the "Kids Free Games App Store" profile) and `scripts/macos-pkg.sh` (sandboxed app signed with Apple Distribution, packaged with the 3rd Party Mac Developer Installer identity), then writes `dist/kids_games-<tag>-ios.ipa`, `dist/kids_games-<tag>-macos.pkg` and a SHA-256 file, and checks the IPA's version against Cargo.toml. The build number is `major*10000 + minor*100 + patch`.
+
+The Mac package needs a Mac App Store provisioning profile for `io.v0l.kidsgames` (Mac App Store Connect type, created in the developer portal); until one is installed the `.pkg` is signed but App Store Connect will reject it. Nothing is uploaded by the scripts. The manual last steps:
+
+```sh
+ssh mac 'ASC_PW=$(cat ~/kgdist/asc_app_password) xcrun altool --upload-app -f ~/git/kids-free-games/target/ios/KidsGames.ipa -t ios -u $(cat ~/kgdist/asc_user) -p @env:ASC_PW'
+ssh mac 'ASC_PW=$(cat ~/kgdist/asc_app_password) xcrun altool --upload-app -f ~/git/kids-free-games/target/macos/KidsGames.pkg -t macos -u $(cat ~/kgdist/asc_user) -p @env:ASC_PW'
+```
+
+The AAB is uploaded by hand in the Play Console (Early access track).
 
 ## iPad and iPhone
 
