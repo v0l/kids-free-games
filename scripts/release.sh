@@ -12,26 +12,14 @@ if ! grep -q '[^[:space:]]' <<< "$notes"; then
   echo "CHANGELOG.md has no entry for $version" >&2
   exit 1
 fi
-if [ -n "${KEYSTORE_BASE64:-}" ]; then
-  keystore=$(mktemp)
-  trap 'rm -f "$keystore"' EXIT
-  base64 -d <<< "$KEYSTORE_BASE64" > "$keystore"
-  export KG_KEYSTORE=$keystore
-elif [ -n "${KEYSTORE:-}" ]; then
-  export KG_KEYSTORE=$KEYSTORE
-fi
-if [ -n "${KG_KEYSTORE:-}" ]; then
-  export KG_KEYSTORE_PASSWORD=${KEYSTORE_PASS:?KEYSTORE_PASS is needed with a keystore}
-  export KG_KEY_ALIAS=${KEY_ALIAS:?KEY_ALIAS is needed with a keystore}
-  export KG_KEY_PASSWORD=${KEY_PASS:-$KEYSTORE_PASS}
-  suffix=android-arm64
-else
-  echo "no keystore given: signing with the debug key" >&2
-  suffix=debug-signed
-fi
-ABI=${ABI:-arm64-v8a} scripts/android.sh
+: "${KEYSTORE:?KEYSTORE is the path to the release keystore}"
+export KG_KEYSTORE=$KEYSTORE
+export KG_KEYSTORE_PASSWORD=${KEYSTORE_PASS:?KEYSTORE_PASS is the keystore password}
+export KG_KEY_ALIAS=${KEY_ALIAS:?KEY_ALIAS is the key alias}
+export KG_KEY_PASSWORD=${KEY_PASS:-$KEYSTORE_PASS}
+ABI=arm64-v8a scripts/android.sh
 mkdir -p dist
-apk="dist/kids_games-$version-$suffix.apk"
+apk="dist/kids_games-v$version-android-arm64.apk"
 cp target/android-artifacts/kids_games.apk "$apk"
 (cd dist && sha256sum "$(basename "$apk")" | tee "$(basename "$apk").sha256")
 echo "$apk"

@@ -143,28 +143,18 @@ jobs:
 
   android:
     needs: check
-    name: android-${{ matrix.name }}
+    name: android-apk
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: arm64
-            abi: arm64-v8a
-            target: aarch64-linux-android
-          - name: x86_64
-            abi: x86_64
-            target: x86_64-linux-android
     steps:
       - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: aarch64-linux-android
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: android-${{ matrix.name }}
+          key: android
 
       - uses: actions/setup-java@v4
         with:
@@ -189,32 +179,27 @@ jobs:
       - name: Install cargo-ndk
         run: cargo install cargo-ndk --locked
 
-      - name: Build and sign
-        id: sign
+      - name: Decode signing keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASS: ${{ secrets.KEYSTORE_PASS }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASS: ${{ secrets.KEY_PASS }}
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 }}
+        run: echo "$SIGNING_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+
+      - name: Build and sign
+        env:
+          KG_KEYSTORE: ${{ runner.temp }}/release.keystore
+          KG_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          KG_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          KG_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: ./scripts/android.sh
+
+      - name: Name the artifact after the tag
         run: |
-          set -euo pipefail
-          suffix="${{ matrix.name == 'x86_64' && 'x86_64-emulator-debug-signed' || 'debug-signed' }}"
-          if [ -n "$KEYSTORE_BASE64" ] && [ "${{ matrix.name }}" = arm64 ]; then
-            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
-            export KG_KEYSTORE="$RUNNER_TEMP/release.keystore"
-            export KG_KEYSTORE_PASSWORD="$KEYSTORE_PASS"
-            export KG_KEY_ALIAS="$KEY_ALIAS"
-            export KG_KEY_PASSWORD="${KEY_PASS:-$KEYSTORE_PASS}"
-            suffix=android-arm64
-          fi
-          echo "suffix=$suffix" >> "$GITHUB_OUTPUT"
-          ABI="${{ matrix.abi }}" scripts/android.sh
           mkdir -p dist
-          cp target/android-artifacts/kids_games.apk "dist/kids_games-${TAG#v}-${suffix}.apk"
+          cp target/android-artifacts/kids_games.apk "dist/kids_games-${TAG}-android-arm64.apk"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: android-${{ matrix.name }}
+          name: android-arm64
           path: dist/*
           if-no-files-found: error
 
@@ -233,12 +218,6 @@ jobs:
       - name: Release notes and checksums
         run: |
           awk -v v="${TAG#v}" '/^## \[/{p=index($0,"[" v "]")>0;next} /^\[[^]]*\]: /{p=0} p' CHANGELOG.md > notes.md
-          if ls dist/*-debug-signed.apk >/dev/null 2>&1; then
-            {
-              echo
-              echo "The Android APKs in this release are signed with the debug key, not a release key. They install with \"allow unknown sources\" but cannot update a build signed with a different key."
-            } >> notes.md
-          fi
           {
             echo
             echo "iOS and the app stores are not built here."

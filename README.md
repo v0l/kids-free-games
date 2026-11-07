@@ -50,28 +50,18 @@ To put it on a phone without adb, copy the APK across and open it (allow install
 
 ## Releasing
 
-A release is a pushed tag. `.github/workflows/release.yml` builds the Android arm64 APK (plus an x86_64 emulator APK), the web bundle and desktop archives for Linux, macOS and Windows from the committed assets, then publishes a GitHub release with `SHA256SUMS` and the CHANGELOG section as the notes. Running the workflow by hand (`gh workflow run release.yml -f tag=v0.1.0`) builds everything and publishes nothing.
+A release is a pushed tag. `.github/workflows/release.yml` builds the signed Android arm64 APK, the web bundle and desktop archives for Linux, macOS and Windows from the committed assets, then publishes a GitHub release with `SHA256SUMS` and the CHANGELOG section as the notes. Running the workflow by hand (`gh workflow run release.yml -f tag=v0.1.1`) builds everything and publishes nothing.
 
 1. Set the version in `Cargo.toml` (`[workspace.package]`) and move the Unreleased entries in `CHANGELOG.md` under a `## [x.y.z] - date` heading. The Android version name is that version and the version code is `major*10000 + minor*100 + patch`.
-2. `scripts/release.sh` runs the same checks and the Android build locally and prints `dist/kids_games-<version>-<suffix>.apk`.
-3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The check job fails the run if the tag differs from the workspace version or the CHANGELOG has no entry.
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`. The check job fails the run if the tag differs from the workspace version or the CHANGELOG has no entry.
 
-Without signing secrets the APK is signed with the debug key and named `kids_games-<version>-debug-signed.apk`, and the release notes say so. For a release key, make one and set four repository secrets (never commit the keystore):
+The APK is signed with the same release key as agentbench, from four repository secrets that use the same names: `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS`. A run without them fails. To build the APK on your own machine:
 
 ```sh
-keytool -genkeypair -v -keystore kids-games-release.jks -alias kidsgames \
-  -keyalg RSA -keysize 2048 -validity 10000
-base64 -w0 kids-games-release.jks
+KEYSTORE=~/.keystores/foreman-release.jks KEYSTORE_PASS=$(cat ~/.keystores/foreman-release.pass) KEY_ALIAS=foreman scripts/release.sh
 ```
 
-| Secret | Value |
-| --- | --- |
-| `KEYSTORE_BASE64` | the base64 output above |
-| `KEYSTORE_PASS` | the keystore password |
-| `KEY_ALIAS` | `kidsgames` |
-| `KEY_PASS` | the key password (the keystore password if left empty) |
-
-`scripts/release.sh` reads the same four names from the environment, or `KEYSTORE=/path/to.jks` instead of `KEYSTORE_BASE64`. iOS (`scripts/ios.sh`, `scripts/ios-appstore.sh`) needs the Mac and the store uploads are manual, so neither is part of CI. Nothing is published to a store.
+iOS and the app stores are not built here.
 
 ## iPad and iPhone
 

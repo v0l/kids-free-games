@@ -6,6 +6,12 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-07
+
+### Changed
+- The Android APK is signed with the same release key as agentbench, from the same four secrets (`SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, `SIGNING_KEY_ALIAS`), and a build without them fails instead of falling back to the debug key.
+- The release builds the arm64 APK only, named `kids_games-<tag>-android-arm64.apk`; the x86_64 emulator build is gone.
+
 ## [0.1.0] - 2026-11-07
 
 ### Added
