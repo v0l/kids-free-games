@@ -32,18 +32,20 @@ Time until every model is ready (release, `ModelsPlugin`):
 | iOS simulator, iPad Pro 11-inch (M4) | 942 ms, 14 builds | 110-112 ms | 106-115 ms, 0 builds |
 | Web, headless Chrome | 2765-3044 ms, 14 builds | no disk cache | 2081-2677 ms, 0 builds |
 
+The game logs `every model ready N ms after start, B builds, K baked` when the last model lands. Final branch, shipped bake: desktop headless sway 121-124 ms, Android emulator `kidsgames-test` x86_64 948-1078 ms (software rendering, busy host), iOS simulator iPad Pro 11-inch (M4) 174-179 ms, web headless Chrome 2514 ms, all with 0 builds and 14 baked.
+
 On the web the models wait for the 13 MB of sound files that load first; loading them after the models would cut that number further.
 
-Sizes: the sixteen `.gcad` files are 140549 B (29069 B gzipped), of which the props are 9313 B. The twelve prop GLBs they replace were 1100352 B; before that the hero and tree GLBs were 722524 B.
+Source sizes: the sixteen `.gcad` files are 140549 B (29069 B gzipped), of which the props are 9313 B. The twelve prop GLBs they replace were 1100352 B; before that the hero and tree GLBs were 722524 B.
 
-| | before (GLB props) | after |
-|---|---|---|
-| Web bundle (`scripts/web.sh`, small) | 51296727 B | 49314507 B |
-| Web wasm | 26603801 B | 25713699 B (no `bevy_gltf`) |
-| Android arm64 APK | 36077613 B | 35640051 B |
-| iOS simulator app | 42268 KiB | 40752 KiB |
+With the shipped bake (same machine and profile, measured by building with and without `assets/gcad-baked`):
 
-With gcad-bevy (before is the `gcad2glb` loader at c43c004, same machine and profile): web bundle 49540006 B (was 49317630), wasm 25939198 B (was 25716822), arm64 APK 35774367 B (was 35643863), iOS simulator app 40864 KiB (was 40704). The difference is gcad-bevy's own surface: the build cache with its bitcode format, morph targets, LODs and normal maps.
+| | without bake | with bake | delta |
+|---|---|---|---|
+| Web bundle (`scripts/web.sh`, small) | 49615608 B | 50951885 B | +1336277 B raw (392868 B gzipped) |
+| Android x86_64 APK (`scripts/android.sh`, small) | 35720095 B | 36121911 B | +401816 B (the APK deflates it) |
+| iOS simulator app | 40900 KiB | 42240 KiB | +1340 KiB |
+
 
 ## Tests
 
