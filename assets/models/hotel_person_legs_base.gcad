@@ -1,0 +1,21 @@
+body legs
+plane XY
+rect 0.15 0.16 at=0.11,0
+leg_l: extrude hip
+rect 0.15 0.16 at=-0.11,0
+leg_r: extrude hip
+color #465aa0
+body shoes
+plane XY
+rect 0.17 0.24 at=0.11,-0.04
+shoe_l: extrude 0.08
+rect 0.17 0.24 at=-0.11,-0.04
+shoe_r: extrude 0.08
+color #3c2823
+body boots
+plane XY
+rect 0.17 0.24 at=0.11,-0.04
+boot_l: extrude 0.12
+rect 0.17 0.24 at=-0.11,-0.04
+boot_r: extrude 0.12
+color #3399ff

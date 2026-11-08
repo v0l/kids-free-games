@@ -1,0 +1,10 @@
+body counter
+plane XY
+rect 0.8 3.2
+counter: extrude 0.94
+color #f08c3c
+body counter_top
+plane XY offset=0.94
+rect 0.8 3.2
+counter_top: extrude 0.06
+color #ffd782

@@ -1,5 +1,4 @@
 use bevy::animation::graph::AnimationGraphHandle;
-use gcad_bevy::GcadAssets;
 use bevy::app::{AppExit, ScheduleRunnerPlugin};
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
@@ -7,6 +6,7 @@ use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
 use bevy::window::ExitCondition;
 use bevy::winit::WinitPlugin;
+use gcad_bevy::GcadAssets;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -267,7 +267,9 @@ fn main() {
                     Transform::from_xyz(2.0, 4.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
                 ));
                 let settings = kids_games::gcad::settings(None);
-                commands.spawn(WorldAssetRoot(assets.load_gcad(model.clone(), settings.clone())));
+                commands.spawn(WorldAssetRoot(
+                    assets.load_gcad(model.clone(), settings.clone()),
+                ));
                 let clips: Vec<Handle<AnimationClip>> = picked2
                     .iter()
                     .map(|i| assets.load_gcad_clip(&model, &names2[*i], settings.clone()))

@@ -1,0 +1,39 @@
+let ay=hip+0.14+0.18*up az=0.22*up ah=0.36-0.04*up
+body sleeves
+plane XY offset=ay
+rect 0.12 0.12 at=0.33,-az
+arm_l: extrude ah
+rect 0.12 0.12 at=-0.33,-az
+arm_r: extrude ah
+color #ff7860
+body hat
+plane XY offset=hip+1.04
+ngon 0.44 10
+hat: extrude 0.16
+color #ff7860
+body brim
+plane XY offset=hip+1.04
+ngon 0.6 10 at=0,-0.06
+brim: extrude 0.03
+color #d86650
+body face
+torso: blob 0,0,hip+0.3 r=0.3,0.25,0.34 mode=shell segments=20
+hand_l: blob 0.33,-az,ay-0.02 r=0.07 mode=shell segments=10
+hand_r: blob -0.33,-az,ay-0.02 r=0.07 mode=shell segments=10
+head: blob 0,0,hip+0.86 r=0.3,0.28,0.29 mode=shell segments=20
+hair: blob 0,0.05,hip+0.94 r=0.31,0.27,0.24 mode=shell segments=20
+eye_l: blob 0.1,-0.255,hip+0.88 r=0.055,0.04,0.07 mode=shell segments=10
+eye_r: blob -0.1,-0.255,hip+0.88 r=0.055,0.04,0.07 mode=shell segments=10
+glint_l: blob 0.115,-0.285,hip+0.905 r=0.018,0.015,0.022 mode=shell segments=6
+glint_r: blob -0.085,-0.285,hip+0.905 r=0.018,0.015,0.022 mode=shell segments=6
+mouth: blob 0,-0.25,hip+0.76 r=0.07,0.04,0.03 mode=shell segments=10
+color #ff7860 part=torso gloss=0.6
+color #ffd9b8 part=hand_l gloss=0.6
+color #ffd9b8 part=hand_r gloss=0.6
+color #ffd9b8 part=head gloss=0.6
+color #3c281e part=hair gloss=0.6
+color #281e28 part=eye_l gloss=0.6
+color #281e28 part=eye_r gloss=0.6
+color #ffffff part=glint_l gloss=0.6
+color #ffffff part=glint_r gloss=0.6
+color #c84650 part=mouth gloss=0.6

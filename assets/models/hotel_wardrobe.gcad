@@ -1,0 +1,20 @@
+body wardrobe
+plane XY
+rect 1.1 0.55
+wardrobe: extrude 1.64
+color #b47850
+body wardrobe_top
+plane XY offset=1.64
+rect 1.1 0.55
+wardrobe_top: extrude 0.06
+color #c68458
+body seam
+plane XY offset=0.15
+rect 0.02 0.02 at=0,-0.28
+seam: extrude 1.4
+color #7e5438
+body knobs
+knob_l: blob 0.12,-0.3,0.9 r=0.04 mode=shell segments=10
+knob_r: blob -0.12,-0.3,0.9 r=0.04 mode=shell segments=10
+color #fad250 part=knob_l gloss=0.6
+color #fad250 part=knob_r gloss=0.6

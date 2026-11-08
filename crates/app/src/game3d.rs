@@ -1,3 +1,4 @@
+use crate::gcad::{Library, Shelf};
 use crate::paint::{Gpu, PaintCamera, Tex};
 use bevy::asset::RenderAssetUsages;
 use bevy::camera::ClearColorConfig;
@@ -52,6 +53,7 @@ pub struct Game3dPlugin;
 impl Plugin for Game3dPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Palette>()
+            .init_resource::<Library>()
             .configure_sets(Update, (Switch.after(Step), Sync3d.after(Switch)))
             .add_systems(Update, switch.in_set(Switch))
             .add_plugins((
@@ -264,6 +266,7 @@ pub enum Shape {
     Plane,
     Quad,
     Sector,
+    Model(&'static str, u16),
 }
 
 impl Shape {
@@ -399,6 +402,7 @@ pub struct Palette {
     meshes: HashMap<Shape, Handle<Mesh>>,
     mats: HashMap<MatKey, Handle<StandardMaterial>>,
     tiles: HashMap<(&'static str, &'static str), Handle<Image>>,
+    shelves: HashMap<usize, std::sync::Arc<Shelf>>,
 }
 
 #[derive(SystemParam)]
@@ -411,6 +415,10 @@ pub struct Kit<'w> {
 }
 
 impl Kit<'_> {
+    pub fn shelf(&self, names: &'static [&'static str]) -> Option<std::sync::Arc<Shelf>> {
+        self.pal.shelves.get(&(names.as_ptr() as usize)).cloned()
+    }
+
     pub fn mesh(&mut self, shape: Shape) -> Handle<Mesh> {
         if let Some(h) = self.pal.meshes.get(&shape) {
             return h.clone();
@@ -554,6 +562,44 @@ impl Kit<'_> {
         if mat.0 != h {
             mat.0 = h;
         }
+    }
+}
+
+pub fn stocked(names: &'static [&'static str]) -> impl FnMut(Res<Palette>) -> bool + Clone {
+    move |pal: Res<Palette>| pal.shelves.contains_key(&(names.as_ptr() as usize))
+}
+
+pub fn stock(
+    names: &'static [&'static str],
+) -> impl FnMut(
+    ResMut<Palette>,
+    ResMut<Library>,
+    Option<Res<AssetServer>>,
+    Option<Res<Assets<bevy::world_serialization::WorldAsset>>>,
+    ResMut<Assets<Mesh>>,
+    Res<Assets<StandardMaterial>>,
+) {
+    move |mut pal, mut library, server, worlds, mut meshes, mats| {
+        let key = names.as_ptr() as usize;
+        if pal.shelves.contains_key(&key) {
+            return;
+        }
+        let src = crate::gcad::Sources {
+            server: server.as_deref(),
+            worlds: worlds.as_deref(),
+            meshes: &mut meshes,
+            mats: &mats,
+        };
+        let Some(shelf) = library.shelf(names, src) else {
+            return;
+        };
+        for name in names {
+            for (i, part) in shelf.get(name).iter().enumerate() {
+                pal.meshes
+                    .insert(Shape::Model(name, i as u16), part.mesh.clone());
+            }
+        }
+        pal.shelves.insert(key, shelf);
     }
 }
 
@@ -710,6 +756,7 @@ pub fn build_mesh(shape: Shape) -> Mesh {
         Shape::Plane => Plane3d::new(Vec3::Y, Vec2::splat(0.5)).mesh().build(),
         Shape::Quad => Rectangle::new(1.0, 1.0).mesh().build(),
         Shape::Sector => sector_mesh(RING_OUTER, RING_INNER, RING_THICK, TAU / SEGMENTS as f32, 6),
+        Shape::Model(..) => Cuboid::new(0.0, 0.0, 0.0).mesh().build(),
     }
 }
 

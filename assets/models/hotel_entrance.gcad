@@ -1,0 +1,20 @@
+body frame
+plane XY
+rect 0.3 0.34 at=1.75,0
+post_l: extrude 1.94
+rect 0.3 0.34 at=-1.75,0
+post_r: extrude 1.94
+plane XY offset=2
+rect 3.8 0.34
+lintel: extrude 0.308
+color #c8a0dc
+body frame_top
+plane XY offset=1.94
+rect 0.3 0.34 at=1.75,0
+cap_l: extrude 0.06
+rect 0.3 0.34 at=-1.75,0
+cap_r: extrude 0.06
+plane XY offset=2.308
+rect 3.8 0.34
+lintel_cap: extrude 0.042
+color #dcb0f2

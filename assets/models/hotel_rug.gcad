@@ -1,0 +1,10 @@
+body rug
+plane XY offset=0.05
+ellipse 1.7 1.2
+rug: extrude 0.01
+color #f0c878
+body rug_inner
+plane XY offset=0.07
+ellipse 1.2 0.8
+rug_inner: extrude 0.01
+color #ffe68a

@@ -1,0 +1,10 @@
+body towel
+plane XY
+rect 0.36 0.26
+towel: extrude 0.088
+color #78befa
+body towel_top
+plane XY offset=0.088
+rect 0.36 0.26
+towel_top: extrude 0.012
+color #a0d2ff

@@ -1,7 +1,7 @@
 use super::{TrainsPlay, SHEET};
 use crate::game3d::*;
 use crate::games::hotel::build::Model;
-use crate::games::hotel::models::{body, guest_look, rgb, Stance};
+use crate::games::hotel::models::{body, guest_look, rgb, Stance, PEOPLE};
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use kg_core::engine::View;
@@ -24,8 +24,10 @@ impl Plugin for TrainsWorld {
         app.add_systems(
             Update,
             (
+                stock(PEOPLE).run_if(is_open(World3d::Trains)),
                 spawn.run_if(opened(World3d::Trains)),
-                sync.run_if(is_open(World3d::Trains)),
+                sync.run_if(is_open(World3d::Trains))
+                    .run_if(stocked(PEOPLE)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -734,12 +736,15 @@ fn wheel(t: &mut ChildSpawnerCommands, kit: &mut Kit, pos: Vec3, r: f32) {
 }
 
 fn spawn_rider(out: &mut ChildSpawnerCommands, kit: &mut Kit, look: u8, arms_up: bool) {
+    let Some(shelf) = kit.shelf(PEOPLE) else {
+        return;
+    };
     let mut m = Model::new();
     let st = Stance {
         arms_up,
         ..Default::default()
     };
-    body(&mut m, &guest_look(look, false), st);
+    body(&mut m, &shelf, &guest_look(look, false), st);
     for p in m.pieces {
         out.spawn(kit.part(p.shape, p.paint, p.at));
     }

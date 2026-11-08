@@ -1,7 +1,8 @@
-use super::build::{arc_dot, arc_shown, Anim, Model, Rest, Xf, ARC_DOTS, LAYER};
+use super::build::{arc_dot, arc_shown, Anim, Model, Rest, Tint, Xf, ARC_DOTS, LAYER};
 use super::models::*;
 use super::{HotelPlay, SHEET};
 use crate::game3d::*;
+use crate::gcad::Shelf;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use glam::{vec2, vec3};
@@ -29,14 +30,54 @@ impl Plugin for HotelWorld {
         app.add_systems(
             Update,
             (
+                stock(MODELS).run_if(is_open(World3d::Hotel)),
                 spawn.run_if(opened(World3d::Hotel)),
-                sync.run_if(is_open(World3d::Hotel)),
+                sync.run_if(is_open(World3d::Hotel)).run_if(stocked(MODELS)),
             )
                 .chain()
                 .in_set(Sync3d),
         );
     }
 }
+
+pub static MODELS: &[&str] = &[
+    "hotel_person",
+    "hotel_person_up",
+    "hotel_person_sit",
+    "hotel_person_sit_up",
+    "hotel_person_lie",
+    "hotel_swimmer",
+    "hotel_desk",
+    "hotel_bed",
+    "hotel_bed_fancy",
+    "hotel_plant",
+    "hotel_plant_mid",
+    "hotel_plant_tall",
+    "hotel_sofa",
+    "hotel_toilet",
+    "hotel_roll",
+    "hotel_burger",
+    "hotel_towel",
+    "hotel_coin",
+    "hotel_coin_top",
+    "hotel_shelf",
+    "hotel_umbrella",
+    "hotel_rug",
+    "hotel_bin",
+    "hotel_bin_full",
+    "hotel_wardrobe",
+    "hotel_tv",
+    "hotel_lamp",
+    "hotel_car",
+    "hotel_laundry",
+    "hotel_partition",
+    "hotel_sink",
+    "hotel_counter",
+    "hotel_table",
+    "hotel_stool",
+    "hotel_sunbed",
+    "hotel_entrance",
+];
 
 pub fn stage_sits(st: Stage) -> bool {
     matches!(st, Stage::WaitSnack(_) | Stage::Eat(..) | Stage::Toilet(..))
@@ -301,11 +342,11 @@ fn wanted(h: &Hotel) -> Vec<(Thing, u64)> {
     out
 }
 
-fn build(h: &Hotel, thing: Thing) -> Vec<Group> {
+fn build(h: &Hotel, shelf: &Shelf, thing: Thing) -> Vec<Group> {
     match thing {
         Thing::Sec(sec) => {
             let mut m = Model::new();
-            let w = Scene3 { h };
+            let w = Scene3 { h, shelf };
             match sec {
                 Sec::Ground => w.ground(&mut m),
                 Sec::Shell => w.shell(&mut m),
@@ -338,7 +379,9 @@ fn build(h: &Hotel, thing: Thing) -> Vec<Group> {
         Thing::Pad(_) => vec![pad_group()],
         Thing::Body => vec![],
         Thing::Splash(_) => vec![splash_group()],
-        t => stance_of(h, t).map(agent_groups).unwrap_or_default(),
+        t => stance_of(h, t)
+            .map(|s| agent_groups(shelf, s))
+            .unwrap_or_default(),
     }
 }
 
@@ -379,24 +422,24 @@ fn dot(m: &mut Model, at: Transform, color: Col) {
 fn splash_group() -> Group {
     let mut m = Model::new();
     for i in 0..6 {
-        m.sphere(
-            Vec3::ZERO,
-            Vec3::splat(0.05),
-            Col::new(0.85, 0.95, 1.0, 1.0),
-        );
-        m.tag(Anim::Drop(i));
+        m.pieces.push(super::build::Piece {
+            shape: Shape::Sphere,
+            paint: Paint::new(Finish::Gloss, Col::new(0.85, 0.95, 1.0, 1.0)),
+            at: Transform::from_scale(Vec3::splat(0.1)),
+            anim: Some(Anim::Drop(i)),
+        });
     }
     m.ring(Vec2::ZERO, 0.5, LAYER * 5.0, Col::new(1.0, 1.0, 1.0, 0.7));
     m.tag(Anim::Wave);
     Group::on(Holder::Root, m)
 }
 
-fn agent_groups(s: Stance3) -> Vec<Group> {
+fn agent_groups(shelf: &Shelf, s: Stance3) -> Vec<Group> {
     let mut root = Model::new();
     let mut person = Model::new();
     if s.swim {
         wake(&mut root, WATER);
-        swimmer(&mut person, &s.look);
+        swimmer(&mut person, shelf, &s.look);
     } else {
         if !s.stance.lie {
             root.disc(
@@ -410,10 +453,10 @@ fn agent_groups(s: Stance3) -> Vec<Group> {
             root.disc(Vec2::ZERO, vec2(0.18, 0.14), LAYER * 6.0, c);
             root.tag(Anim::Trail);
         }
-        body(&mut person, &s.look, s.stance);
+        body(&mut person, shelf, &s.look, s.stance);
         let local = |y: f32, fwd: f32| vec3(0.0, y / s.size, fwd / s.size);
         if s.eat {
-            burger(&mut person, local(1.15, 0.2));
+            burger(&mut person, shelf, local(1.15, 0.2));
         }
         if let Some((item, n)) = s.carry {
             let (y, fwd) = if s.size >= 1.0 {
@@ -424,9 +467,9 @@ fn agent_groups(s: Stance3) -> Vec<Group> {
             for k in 0..n.max(1) {
                 let p = local(y, fwd) + vec3(0.0, k as f32 * 0.2, 0.0);
                 match item {
-                    Item::Paper => roll(&mut person, p),
-                    Item::Snack => burger(&mut person, p),
-                    Item::Towel => towel(&mut person, p),
+                    Item::Paper => roll(&mut person, shelf, p),
+                    Item::Snack => burger(&mut person, shelf, p),
+                    Item::Towel => towel(&mut person, shelf, p),
                 }
             }
         }
@@ -468,6 +511,7 @@ fn fill(commands: &mut ChildSpawnerCommands, kit: &mut Kit, groups: Vec<Group>) 
 fn reconcile(
     commands: &mut Commands,
     h: &Hotel,
+    shelf: &Shelf,
     kit: &mut Kit,
     root: Entity,
     things: &mut Query<Placed, Without<Eye>>,
@@ -486,7 +530,7 @@ fn reconcile(
                 let key = want[i].1;
                 if built.0 != key {
                     built.0 = key;
-                    let groups = build(h, *thing);
+                    let groups = build(h, shelf, *thing);
                     let mut ec = commands.entity(e);
                     ec.despawn_children();
                     ec.with_children(|c| fill(c, kit, groups));
@@ -498,7 +542,7 @@ fn reconcile(
         if have[i] {
             continue;
         }
-        let groups = build(h, thing);
+        let groups = build(h, shelf, thing);
         commands.entity(root).with_children(|w| {
             w.spawn((
                 thing,
@@ -678,7 +722,10 @@ fn sync(
     let (Some(p), Ok(root)) = (playing::<HotelPlay>(&frame), root.single()) else {
         return;
     };
-    reconcile(&mut commands, &p.h, &mut kit, root, &mut things);
+    let Some(shelf) = kit.shelf(MODELS) else {
+        return;
+    };
+    reconcile(&mut commands, &p.h, &shelf, &mut kit, root, &mut things);
     place(&p.h, &pen, &mut eye, &mut things);
     animate(&p.h, &mut kit, &mut parts, &things);
 }
@@ -886,6 +933,7 @@ fn animate(
 
 struct Scene3<'a> {
     h: &'a Hotel,
+    shelf: &'a Shelf,
 }
 
 impl Scene3<'_> {
@@ -896,6 +944,7 @@ impl Scene3<'_> {
     fn ground(&self, s: &mut Model) {
         let lay = &self.h.sim.lay;
         let th = lay.theme;
+        let shelf = self.shelf;
         s.flat_rect(
             vec2(0.0, (LOBBY_S + OUTSIDE_S) / 2.0 + 1.0),
             vec2(4.0, OUTSIDE_S - LOBBY_S + 2.0),
@@ -913,30 +962,22 @@ impl Scene3<'_> {
         for k in 0..3 {
             let x = [-4.6, 4.6, -4.6][k];
             let z = [OUTSIDE_S - 1.5, OUTSIDE_S - 1.5, OUTSIDE_S - 3.6][k];
-            plant(s, vec2(x, z), 1.6);
+            plant(s, shelf, vec2(x, z), 1.6);
         }
         for (i, c) in [rgb(240, 80, 80), rgb(80, 150, 240)].iter().enumerate() {
-            car(s, vec2(-4.5 + i as f32 * 9.0, OUTSIDE_S - 0.2 + 1.6), *c);
-        }
-        desk(s, lay.desk, &th);
-        sofa(s, vec2(-HALL_W + 0.7, 6.0), th.accent, FRAC_PI_2);
-        sofa(s, vec2(HALL_W - 0.7, 6.0), th.accent, -FRAC_PI_2);
-        plant(s, vec2(-CORR - 0.5, LOBBY_S - 0.5), 1.2);
-        plant(s, vec2(CORR + 0.5, LOBBY_S - 0.5), 1.2);
-        for side in [-1.0, 1.0] {
-            s.cuboid2(
-                vec3(side * (CORR + 0.15), 0.0, LOBBY_S),
-                vec3(0.3, 2.0, 0.34),
-                th.trim,
-                darker(th.trim, 1.1),
+            car(
+                s,
+                shelf,
+                vec2(-4.5 + i as f32 * 9.0, OUTSIDE_S - 0.2 + 1.6),
+                *c,
             );
         }
-        s.cuboid2(
-            vec3(0.0, 2.0, LOBBY_S),
-            vec3(CORR * 2.0 + 0.6, 0.35, 0.34),
-            th.trim,
-            darker(th.trim, 1.1),
-        );
+        desk(s, shelf, lay.desk, &th);
+        sofa(s, shelf, vec2(-HALL_W + 0.7, 6.0), th.accent, FRAC_PI_2);
+        sofa(s, shelf, vec2(HALL_W - 0.7, 6.0), th.accent, -FRAC_PI_2);
+        plant(s, shelf, vec2(-CORR - 0.5, LOBBY_S - 0.5), 1.2);
+        plant(s, shelf, vec2(CORR + 0.5, LOBBY_S - 0.5), 1.2);
+        entrance(s, shelf, vec3(0.0, 0.0, LOBBY_S), th.trim);
     }
 
     fn shell(&self, s: &mut Model) {
@@ -1018,6 +1059,7 @@ impl Scene3<'_> {
 
     fn room(&self, s: &mut Model, r: usize) {
         let sim = &self.h.sim;
+        let shelf = self.shelf;
         let th = sim.lay.theme;
         let decor = sim.decor(r);
         let room = &sim.rooms[r];
@@ -1039,63 +1081,47 @@ impl Scene3<'_> {
             2 => th.trim,
             _ => rgb(250, 205, 80),
         };
-        let bx = s.xf;
-        s.xf = bx.then(Xf::at(
-            vec3(room_bed(r).x, 0.0, room_bed(r).y),
-            bed_yaw(r),
-            if decor >= 3 { 1.12 } else { 1.0 },
-        ));
-        bed(
-            s,
-            Vec2::ZERO,
-            if dirty(SpotKind::Bed) {
-                rgb(200, 190, 175)
-            } else {
-                sheet
-            },
-            wood,
-            decor >= 3,
-        );
-        s.xf = bx;
+        let sheet = if dirty(SpotKind::Bed) {
+            rgb(200, 190, 175)
+        } else {
+            sheet
+        };
+        let scale = if decor >= 3 { 1.12 } else { 1.0 };
+        yawed(s, room_bed(r), bed_yaw(r), scale, |s| {
+            bed(s, shelf, sheet, wood, decor >= 3)
+        });
         if dirty(SpotKind::Bed) {
             let b = room_bed(r);
-            s.sphere(
-                vec3(b.x, 0.68, b.y + 0.3),
-                vec3(0.5, 0.15, 0.4),
-                rgb(220, 215, 205),
-            );
+            s.prop(shelf, "hotel_laundry", vec3(b.x, 0.0, b.y), 0.0);
         }
         let bin_at = spots
             .iter()
             .find(|sp| sp.kind == SpotKind::Bin)
             .map(|sp| sp.obj)
             .unwrap_or_default();
-        bin(s, bin_at, dirty(SpotKind::Bin));
-        plant(s, room_pt(r, 4.0, 2.2), 1.0);
+        bin(s, shelf, bin_at, dirty(SpotKind::Bin));
+        plant(s, shelf, room_pt(r, 4.0, 2.2), 1.0);
         if decor >= 2 || sim.lay.extra_spots > 0 {
             let at = room_pt(r, 1.5, 1.0);
-            rug(
-                s,
-                at,
-                if decor >= 3 {
-                    th.accent
-                } else {
-                    rgb(240, 200, 120)
-                },
-            );
+            let c = if decor >= 3 {
+                th.accent
+            } else {
+                rgb(240, 200, 120)
+            };
+            rug(s, shelf, at, c);
             if dirty(SpotKind::Rug) {
                 dust(s, at);
             }
         }
         if decor >= 2 {
-            wardrobe(s, room_pt(r, 4.0, -2.15), wood, 0.0);
-            lamp(s, room_pt(r, 4.2, 1.4), th.accent);
+            wardrobe(s, shelf, room_pt(r, 4.0, -2.15), wood, 0.0);
+            lamp(s, shelf, room_pt(r, 4.2, 1.4), th.accent);
             if dirty(SpotKind::Wardrobe) {
                 dust(s, room_pt(r, 3.4, -1.45));
             }
         }
         if decor >= 3 {
-            tv(s, room_pt(r, 0.3, 2.1), PI);
+            tv(s, shelf, room_pt(r, 0.3, 2.1), PI);
             if dirty(SpotKind::Tv) {
                 dust(s, room_pt(r, 0.95, 1.6));
             }
@@ -1104,67 +1130,58 @@ impl Scene3<'_> {
 
     fn toilets(&self, s: &mut Model) {
         let sim = &self.h.sim;
+        let shelf = self.shelf;
         let lay = &sim.lay;
         let r = lay.toilet_room;
         for (k, st) in lay.stalls.iter().enumerate() {
-            let outer = s.xf;
-            s.xf = outer.then(Xf::at(vec3(st.x, 0.0, st.y), FRAC_PI_2, 1.0));
-            toilet(s, Vec2::ZERO);
-            s.xf = outer;
+            toilet(s, shelf, *st, FRAC_PI_2);
             for q in 0..sim.stalls[k].paper {
-                roll(s, vec3(r.x + 0.2, 0.55 + q as f32 * 0.22, st.y - 0.45));
+                let at = vec3(r.x + 0.2, 0.55 + q as f32 * 0.22, st.y - 0.45);
+                roll(s, shelf, at);
             }
         }
         for k in 0..=lay.stalls.len() {
             let z = SIDE_N + 0.3 + STALL_H * k as f32;
-            s.cuboid(
-                vec3(r.x + 0.8, 0.0, z),
-                vec3(1.6, 1.3, 0.1),
-                rgb(120, 200, 235),
-            );
+            s.prop(shelf, "hotel_partition", vec3(r.x + 0.8, 0.0, z), 0.0);
         }
-        shelf(s, lay.paper_shelf, WHITE);
+        self::shelf(s, shelf, lay.paper_shelf, WHITE);
         for q in 0..3 {
-            roll(
-                s,
-                vec3(
-                    lay.paper_shelf.x - 0.15 + q as f32 * 0.15,
-                    0.95,
-                    lay.paper_shelf.y,
-                ),
+            let at = vec3(
+                lay.paper_shelf.x - 0.15 + q as f32 * 0.15,
+                0.95,
+                lay.paper_shelf.y,
             );
+            roll(s, shelf, at);
         }
-        s.cuboid2(
-            vec3(r.x + r.w - 0.5, 0.0, r.y + r.h - 0.9),
-            vec3(0.6, 0.8, 1.2),
-            WHITE,
-            rgb(220, 240, 250),
-        );
+        let sink = vec3(r.x + r.w - 0.5, 0.0, r.y + r.h - 0.9);
+        s.prop(shelf, "hotel_sink", sink, 0.0);
     }
 
     fn cafe(&self, s: &mut Model) {
+        let shelf = self.shelf;
         let lay = &self.h.sim.lay;
         let th = lay.theme;
         let c = lay.counter;
-        s.cuboid2(
-            vec3(c.x + c.w / 2.0, 0.0, c.y + c.h / 2.0),
-            vec3(c.w, 1.0, c.h),
-            rgb(240, 140, 60),
-            rgb(255, 215, 130),
-        );
+        let middle = vec3(c.x + c.w / 2.0, 0.0, c.y + c.h / 2.0);
+        s.prop(shelf, "hotel_counter", middle, 0.0);
         for k in 0..3 {
-            burger(s, vec3(c.x + c.w / 2.0, 1.0, c.y + 0.5 + k as f32 * 1.0));
+            burger(
+                s,
+                shelf,
+                vec3(c.x + c.w / 2.0, 1.0, c.y + 0.5 + k as f32 * 1.0),
+            );
         }
         for tb in &lay.tables {
-            s.cylinder(vec3(tb.x, 0.0, tb.y), 0.08, 0.7, 6, rgb(90, 90, 100));
-            s.cylinder(vec3(tb.x, 0.7, tb.y), 0.5, 0.06, 14, rgb(230, 230, 235));
+            s.prop(shelf, "hotel_table", vec3(tb.x, 0.0, tb.y), 0.0);
             for p in seat_spots(*tb) {
-                s.cylinder(vec3(p.x, 0.0, p.y), 0.25, 0.42, 8, th.accent);
+                let at = Transform::from_xyz(p.x, 0.0, p.y);
+                s.model(shelf, "hotel_stool", at, |_| Tint::color(th.accent));
             }
         }
     }
 
     fn pool(&self, s: &mut Model) {
+        let shelf = self.shelf;
         let lay = &self.h.sim.lay;
         let th = lay.theme;
         let p = lay.pool;
@@ -1210,21 +1227,21 @@ impl Scene3<'_> {
         s.cuboid(vec3(p.x - e / 2.0, 0.0, c.y), vec3(e, 0.16, p.h), rim);
         s.cuboid(vec3(p.x + p.w + e / 2.0, 0.0, c.y), vec3(e, 0.16, p.h), rim);
         for (k, sb) in lay.sunbeds.iter().enumerate() {
-            s.cuboid2(
-                vec3(sb.x, 0.0, sb.y),
-                vec3(0.7, 0.3, 1.5),
-                WHITE,
-                if k % 2 == 0 {
-                    th.accent
-                } else {
-                    rgb(255, 210, 80)
-                },
-            );
+            let cushion = if k % 2 == 0 {
+                th.accent
+            } else {
+                rgb(255, 210, 80)
+            };
+            let at = Transform::from_xyz(sb.x, 0.0, sb.y);
+            s.model(shelf, "hotel_sunbed", at, |part| match part {
+                "cushion" => Tint::color(cushion),
+                _ => Tint::default(),
+            });
             if k % 2 == 0 {
-                umbrella(s, *sb + vec2(0.8, -0.3), th.trim);
+                umbrella(s, shelf, *sb + vec2(0.8, -0.3), th.trim);
             }
         }
-        shelf(s, lay.towel_shelf, rgb(120, 190, 250));
+        self::shelf(s, shelf, lay.towel_shelf, rgb(120, 190, 250));
     }
 
     fn coins(&self, s: &mut Model) {
@@ -1232,12 +1249,12 @@ impl Scene3<'_> {
         for p in PILES {
             let amount = sim.pile(p);
             if amount > 0 {
-                coin_stack(s, sim.pile_pos(p), amount);
+                coin_stack(s, self.shelf, sim.pile_pos(p), amount);
             }
         }
         for (k, room) in sim.rooms.iter().enumerate() {
             if room.tip > 0 {
-                coin_stack(s, room_pt(k, 1.6, 1.2), room.tip);
+                coin_stack(s, self.shelf, room_pt(k, 1.6, 1.2), room.tip);
             }
         }
     }

@@ -1,0 +1,5 @@
+body column
+plane XY
+ngon 0.3 10
+column: extrude 1
+color #f0b41e

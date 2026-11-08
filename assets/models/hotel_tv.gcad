@@ -1,0 +1,20 @@
+body stand
+plane XY
+rect 1 0.45
+stand: extrude 0.396
+color #966446
+body stand_top
+plane XY offset=0.396
+rect 1 0.45
+stand_top: extrude 0.054
+color #b47d55
+body frame
+plane XY offset=0.45
+rect 0.9 0.06 at=0,0.05
+frame: extrude 0.55
+color #282837
+body screen
+plane XY offset=0.5
+rect 0.8 0.02 at=0,0.01
+screen: extrude 0.45
+color #50c8f0

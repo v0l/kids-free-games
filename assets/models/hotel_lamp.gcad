@@ -1,0 +1,15 @@
+body base
+plane XY
+ngon 0.36 8
+base: extrude 0.5
+color #966446
+body stem
+plane XY offset=0.5
+ngon 0.06 6
+stem: extrude 0.3
+color #ffffff
+body shade
+plane XY offset=0.75
+ngon 0.44 10
+shade: extrude 0.25 scale=0.5909
+color #ff9a3c

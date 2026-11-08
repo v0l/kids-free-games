@@ -1,0 +1,10 @@
+body sink
+plane XY
+rect 0.6 1.2
+sink: extrude 0.74
+color #ffffff
+body sink_top
+plane XY offset=0.74
+rect 0.6 1.2
+sink_top: extrude 0.06
+color #dcf0fa

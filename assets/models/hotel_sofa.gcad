@@ -1,0 +1,14 @@
+body seat
+plane XY
+rect 1.8 0.8
+seat: extrude 0.45
+color #ff8c8c
+body back
+plane XY
+rect 1.8 0.2 at=0,0.32
+back: extrude 0.95
+rect 0.2 0.8 at=0.95,0
+arm_l: extrude 0.65
+rect 0.2 0.8 at=-0.95,0
+arm_r: extrude 0.65
+color #e67e7e

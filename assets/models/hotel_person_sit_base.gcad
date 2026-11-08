@@ -1,0 +1,12 @@
+body legs
+plane XY offset=0.32
+rect 0.15 0.4 at=0.11,-0.12
+thigh_l: extrude 0.13
+rect 0.15 0.4 at=-0.11,-0.12
+thigh_r: extrude 0.13
+plane XY
+rect 0.14 0.14 at=0.11,-0.3
+shin_l: extrude 0.32
+rect 0.14 0.14 at=-0.11,-0.3
+shin_r: extrude 0.32
+color #465aa0

@@ -1,0 +1,10 @@
+body bed
+plane XY
+rect 0.7 1.5
+bed: extrude 0.264
+color #ffffff
+body cushion
+plane XY offset=0.264
+rect 0.7 1.5
+cushion: extrude 0.036
+color #ffd250

@@ -1,0 +1,10 @@
+body pole
+plane XY
+ngon 0.08 6
+pole: extrude 1.6
+color #ffffff
+body canopy
+plane XY offset=1.5
+ngon 1.5 10
+canopy: extrude 0.3 scale=0
+color #ff9a3c

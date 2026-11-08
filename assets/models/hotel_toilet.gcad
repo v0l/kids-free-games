@@ -1,0 +1,10 @@
+body tank
+plane XY
+rect 0.3 0.5 at=0.3,0
+tank: extrude 0.85
+color #ffffff
+body bowl
+plane XY
+ngon 0.36 10 at=-0.05,0
+bowl: extrude 0.45 scale=1.4444
+color #f5f5fa

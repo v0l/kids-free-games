@@ -1,0 +1,18 @@
+body bun
+plane XY
+ngon 0.32 8
+bun: extrude 0.05
+color #dc9646
+body patty
+plane XY offset=0.05
+ngon 0.34 8
+patty: extrude 0.05
+color #6e3c28
+body lettuce
+plane XY offset=0.1
+ngon 0.34 8
+lettuce: extrude 0.02
+color #6ec850
+body top
+top: blob 0,0,0.14 r=0.17,0.17,0.09 mode=shell segments=16
+color #f0aa50 part=top gloss=0.6

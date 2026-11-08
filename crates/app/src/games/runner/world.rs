@@ -788,7 +788,10 @@ mod tests {
             if pending.is_empty() {
                 break;
             }
-            assert!(started.elapsed().as_secs() < 120, "{pending:?} did not load");
+            assert!(
+                started.elapsed().as_secs() < 120,
+                "{pending:?} did not load"
+            );
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
         let clips = app.world().resource::<Assets<AnimationClip>>();
@@ -808,7 +811,10 @@ mod tests {
             .resource::<Assets<bevy::world_serialization::WorldAsset>>()
             .get(models.scene("hero").unwrap())
             .unwrap();
-        let mut q = hero.world.try_query::<(&gcad_bevy::GcadModel, &Transform)>().unwrap();
+        let mut q = hero
+            .world
+            .try_query::<(&gcad_bevy::GcadModel, &Transform)>()
+            .unwrap();
         let (model, at) = q.single(&hero.world).unwrap();
         let height = (model.bounds_max.y - model.bounds_min.y) * at.scale.y;
         assert!((height - 1.0).abs() < 1e-3, "hero loads {height} high");
@@ -830,7 +836,10 @@ mod tests {
             return;
         }
         let problems = gcad_bevy::bake::check(&root, crate::gcad::bake_settings);
-        assert!(problems.is_empty(), "stale bake, run scripts/bake.sh: {problems:#?}");
+        assert!(
+            problems.is_empty(),
+            "stale bake, run scripts/bake.sh: {problems:#?}"
+        );
     }
 
     #[test]
@@ -860,13 +869,19 @@ mod tests {
         let mut assets: Vec<(String, gcad_bevy::GcadSettings)> =
             vec![("models/hero.gcad".into(), crate::gcad::settings(None))];
         for (name, scale) in PROPS {
-            assets.push((format!("models/prop_{name}.gcad"), crate::gcad::settings(scale)));
+            assets.push((
+                format!("models/prop_{name}.gcad"),
+                crate::gcad::settings(scale),
+            ));
         }
         for (asset, loaded) in assets {
-            let baked = crate::gcad::bake_settings(&asset).unwrap_or_else(|| panic!("{asset} not baked"));
+            let baked =
+                crate::gcad::bake_settings(&asset).unwrap_or_else(|| panic!("{asset} not baked"));
             assert_eq!(baked, loaded, "{asset}");
             let text = std::fs::read_to_string(root.join(&asset)).unwrap();
-            let sources = gcad_bevy::Sources::read(&asset, &text, |n| std::fs::read(root.join(n)).ok()).unwrap();
+            let sources =
+                gcad_bevy::Sources::read(&asset, &text, |n| std::fs::read(root.join(n)).ok())
+                    .unwrap();
             assert_eq!(
                 gcad_bevy::bake::key_of(&root, &asset, &baked).unwrap(),
                 gcad_bevy::cache_key(&sources, &loaded).unwrap(),

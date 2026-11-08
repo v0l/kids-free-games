@@ -1,4 +1,5 @@
 use crate::game3d::{Finish, Paint, Shape, Skin};
+use crate::gcad::Shelf;
 use bevy::math::Vec2;
 use bevy::math::{Quat, Vec3};
 use bevy::prelude::{Component, Transform};
@@ -86,6 +87,30 @@ pub struct Piece {
     pub anim: Option<Anim>,
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Tint {
+    pub color: Option<Color>,
+    pub hide: bool,
+    pub anim: Option<Anim>,
+    pub at: Option<Transform>,
+}
+
+impl Tint {
+    pub fn color(c: Color) -> Self {
+        Self {
+            color: Some(c),
+            ..Default::default()
+        }
+    }
+
+    pub fn hidden() -> Self {
+        Self {
+            hide: true,
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct Model {
     pub pieces: Vec<Piece>,
@@ -100,8 +125,13 @@ pub fn ball_at(c: Vec3, r: Vec3) -> Transform {
     Transform::from_translation(c).with_scale(r * 2.0)
 }
 
-fn sides(n: usize) -> u8 {
-    (n.clamp(6, 24) as u8 / 2) * 2
+fn paint_of(color: Color, finish: Finish) -> Paint {
+    let finish = if color.a < 0.99 && matches!(finish, Finish::Matte | Finish::Gloss) {
+        Finish::Ghost
+    } else {
+        finish
+    };
+    Paint::new(finish, color)
 }
 
 impl Model {
@@ -116,14 +146,9 @@ impl Model {
     }
 
     fn put(&mut self, shape: Shape, finish: Finish, color: Color, center: Vec3, size: Vec3) {
-        let finish = if color.a < 0.99 && matches!(finish, Finish::Matte | Finish::Gloss) {
-            Finish::Ghost
-        } else {
-            finish
-        };
         self.pieces.push(Piece {
             shape,
-            paint: Paint::new(finish, color),
+            paint: paint_of(color, finish),
             at: Transform {
                 translation: self.xf.point(center),
                 rotation: Quat::from_rotation_y(self.xf.yaw),
@@ -131,6 +156,42 @@ impl Model {
             },
             anim: None,
         });
+    }
+
+    pub fn model(
+        &mut self,
+        shelf: &Shelf,
+        name: &'static str,
+        at: Transform,
+        mut tint: impl FnMut(&str) -> Tint,
+    ) {
+        let place = self.xf.transform() * at;
+        for (i, part) in shelf.get(name).iter().enumerate() {
+            let t = tint(&part.name);
+            if t.hide {
+                continue;
+            }
+            let finish = if part.gloss {
+                Finish::Gloss
+            } else {
+                Finish::Matte
+            };
+            self.pieces.push(Piece {
+                shape: Shape::Model(name, i as u16),
+                paint: paint_of(t.color.unwrap_or(part.color), finish),
+                at: place * t.at.unwrap_or_default(),
+                anim: t.anim,
+            });
+        }
+    }
+
+    pub fn prop(&mut self, shelf: &Shelf, name: &'static str, at: Vec3, yaw: f32) {
+        self.model(
+            shelf,
+            name,
+            Transform::from_translation(at).with_rotation(Quat::from_rotation_y(yaw)),
+            |_| Tint::default(),
+        );
     }
 
     pub fn cuboid(&mut self, base: Vec3, size: Vec3, color: Color) {
@@ -161,33 +222,27 @@ impl Model {
         );
     }
 
-    pub fn cylinder(&mut self, base: Vec3, r: f32, h: f32, n: usize, side: Color) {
-        self.put(
-            Shape::Cylinder(sides(n)),
-            Finish::Matte,
-            side,
-            base + vec3(0.0, h / 2.0, 0.0),
-            vec3(r * 2.0, h, r * 2.0),
-        );
-    }
-
-    pub fn frustum(&mut self, base: Vec3, r0: f32, r1: f32, h: f32, n: usize, side: Color) {
-        let (shape, r) = if r1 < 0.08 {
-            (Shape::Cone(sides(n)), r0)
-        } else {
-            (Shape::Cylinder(sides(n)), (r0 + r1) / 2.0)
-        };
-        self.put(
-            shape,
-            Finish::Matte,
-            side,
-            base + vec3(0.0, h / 2.0, 0.0),
-            vec3(r * 2.0, h, r * 2.0),
-        );
-    }
-
-    pub fn sphere(&mut self, c: Vec3, r: Vec3, color: Color) {
-        self.put(Shape::Sphere, Finish::Gloss, color, c, r * 2.0);
+    pub fn floor_at(
+        &mut self,
+        area: kg_core::geom::Rect,
+        y: f32,
+        tile: f32,
+        sheet: &'static str,
+        name: &'static str,
+        tint: Color,
+    ) {
+        let repeat = Vec2::new(area.w / tile, area.h / tile);
+        self.pieces.push(Piece {
+            shape: Shape::Plane,
+            paint: Paint::skinned(Finish::Floor, tint, Skin::Tile(sheet, name, repeat)),
+            at: Transform::from_translation(self.xf.point(vec3(
+                area.x + area.w / 2.0,
+                y,
+                area.y + area.h / 2.0,
+            )))
+            .with_scale(vec3(area.w, 1.0, area.h)),
+            anim: None,
+        });
     }
 
     fn flat(&mut self, shape: Shape, center: Vec2, size: Vec2, y: f32, color: Color) {
@@ -211,29 +266,6 @@ impl Model {
 
     pub fn flat_rect(&mut self, center: Vec2, size: Vec2, y: f32, color: Color) {
         self.flat(Shape::Plane, center, size, y, color);
-    }
-
-    pub fn floor_at(
-        &mut self,
-        area: kg_core::geom::Rect,
-        y: f32,
-        tile: f32,
-        sheet: &'static str,
-        name: &'static str,
-        tint: Color,
-    ) {
-        let repeat = Vec2::new(area.w / tile, area.h / tile);
-        self.pieces.push(Piece {
-            shape: Shape::Plane,
-            paint: Paint::skinned(Finish::Floor, tint, Skin::Tile(sheet, name, repeat)),
-            at: Transform::from_translation(self.xf.point(vec3(
-                area.x + area.w / 2.0,
-                y,
-                area.y + area.h / 2.0,
-            )))
-            .with_scale(vec3(area.w, 1.0, area.h)),
-            anim: None,
-        });
     }
 
     pub fn ring(&mut self, center: Vec2, r: f32, y: f32, color: Color) {
@@ -290,7 +322,12 @@ mod tests {
     #[test]
     fn see_through_solids_turn_ghostly() {
         let mut s = Model::new();
-        s.sphere(Vec3::ZERO, Vec3::ONE, kg_core::geom::WHITE.with_alpha(0.5));
+        s.disc(
+            Vec2::ZERO,
+            Vec2::ONE,
+            0.0,
+            kg_core::geom::WHITE.with_alpha(0.5),
+        );
         assert_eq!(s.pieces[0].paint.finish, Finish::Ghost);
     }
 

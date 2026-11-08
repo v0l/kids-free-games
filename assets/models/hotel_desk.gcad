@@ -1,0 +1,28 @@
+body desk
+plane XY
+rect 3.2 0.9
+desk: extrude 0.99
+color #965a37
+body top
+plane XY offset=0.99
+rect 3.2 0.9
+top: extrude 0.06
+color #ffffff
+body panel
+plane XY offset=0.25
+rect 2.56 0.02 at=0,0.46
+panel: extrude 0.45
+color #e6e6e6
+body bell
+plane XY offset=1.05
+ngon 0.24 8 at=0.9,0
+bell: extrude 0.05
+color #f0c83c
+body screen
+plane XY offset=1.05
+rect 0.45 0.06 at=-0.8,0
+screen: extrude 0.32
+color #3c3c50
+body knob
+knob: blob 0.9,0,1.12 r=0.06 mode=shell segments=10
+color #ffdc50 part=knob gloss=0.6

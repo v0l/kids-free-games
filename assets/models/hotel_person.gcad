@@ -1,0 +1,3 @@
+let hip=0.42 up=0
+include hotel_person_legs_base.gcad
+include hotel_person_upper_base.gcad

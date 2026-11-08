@@ -1,0 +1,17 @@
+body shelf
+plane XY
+rect 0.7 0.6
+shelf: extrude 0.69
+color #aa7850
+body shelf_top
+plane XY offset=0.69
+rect 0.7 0.6
+shelf_top: extrude 0.06
+color #c89664
+body items
+plane XY offset=0.75
+rect 0.25 0.25 at=0.15,0
+item_l: extrude 0.2
+rect 0.25 0.25 at=-0.15,0
+item_r: extrude 0.2
+color #ffffff

@@ -1,0 +1,10 @@
+body leg
+plane XY
+ngon 0.16 6
+leg: extrude 0.7
+color #5a5a64
+body top
+plane XY offset=0.7
+ngon 1 14
+top: extrude 0.06
+color #e6e6eb
