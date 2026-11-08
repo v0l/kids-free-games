@@ -94,7 +94,7 @@ fn gcad_source(path: &std::path::Path) -> String {
 }
 
 fn animation_names(path: &std::path::Path) -> Vec<String> {
-    let model = kids_games::gcad::build(&gcad_source(path), 1.0).unwrap();
+    let model = kids_games::gcad::build(&gcad_source(path), 1.0, None).unwrap();
     kids_games::gcad::clip_names(&model)
 }
 

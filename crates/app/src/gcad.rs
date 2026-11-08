@@ -57,17 +57,16 @@ pub fn expand_includes(
     Ok(out)
 }
 
-pub fn build(source: &str, detail: f64) -> Result<gcad_mesh::Model, GcadError> {
+pub fn build(
+    source: &str,
+    detail: f64,
+    scale: Option<f32>,
+) -> Result<std::sync::Arc<gcad2glb::Assets>, GcadError> {
     use std::sync::{Arc, Mutex, OnceLock};
-    type Built = Arc<OnceLock<Result<gcad_mesh::Model, String>>>;
+    type Built = Arc<OnceLock<Result<Arc<gcad2glb::Assets>, String>>>;
     static CACHE: OnceLock<Mutex<Vec<(u64, Built)>>> = OnceLock::new();
-    let key = {
-        use std::hash::{Hash, Hasher};
-        let mut h = std::collections::hash_map::DefaultHasher::new();
-        source.hash(&mut h);
-        detail.to_bits().hash(&mut h);
-        h.finish()
-    };
+    let options = options_for(detail, scale);
+    let key = gcad2glb::cache_key(source, &options);
     let slot: Built = {
         let mut cache = CACHE.get_or_init(Default::default).lock().unwrap();
         cache.retain(|(_, b)| Arc::strong_count(b) > 1 || b.get().is_some());
@@ -76,57 +75,55 @@ pub fn build(source: &str, detail: f64) -> Result<gcad_mesh::Model, GcadError> {
             None => {
                 let b: Built = Arc::default();
                 cache.push((key, b.clone()));
-                if cache.len() > 8 {
+                if cache.len() > 16 {
                     cache.remove(0);
                 }
                 b
             }
         }
     };
-    slot.get_or_init(|| build_uncached(source, detail).map_err(|e| e.0))
+    slot.get_or_init(|| build_uncached(source, options).map(Arc::new).map_err(|e| e.0))
         .clone()
         .map_err(GcadError)
 }
 
-fn build_uncached(source: &str, detail: f64) -> Result<gcad_mesh::Model, GcadError> {
-    let options = gcad_mesh::Options {
+fn options_for(detail: f64, scale: Option<f32>) -> gcad2glb::Options {
+    gcad2glb::Options {
         detail,
+        fit: gcad2glb::Fit {
+            height: scale.is_none().then_some(1.0),
+            scale: scale.map(f64::from),
+            centre: true,
+        },
         ..Default::default()
-    };
+    }
+}
+
+fn build_uncached(
+    source: &str,
+    options: gcad2glb::Options,
+) -> Result<gcad2glb::Assets, GcadError> {
     let started = bevy::platform::time::Instant::now();
-    let model = gcad_mesh::build_with(source, &options)
-        .map_err(|e| GcadError(format!("line {} `{}`: {}", e.line, e.text, e.message)))?;
-    let triangles: usize = model.bodies.iter().map(|b| b.indices.len() / 3).sum();
+    let mut assets = gcad2glb::Assets::from_source(source, &options)
+        .map_err(|e| GcadError(e.to_string()))?;
+    if rigged(&assets) {
+        assets.options.fit.centre = false;
+    }
     info!(
         "built gcad model ({} bytes, {} triangles, detail {}) in {:.0} ms",
         source.len(),
-        triangles,
-        detail,
+        assets.triangles(),
+        options.detail,
         started.elapsed().as_secs_f64() * 1000.0
     );
-    Ok(model)
+    Ok(assets)
 }
 
-pub fn rigged(model: &gcad_mesh::Model) -> bool {
+pub fn rigged(model: &gcad2glb::gcad_mesh::Model) -> bool {
     model.bodies.iter().any(|b| !b.joints.is_empty())
 }
 
-pub fn fit(model: &gcad_mesh::Model) -> (f32, Vec3) {
-    let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
-    for p in model.bodies.iter().flat_map(|b| &b.positions) {
-        lo = lo.min(Vec3::from(*p));
-        hi = hi.max(Vec3::from(*p));
-    }
-    let height = (hi.y - lo.y).max(1.0e-6);
-    let base = if rigged(model) {
-        Vec3::new(0.0, lo.y, 0.0)
-    } else {
-        Vec3::new((lo.x + hi.x) / 2.0, lo.y, (lo.z + hi.z) / 2.0)
-    };
-    (height, base)
-}
-
-fn mesh_of(body: &gcad_mesh::Body, part: &gcad_mesh::Part) -> Mesh {
+fn mesh_of(body: &gcad2glb::gcad_mesh::Body, part: &gcad2glb::gcad_mesh::Part) -> Mesh {
     let range = part.first_index..part.first_index + part.index_count;
     let mut used: Vec<u32> = body.indices[range.clone()].to_vec();
     used.sort_unstable();
@@ -176,7 +173,7 @@ fn mesh_of(body: &gcad_mesh::Body, part: &gcad_mesh::Part) -> Mesh {
     mesh
 }
 
-fn material_of(body: &gcad_mesh::Body, part: &gcad_mesh::Part) -> StandardMaterial {
+fn material_of(body: &gcad2glb::gcad_mesh::Body, part: &gcad2glb::gcad_mesh::Part) -> StandardMaterial {
     let tint = if body.colours.is_empty() {
         Color::srgb_from_array(part.colour)
     } else {
@@ -190,7 +187,7 @@ fn material_of(body: &gcad_mesh::Body, part: &gcad_mesh::Part) -> StandardMateri
     }
 }
 
-fn clip_of(clip: &gcad_mesh::Clip, paths: &[Vec<Name>]) -> AnimationClip {
+fn clip_of(clip: &gcad2glb::gcad_mesh::Clip, paths: &[Vec<Name>]) -> AnimationClip {
     let mut out = AnimationClip::default();
     let target = |joint: usize| AnimationTargetId::from_names(paths[joint].iter());
     for track in &clip.tracks {
@@ -239,7 +236,7 @@ fn clip_of(clip: &gcad_mesh::Clip, paths: &[Vec<Name>]) -> AnimationClip {
     out
 }
 
-fn local_offset(body: &gcad_mesh::Body, joint: usize) -> Vec3 {
+fn local_offset(body: &gcad2glb::gcad_mesh::Body, joint: usize) -> Vec3 {
     let j = &body.joints[joint];
     match j.parent {
         Some(p) => Vec3::from(j.head) - Vec3::from(body.joints[p].head),
@@ -247,7 +244,7 @@ fn local_offset(body: &gcad_mesh::Body, joint: usize) -> Vec3 {
     }
 }
 
-pub fn clip_names(model: &gcad_mesh::Model) -> Vec<String> {
+pub fn clip_names(model: &gcad2glb::gcad_mesh::Model) -> Vec<String> {
     let mut names: Vec<String> = model
         .bodies
         .iter()
@@ -259,16 +256,15 @@ pub fn clip_names(model: &gcad_mesh::Model) -> Vec<String> {
 }
 
 pub fn into_world(
-    model: &gcad_mesh::Model,
-    scale: Option<f32>,
+    model: &gcad2glb::Assets,
     load_context: &mut LoadContext,
 ) -> WorldAsset {
-    let (height, base) = fit(model);
-    let scale = scale.unwrap_or(1.0 / height);
+    let placed = model.fit().expect("the loader always asks for a fit");
     let mut world = World::default();
     let root = world
         .spawn((
-            Transform::from_scale(Vec3::splat(scale)).with_translation(-base * scale),
+            Transform::from_scale(Vec3::splat(placed.scale))
+                .with_translation(Vec3::from(placed.translation)),
             Visibility::default(),
             Name::new("gcad"),
         ))
@@ -406,8 +402,8 @@ impl AssetLoader for GcadLoader {
                 .map(|(_, t)| t.clone())
                 .ok_or_else(|| GcadError(format!("include {name} not found")))
         })?;
-        let model = build(&source, settings.detail)?;
-        Ok(into_world(&model, settings.scale, load_context))
+        let model = build(&source, settings.detail, settings.scale)?;
+        Ok(into_world(&model, load_context))
     }
 
     fn extensions(&self) -> &[&str] {
@@ -453,7 +449,7 @@ fn warm_up() {
             for rel in WARM {
                 if let Some(source) = source_of(rel) {
                     let started = bevy::platform::time::Instant::now();
-                    if build(&source, 1.0).is_ok() {
+                    if build(&source, 1.0, None).is_ok() {
                         info!(
                             "warmed {rel} in {:.0} ms",
                             started.elapsed().as_secs_f64() * 1000.0

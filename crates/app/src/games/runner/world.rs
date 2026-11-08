@@ -667,17 +667,13 @@ mod tests {
         .unwrap()
     }
 
-    fn triangles(model: &gcad_mesh::Model) -> usize {
-        model.bodies.iter().map(|b| b.indices.len() / 3).sum()
+    fn triangles(model: &gcad2glb::Assets) -> usize {
+        model.triangles()
     }
 
-    fn extent(model: &gcad_mesh::Model, scale: Option<f32>) -> Vec3 {
-        let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
-        for p in model.bodies.iter().flat_map(|b| &b.positions) {
-            lo = lo.min(Vec3::from(*p));
-            hi = hi.max(Vec3::from(*p));
-        }
-        (hi - lo) * scale.unwrap_or(1.0 / (hi.y - lo.y))
+    fn extent(model: &gcad2glb::Assets) -> Vec3 {
+        let (lo, hi) = model.bounds().unwrap();
+        (Vec3::from(hi) - Vec3::from(lo)) * model.fit().unwrap().scale
     }
 
     #[test]
@@ -697,7 +693,7 @@ mod tests {
             ("building5", [5.66, 7.82, 7.84]),
         ];
         for (name, scale) in PROPS {
-            let model = crate::gcad::build(&gcad_source(&format!("prop_{name}")), 1.0)
+            let model = crate::gcad::build(&gcad_source(&format!("prop_{name}")), 1.0, scale)
                 .unwrap_or_else(|e| panic!("{name}: {e}"));
             let tris = triangles(&model);
             assert!((1..=4_000).contains(&tris), "{name}: {tris} triangles");
@@ -720,7 +716,7 @@ mod tests {
             let Some((_, want)) = kernel.iter().find(|(n, _)| *n == name) else {
                 continue;
             };
-            let got = extent(&model, scale);
+            let got = extent(&model);
             for i in 0..3 {
                 assert!(
                     (got[i] - want[i]).abs() <= 0.02 * want[i].max(0.2),
@@ -761,7 +757,7 @@ mod tests {
 
     #[test]
     fn the_hero_builds_from_gcad_with_every_clip_on_its_rig() {
-        let model = crate::gcad::build(&gcad_source("hero"), 1.0).unwrap();
+        let model = crate::gcad::build(&gcad_source("hero"), 1.0, None).unwrap();
         assert_eq!(model.bodies.len(), 1);
         let body = &model.bodies[0];
         assert_eq!(body.joints.len(), 15);
@@ -780,9 +776,10 @@ mod tests {
             "{} triangles",
             triangles(&model)
         );
-        let (height, base) = crate::gcad::fit(&model);
+        let (lo, hi) = model.bounds().unwrap();
+        let height = hi[1] - lo[1];
         assert!((100.0..160.0).contains(&height), "hero is {height} tall");
-        assert!(base.y.abs() < 1.0, "hero feet at {}", base.y);
+        assert!(lo[1].abs() < 1.0, "hero feet at {}", lo[1]);
         let rest = body.bone_matrices(None, 0.0);
         let run = body.bone_matrices(body.clip_index("run"), 0.1);
         assert_eq!(rest.len(), 15);
@@ -791,13 +788,14 @@ mod tests {
 
     #[test]
     fn the_tree_builds_from_gcad_inside_its_budget() {
-        let model = crate::gcad::build(&gcad_source("prop_tree"), 1.0).unwrap();
+        let model = crate::gcad::build(&gcad_source("prop_tree"), 1.0, None).unwrap();
         assert!(
             triangles(&model) <= 4_000,
             "{} triangles",
             triangles(&model)
         );
-        let (height, _) = crate::gcad::fit(&model);
+        let (lo, hi) = model.bounds().unwrap();
+        let height = hi[1] - lo[1];
         assert!((150.0..300.0).contains(&height), "tree is {height} tall");
     }
 

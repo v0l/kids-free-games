@@ -9,7 +9,7 @@ Every visual in Lane Runner is made in-house. Nothing is Kenney or stock.
 
 ## Models built at startup
 
-Every model ships as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh`). There is no export step and no `.glb` in the game: edit a `.gcad` and run the game. `crates/app/src/gcad.rs` is a Bevy asset loader for `.gcad`: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with `gcad_mesh::build_with` (gcad pinned by git rev in `crates/app/Cargo.toml`, `parallel` on everything but wasm32), and turns the result into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The model is scaled to 1 unit high with its feet at 0 (the runner then scales it to the height in `prop(c, models, name, h, at)`); `GcadSettings::scale` gives a fixed scale instead (0.01 for the road and buildings, which the runner places in metres from their millimetre sources). Unrigged models are centred on x and z.
+Every model ships as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh`). There is no export step and no `.glb` in the game: edit a `.gcad` and run the game. `crates/app/src/gcad.rs` is a Bevy asset loader for `.gcad`: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with the `gcad2glb` runtime library (`Assets::from_source`, mesh-only build, gcad pinned at 75e25dd by git rev in `crates/app/Cargo.toml`, `parallel` on everything but wasm32), and turns the result into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The model is scaled to 1 unit high with its feet at 0 (the runner then scales it to the height in `prop(c, models, name, h, at)`); `GcadSettings::scale` gives a fixed scale instead (0.01 for the road and buildings, which the runner places in metres from their millimetre sources). Unrigged models are centred on x and z.
 
 The five buildings are `prop_building1.gcad` to `prop_building5.gcad`, two lines each: `let style= floors=` and `include building_base.gcad`.
 
@@ -63,7 +63,24 @@ The props are flat solid profiles (gcad #271): `plane`, `rect`, `circle`, `poly`
 
 Normals are flat per face. Silhouettes are within 0.6% of the kernel (gcad `tests/solid_silhouette.rs`). `docs/props/glb_vs_gcad.png` shows train, coin and barrier from the front, side and three-quarter view, kernel GLB then gcad-mesh, through `model_sheet`. In the game, runner shots 201 and 204-208 before and after are 98.4-99.7% of pixels within 16 levels, mean difference 0.2-1.3 (the moving sparkles and shadows account for most of it).
 
-When gcad grows a runtime library for solid parts that gcad-mesh cannot build (real booleans, fillets on non-extrude edges), a prop that needs them switches its loader to that crate; none does today.
+## Why gcad2glb and not gcad-bevy
+
+`gcad-bevy` does not exist: `~/git/gcad-engines` holds Godot, Unity and Windows integrations only, no Bevy crate. The game depends on the `gcad2glb` library (gcad #310) with its own thin Bevy glue (`crates/app/src/gcad.rs`: mesh, material, clip and skeleton entities, `include` splicing through the asset reader, cache, warm-up, hero retarget). The library provides the build (`Assets::from_source`), the cache key (`gcad2glb::cache_key`), and the fit (`Assets::fit`, replacing the game's own `fit` and the scale bookkeeping). `Assets` derefs to `gcad_mesh::Model`, so mesh, material and clip conversion are unchanged. The hero is rigged and uses `Fit { height: 1, centre: false }`, props use `centre: true`, and the road and buildings use `Fit::scale = 0.01`.
+
+Switching changed nothing visible: tests, triangle counts and every prop extent are the same, and the 12 props still build in about 1 ms on desktop. Startup, desktop: hero 393 ms, tree 71 ms, all props 1 ms (465 ms total, 48 threads). Android emulator x86_64, two cold starts: hero 906-956 ms, tree 188-206 ms, 13 props 0-1 ms each. Sizes after: web bundle 49317630 B (was 49314507), wasm 25716822 B (was 25713699), arm64 APK 35643871 B (was 35640051). The few KB are the library's extra surface.
+
+## Solid props through the kernel (`brep` feature): not enabled
+
+Measured with the `gcad2glb` command (kernel on) against the gcad-mesh build:
+
+| prop | triangles, kernel / gcad-mesh | build time, kernel | gcad-mesh |
+|---|---|---|---|
+| barrier | 1884 / 2608 | 246 ms | 0.1 ms |
+| train | 848 / 3144 | 479 ms | 0.2 ms |
+| coin | 1444 / 284 | 25 ms | 0.0 ms |
+
+(desktop, includes process start.) The kernel adds about 13 MB stripped (gcad's own measure; the command binary is 18.9 MB) and about 42 s clean build time, and needs the monstertruck `[patch.crates-io]` lines. That is far over the 1 MB and 50 ms limits, and the props already look the same, so the game stays mesh-only. Only the train would lose triangles (3144 to 848), and it is inside the 4000 budget.
+
 
 ## Hero motion
 

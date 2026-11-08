@@ -10,8 +10,8 @@ fn source(motion: &str) -> String {
 fn main() {
     let mut args = std::env::args().skip(1);
     let (a, b) = (args.next().unwrap(), args.next().unwrap());
-    let ma = kids_games::gcad::build(&source(&a), 1.0).unwrap();
-    let mb = kids_games::gcad::build(&source(&b), 1.0).unwrap();
+    let ma = kids_games::gcad::build(&source(&a), 1.0, None).unwrap();
+    let mb = kids_games::gcad::build(&source(&b), 1.0, None).unwrap();
     let (ba, bb) = (&ma.bodies[0], &mb.bodies[0]);
     let mut worst_all: f32 = 0.0;
     for clip in &ba.clips {

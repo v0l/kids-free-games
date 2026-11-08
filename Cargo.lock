@@ -2776,7 +2776,7 @@ dependencies = [
 [[package]]
 name = "gcad-mesh"
 version = "0.6.1"
-source = "git+https://github.com/v0l/gcad.git?rev=888da75938244e8c24551a16731f3993fdb8a2ee#888da75938244e8c24551a16731f3993fdb8a2ee"
+source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
 dependencies = [
  "anyhow",
  "gcad-parse",
@@ -2788,9 +2788,23 @@ dependencies = [
 [[package]]
 name = "gcad-parse"
 version = "0.6.1"
-source = "git+https://github.com/v0l/gcad.git?rev=888da75938244e8c24551a16731f3993fdb8a2ee#888da75938244e8c24551a16731f3993fdb8a2ee"
+source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
 dependencies = [
  "anyhow",
+]
+
+[[package]]
+name = "gcad-version"
+version = "0.6.1"
+source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
+
+[[package]]
+name = "gcad2glb"
+version = "0.6.1"
+source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
+dependencies = [
+ "gcad-mesh",
+ "gcad-version",
 ]
 
 [[package]]
@@ -3369,7 +3383,7 @@ version = "0.1.1"
 dependencies = [
  "bevy",
  "cpal",
- "gcad-mesh",
+ "gcad2glb",
  "glam",
  "image",
  "jni 0.21.1",

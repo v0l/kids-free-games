@@ -23,13 +23,13 @@ fn main() {
         let mut triangles = 0;
         for _ in 0..3 {
             let t = std::time::Instant::now();
-            let options = gcad_mesh::Options {
+            let options = gcad2glb::Options {
                 detail,
                 ..Default::default()
             };
-            let model = gcad_mesh::build_with(&source, &options).unwrap();
+            let model = gcad2glb::Assets::from_source(&source, &options).unwrap();
             best = best.min(t.elapsed().as_secs_f64() * 1000.0);
-            triangles = model.bodies.iter().map(|b| b.indices.len() / 3).sum();
+            triangles = model.triangles();
         }
         total += best;
         println!(
