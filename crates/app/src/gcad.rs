@@ -2,6 +2,7 @@ use crate::games::runner::world::{Models, PROPS};
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use gcad_bevy::prelude::*;
+use gcad_bevy::GcadStats;
 
 pub fn settings(scale: Option<f32>) -> GcadSettings {
     GcadSettings {
@@ -55,6 +56,7 @@ fn report_ready(
     mut warming: ResMut<Warming>,
     models: Res<Models>,
     assets: Res<AssetServer>,
+    stats: Res<GcadStats>,
 ) {
     let started = warming.started;
     warming.pending.retain(|name| {
@@ -72,6 +74,12 @@ fn report_ready(
         !ready && !failed
     });
     if warming.pending.is_empty() {
+        info!(
+            "every model ready {:.0} ms after start, {} builds, {} baked",
+            started.elapsed().as_secs_f64() * 1000.0,
+            stats.builds(),
+            stats.hits_baked()
+        );
         commands.remove_resource::<Warming>();
     }
 }
