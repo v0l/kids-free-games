@@ -823,6 +823,17 @@ mod tests {
     }
 
     #[test]
+    fn the_shipped_bake_is_fresh_when_it_exists() {
+        let root = assets_root();
+        if !gcad_bevy::bake::baked_dir(&root).is_dir() {
+            eprintln!("skipped: assets/gcad-baked is missing, run scripts/bake.sh");
+            return;
+        }
+        let problems = gcad_bevy::bake::check(&root, crate::gcad::bake_settings);
+        assert!(problems.is_empty(), "stale bake, run scripts/bake.sh: {problems:#?}");
+    }
+
+    #[test]
     fn a_fresh_bake_of_the_models_passes_the_check() {
         let root = assets_root();
         let copy = std::env::temp_dir().join(format!("kg-bake-{}", std::process::id()));
