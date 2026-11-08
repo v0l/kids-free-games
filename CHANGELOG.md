@@ -8,6 +8,7 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ### Added
 
+- Happy Hotel models (guests, staff, swimmers, furniture, cars, coins) are `.gcad` files in `assets/models/`, built at startup by gcad-bevy and recoloured per guest by part name. A guest is 1696 triangles instead of 4952.
 - The release workflow builds a signed Android App Bundle (`kids_games-<tag>-android.aab`), signed with the Play upload key from the `PLAY_UPLOAD_*` secrets.
 - The macOS build ships a `KidsGames.app` in a `.dmg` next to the tar.gz.
 - `scripts/release-apple.sh` builds the signed iOS IPA and the sandboxed Mac App Store `.pkg` on the Mac and copies them to `dist/`.

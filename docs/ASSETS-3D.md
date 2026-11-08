@@ -1,4 +1,4 @@
-# Lane Runner asset pipeline
+# 3D asset pipeline
 
 Every visual in Lane Runner is made in-house. Nothing is Kenney or stock.
 
@@ -94,6 +94,71 @@ Measured with the `gcad2glb` command (kernel on) against the gcad-mesh build:
 
 (desktop, includes process start.) The kernel adds about 13 MB stripped (gcad's own measure; the command binary is 18.9 MB) and about 42 s clean build time, and needs the monstertruck `[patch.crates-io]` lines. That is far over the 1 MB and 50 ms limits, and the props already look the same, so the game stays mesh-only. Only the train would lose triangles (3144 to 848), and it is inside the 4000 budget.
 
+## Primitive games
+
+The other 3D games used to build every object in Rust from `game3d::Shape` primitives. They move to `.gcad` one game at a time (#336). The Happy Hotel is done; the rest follow the same rules.
+
+### How a primitive game loads its models
+
+- Each fixed object is one `.gcad` file in `assets/models/`, named `<game>_<object>.gcad` (a flat folder, because the web, Android, iOS and macOS scripts copy `assets/models/*`). Files that are only included end in `_base` (`hotel_bed_base.gcad`); a variant is two lines, `let fancy=1` and `include hotel_bed_base.gcad`.
+- Models are built mesh-only by gcad-bevy at their own millimetre-free scale (`GcadSettings::default()`, no fit: one gcad unit is one game metre, Z up becomes Y up). The game lists its models in one `static` (`hotel::world::MODELS`).
+- `gcad::ModelsPlugin` starts loading every listed model at app start next to the runner's. `game3d::stock(MODELS)` waits until they are loaded, takes each part's mesh out of the built scene, drops its vertex colours and keeps its colour and gloss, and registers it as `Shape::Model(name, part)` in the `Palette`. The game's `sync` runs only once the shelf is stocked (`stocked(MODELS)`). Without an asset server (headless tests) the shelf builds the same files synchronously with `gcad_bevy::build`.
+- Instances keep sharing one mesh handle per part, so a hundred guests draw from the same meshes as before; materials stay the Kit's cached `Paint`s, keyed by colour and finish.
+
+### Recolouring and animation hooks (decision)
+
+- Colour per instance goes through part names, not `set` overrides: `Model::model(shelf, name, at, |part| Tint)` places every part and lets the game return a colour, a hide, an extra transform or an `Anim` per part name. A `set name=value` override would need one build per colour (guests have ten shirts, five hair colours, four skins), so it is kept for shape variants only (`fancy`, `full`, `h`, `up`).
+- A part's colour in the file is its default; the hotel overrides `torso`, `arm_*`, `hand_*`, `head`, `hair`, `hat`, `brim`, legs, sheets, wood, rugs, stools and cushions from `Look` and the theme.
+- Animation stays per part: the hotel tags `leg_l`, `shoe_l`, `arm_l` (`Anim::Leg`, `Anim::Arm`), the swimmer's `arm_*`, `leg_*`, `head` (`Stroke`, `Kick`, `Turn`) and the coin top (`Bob`), and `animate` moves those entities as before. Characters that need bones later use the gcad rig and clips like the runner hero.
+- Gloss comes from the file: `color ... gloss=0.6` on a mesh shell gives `Finish::Gloss`, a flat body is `Finish::Matte`.
+
+### gcad-mesh additions
+
+The hotel needed shapes gcad-mesh did not have, added to gcad master in 434c02e (tests in `crates/gcad-mesh/tests/shapes.rs`) and pinned in gcad-engines e367a57:
+
+- `ngon d n` (an n-sided cylinder when extruded), `ellipse dx dy` (the rug).
+- `extrude d scale=k` (a frustum: pots, bins, toilets, lamp shades) and `scale=0` (a cone: the umbrella).
+- `blob ... mode=shell segments=N`: a UV ellipsoid of `N*N` triangles. A plain shell meshes to about 2000 triangles, which put a guest at 27000.
+
+Rounded boxes (`block round=`) and spheres already existed; torus and sector are left for Helix and Ball Sort.
+
+### Hotel inventory
+
+| model | made of | instances | per-instance |
+|---|---|---|---|
+| `hotel_person`, `_up`, `_sit`, `_sit_up` | legs, shoes, boots, sleeves (extrusions), hat and brim (10-gons), torso, hands, head, hair, eyes, glints, mouth (shells) | every guest, staff and the player | `Look` colours, `wide`, hidden hat/boots, leg and arm swing |
+| `hotel_person_lie` | head, hair | sleeping guests | skin, hair |
+| `hotel_swimmer` | torso, arms, legs, head, cap, goggles | swimming guests | `Look` colours, stroke, kick, head turn |
+| `hotel_desk`, `hotel_counter`, `hotel_sink`, `hotel_shelf`, `hotel_partition` | boxes with a top cap | one each, shelves two | trim colour, shelf items |
+| `hotel_bed`, `hotel_bed_fancy` | frame, sheet, headboard, pillows, crown | one per room | sheet and wood colour, room scale |
+| `hotel_plant`, `_mid`, `_tall` | tapered pot, three leaf shells | 8 to 20 | |
+| `hotel_sofa`, `hotel_wardrobe`, `hotel_tv`, `hotel_lamp`, `hotel_rug`, `hotel_bin`, `hotel_bin_full`, `hotel_laundry` | boxes, 8 and 10-gons, frustums, ellipses, shells | per room or lobby | accent and wood colours |
+| `hotel_toilet`, `hotel_roll`, `hotel_burger`, `hotel_towel` | | per stall, carried items | |
+| `hotel_table`, `hotel_stool`, `hotel_sunbed`, `hotel_umbrella` | | cafe and pool | accent and trim colours |
+| `hotel_car`, `hotel_entrance` | | two cars, one door frame | car colour, trim |
+| `hotel_coin`, `hotel_coin_top` | 10-gon column, scaled per coin | coin piles and tips | height, bob |
+
+Still drawn from primitives in the hotel, on purpose: floors, zones, the pool water, ripples, wakes, dust, shadows, pads and their progress dots (flat layers sized from the layout each frame or animated by scale), the walls, locked doors and pool rim (boxes sized from the layout, `cuboid`/`cuboid2`), and the splash drops and rings (scaled every frame).
+
+### Procedural geometry that stays in Rust
+
+| game | what | why |
+|---|---|---|
+| Hotel | walls, locked doors, pool rim, floors, zones, pads | sized from `Layout` per hotel; a model per size would be a file per wall |
+| Paper Land | land contours and trails (`paper/land.rs`) | marching squares over the live ownership grid |
+| Helix | ring sectors (`Shape::Sector`) | sized by `RING_OUTER`, `RING_INNER`, `SEGMENTS` and generated per tower |
+
+### Checks
+
+`crates/app/src/gcad.rs` tests build every shipped `.gcad` (everything in `assets/models` but `*_base` and `motion`) with `gcad_bevy::build`: each builds mesh-only, has triangles within its budget (hero 14000, tree 12000, people 3000, other hotel props 1500, other props 4000), no empty or unnamed part and a real size; every hotel model is listed in `MODELS` and on disk; people have every part the hotel recolours and animates; the bed, desk, sofa, car, wardrobe and umbrella keep the size of the primitives they replaced within 3 cm; all hotel models build in under 1.5 s on the test machine. The hotel and trains tests run against the gcad models.
+
+### Hotel numbers
+
+- Triangles: a standing person is 1696 (the primitive version was 4952: ten 480-triangle spheres, six boxes and two 10-sided cylinders), the swimmer about 1500, every prop under 1500.
+- Build on the Android emulator `kidsgames-test` (x86_64, cold start with app data cleared, `gcad_bevy` debug log), three runs: the 36 hotel models take 0 or 1 ms each, 8 to 10 ms together, against the 150 ms budget. The hero (1034-1088 ms) and tree (219-241 ms) are unchanged.
+- Emulator: the hotel opens and draws with every model from `.gcad` (`docs/shots/hotel-emulator.png`).
+- Screenshots 170-183 before and after (`scripts/shots.sh`, headless Chrome): 99.5-99.95% of pixels within 16 levels, mean difference 0.03-0.27. The low-poly shells differ from the old 20-segment spheres at the edges only.
+- Sizes against 83f7744 (same machine and profile): web bundle 49540006 B to 49664393 B, wasm 25939198 B to 26053064 B, Android arm64 APK 35774371 B to 35841018 B. The 42 hotel `.gcad` files are 10521 B (2543 B gzipped). iOS not rebuilt for this step.
 
 ## Hero motion
 
