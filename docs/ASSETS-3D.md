@@ -5,15 +5,17 @@ Every visual in Lane Runner is made in-house. Nothing is Kenney or stock.
 | Asset | Source | Files |
 |---|---|---|
 | Sky backdrop | FLUX.1-dev sprite | `art/gen/prompts/runner.json`, `art/runner.txt` |
-| Hero, motion clips, tree, barrier, hurdle, gate, train, coin, finish arch, road, buildings | gcad text, built at startup by gcad-mesh | `assets/models/*.gcad` |
+| Hero, motion clips, tree, barrier, hurdle, gate, train, coin, finish arch, road, buildings | gcad text, built at startup by gcad-bevy | `assets/models/*.gcad` |
 
 ## Models built at startup
 
-Every model ships as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh`). There is no export step and no `.glb` in the game: edit a `.gcad` and run the game. `crates/app/src/gcad.rs` is a Bevy asset loader for `.gcad`: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with the `gcad2glb` runtime library (`Assets::from_source`, mesh-only build, gcad pinned at 75e25dd by git rev in `crates/app/Cargo.toml`, `parallel` on everything but wasm32), and turns the result into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The model is scaled to 1 unit high with its feet at 0 (the runner then scales it to the height in `prop(c, models, name, h, at)`); `GcadSettings::scale` gives a fixed scale instead (0.01 for the road and buildings, which the runner places in metres from their millimetre sources). Unrigged models are centred on x and z.
+Every model ships as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh`). There is no export step and no `.glb` in the game: edit a `.gcad` and run the game. The loader is the `gcad-bevy` crate from [v0l/gcad-engines](https://github.com/v0l/gcad-engines) (`bevy/`, docs in its `docs/bevy.md`), pinned by git rev in `crates/app/Cargo.toml`; it is public, so CI and release builds fetch it with no credentials. It uses gcad 75e25dd, the only gcad in `Cargo.lock`. `GcadPlugin` registers the `.gcad` asset loader: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with gcad's `gcad2glb` library (mesh-only, `parallel` on everything but wasm32) on Bevy's async compute pool, and turns it into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The game depends on it with `default-features = false`, which leaves Bevy's `multi_threaded` off as before.
+
+`crates/app/src/gcad.rs` holds only what is the game's own: `settings(scale)`, which is `GcadSettings::fit_height(1.0)` (1 unit high, feet at 0, unrigged models centred on x and z; the runner then scales each model to the height in `prop(c, models, name, h, at)`) or a fixed `scale` instead (0.01 for the road and buildings, which the runner places in metres from their millimetre sources), and `ModelsPlugin`, the startup warm-up. The hero clips load with `load_gcad_clip` and the same settings as the scene, so they share one build. The prop heights and the hero clip names stay in `crates/app/src/games/runner/world.rs`.
 
 The five buildings are `prop_building1.gcad` to `prop_building5.gcad`, two lines each: `let style= floors=` and `include building_base.gcad`.
 
-`GcadPlugin` warms every model in `WARM` on a background task at app start, and the loader runs on Bevy's asset threads, so nothing builds on the main thread. A process-wide cache keyed by the text and detail level builds each model once even when the scene and its six clips are requested separately. The runner stays on "Getting ready..." and ignores taps until the hero has loaded (`RunnerPlay::loaded`).
+`ModelsPlugin` starts loading every model the runner uses (`Models::load`: hero, six clips, 13 props) at app start and logs `model <name> ready N ms after start` as each one lands; the runner reuses those handles. The game runs Bevy without `multi_threaded`, so Bevy's task pools, and the builds on them, run on the main thread during the first frames, the same as with the old loader. gcad-bevy keeps each build in memory, and on desktop also on disk (`~/.cache/gcad/bevy`, keyed on gcad version, text, includes and settings), so the second start needs no build at all. The runner stays on "Getting ready..." and ignores taps until the hero has loaded (`RunnerPlay::loaded`).
 
 Build time per model (release, best of three; the hero includes its clips; props are all twelve together):
 
@@ -24,7 +26,19 @@ Build time per model (release, best of three; the hero includes its clips; props
 | Android emulator `kidsgames-test` (x86_64, 4 cores, swiftshader), three cold starts | 912-1318 ms | 194-285 ms | 9-10 ms | 1.1-1.6 s |
 | Web, headless Chrome (wasm32, single thread, busy machine) | 1504 ms | 370 ms | 12 ms | 1.9 s |
 
-All of it is under the 2 s budget and off the main thread, so there is no on-disk cache. `GcadSettings::detail` (2 halves the grid) is there for slow devices.
+All of it is under the 2 s budget. `GcadSettings::detail` (2 halves the grid) is there for slow devices.
+
+With gcad-bevy (build times from its `debug` log, ready times from `ModelsPlugin`; desktop in a private headless sway with an empty cache):
+
+| | hero build | tree build | 13 props | every model ready |
+|---|---|---|---|---|
+| Desktop, 48 threads, cold | 393 ms | 70 ms | 0 ms each | 485 ms (512 ms on a second cold run) |
+| Desktop, disk cache warm | no build | no build | no build | 25 ms |
+| Android emulator `kidsgames-test` x86_64, three cold starts | 1014-1131 ms | 205-208 ms | 0-1 ms each | 2.1-2.3 s |
+| Web, headless Chrome, three loads | 1572-1622 ms | 407-426 ms | | 2.3-2.8 s |
+| iOS simulator (iPad Pro 11-inch M4) | | | | 1.8 s |
+
+Build times match the old loader (desktop hero 393 ms, tree 74 ms; emulator hero 906-1318 ms, tree 188-285 ms; web hero 1537-1560 ms, tree 364-406 ms with the old loader on the same machine). "Ready" also counts scene setup and the first frames, so it sits above the sum of the builds.
 
 Sizes: the sixteen `.gcad` files are 140549 B (29069 B gzipped), of which the props are 9313 B. The twelve prop GLBs they replace were 1100352 B; before that the hero and tree GLBs were 722524 B.
 
@@ -35,13 +49,16 @@ Sizes: the sixteen `.gcad` files are 140549 B (29069 B gzipped), of which the pr
 | Android arm64 APK | 36077613 B | 35640051 B |
 | iOS simulator app | 42268 KiB | 40752 KiB |
 
+With gcad-bevy (before is the `gcad2glb` loader at c43c004, same machine and profile): web bundle 49540006 B (was 49317630), wasm 25939198 B (was 25716822), arm64 APK 35774367 B (was 35643863), iOS simulator app 40864 KiB (was 40704). The difference is gcad-bevy's own surface: the build cache with its bitcode format, morph targets, LODs and normal maps.
+
 ## Tests
 
-Tests in `crates/app/src/games/runner/world.rs` build every `.gcad` with gcad-mesh:
+Tests in `crates/app/src/games/runner/world.rs` build every `.gcad` with `gcad_bevy::build` and the runner's settings:
 
 - `the_hero_builds_from_gcad_with_every_clip_on_its_rig`: 15 bones, the six clip names, 14000 triangles at most, height and feet, a clip moves the rig.
 - `every_prop_builds_from_gcad_at_the_size_the_runner_spawns_it`: every prop builds, has 1 to 4000 triangles (the old `scripts/glb_audit.py` budget), no empty body, no empty or unnamed part, and its extent at the runner's scale is within 2% of the kernel GLB it replaced.
-- `the_tree_builds_from_gcad_inside_its_budget`, `every_model_the_runner_loads_is_on_disk`, `every_model_the_runner_loads_is_warmed_at_startup`.
+- `the_tree_builds_from_gcad_inside_its_budget`, `every_model_the_runner_loads_is_on_disk`.
+- `every_model_the_runner_loads_is_warmed_at_startup` runs `ModelsPlugin` headless (no window, no GPU), waits for every scene and clip to load through the asset server, and checks the hero scene is fitted to 1 unit with all six clips. It caught gcad-bevy rebuilding the hero unfitted when its clips loaded single-threaded (fixed in gcad-engines 7d1fc40, `every_clip_and_the_scene_keep_the_fit_in_any_order`).
 - `a_tap_does_not_start_the_run_before_the_hero_is_built` covers the loading gate.
 
 `docs/hero/glb_vs_gcad.png` compares the old hero GLB (top) with the gcad build (bottom) for every clip from the game camera: 99.8% of pixels within 16 levels, mean difference 0.1.
@@ -63,11 +80,11 @@ The props are flat solid profiles (gcad #271): `plane`, `rect`, `circle`, `poly`
 
 Normals are flat per face. Silhouettes are within 0.6% of the kernel (gcad `tests/solid_silhouette.rs`). `docs/props/glb_vs_gcad.png` shows train, coin and barrier from the front, side and three-quarter view, kernel GLB then gcad-mesh, through `model_sheet`. In the game, runner shots 201 and 204-208 before and after are 98.4-99.7% of pixels within 16 levels, mean difference 0.2-1.3 (the moving sparkles and shadows account for most of it).
 
-## Why gcad2glb and not gcad-bevy
+## From the game's loader to gcad-bevy
 
-`gcad-bevy` does not exist: `~/git/gcad-engines` holds Godot, Unity and Windows integrations only, no Bevy crate. The game depends on the `gcad2glb` library (gcad #310) with its own thin Bevy glue (`crates/app/src/gcad.rs`: mesh, material, clip and skeleton entities, `include` splicing through the asset reader, cache, warm-up, hero retarget). The library provides the build (`Assets::from_source`), the cache key (`gcad2glb::cache_key`), and the fit (`Assets::fit`, replacing the game's own `fit` and the scale bookkeeping). `Assets` derefs to `gcad_mesh::Model`, so mesh, material and clip conversion are unchanged. The hero is rigged and uses `Fit { height: 1, centre: false }`, props use `centre: true`, and the road and buildings use `Fit::scale = 0.01`.
+Until November 2026 the game had its own 469-line loader in `crates/app/src/gcad.rs` on the `gcad2glb` library (mesh, material, clip and skeleton entities, `include` splicing, cache, warm-up). That code moved into gcad-bevy, which grew out of it, and the game now depends on the crate. Two changes went into gcad-engines first: Bevy's `multi_threaded` became a default feature the game turns off (44bc147), and `load_gcad_clip` keeps the scene's fit when Bevy runs single-threaded (7d1fc40). Runner shots 201 and 204 before and after are 98.9% and 98.4% of pixels within 16 levels, mean difference 0.7 and 0.8 (the moving sparkles).
 
-Switching changed nothing visible: tests, triangle counts and every prop extent are the same, and the 12 props still build in about 1 ms on desktop. Startup, desktop: hero 393 ms, tree 71 ms, all props 1 ms (465 ms total, 48 threads). Android emulator x86_64, two cold starts: hero 906-956 ms, tree 188-206 ms, 13 props 0-1 ms each. Sizes after: web bundle 49317630 B (was 49314507), wasm 25716822 B (was 25713699), arm64 APK 35643871 B (was 35640051). The few KB are the library's extra surface.
+Earlier the switch from gcad-mesh to the `gcad2glb` library changed nothing visible: tests, triangle counts and every prop extent stayed the same.
 
 ## Solid props through the kernel (`brep` feature): not enabled
 
@@ -92,7 +109,7 @@ Measured with the `gcad2glb` command (kernel on) against the gcad-mesh build:
 
 `cargo run --release -p kids_games --example model_sheet -- models/hero.gcad --clips run,jump --views game,side --out /tmp/sheet.png`
 
-Renders a `.gcad` through the game's own loader and animation path, headless, into one PNG: a row per clip and view, a column per frame. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. `gcad render` and `gcad inspect` show the source with grids and part names; `gcad view` opens the live viewer.
+Renders a `.gcad` through gcad-bevy and the game's animation path, headless, into one PNG: a row per clip and view, a column per frame. Views: `front side back three game`. Flags: `--size`, `--frames`, `--height`, `--assets`. `gcad render` and `gcad inspect` show the source with grids and part names; `gcad view` opens the live viewer.
 
 ## History
 

@@ -32,9 +32,10 @@ fn warm_up(
     assets: Res<AssetServer>,
     mut graphs: ResMut<Assets<AnimationGraph>>,
 ) {
+    let started = Instant::now();
     let models = Models::load(&assets, &mut graphs);
     commands.insert_resource(Warming {
-        started: Instant::now(),
+        started,
         pending: models.names().collect(),
     });
     commands.insert_resource(models);
