@@ -5,3 +5,4 @@ android/app/src/main/assets/
 art/3d/out/
 /.wrangler
 /.playwright-mcp
+/assets/gcad-baked/

@@ -1,4 +1,4 @@
-use crate::games::runner::world::Models;
+use crate::games::runner::world::{Models, PROPS};
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use gcad_bevy::prelude::*;
@@ -9,6 +9,15 @@ pub fn settings(scale: Option<f32>) -> GcadSettings {
         scale: scale.map(f64::from),
         ..GcadSettings::fit_height(1.0)
     }
+}
+
+pub fn bake_settings(asset: &str) -> Option<GcadSettings> {
+    if asset == "models/hero.gcad" {
+        return Some(settings(None));
+    }
+    let name = asset.strip_prefix("models/prop_")?.strip_suffix(".gcad")?;
+    let (_, scale) = PROPS.iter().find(|(p, _)| *p == name)?;
+    Some(settings(*scale))
 }
 
 pub struct ModelsPlugin;

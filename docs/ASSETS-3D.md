@@ -9,7 +9,7 @@ Every visual in Lane Runner is made in-house. Nothing is Kenney or stock.
 
 ## Models built at startup
 
-Every model ships as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh`). There is no export step and no `.glb` in the game: edit a `.gcad` and run the game. The loader is the `gcad-bevy` crate from [v0l/gcad-engines](https://github.com/v0l/gcad-engines) (`bevy/`, docs in its `docs/bevy.md`), pinned by git rev in `crates/app/Cargo.toml`; it is public, so CI and release builds fetch it with no credentials. It uses gcad 75e25dd, the only gcad in `Cargo.lock`. `GcadPlugin` registers the `.gcad` asset loader: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with gcad's `gcad2glb` library (mesh-only, `parallel` on everything but wasm32) on Bevy's async compute pool, and turns it into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The game depends on it with `default-features = false`, which leaves Bevy's `multi_threaded` off as before.
+Every model ships as the `.gcad` text itself (`assets/models/*.gcad`, copied by `scripts/web.sh`, `scripts/android.sh` and `scripts/ios.sh`). There is no export step and no `.glb` in the game: edit a `.gcad` and run the game. The loader is the `gcad-bevy` crate from [v0l/gcad-engines](https://github.com/v0l/gcad-engines) (`bevy/`, docs in its `docs/bevy.md`), pinned by git rev in `crates/app/Cargo.toml`; it is public, so CI and release builds fetch it with no credentials. It uses gcad 5a5fde3, the only gcad in `Cargo.lock`. `GcadPlugin` registers the `.gcad` asset loader: it splices `include` lines through the asset reader (so it works from the Android APK and over HTTP on the web), builds the model with gcad's `gcad2glb` library (mesh-only, `parallel` on everything but wasm32) on Bevy's async compute pool, and turns it into a scene: one mesh and material per part with vertex colours, a joint entity per bone, a `SkinnedMesh`, and an `AnimationClip` per clip as `models/hero.gcad#Animation/<name>`. The game depends on it with `default-features = false`, which leaves Bevy's `multi_threaded` off as before.
 
 `crates/app/src/gcad.rs` holds only what is the game's own: `settings(scale)`, which is `GcadSettings::fit_height(1.0)` (1 unit high, feet at 0, unrigged models centred on x and z; the runner then scales each model to the height in `prop(c, models, name, h, at)`) or a fixed `scale` instead (0.01 for the road and buildings, which the runner places in metres from their millimetre sources), and `ModelsPlugin`, the startup warm-up. The hero clips load with `load_gcad_clip` and the same settings as the scene, so they share one build. The prop heights and the hero clip names stay in `crates/app/src/games/runner/world.rs`.
 
@@ -17,28 +17,22 @@ The five buildings are `prop_building1.gcad` to `prop_building5.gcad`, two lines
 
 `ModelsPlugin` starts loading every model the runner uses (`Models::load`: hero, six clips, 13 props) at app start and logs `model <name> ready N ms after start` as each one lands; the runner reuses those handles. The game runs Bevy without `multi_threaded`, so Bevy's task pools, and the builds on them, run on the main thread during the first frames, the same as with the old loader. gcad-bevy keeps each build in memory, and on desktop also on disk (`~/.cache/gcad/bevy`, keyed on gcad version, text, includes and settings), so the second start needs no build at all. The runner stays on "Getting ready..." and ignores taps until the hero has loaded (`RunnerPlay::loaded`).
 
-Build time per model (release, best of three; the hero includes its clips; props are all twelve together):
+## The shipped bake
 
-| | hero | tree | 12 props | total |
-|---|---|---|---|---|
-| Desktop, 48 threads (`cargo run --release -p kids_games --example gcad_timing`) | 449 ms | 80 ms | 1.5 ms | 531 ms |
-| Desktop, one core (`taskset -c 0`) | 870 ms | 201 ms | 1.6 ms | 1073 ms |
-| Android emulator `kidsgames-test` (x86_64, 4 cores, swiftshader), three cold starts | 912-1318 ms | 194-285 ms | 9-10 ms | 1.1-1.6 s |
-| Web, headless Chrome (wasm32, single thread, busy machine) | 1504 ms | 370 ms | 12 ms | 1.9 s |
+`scripts/bake.sh` runs `cargo run --release -p kids_games --example bake` (gcad-bevy's `bake::bake` with `kids_games::gcad::bake_settings`, the same `settings(scale)` the runner loads with) and then `--check`. It writes `assets/gcad-baked/`: one `.bin` per model and an index, 14 files and 1.33 MB (389 KB gzipped), in 0.6 s. `scripts/android.sh`, `scripts/ios.sh`, `scripts/web.sh`, `scripts/macos-app.sh` and the desktop job of the release workflow run it and the three app scripts copy `assets/gcad-baked/` next to `assets/models/`. The directory is generated, not committed (`.gitignore`): it changes on every gcad bump and rebuilding it costs less than a second.
 
-All of it is under the 2 s budget. `GcadSettings::detail` (2 halves the grid) is there for slow devices.
+Tests in `world.rs` keep the bake honest: `the_bake_key_is_the_key_models_load_asks_for` checks that `bake::key_of` equals the cache key of every `Models::load` asset, and `a_fresh_bake_of_the_models_passes_the_check` bakes a copy of the models, checks it passes and that editing a model makes `bake::check` report it. `bake_settings` is built from `PROPS`, so a new prop is baked and checked without another edit.
 
-With gcad-bevy (build times from its `debug` log, ready times from `ModelsPlugin`; desktop in a private headless sway with an empty cache):
+Time until every model is ready (release, `ModelsPlugin`):
 
-| | hero build | tree build | 13 props | every model ready |
-|---|---|---|---|---|
-| Desktop, 48 threads, cold | 393 ms | 70 ms | 0 ms each | 485 ms (512 ms on a second cold run) |
-| Desktop, disk cache warm | no build | no build | no build | 25 ms |
-| Android emulator `kidsgames-test` x86_64, three cold starts | 1014-1131 ms | 205-208 ms | 0-1 ms each | 2.1-2.3 s |
-| Web, headless Chrome, three loads | 1572-1622 ms | 407-426 ms | | 2.3-2.8 s |
-| iOS simulator (iPad Pro 11-inch M4) | | | | 1.8 s |
+| | no bake, empty cache | no bake, warm disk cache | shipped bake, first start |
+|---|---|---|---|
+| Desktop, private headless sway | 672-730 ms, 14 builds | 103-113 ms | 108-112 ms, 0 builds |
+| Android emulator `kidsgames-test` x86_64 | 1337 ms, 14 builds | 558-675 ms | 496-798 ms, 0 builds |
+| iOS simulator, iPad Pro 11-inch (M4) | 942 ms, 14 builds | 110-112 ms | 106-115 ms, 0 builds |
+| Web, headless Chrome | 2765-3044 ms, 14 builds | no disk cache | 2081-2677 ms, 0 builds |
 
-Build times match the old loader (desktop hero 393 ms, tree 74 ms; emulator hero 906-1318 ms, tree 188-285 ms; web hero 1537-1560 ms, tree 364-406 ms with the old loader on the same machine). "Ready" also counts scene setup and the first frames, so it sits above the sum of the builds.
+On the web the models wait for the 13 MB of sound files that load first; loading them after the models would cut that number further.
 
 Sizes: the sixteen `.gcad` files are 140549 B (29069 B gzipped), of which the props are 9313 B. The twelve prop GLBs they replace were 1100352 B; before that the hero and tree GLBs were 722524 B.
 

@@ -76,6 +76,10 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
+      - name: Bake and check the models
+        shell: bash
+        run: scripts/bake.sh
+
       - name: Build
         run: cargo build --release --locked -p kids_games --target ${{ matrix.target }}
 
