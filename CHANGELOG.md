@@ -12,6 +12,10 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 - The macOS build ships a `KidsGames.app` in a `.dmg` next to the tar.gz.
 - `scripts/release-apple.sh` builds the signed iOS IPA and the sandboxed Mac App Store `.pkg` on the Mac and copies them to `dist/`.
 
+### Changed
+
+- Every runner prop (barrier, hurdle, gate, train, coin, finish arch, road, five buildings) is built from its `.gcad` source by gcad-mesh at startup, like the hero and the trees. The 12 prebuilt GLBs, `art/3d/props/build.sh` and the glTF loader are gone; gcad is pinned to 888da75. The iOS app is 1.5 MB smaller, the Android APK 0.4 MB and the web bundle 2.0 MB.
+
 ## [0.1.1] - 2026-11-07
 
 ### Changed

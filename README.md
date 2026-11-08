@@ -4,7 +4,7 @@ Ad-free versions of popular free mobile games, in one app, for iPad, iPhone, And
 
 Written in Rust on [Bevy](https://bevy.org) 0.20: `crates/core` holds the game logic, save, profiles and sync with no drawing, and `crates/app` is the Bevy app. `docs/BEVY.md` explains how a game is split between the two.
 
-Art is painted with FLUX.1-dev. Sound effects and voice lines are from [Kenney](https://kenney.nl) (CC0). Music is Carnival Rides, Summer Park and Happy Lullaby from [OpenGameArt](https://opengameart.org) (CC0). The font is Fredoka (SIL OFL). `docs/DESIGN.md` explains the process and `docs/STYLE.md` the rules. Sprite sheets and the sound pack are built into `assets/` by `scripts/assets.py` from the manifests in `art/` and `sound.txt`; see `art/README.md`.
+Art is painted with FLUX.1-dev. The 3D models (the runner hero, its clips, the trees and every prop) are `.gcad` text in `assets/models`, built into meshes by gcad-mesh when the game starts: edit the `.gcad` and run the game, there is no export step (`docs/ASSETS-3D.md`). Sound effects and voice lines are from [Kenney](https://kenney.nl) (CC0). Music is Carnival Rides, Summer Park and Happy Lullaby from [OpenGameArt](https://opengameart.org) (CC0). The font is Fredoka (SIL OFL). `docs/DESIGN.md` explains the process and `docs/STYLE.md` the rules. Sprite sheets and the sound pack are built into `assets/` by `scripts/assets.py` from the manifests in `art/` and `sound.txt`; see `art/README.md`.
 
 See [GAMES.md](GAMES.md) for the list of popular games and which ones are done.
 

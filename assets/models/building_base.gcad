@@ -1,4 +1,4 @@
-let floors=3 style=1 W=520 D=760 F=250
+let W=520 D=760 F=250
 let H=floors*F
 walls: rect W D
 walls: extrude H

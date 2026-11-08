@@ -3,7 +3,6 @@ use crate::game3d::*;
 use bevy::animation::graph::AnimationGraphHandle;
 use bevy::animation::transition::AnimationTransitions;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
-use bevy::gltf::GltfAssetLabel;
 use bevy::pbr::{DistanceFog, FogFalloff};
 use bevy::prelude::*;
 use kg_core::engine::View;
@@ -175,22 +174,21 @@ const HERO_H: f32 = 1.8;
 const TRAIN_H: f32 = 1.9;
 const STRIDE_METRES: f32 = 6.0;
 const HERO_CLIPS: [&str; 6] = ["fail", "happy", "idle", "jump", "run", "slide"];
-const PROPS: [&str; 13] = [
-    "barrier",
-    "hurdle",
-    "gate",
-    "train",
-    "coin",
-    "tree",
-    "arch",
-    "road",
-    "building1",
-    "building2",
-    "building3",
-    "building4",
-    "building5",
+const PROPS: [(&str, Option<f32>); 13] = [
+    ("barrier", None),
+    ("hurdle", None),
+    ("gate", None),
+    ("train", None),
+    ("coin", None),
+    ("tree", None),
+    ("arch", None),
+    ("road", Some(0.01)),
+    ("building1", Some(0.01)),
+    ("building2", Some(0.01)),
+    ("building3", Some(0.01)),
+    ("building4", Some(0.01)),
+    ("building5", Some(0.01)),
 ];
-const GCAD: [&str; 2] = ["hero", "prop_tree"];
 const BUILDINGS: [&str; 5] = [
     "building1",
     "building2",
@@ -208,17 +206,16 @@ pub struct Models {
 
 impl Models {
     fn load(assets: &AssetServer, graphs: &mut Assets<AnimationGraph>) -> Self {
-        let scene = |file: &str| {
-            if GCAD.contains(&file) {
-                assets.load(format!("models/{file}.gcad"))
-            } else {
-                assets.load(GltfAssetLabel::Scene(0).from_asset(format!("models/{file}.glb")))
-            }
-        };
         let mut scenes = HashMap::new();
-        scenes.insert("hero", scene("hero"));
-        for name in PROPS {
-            scenes.insert(name, scene(&format!("prop_{name}")));
+        scenes.insert("hero", assets.load("models/hero.gcad"));
+        for (name, scale) in PROPS {
+            scenes.insert(
+                name,
+                assets
+                    .load_builder()
+                    .with_settings(move |s: &mut crate::gcad::GcadSettings| s.scale = scale)
+                    .load(format!("models/prop_{name}.gcad")),
+            );
         }
         let clips = HERO_CLIPS
             .iter()
@@ -674,23 +671,91 @@ mod tests {
         model.bodies.iter().map(|b| b.indices.len() / 3).sum()
     }
 
+    fn extent(model: &gcad_mesh::Model, scale: Option<f32>) -> Vec3 {
+        let (mut lo, mut hi) = (Vec3::splat(f32::MAX), Vec3::splat(f32::MIN));
+        for p in model.bodies.iter().flat_map(|b| &b.positions) {
+            lo = lo.min(Vec3::from(*p));
+            hi = hi.max(Vec3::from(*p));
+        }
+        (hi - lo) * scale.unwrap_or(1.0 / (hi.y - lo.y))
+    }
+
+    #[test]
+    fn every_prop_builds_from_gcad_at_the_size_the_runner_spawns_it() {
+        let kernel = [
+            ("barrier", [1.052, 1.0, 0.193]),
+            ("hurdle", [1.682, 1.0, 0.628]),
+            ("gate", [0.669, 1.0, 0.105]),
+            ("train", [0.723, 1.0, 4.859]),
+            ("coin", [1.0, 1.0, 0.16]),
+            ("arch", [0.761, 1.0, 0.113]),
+            ("road", [9.36, 0.24, 9.0]),
+            ("building1", [5.66, 5.32, 7.84]),
+            ("building2", [5.66, 7.82, 7.84]),
+            ("building3", [5.66, 10.32, 7.84]),
+            ("building4", [5.66, 12.82, 7.84]),
+            ("building5", [5.66, 7.82, 7.84]),
+        ];
+        for (name, scale) in PROPS {
+            let model = crate::gcad::build(&gcad_source(&format!("prop_{name}")), 1.0)
+                .unwrap_or_else(|e| panic!("{name}: {e}"));
+            let tris = triangles(&model);
+            assert!((1..=4_000).contains(&tris), "{name}: {tris} triangles");
+            for body in &model.bodies {
+                assert!(
+                    !body.indices.is_empty(),
+                    "{name}: body {} is empty",
+                    body.name
+                );
+                assert!(
+                    !body.parts.is_empty(),
+                    "{name}: body {} has no parts",
+                    body.name
+                );
+                for part in &body.parts {
+                    assert!(!part.name.is_empty(), "{name}: unnamed part");
+                    assert!(part.index_count > 0, "{name}: part {} empty", part.name);
+                }
+            }
+            let Some((_, want)) = kernel.iter().find(|(n, _)| *n == name) else {
+                continue;
+            };
+            let got = extent(&model, scale);
+            for i in 0..3 {
+                assert!(
+                    (got[i] - want[i]).abs() <= 0.02 * want[i].max(0.2),
+                    "{name}: extent {got} against the kernel's {want:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn every_model_the_runner_loads_is_warmed_at_startup() {
+        for name in PROPS
+            .iter()
+            .map(|(p, _)| format!("prop_{p}"))
+            .chain(["hero".to_string()])
+        {
+            let rel = format!("models/{name}.gcad");
+            assert!(
+                crate::gcad::WARM.contains(&rel.as_str()),
+                "{rel} is not warmed"
+            );
+        }
+    }
+
     #[test]
     fn every_model_the_runner_loads_is_on_disk() {
         for name in PROPS
             .iter()
-            .map(|p| format!("prop_{p}"))
+            .map(|(p, _)| format!("prop_{p}"))
             .chain(["hero".to_string()])
         {
-            let ext = if GCAD.contains(&name.as_str()) {
-                "gcad"
-            } else {
-                "glb"
-            };
-            let bytes = kg_core::assets::read(&format!("models/{name}.{ext}"))
-                .unwrap_or_else(|| panic!("models/{name}.{ext} missing"));
-            if ext == "glb" {
-                assert_eq!(&bytes[..4], b"glTF", "{name} is not a glb");
-            }
+            assert!(
+                kg_core::assets::read(&format!("models/{name}.gcad")).is_some(),
+                "models/{name}.gcad missing"
+            );
         }
     }
 

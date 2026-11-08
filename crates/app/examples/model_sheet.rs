@@ -1,7 +1,6 @@
 use bevy::animation::graph::AnimationGraphHandle;
 use bevy::app::{AppExit, ScheduleRunnerPlugin};
 use bevy::camera::RenderTarget;
-use bevy::gltf::GltfAssetLabel;
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::render::view::screenshot::{Screenshot, ScreenshotCaptured};
@@ -71,7 +70,7 @@ fn parse() -> Args {
     }
     if a.model.is_empty() {
         eprintln!(
-            "usage: model_sheet <models/x.glb> [--out sheet.png] [--size 256] [--frames 8]\n  [--views front,side,back,three,game] [--clips run,jump] [--height 1.0] [--assets dir]\nRows are clip x view (or one turntable row per model without clips), columns are frames."
+            "usage: model_sheet <models/x.gcad> [--out sheet.png] [--size 256] [--frames 8]\n  [--views front,side,back,three,game] [--clips run,jump] [--height 1.0] [--assets dir]\nRows are clip x view (or one turntable row per model without clips), columns are frames."
         );
         std::process::exit(2);
     }
@@ -94,34 +93,9 @@ fn gcad_source(path: &std::path::Path) -> String {
     .unwrap()
 }
 
-fn is_gcad(path: &std::path::Path) -> bool {
-    path.extension().is_some_and(|e| e == "gcad")
-}
-
 fn animation_names(path: &std::path::Path) -> Vec<String> {
-    if is_gcad(path) {
-        let model = kids_games::gcad::build(&gcad_source(path), 1.0).unwrap();
-        return kids_games::gcad::clip_names(&model);
-    }
-    let Ok(bytes) = std::fs::read(path) else {
-        return vec![];
-    };
-    if bytes.len() < 20 || &bytes[..4] != b"glTF" {
-        return vec![];
-    }
-    let n = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
-    let Ok(json) = serde_json::from_slice::<serde_json::Value>(&bytes[20..20 + n]) else {
-        return vec![];
-    };
-    json["animations"]
-        .as_array()
-        .map(|a| {
-            a.iter()
-                .enumerate()
-                .map(|(i, v)| v["name"].as_str().map_or(format!("clip{i}"), String::from))
-                .collect()
-        })
-        .unwrap_or_default()
+    let model = kids_games::gcad::build(&gcad_source(path), 1.0).unwrap();
+    kids_games::gcad::clip_names(&model)
 }
 
 #[derive(Clone)]
@@ -300,21 +274,10 @@ fn main() {
                     },
                     Transform::from_xyz(2.0, 4.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
                 ));
-                let gcad = model.ends_with(".gcad");
-                commands.spawn(WorldAssetRoot(if gcad {
-                    assets.load(model.clone())
-                } else {
-                    assets.load(GltfAssetLabel::Scene(0).from_asset(model.clone()))
-                }));
+                commands.spawn(WorldAssetRoot(assets.load(model.clone())));
                 let clips: Vec<Handle<AnimationClip>> = picked2
                     .iter()
-                    .map(|i| {
-                        if gcad {
-                            assets.load(format!("{model}#Animation/{}", names2[*i]))
-                        } else {
-                            assets.load(GltfAssetLabel::Animation(*i).from_asset(model.clone()))
-                        }
-                    })
+                    .map(|i| assets.load(format!("{model}#Animation/{}", names2[*i])))
                     .collect();
                 let (graph, nodes) = AnimationGraph::from_clips(clips.clone());
                 commands.insert_resource(Rig {

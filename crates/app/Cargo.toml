@@ -18,7 +18,7 @@ glam.workspace = true
 image = { version = "0.25", default-features = false }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
-gcad-mesh = { git = "https://github.com/v0l/gcad.git", rev = "dab18d76587e44cbfc8a92f4d8bb7241c54be045" }
+gcad-mesh = { git = "https://github.com/v0l/gcad.git", rev = "888da75938244e8c24551a16731f3993fdb8a2ee" }
 cpal = "0.17"
 bevy = { version = "0.20", default-features = false, features = [
   "std",
@@ -32,8 +32,7 @@ bevy = { version = "0.20", default-features = false, features = [
   "bevy_sprite_render",
   "bevy_pbr",
   "bevy_light",
-  "bevy_gltf",
-  "gltf_animation",
+  "bevy_world_serialization",
   "bevy_animation",
   "bevy_scene",
   "bevy_curve",
@@ -51,7 +50,7 @@ bevy = { version = "0.20", default-features = false, features = [
 bevy = { version = "0.20", default-features = false, features = ["x11", "wayland"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-gcad-mesh = { git = "https://github.com/v0l/gcad.git", rev = "dab18d76587e44cbfc8a92f4d8bb7241c54be045", features = ["parallel"] }
+gcad-mesh = { git = "https://github.com/v0l/gcad.git", rev = "888da75938244e8c24551a16731f3993fdb8a2ee", features = ["parallel"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 bevy = { version = "0.20", default-features = false, features = ["android-game-activity"] }

@@ -17,11 +17,15 @@ pub struct GcadLoader;
 #[derive(Serialize, Deserialize, Clone, Copy, Debug)]
 pub struct GcadSettings {
     pub detail: f64,
+    pub scale: Option<f32>,
 }
 
 impl Default for GcadSettings {
     fn default() -> Self {
-        Self { detail: 1.0 }
+        Self {
+            detail: 1.0,
+            scale: None,
+        }
     }
 }
 
@@ -254,9 +258,13 @@ pub fn clip_names(model: &gcad_mesh::Model) -> Vec<String> {
     names
 }
 
-pub fn into_world(model: &gcad_mesh::Model, load_context: &mut LoadContext) -> WorldAsset {
+pub fn into_world(
+    model: &gcad_mesh::Model,
+    scale: Option<f32>,
+    load_context: &mut LoadContext,
+) -> WorldAsset {
     let (height, base) = fit(model);
-    let scale = 1.0 / height;
+    let scale = scale.unwrap_or(1.0 / height);
     let mut world = World::default();
     let root = world
         .spawn((
@@ -399,7 +407,7 @@ impl AssetLoader for GcadLoader {
                 .ok_or_else(|| GcadError(format!("include {name} not found")))
         })?;
         let model = build(&source, settings.detail)?;
-        Ok(into_world(&model, load_context))
+        Ok(into_world(&model, settings.scale, load_context))
     }
 
     fn extensions(&self) -> &[&str] {
@@ -409,7 +417,22 @@ impl AssetLoader for GcadLoader {
 
 pub struct GcadPlugin;
 
-pub const WARM: [&str; 2] = ["models/hero.gcad", "models/prop_tree.gcad"];
+pub const WARM: [&str; 14] = [
+    "models/hero.gcad",
+    "models/prop_tree.gcad",
+    "models/prop_barrier.gcad",
+    "models/prop_hurdle.gcad",
+    "models/prop_gate.gcad",
+    "models/prop_train.gcad",
+    "models/prop_coin.gcad",
+    "models/prop_arch.gcad",
+    "models/prop_road.gcad",
+    "models/prop_building1.gcad",
+    "models/prop_building2.gcad",
+    "models/prop_building3.gcad",
+    "models/prop_building4.gcad",
+    "models/prop_building5.gcad",
+];
 
 #[cfg(not(target_arch = "wasm32"))]
 pub fn source_of(rel: &str) -> Option<String> {
