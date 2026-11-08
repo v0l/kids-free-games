@@ -1,17 +1,28 @@
 fn source(motion: &str) -> String {
     let dir = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../assets/models"));
     let text = std::fs::read_to_string(dir.join("hero.gcad")).unwrap();
-    kids_games::gcad::expand_includes(&text, &mut |_| {
-        std::fs::read_to_string(motion).map_err(|e| kids_games::gcad::GcadError(e.to_string()))
+    gcad_bevy::expand_includes(&text, &mut |_| {
+        std::fs::read_to_string(motion).map_err(|e| gcad_bevy::GcadError(e.to_string()))
     })
     .unwrap()
+}
+
+fn build(source: &str) -> gcad2glb::Assets {
+    let options = gcad2glb::Options {
+        fit: gcad2glb::Fit {
+            height: Some(1.0),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    gcad2glb::Assets::from_source(source, &options).unwrap()
 }
 
 fn main() {
     let mut args = std::env::args().skip(1);
     let (a, b) = (args.next().unwrap(), args.next().unwrap());
-    let ma = kids_games::gcad::build(&source(&a), 1.0, None).unwrap();
-    let mb = kids_games::gcad::build(&source(&b), 1.0, None).unwrap();
+    let ma = build(&source(&a));
+    let mb = build(&source(&b));
     let (ba, bb) = (&ma.bodies[0], &mb.bodies[0]);
     let mut worst_all: f32 = 0.0;
     for clip in &ba.clips {

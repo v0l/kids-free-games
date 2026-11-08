@@ -485,6 +485,7 @@ dependencies = [
  "bevy_derive",
  "bevy_ecs",
  "bevy_math",
+ "bevy_mesh",
  "bevy_platform",
  "bevy_reflect",
  "bevy_time",
@@ -1926,6 +1927,30 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b71798fca2c1fe1086445a7258a4bc81e6e49dcd24c8d0dd9a1e57395b603f51"
 
 [[package]]
+name = "bitcode"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a6ed1b54d8dc333e7be604d00fa9262f4635485ffea923647b6521a5fff045d"
+dependencies = [
+ "arrayvec",
+ "bitcode_derive",
+ "bytemuck",
+ "glam",
+ "serde",
+]
+
+[[package]]
+name = "bitcode_derive"
+version = "0.6.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "238b90427dfad9da4a9abd60f3ec1cdee6b80454bde49ed37f1781dd8e9dc7f9"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2774,9 +2799,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcad-bevy"
+version = "0.1.0"
+source = "git+https://github.com/v0l/gcad-engines?rev=7d1fc40331b0d7ab821643bac6c25c8f71c86f78#7d1fc40331b0d7ab821643bac6c25c8f71c86f78"
+dependencies = [
+ "bevy",
+ "bitcode",
+ "gcad2glb",
+ "serde",
+]
+
+[[package]]
 name = "gcad-mesh"
 version = "0.6.1"
-source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
+source = "git+https://github.com/v0l/gcad?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
 dependencies = [
  "anyhow",
  "gcad-parse",
@@ -2788,7 +2824,7 @@ dependencies = [
 [[package]]
 name = "gcad-parse"
 version = "0.6.1"
-source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
+source = "git+https://github.com/v0l/gcad?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
 dependencies = [
  "anyhow",
 ]
@@ -2796,12 +2832,12 @@ dependencies = [
 [[package]]
 name = "gcad-version"
 version = "0.6.1"
-source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
+source = "git+https://github.com/v0l/gcad?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
 
 [[package]]
 name = "gcad2glb"
 version = "0.6.1"
-source = "git+https://github.com/v0l/gcad.git?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
+source = "git+https://github.com/v0l/gcad?rev=75e25dda66abf25347778ccb7c65b155d52d2195#75e25dda66abf25347778ccb7c65b155d52d2195"
 dependencies = [
  "gcad-mesh",
  "gcad-version",
@@ -3383,6 +3419,7 @@ version = "0.1.1"
 dependencies = [
  "bevy",
  "cpal",
+ "gcad-bevy",
  "gcad2glb",
  "glam",
  "image",

@@ -1,4 +1,5 @@
 use bevy::animation::graph::AnimationGraphHandle;
+use gcad_bevy::GcadAssets;
 use bevy::app::{AppExit, ScheduleRunnerPlugin};
 use bevy::camera::RenderTarget;
 use bevy::prelude::*;
@@ -83,19 +84,10 @@ fn parse() -> Args {
     a
 }
 
-fn gcad_source(path: &std::path::Path) -> String {
-    let text = std::fs::read_to_string(path).unwrap();
-    let dir = path.parent().unwrap().to_path_buf();
-    kids_games::gcad::expand_includes(&text, &mut |name| {
-        std::fs::read_to_string(dir.join(name))
-            .map_err(|e| kids_games::gcad::GcadError(e.to_string()))
-    })
-    .unwrap()
-}
-
 fn animation_names(path: &std::path::Path) -> Vec<String> {
-    let model = kids_games::gcad::build(&gcad_source(path), 1.0, None).unwrap();
-    kids_games::gcad::clip_names(&model)
+    gcad_bevy::build_file(path, &kids_games::gcad::settings(None))
+        .unwrap()
+        .clip_names()
 }
 
 #[derive(Clone)]
@@ -223,7 +215,7 @@ fn main() {
                 .disable::<WinitPlugin>(),
         )
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(5)))
-        .add_plugins(kids_games::gcad::GcadPlugin)
+        .add_plugins(gcad_bevy::GcadPlugin::default())
         .insert_resource(ClearColor(Color::srgb(0.78, 0.78, 0.8)))
         .insert_resource(GlobalAmbientLight {
             color: Color::WHITE,
@@ -274,10 +266,11 @@ fn main() {
                     },
                     Transform::from_xyz(2.0, 4.0, 3.0).looking_at(Vec3::ZERO, Vec3::Y),
                 ));
-                commands.spawn(WorldAssetRoot(assets.load(model.clone())));
+                let settings = kids_games::gcad::settings(None);
+                commands.spawn(WorldAssetRoot(assets.load_gcad(model.clone(), settings.clone())));
                 let clips: Vec<Handle<AnimationClip>> = picked2
                     .iter()
-                    .map(|i| assets.load(format!("{model}#Animation/{}", names2[*i])))
+                    .map(|i| assets.load_gcad_clip(&model, &names2[*i], settings.clone()))
                     .collect();
                 let (graph, nodes) = AnimationGraph::from_clips(clips.clone());
                 commands.insert_resource(Rig {

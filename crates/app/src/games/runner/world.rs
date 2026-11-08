@@ -5,6 +5,7 @@ use bevy::animation::transition::AnimationTransitions;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::pbr::{DistanceFog, FogFalloff};
 use bevy::prelude::*;
+use gcad_bevy::GcadAssets;
 use kg_core::engine::View;
 use kg_core::games::runner::State as Phase;
 use kg_core::games::runner::*;
@@ -99,12 +100,13 @@ fn node(out: &mut ChildSpawnerCommands, role: Role, at: Transform) -> Entity {
 fn spawn(
     mut commands: Commands,
     mut kit: Kit,
+    loaded: Res<Models>,
     assets: Option<Res<AssetServer>>,
     graphs: Option<ResMut<Assets<AnimationGraph>>>,
 ) {
     let models = match (assets, graphs) {
-        (Some(a), Some(mut g)) => Models::load(&a, &mut g),
-        _ => Models::default(),
+        (Some(a), Some(mut g)) if loaded.scenes.is_empty() => Models::load(&a, &mut g),
+        _ => loaded.clone(),
     };
     commands.insert_resource(models.clone());
     let world = spawn_world(
@@ -205,27 +207,36 @@ pub struct Models {
 }
 
 impl Models {
-    fn load(assets: &AssetServer, graphs: &mut Assets<AnimationGraph>) -> Self {
+    pub fn load(assets: &AssetServer, graphs: &mut Assets<AnimationGraph>) -> Self {
+        let hero = crate::gcad::settings(None);
         let mut scenes = HashMap::new();
-        scenes.insert("hero", assets.load("models/hero.gcad"));
+        scenes.insert("hero", assets.load_gcad("models/hero.gcad", hero.clone()));
         for (name, scale) in PROPS {
             scenes.insert(
                 name,
-                assets
-                    .load_builder()
-                    .with_settings(move |s: &mut crate::gcad::GcadSettings| s.scale = scale)
-                    .load(format!("models/prop_{name}.gcad")),
+                assets.load_gcad(
+                    format!("models/prop_{name}.gcad"),
+                    crate::gcad::settings(scale),
+                ),
             );
         }
         let clips = HERO_CLIPS
             .iter()
-            .map(|c| assets.load(format!("models/hero.gcad#Animation/{c}")));
+            .map(|c| assets.load_gcad_clip("models/hero.gcad", c, hero.clone()));
         let (graph, clips) = AnimationGraph::from_clips(clips);
         Self {
             scenes,
             graph: Some(graphs.add(graph)),
             clips,
         }
+    }
+
+    pub fn names(&self) -> impl Iterator<Item = &'static str> + '_ {
+        self.scenes.keys().copied()
+    }
+
+    pub fn scene(&self, name: &str) -> Option<&Handle<WorldAsset>> {
+        self.scenes.get(name)
     }
 }
 
@@ -659,21 +670,22 @@ mod tests {
     fn gcad_source(name: &str) -> String {
         let text = kg_core::assets::read(&format!("models/{name}.gcad"))
             .unwrap_or_else(|| panic!("models/{name}.gcad missing"));
-        crate::gcad::expand_includes(&String::from_utf8(text).unwrap(), &mut |inc| {
+        gcad_bevy::expand_includes(&String::from_utf8(text).unwrap(), &mut |inc| {
             kg_core::assets::read(&format!("models/{inc}"))
                 .map(|b| String::from_utf8(b).unwrap())
-                .ok_or_else(|| crate::gcad::GcadError(format!("models/{inc} missing")))
+                .ok_or_else(|| gcad_bevy::GcadError(format!("models/{inc} missing")))
         })
         .unwrap()
     }
 
-    fn triangles(model: &gcad2glb::Assets) -> usize {
-        model.triangles()
+    fn build(name: &str, scale: Option<f32>) -> gcad_bevy::Built {
+        gcad_bevy::build(&gcad_source(name), &crate::gcad::settings(scale))
+            .unwrap_or_else(|e| panic!("{name}: {e}"))
     }
 
-    fn extent(model: &gcad2glb::Assets) -> Vec3 {
-        let (lo, hi) = model.bounds().unwrap();
-        (Vec3::from(hi) - Vec3::from(lo)) * model.fit().unwrap().scale
+    fn extent(model: &gcad_bevy::Built) -> Vec3 {
+        let (lo, hi) = model.bounds.unwrap();
+        (Vec3::from(hi) - Vec3::from(lo)) * model.fit.unwrap().0
     }
 
     #[test]
@@ -693,9 +705,8 @@ mod tests {
             ("building5", [5.66, 7.82, 7.84]),
         ];
         for (name, scale) in PROPS {
-            let model = crate::gcad::build(&gcad_source(&format!("prop_{name}")), 1.0, scale)
-                .unwrap_or_else(|e| panic!("{name}: {e}"));
-            let tris = triangles(&model);
+            let model = build(&format!("prop_{name}"), scale);
+            let tris = model.triangles();
             assert!((1..=4_000).contains(&tris), "{name}: {tris} triangles");
             for body in &model.bodies {
                 assert!(
@@ -726,19 +737,82 @@ mod tests {
         }
     }
 
+    fn loading_app() -> App {
+        let root = kg_core::assets::dirs()
+            .into_iter()
+            .find(|d| d.join("models").is_dir())
+            .expect("assets/models");
+        let mut app = App::new();
+        app.add_plugins((
+            MinimalPlugins,
+            bevy::asset::AssetPlugin {
+                file_path: root.canonicalize().unwrap().to_string_lossy().into_owned(),
+                ..default()
+            },
+            bevy::transform::TransformPlugin,
+            bevy::mesh::MeshPlugin,
+            bevy::animation::AnimationPlugin,
+            bevy::world_serialization::WorldSerializationPlugin,
+        ))
+        .init_asset::<StandardMaterial>()
+        .init_asset::<Image>()
+        .add_plugins(crate::gcad::ModelsPlugin);
+        app
+    }
+
     #[test]
     fn every_model_the_runner_loads_is_warmed_at_startup() {
-        for name in PROPS
-            .iter()
-            .map(|(p, _)| format!("prop_{p}"))
-            .chain(["hero".to_string()])
-        {
-            let rel = format!("models/{name}.gcad");
-            assert!(
-                crate::gcad::WARM.contains(&rel.as_str()),
-                "{rel} is not warmed"
-            );
+        let mut app = loading_app();
+        app.update();
+        let models = app.world().resource::<Models>().clone();
+        let mut names: Vec<&str> = models.names().collect();
+        names.sort();
+        let mut want: Vec<&str> = PROPS.iter().map(|(p, _)| *p).chain(["hero"]).collect();
+        want.sort();
+        assert_eq!(names, want);
+        let started = std::time::Instant::now();
+        loop {
+            app.update();
+            let server = app.world().resource::<AssetServer>();
+            let pending: Vec<&str> = want
+                .iter()
+                .copied()
+                .filter(|n| {
+                    let h = models.scene(n).unwrap();
+                    if let bevy::asset::LoadState::Failed(e) = server.load_state(h) {
+                        panic!("{n}: {e}");
+                    }
+                    !server.is_loaded_with_dependencies(h)
+                })
+                .collect();
+            if pending.is_empty() {
+                break;
+            }
+            assert!(started.elapsed().as_secs() < 120, "{pending:?} did not load");
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
+        let clips = app.world().resource::<Assets<AnimationClip>>();
+        let graphs = app.world().resource::<Assets<AnimationGraph>>();
+        let graph = graphs.get(models.graph.as_ref().unwrap()).unwrap();
+        for node in &models.clips {
+            let Some(bevy::animation::graph::AnimationNodeType::Clip(clip)) =
+                graph.get(*node).map(|n| &n.node_type)
+            else {
+                panic!("node {node:?} is not a clip");
+            };
+            let clip = clips.get(clip).expect("hero clip loaded");
+            assert!(clip.duration() > 0.3 && !clip.curves().is_empty());
+        }
+        let world = app.world_mut();
+        let hero = world
+            .resource::<Assets<bevy::world_serialization::WorldAsset>>()
+            .get(models.scene("hero").unwrap())
+            .unwrap();
+        let mut q = hero.world.try_query::<(&gcad_bevy::GcadModel, &Transform)>().unwrap();
+        let (model, at) = q.single(&hero.world).unwrap();
+        let height = (model.bounds_max.y - model.bounds_min.y) * at.scale.y;
+        assert!((height - 1.0).abs() < 1e-3, "hero loads {height} high");
+        assert_eq!(model.clips, HERO_CLIPS);
     }
 
     #[test]
@@ -757,44 +831,47 @@ mod tests {
 
     #[test]
     fn the_hero_builds_from_gcad_with_every_clip_on_its_rig() {
-        let model = crate::gcad::build(&gcad_source("hero"), 1.0, None).unwrap();
+        let model = build("hero", None);
         assert_eq!(model.bodies.len(), 1);
         let body = &model.bodies[0];
         assert_eq!(body.joints.len(), 15);
-        assert_eq!(crate::gcad::clip_names(&model), HERO_CLIPS);
+        assert_eq!(model.clip_names(), HERO_CLIPS);
         for clip in &body.clips {
             assert!(clip.duration > 0.3, "{} lasts {}", clip.name, clip.duration);
             assert!(
-                clip.tracks.len() >= 10,
+                clip.rotations.len() >= 10,
                 "{} keys {} bones",
                 clip.name,
-                clip.tracks.len()
+                clip.rotations.len()
             );
         }
         assert!(
-            triangles(&model) <= 14_000,
+            model.triangles() <= 14_000,
             "{} triangles",
-            triangles(&model)
+            model.triangles()
         );
-        let (lo, hi) = model.bounds().unwrap();
+        let (lo, hi) = model.bounds.unwrap();
         let height = hi[1] - lo[1];
         assert!((100.0..160.0).contains(&height), "hero is {height} tall");
         assert!(lo[1].abs() < 1.0, "hero feet at {}", lo[1]);
-        let rest = body.bone_matrices(None, 0.0);
-        let run = body.bone_matrices(body.clip_index("run"), 0.1);
-        assert_eq!(rest.len(), 15);
-        assert_ne!(rest, run, "the run clip does not move the rig");
+        let run = body.clips.iter().find(|c| c.name == "run").unwrap();
+        assert!(
+            run.rotations
+                .iter()
+                .any(|t| t.values.windows(2).any(|w| w[0] != w[1])),
+            "the run clip does not move the rig"
+        );
     }
 
     #[test]
     fn the_tree_builds_from_gcad_inside_its_budget() {
-        let model = crate::gcad::build(&gcad_source("prop_tree"), 1.0, None).unwrap();
+        let model = build("prop_tree", None);
         assert!(
-            triangles(&model) <= 4_000,
+            model.triangles() <= 4_000,
             "{} triangles",
-            triangles(&model)
+            model.triangles()
         );
-        let (lo, hi) = model.bounds().unwrap();
+        let (lo, hi) = model.bounds.unwrap();
         let height = hi[1] - lo[1];
         assert!((150.0..300.0).contains(&height), "tree is {height} tall");
     }
