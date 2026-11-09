@@ -383,6 +383,7 @@ pub enum Say {
     GardenIntro,
     Bloom,
     Steady,
+    SnakeIntro,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -462,6 +463,7 @@ impl Say {
             Say::GardenIntro => "say_garden_intro".into(),
             Say::Bloom => "say_garden_bloom".into(),
             Say::Steady => "say_garden_steady".into(),
+            Say::SnakeIntro => "say_snake_intro".into(),
         }
     }
 }
@@ -728,7 +730,7 @@ mod tests {
         lines.extend((1..=10).map(Say::Number));
         lines.extend((1..=99).map(number));
         lines.extend(Line::ALL.iter().map(|l| Say::Line(*l)));
-        lines.extend([Say::GardenIntro, Say::Bloom, Say::Steady]);
+        lines.extend([Say::GardenIntro, Say::Bloom, Say::Steady, Say::SnakeIntro]);
         for v in lines {
             let takes: Vec<_> = p.iter().filter(|(k, _)| voice_line(k) == v.key()).collect();
             assert!(!takes.is_empty(), "{v:?} missing");

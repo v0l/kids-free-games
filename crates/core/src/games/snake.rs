@@ -2,6 +2,7 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
+use crate::input::SwipeTracker;
 use crate::rng as rand;
 use crate::sfx::{self, Sfx};
 use glam::{ivec2, vec2, IVec2, Vec2};
@@ -9,12 +10,12 @@ use std::collections::VecDeque;
 
 pub const LONG: i32 = 24;
 pub const SHORT: i32 = 18;
-pub const START_STEP: f32 = 0.30;
+pub const START_STEP: f32 = 0.22;
 pub const FASTEST_STEP: f32 = 0.09;
-pub const STAGE_DROP: f32 = 0.025;
+pub const STAGE_DROP: f32 = 0.02;
 pub const STAGE_APPLES: u32 = 5;
-pub const GRACE_MOVES: u32 = 16;
-pub const GENTLE_GRACE_MOVES: u32 = 28;
+pub const GRACE_MOVES: u32 = 20;
+pub const GENTLE_GRACE_MOVES: u32 = 32;
 pub const GENTLE_SLOWDOWN: f32 = 1.25;
 pub const GENTLE_LIMIT: u32 = 4;
 pub const GENTLE_AFTER: i64 = 2;
@@ -22,6 +23,13 @@ pub const FIRST_RUN_SAFE_APPLES: u32 = 3;
 pub const RESULTS_DELAY: f32 = 0.6;
 pub const GAME: &str = "snake";
 pub const FIRST_FOOD_AHEAD: i32 = 6;
+pub const RETRO_WINDOW: f32 = 0.6;
+pub const SNAKE_SWIPE_MM: f32 = 3.0;
+pub const BRINK_START: f32 = 0.2;
+pub const BRINK_DROP: f32 = 0.03;
+pub const FACE_RATE: f32 = 28.0;
+pub const NUDGE_RATE: f32 = 30.0;
+pub const MOUTH_CELLS: f32 = 3.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum State {
@@ -63,6 +71,18 @@ pub struct Snake {
     pub clock: f32,
     pub food_age: f32,
     pub dead_age: f32,
+    pub face: f32,
+    pub nudge: Vec2,
+    pub turn_kick: f32,
+    pub gulp: f32,
+    pub brink: f32,
+    pub intro_said: bool,
+    swipes: SwipeTracker,
+    pad_last: Option<Dir>,
+    pre_dir: Dir,
+    last_tail: Option<IVec2>,
+    retro_used: bool,
+    tap_armed: bool,
 }
 
 pub fn bulge_scale(index: usize, bulge_at: f32) -> f32 {
@@ -87,6 +107,34 @@ fn wrap_delta(d: f32, span: f32) -> f32 {
     } else {
         d
     }
+}
+
+pub fn angle_of(d: Dir) -> f32 {
+    let v = d.delta().as_vec2();
+    v.y.atan2(v.x)
+}
+
+pub fn wrap_angle(a: f32) -> f32 {
+    (a + std::f32::consts::PI).rem_euclid(std::f32::consts::TAU) - std::f32::consts::PI
+}
+
+pub fn left_of(d: Dir) -> Dir {
+    match d {
+        Dir::Right => Dir::Up,
+        Dir::Up => Dir::Left,
+        Dir::Left => Dir::Down,
+        Dir::Down => Dir::Right,
+    }
+}
+
+pub fn right_of(d: Dir) -> Dir {
+    left_of(d).opposite()
+}
+
+pub fn blink(clock: f32) -> f32 {
+    let t = clock.rem_euclid(3.7);
+    let lid = |at: f32| (1.0 - ((t - at).abs() / 0.07)).max(0.0);
+    lid(3.2).max(lid(3.45) * 0.9)
 }
 
 impl Snake {
@@ -121,6 +169,18 @@ impl Snake {
             clock: 0.0,
             food_age: 0.0,
             dead_age: 0.0,
+            face: 0.0,
+            nudge: Vec2::ZERO,
+            turn_kick: 0.0,
+            gulp: 0.0,
+            brink: 0.0,
+            intro_said: false,
+            swipes: SwipeTracker::default(),
+            pad_last: None,
+            pre_dir: Dir::Right,
+            last_tail: None,
+            retro_used: false,
+            tap_armed: false,
         };
         s.food = s.body[0] + ivec2(FIRST_FOOD_AHEAD, 0);
         s
@@ -157,8 +217,123 @@ impl Snake {
         }
     }
 
+    pub fn heading(&self) -> Dir {
+        *self.queued.front().unwrap_or(&self.dir)
+    }
+
+    pub fn drawn_head(&self) -> Vec2 {
+        self.chain(self.frac())[0] + self.nudge
+    }
+
+    fn can_retro(&self, d: Dir) -> bool {
+        self.state == State::Playing
+            && self.queued.is_empty()
+            && !self.retro_used
+            && self.last_tail.is_some()
+            && self.frac() < RETRO_WINDOW
+            && d != self.dir
+            && d != self.pre_dir.opposite()
+            && self.body.len() > 1
+            && self.retro_is_safe(d)
+    }
+
+    fn retro_is_safe(&self, d: Dir) -> bool {
+        let neck = self.body[1];
+        let mut at = neck + d.delta();
+        if self.wrap {
+            at = ivec2(at.x.rem_euclid(self.size.x), at.y.rem_euclid(self.size.y));
+        } else if at.x < 0 || at.y < 0 || at.x >= self.size.x || at.y >= self.size.y {
+            return false;
+        }
+        let n = self.body.len();
+        !self.body.iter().skip(1).take(n - 1).any(|p| *p == at)
+    }
+
+    pub fn steer(&mut self, d: Dir) {
+        if self.can_retro(d) {
+            let frac = self.frac();
+            let size = self.size.as_vec2();
+            let from = self.chain(frac)[0];
+            let tail = self.last_tail.take().unwrap_or_default();
+            self.body.pop_front();
+            self.body.push_back(tail);
+            for b in &mut self.bulges {
+                *b = b.saturating_sub(1);
+            }
+            self.moves = self.moves.saturating_sub(1);
+            self.dir = self.pre_dir;
+            self.queued.push_back(d);
+            self.tick();
+            self.retro_used = true;
+            let to = self.chain(frac)[0];
+            let gap = from - to;
+            self.nudge += vec2(wrap_delta(gap.x, size.x), wrap_delta(gap.y, size.y));
+        } else {
+            let before = self.queued.len();
+            self.turn(d);
+            if self.queued.len() == before {
+                return;
+            }
+        }
+        self.turn_kick = 1.0;
+        self.face += wrap_angle(angle_of(self.heading()) - self.face) * 0.5;
+        sfx::play(Sfx::Tick);
+    }
+
+    fn next_cell(&self) -> IVec2 {
+        let head = self.body[0] + self.heading().delta();
+        if self.wrap {
+            ivec2(
+                head.x.rem_euclid(self.size.x),
+                head.y.rem_euclid(self.size.y),
+            )
+        } else {
+            head
+        }
+    }
+
+    pub fn would_crash(&self) -> bool {
+        if self.forgiving() {
+            return false;
+        }
+        let head = self.next_cell();
+        if head.x < 0 || head.y < 0 || head.x >= self.size.x || head.y >= self.size.y {
+            return true;
+        }
+        let solid = self.body.len() - usize::from(head != self.food);
+        self.body.iter().take(solid).any(|p| *p == head)
+    }
+
+    pub fn brink_time(&self) -> f32 {
+        (BRINK_START - (self.stage() - 1) as f32 * BRINK_DROP).max(0.0)
+    }
+
+    pub fn mouth(&self) -> f32 {
+        if self.state == State::Dead {
+            return 0.0;
+        }
+        let size = self.size.as_vec2();
+        let head = self.chain(self.frac())[0];
+        let d = self.food.as_vec2() - head;
+        let d = vec2(wrap_delta(d.x, size.x), wrap_delta(d.y, size.y));
+        let near = (1.0 - (d.length() - 0.6) / (MOUTH_CELLS - 0.6)).clamp(0.0, 1.0);
+        let ahead = d.normalize_or_zero().dot(Vec2::from_angle(self.face)).max(0.0);
+        (near * (0.4 + 0.6 * ahead)).max(self.gulp)
+    }
+
+    pub fn look(&self) -> Vec2 {
+        let size = self.size.as_vec2();
+        let head = self.chain(self.frac())[0];
+        let d = self.food.as_vec2() - head;
+        vec2(wrap_delta(d.x, size.x), wrap_delta(d.y, size.y)).normalize_or_zero()
+    }
+
     pub fn tick(&mut self) {
         self.prev = self.body.iter().copied().collect();
+        self.pre_dir = self.dir;
+        self.last_tail = None;
+        self.retro_used = false;
+        self.brink = 0.0;
         for b in &mut self.bulges {
             *b += 1;
         }
@@ -194,11 +369,12 @@ impl Snake {
         }
         self.moves += 1;
         if !eating {
-            self.body.pop_back();
+            self.last_tail = self.body.pop_back();
         }
         self.body.push_front(head);
         if eating {
             self.score += 1;
+            self.gulp = 1.0;
             self.events.push(Event::Ate(head));
             self.bulges.push(0);
             self.place_food();
@@ -390,6 +566,9 @@ impl Game for Snake {
         self.popups.update(dt);
         self.shake.update(dt);
         self.bump.update(dt);
+        self.turn_kick = (self.turn_kick - dt * 5.0).max(0.0);
+        self.gulp = (self.gulp - dt * 3.5).max(0.0);
+        let steer = self.read_steer(input, view);
         match self.state {
             State::Ready => {
                 if Self::size_for(view) != self.size {
@@ -397,35 +576,94 @@ impl Game for Snake {
                     *self = Self::sized(Self::size_for(view));
                     self.best = best;
                 }
-                if let Some(d) = input.dir() {
+                if !self.intro_said && self.clock > 0.4 {
+                    self.intro_said = true;
+                    sfx::say(sfx::Say::SnakeIntro);
+                }
+                if let Some(d) = steer.or(input.key_dir) {
                     self.turn(d);
-                    self.state = State::Playing;
-                    sfx::say(sfx::Say::Go);
-                } else if input.tap() {
-                    self.state = State::Playing;
-                    sfx::say(sfx::Say::Go);
+                    self.start();
+                } else if input.pressed || input.action {
+                    self.start();
                 }
             }
             State::Playing => {
-                if let Some(d) = input.dir() {
-                    self.turn(d);
+                if let Some(d) = steer {
+                    self.steer(d);
                 }
-                let speed = self.step_time();
-                self.timer += dt;
-                while self.timer >= speed && self.state == State::Playing {
-                    self.timer -= speed;
-                    self.tick();
-                }
+                self.advance(dt);
             }
             State::Dead => {
                 if input.tap() && self.dead_age > RESULTS_DELAY {
                     let best = self.best;
                     *self = Self::sized(Self::size_for(view));
                     self.best = best;
+                    self.intro_said = true;
                 }
             }
         }
+        if self.state != State::Dead {
+            let want = angle_of(self.heading());
+            let gap = wrap_angle(want - self.face);
+            self.face = wrap_angle(self.face + gap * (1.0 - (-FACE_RATE * dt).exp()));
+        }
+        self.nudge *= (-NUDGE_RATE * dt).exp();
         self.react(view);
+    }
+}
+
+impl Snake {
+    fn start(&mut self) {
+        self.state = State::Playing;
+        self.timer = 0.0;
+        self.tick();
+        sfx::say(sfx::Say::Go);
+    }
+
+    fn advance(&mut self, dt: f32) {
+        let speed = self.step_time();
+        if self.timer + dt >= speed && self.brink < self.brink_time() && self.would_crash() {
+            self.brink += dt;
+            self.timer = speed;
+            return;
+        }
+        self.timer += dt;
+        while self.timer >= speed && self.state == State::Playing {
+            self.timer -= speed;
+            self.tick();
+        }
+    }
+
+    fn read_steer(&mut self, input: &Input, view: &View) -> Option<Dir> {
+        let threshold = SNAKE_SWIPE_MM * input.mm();
+        let swipe = self
+            .swipes
+            .track(input.pos, input.down && !input.cancelled, input.pressed, threshold);
+        let pad = if input.axis.length() > 0.6 {
+            Some(Dir::from_vec(input.axis))
+        } else {
+            None
+        };
+        let pad_new = pad.filter(|d| self.pad_last != Some(*d));
+        self.pad_last = pad;
+        if input.pressed {
+            self.tap_armed = self.state == State::Playing;
+        }
+        let tap = (input.released
+            && self.tap_armed
+            && !input.cancelled
+            && !self.swipes.swiped
+            && self.swipes.travel < crate::input::TAP_SLOP_MM * input.mm()
+            && self.state == State::Playing)
+            .then(|| {
+                let h = self.heading();
+                if input.pos.x < view.w / 2.0 {
+                    left_of(h)
+                } else {
+                    right_of(h)
+                }
+            });
+        input.key_dir.or(swipe).or(pad_new).or(tap)
     }
 }
 
@@ -695,7 +933,7 @@ mod tests {
     fn the_first_stretch_is_slow_and_speed_rises_by_stage() {
         fresh_player();
         let mut s = Snake::new();
-        assert!(s.step_time() >= 0.28);
+        assert!(s.step_time() >= START_STEP - 1e-6);
         let mut last = s.step_time();
         for score in (0..60).step_by(STAGE_APPLES as usize) {
             s.score = score;
@@ -790,5 +1028,307 @@ mod tests {
         assert!(tongue_len(0.2) > 0.99);
         assert_eq!(tongue_len(0.0), 0.0);
         assert_eq!(tongue_len(1.8 + 1.0), 0.0);
+    }
+
+    const DT: f32 = 1.0 / 60.0;
+
+    fn phone() -> View {
+        View::fit(1080.0, 2400.0)
+    }
+
+    fn playing_at(frac: f32) -> Snake {
+        fresh_player();
+        let v = phone();
+        let mut s = Snake::new();
+        s.update(&Input::default(), &v, DT);
+        s.state = State::Playing;
+        s.moves = 100;
+        s.best = Best(30);
+        s.food = ivec2(0, 0);
+        while s.body[0].x < s.size.x / 3 + 2 {
+            s.update(&Input::default(), &v, DT);
+        }
+        while !(frac..frac + 0.1).contains(&s.frac()) {
+            s.update(&Input::default(), &v, DT);
+        }
+        s
+    }
+
+    fn up_by(s: &Snake, from: Vec2) -> f32 {
+        from.y - s.drawn_head().y
+    }
+
+    #[test]
+    fn an_early_turn_moves_the_drawn_head_the_same_frame() {
+        let mut s = playing_at(0.2);
+        let before = s.drawn_head();
+        s.update(&Input::key(Dir::Up), &phone(), DT);
+        assert_eq!(s.dir, Dir::Up);
+        assert!(up_by(&s, before) > 0.02, "head {:?} -> {:?}", before, s.drawn_head());
+        assert!((s.drawn_head() - before).length() < 0.3);
+    }
+
+    #[test]
+    fn a_late_turn_swings_the_face_the_same_frame_and_lands_next_cell() {
+        let mut s = playing_at(0.7);
+        let face = s.face;
+        s.update(&Input::key(Dir::Up), &phone(), DT);
+        assert_eq!(s.heading(), Dir::Up);
+        let up = angle_of(Dir::Up);
+        assert!(wrap_angle(up - s.face).abs() < wrap_angle(up - face).abs() * 0.5);
+        let start = s.body[0];
+        for _ in 0..30 {
+            s.update(&Input::default(), &phone(), DT);
+        }
+        assert!(s.body.contains(&(start + ivec2(0, -1))));
+    }
+
+    #[test]
+    fn turns_queue_in_order_and_cap_at_three() {
+        let mut s = playing_at(0.7);
+        s.steer(Dir::Up);
+        s.steer(Dir::Left);
+        s.steer(Dir::Down);
+        s.steer(Dir::Right);
+        assert_eq!(s.queued, [Dir::Up, Dir::Left, Dir::Down]);
+        let h = s.body[0];
+        s.tick();
+        s.tick();
+        assert_eq!(s.body[0], h + ivec2(-1, -1));
+    }
+
+    #[test]
+    fn no_turn_ever_reverses_into_the_neck() {
+        for frac in [0.0, 0.1, 0.3, 0.6, 0.95] {
+            for first in Dir::ALL {
+                for second in Dir::ALL {
+                    let mut s = playing_at(frac);
+                    s.update(&Input::key(first), &phone(), DT);
+                    s.update(&Input::key(second), &phone(), DT);
+                    for _ in 0..40 {
+                        s.update(&Input::default(), &phone(), DT);
+                        let n = s.body.len();
+                        let cells: std::collections::HashSet<_> = s.body.iter().collect();
+                        assert_eq!(cells.len(), n, "overlap after {first:?} {second:?} at {frac}");
+                        assert_ne!(s.state, State::Dead);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_reverse_of_the_way_in_is_ignored_even_just_after_a_turn() {
+        let mut s = playing_at(0.7);
+        s.steer(Dir::Up);
+        s.tick();
+        s.steer(Dir::Left);
+        assert_eq!(s.dir, Dir::Up);
+        assert_eq!(s.queued, [Dir::Left]);
+        let neck = s.body[1];
+        s.tick();
+        assert_ne!(s.body[0], neck);
+    }
+
+    #[test]
+    fn a_swipe_fires_while_the_finger_is_still_moving() {
+        let mut s = playing_at(0.7);
+        let v = phone();
+        let mut sc = Script::new(v);
+        let from = vec2(500.0, 400.0);
+        s.update(&sc.press(from), &v, DT);
+        let step = SNAKE_SWIPE_MM * 1.2 * sc_mm(&v);
+        s.update(&sc.drag_to(from + vec2(0.0, -step)), &v, DT);
+        assert_eq!(s.heading(), Dir::Up);
+    }
+
+    fn sc_mm(v: &View) -> f32 {
+        6.0 / v.scale
+    }
+
+    #[test]
+    fn a_tap_on_a_half_turns_relative_to_the_heading() {
+        let v = phone();
+        for (x, want) in [(v.w * 0.2, Dir::Up), (v.w * 0.8, Dir::Down)] {
+            let mut s = playing_at(0.7);
+            let mut sc = Script::new(v);
+            for f in sc.tap(vec2(x, v.h * 0.5)) {
+                s.update(&f, &v, DT);
+            }
+            assert_eq!(s.heading(), want);
+        }
+        let mut s = playing_at(0.7);
+        s.dir = Dir::Up;
+        let mut sc = Script::new(v);
+        for f in sc.tap(vec2(v.w * 0.2, v.h * 0.5)) {
+            s.update(&f, &v, DT);
+        }
+        assert_eq!(s.heading(), Dir::Left);
+    }
+
+    #[test]
+    fn a_gamepad_stick_turns_once_per_push() {
+        let mut s = playing_at(0.7);
+        let v = phone();
+        s.update(&Input::held(vec2(0.0, -1.0)), &v, DT);
+        s.update(&Input::held(vec2(0.0, -1.0)), &v, DT);
+        assert_eq!(s.queued, [Dir::Up]);
+    }
+
+    #[test]
+    fn the_starting_swipe_moves_the_snake_within_a_few_frames() {
+        fresh_player();
+        let v = phone();
+        let mut s = Snake::new();
+        s.update(&Input::default(), &v, DT);
+        let before = s.drawn_head();
+        s.update(&Input::key(Dir::Up), &v, DT);
+        let mut frames = 1;
+        while (s.drawn_head() - before).length() < 0.05 && frames < 60 {
+            s.update(&Input::default(), &v, DT);
+            frames += 1;
+        }
+        assert!(frames <= 6, "{frames} frames");
+    }
+
+    #[test]
+    fn a_head_about_to_crash_waits_a_moment_so_a_late_turn_still_saves_it() {
+        fresh_player();
+        crate::profile::submit(GAME, 20, crate::profile::Better::Higher);
+        let v = phone();
+        let mut s = Snake::sized(Snake::size_for(&v));
+        s.state = State::Playing;
+        s.wrap = false;
+        s.moves = GRACE_MOVES;
+        let w = s.size.x;
+        s.body = (0..4).map(|i| ivec2(w - 1 - i, 5)).collect();
+        s.food = ivec2(0, 0);
+        let step = s.step_time();
+        for _ in 0..((step / DT) as usize + 3) {
+            s.update(&Input::default(), &v, DT);
+        }
+        assert_eq!(s.state, State::Playing);
+        s.update(&Input::key(Dir::Down), &v, DT);
+        for _ in 0..30 {
+            s.update(&Input::default(), &v, DT);
+        }
+        assert_eq!(s.state, State::Playing);
+        assert_eq!(s.body[0].x, w - 1);
+    }
+
+    #[test]
+    fn the_crash_pause_shrinks_as_stages_rise() {
+        let mut s = Snake::new();
+        let first = s.brink_time();
+        s.score = STAGE_APPLES * 6;
+        assert!(s.brink_time() < first);
+        assert!(s.brink_time() >= 0.0);
+    }
+
+    #[test]
+    fn the_mouth_opens_as_the_fruit_comes_close_ahead() {
+        fresh_player();
+        let mut s = Snake::new();
+        s.food = s.body[0] + ivec2(6, 0);
+        let far = s.mouth();
+        s.food = s.body[0] + ivec2(1, 0);
+        assert!(s.mouth() > far + 0.5);
+        assert!(s.look().x > 0.9);
+    }
+
+    #[test]
+    fn blinks_are_short_and_rare() {
+        let shut = (0..370).filter(|i| blink(*i as f32 / 100.0) > 0.5).count();
+        assert!(shut > 0 && shut < 20, "{shut}");
+    }
+
+    struct Bot {
+        swipe: Option<(Dir, u8)>,
+    }
+
+    fn bot_input(bot: &mut Bot, s: &Snake, sc: &mut Script, v: &View, slow: bool, frame: usize) -> Input {
+        let mid = vec2(v.w / 2.0, v.h / 2.0);
+        if let Some((d, k)) = bot.swipe {
+            bot.swipe = (k < 2).then_some((d, k + 1));
+            return match k {
+                0 => sc.drag_to(mid + d.delta().as_vec2() * 2.0 * sc_mm(v)),
+                1 => sc.drag_to(mid + d.delta().as_vec2() * 5.0 * sc_mm(v)),
+                _ => sc.release(),
+            };
+        }
+        let head = s.body[0];
+        let size = s.size;
+        let wrapped = |p: IVec2| ivec2(p.x.rem_euclid(size.x), p.y.rem_euclid(size.y));
+        let free = |d: Dir| {
+            let at = wrapped(head + d.delta());
+            d != s.dir.opposite() && !s.body.iter().take(s.body.len() - 1).any(|b| *b == at)
+        };
+        let gap = |d: Dir| {
+            let at = wrapped(head + d.delta());
+            let dx = (s.food.x - at.x).abs();
+            let dy = (s.food.y - at.y).abs();
+            dx.min(size.x - dx) + dy.min(size.y - dy)
+        };
+        let want = if slow && frame % 40 != 0 {
+            s.heading()
+        } else if slow && (frame / 40) % 3 == 2 {
+            Dir::ALL
+                .into_iter()
+                .filter(|d| free(*d))
+                .max_by_key(|d| gap(*d))
+                .unwrap_or(s.dir)
+        } else {
+            Dir::ALL
+                .into_iter()
+                .filter(|d| free(*d))
+                .min_by_key(|d| gap(*d))
+                .unwrap_or(s.dir)
+        };
+        if want != s.heading() && s.queued.is_empty() {
+            bot.swipe = Some((want, 0));
+            return sc.press(mid);
+        }
+        sc.idle()
+    }
+
+    fn play(slow: bool, frames: usize) -> Snake {
+        let v = phone();
+        let mut s = Snake::new();
+        let mut sc = Script::new(v);
+        let mut bot = Bot { swipe: None };
+        s.update(&Input::key(Dir::Right), &v, DT);
+        for f in 0..frames {
+            let i = bot_input(&mut bot, &s, &mut sc, &v, slow, f);
+            s.update(&i, &v, DT);
+            if s.state == State::Dead {
+                break;
+            }
+        }
+        s
+    }
+
+    #[test]
+    fn a_strong_swiping_player_climbs_stages_and_the_game_speeds_up() {
+        fresh_player();
+        let s = play(false, 60 * 240);
+        assert!(s.stage() >= 5, "stage {} score {}", s.stage(), s.score);
+        assert!(s.step_time() < START_STEP * 0.75);
+    }
+
+    #[test]
+    fn a_weak_player_still_eats_and_gets_an_easier_start_after_two_poor_runs() {
+        fresh_player();
+        let first = play(true, 60 * 60);
+        assert!(first.score >= 2, "score {} {:?}", first.score, first.state);
+        for _ in 0..GENTLE_AFTER {
+            let mut s = Snake::new();
+            s.wrap = false;
+            s.best = Best(9);
+            s.moves = 99;
+            s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)].into_iter().collect();
+            s.tick();
+        }
+        let s = Snake::new();
+        assert!(s.gentle && s.step_time() > START_STEP);
     }
 }

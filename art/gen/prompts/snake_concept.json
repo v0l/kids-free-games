@@ -1,0 +1,18 @@
+[
+ {
+  "name": "snake_concept",
+  "w": 768,
+  "h": 1344,
+  "seed": 4561,
+  "cut": false,
+  "prompt": "Mobile game portrait screenshot concept, top down view of a cute chunky cartoon snake game on a bright grass lawn board with a soft two tone checker pattern and a chunky wooden garden frame around it. The snake is one smooth continuous glossy tube, lime green with darker green chevron stripes on its back, a pale yellow belly highlight running along it, a thick dark green outline, tapering to a pointed tail, gently curving round corners. Its big round head is part of the same body, with two large white googly eyes with black pupils looking at a shiny red apple, rosy cheeks, a happy open smile and a small red forked tongue. Soft drop shadow under the snake. The apple sits on the grass with a white shine and a little leaf. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "snake_concept_head",
+  "w": 1024,
+  "h": 1024,
+  "seed": 4562,
+  "cut": false,
+  "prompt": "Character sheet, top down view of a cute cartoon snake head and the start of its body for a mobile game, three expressions side by side: happy with big round eyes looking sideways, mouth wide open about to eat an apple, and dizzy knocked out with spiral eyes and tongue out. Lime green glossy skin, darker green chevron stripes on the back, pale yellow belly highlight, thick dark green outline, rosy cheeks, on a plain light grass green background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]
