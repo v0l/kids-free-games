@@ -240,6 +240,20 @@ impl Models {
     }
 }
 
+#[derive(Debug, PartialEq)]
+pub enum RunPose {
+    Seek(f32),
+    Speed(f32),
+}
+
+pub fn run_pose(dist: f32, secs: f32, shot: bool, speed: f32) -> RunPose {
+    if shot {
+        RunPose::Seek((dist / STRIDE_METRES).fract() * secs)
+    } else {
+        RunPose::Speed((secs * speed / STRIDE_METRES).clamp(0.6, 3.0))
+    }
+}
+
 pub fn hero_clip(g: &Runner) -> &'static str {
     if g.state == Phase::Dead {
         "fail"
@@ -381,12 +395,14 @@ fn animate_hero(
         if want == "run" {
             if let Some(a) = player.animation_mut(node) {
                 let secs = clip_secs(&graphs, &clips, &graph, node);
-                if crate::shots::requested().is_some() {
-                    let strides = g.dist / STRIDE_METRES;
-                    a.set_speed(0.0);
-                    a.seek_to(strides.fract() * secs);
-                } else {
-                    a.set_speed((secs * g.speed / STRIDE_METRES).clamp(0.6, 3.0));
+                match run_pose(g.dist, secs, crate::shots::requested().is_some(), g.speed) {
+                    RunPose::Seek(t) => {
+                        a.set_speed(0.0);
+                        a.seek_to(t);
+                    }
+                    RunPose::Speed(s) => {
+                        a.set_speed(s);
+                    }
                 }
             }
         }
@@ -673,6 +689,23 @@ mod tests {
     use crate::games::Play;
     use kg_core::engine::{Dir, Input};
 
+    #[test]
+    fn shot_mode_seeks_the_stride_from_distance() {
+        let secs = 0.8;
+        match run_pose(15.0, secs, true, 9.0) {
+            RunPose::Seek(t) => assert!((t - 0.5 * secs).abs() < 1e-5, "{t}"),
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(run_pose(15.0, secs, true, 9.0), run_pose(15.0, secs, true, 2.0));
+    }
+
+    #[test]
+    fn normal_play_keeps_real_time_playback() {
+        assert_eq!(
+            run_pose(15.0, 0.8, false, 9.0),
+            RunPose::Speed((0.8f32 * 9.0 / STRIDE_METRES).clamp(0.6, 3.0))
+        );
+    }
     fn gcad_source(name: &str) -> String {
         let text = kg_core::assets::read(&format!("models/{name}.gcad"))
             .unwrap_or_else(|| panic!("models/{name}.gcad missing"));
