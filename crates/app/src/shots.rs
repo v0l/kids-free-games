@@ -67,6 +67,8 @@ pub const SCENES: &[(u32, &str)] = &[
     (35, "snake bonk"),
     (36, "snake game over with the board"),
     (37, "snake new best"),
+    (38, "snake mouth open next to the fruit"),
+    (39, "snake mid turn with the swallow bulge"),
     (40, "2048 teaching deal with the hint"),
     (41, "2048 level 4 mid game"),
     (42, "2048 level 8 with big tiles and the crown"),

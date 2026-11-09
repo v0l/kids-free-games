@@ -13,7 +13,7 @@ fn heading(p: &SnakePlay) -> Option<Dir> {
     let wrapped = |d: IVec2| ivec2(d.x.rem_euclid(size.x), d.y.rem_euclid(size.y));
     let free = |d: Dir| {
         let at = wrapped(head + d.delta());
-        d != g.dir.opposite() && !g.body.iter().take(g.body.len() - 1).any(|b| *b == at)
+        d != g.heading().opposite() && !g.body.iter().take(g.body.len() - 1).any(|b| *b == at)
     };
     let gap = |d: Dir| {
         let at = wrapped(head + d.delta());
@@ -21,16 +21,35 @@ fn heading(p: &SnakePlay) -> Option<Dir> {
         let dy = (g.food.y - at.y).abs();
         dx.min(size.x - dx) + dy.min(size.y - dy)
     };
+    let room = |d: Dir| {
+        let start = wrapped(head + d.delta());
+        let blocked: std::collections::HashSet<IVec2> =
+            g.body.iter().take(g.body.len() - 1).copied().collect();
+        let mut seen = std::collections::HashSet::from([start]);
+        let mut todo = vec![start];
+        while let Some(p) = todo.pop() {
+            if seen.len() > g.body.len() * 2 {
+                break;
+            }
+            for n in Dir::ALL {
+                let q = wrapped(p + n.delta());
+                if !blocked.contains(&q) && seen.insert(q) {
+                    todo.push(q);
+                }
+            }
+        }
+        seen.len() > g.body.len() * 2
+    };
     Dir::ALL
         .into_iter()
         .filter(|d| free(*d))
-        .min_by_key(|d| gap(*d))
+        .min_by_key(|d| (!room(*d), gap(*d)))
 }
 
 fn steer(p: &mut SnakePlay, view: &View, frames: usize) {
     for _ in 0..frames {
         let input = match heading(p) {
-            Some(d) if p.g.state == State::Playing && d != p.g.dir => Input::key(d),
+            Some(d) if p.g.state == State::Playing && d != p.g.heading() && p.g.queued.is_empty() => Input::key(d),
             _ => Input::default(),
         };
         p.update(&input, view, DT);
@@ -99,7 +118,7 @@ pub fn setup(n: u32, view: &View) -> Stage {
         }
         31 => {
             start(&mut p, view);
-            steer(&mut p, view, 50);
+            steer(&mut p, view, 20);
         }
         32 => {
             start(&mut p, view);
@@ -132,6 +151,28 @@ pub fn setup(n: u32, view: &View) -> Stage {
             }
             p.update(&Input::key(Dir::Up), view, DT);
             steer_blind(&mut p, view);
+        }
+        38 => {
+            start(&mut p, view);
+            until_score(&mut p, view, 6);
+            steer(&mut p, view, 90);
+            let head = p.g.body[0];
+            let d = p.g.heading().delta();
+            let ahead = ivec2((head.x + d.x * 2).rem_euclid(p.g.size.x), (head.y + d.y * 2).rem_euclid(p.g.size.y));
+            p.g.food = ahead;
+            p.g.food_age = 2.0;
+            let step = p.g.step_time();
+            while p.g.frac() < 0.5 {
+                p.update(&Input::default(), view, step / 8.0);
+            }
+        }
+        39 => {
+            start(&mut p, view);
+            until_score(&mut p, view, 7);
+            steer(&mut p, view, 2);
+            let side = kg_core::games::snake::left_of(p.g.heading());
+            p.update(&Input::key(side), view, DT);
+            p.update(&Input::default(), view, DT);
         }
         36 => {
             board(&[("Leo", 5, 23), ("Ava", 9, 14), ("Sam", 3, 6)]);
@@ -173,5 +214,7 @@ pub fn check() {
         let over = get(36);
         assert!(over.g.shows_results() && over.g.rank.is_some_and(|r| r > 0));
         assert_eq!(get(37).g.rank, Some(0));
+        assert!(get(38).g.mouth() > 0.4);
+        assert!(!get(39).g.bulges.is_empty());
     }
 }

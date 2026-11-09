@@ -30,6 +30,9 @@ pub const BRINK_DROP: f32 = 0.03;
 pub const FACE_RATE: f32 = 28.0;
 pub const NUDGE_RATE: f32 = 30.0;
 pub const MOUTH_CELLS: f32 = 3.0;
+pub const MAX_LONG: i32 = 34;
+pub const PHONE_SHORT: i32 = 15;
+pub const LAYOUT_TOP: f32 = 70.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum State {
@@ -77,6 +80,8 @@ pub struct Snake {
     pub gulp: f32,
     pub brink: f32,
     pub intro_said: bool,
+    pub eaten_at: IVec2,
+    pub eat_age: f32,
     swipes: SwipeTracker,
     pad_last: Option<Dir>,
     pre_dir: Dir,
@@ -175,6 +180,8 @@ impl Snake {
             gulp: 0.0,
             brink: 0.0,
             intro_said: false,
+            eaten_at: IVec2::ZERO,
+            eat_age: 9.0,
             swipes: SwipeTracker::default(),
             pad_last: None,
             pre_dir: Dir::Right,
@@ -375,6 +382,8 @@ impl Snake {
         if eating {
             self.score += 1;
             self.gulp = 1.0;
+            self.eaten_at = head;
+            self.eat_age = 0.0;
             self.events.push(Event::Ate(head));
             self.bulges.push(0);
             self.place_food();
@@ -407,10 +416,14 @@ impl Snake {
     }
 
     pub fn size_for(view: &View) -> IVec2 {
+        let (avail_w, avail_h) = (view.w - 40.0, view.h - LAYOUT_TOP - 20.0);
+        let (short, long) = (avail_w.min(avail_h), avail_w.max(avail_h));
+        let across = if long / short > 1.7 { PHONE_SHORT } else { SHORT };
+        let along = ((long / (short / across as f32)).floor() as i32).clamp(LONG, MAX_LONG);
         if view.h > view.w {
-            ivec2(SHORT, LONG)
+            ivec2(across, along)
         } else {
-            ivec2(LONG, SHORT)
+            ivec2(along, across)
         }
     }
 
@@ -478,9 +491,27 @@ impl Snake {
             match e {
                 Event::Ate(p) => {
                     sfx::play(Sfx::Crunch);
+                    sfx::play_step(Sfx::Pop, (self.score.saturating_sub(1) % STAGE_APPLES) as usize * 2);
                     let at = center(p);
                     self.particles
                         .sparkle(at, Color::from_rgba(230, 60, 60, 255));
+                    self.particles.emit(
+                        at,
+                        &[
+                            Color::from_rgba(255, 220, 70, 255),
+                            Color::from_rgba(255, 255, 255, 255),
+                            Color::from_rgba(120, 220, 90, 255),
+                        ],
+                        Burst {
+                            count: 14,
+                            speed: (cell * 3.0, cell * 7.0),
+                            size: (cell * 0.08, cell * 0.16),
+                            life: (0.3, 0.55),
+                            gravity: 0.0,
+                            drag: 4.0,
+                            ..Default::default()
+                        },
+                    );
                     self.popups.add(
                         at - vec2(0.0, cell * 0.6),
                         "+1",
@@ -536,7 +567,7 @@ impl Snake {
     }
 
     pub fn layout(&self, view: &View) -> (f32, Vec2) {
-        let top = 70.0;
+        let top = LAYOUT_TOP;
         let (gw, gh) = (self.size.x as f32, self.size.y as f32);
         let cell = ((view.w - 40.0) / gw)
             .min((view.h - top - 20.0) / gh)
@@ -562,20 +593,21 @@ impl Game for Snake {
         self.clock += dt;
         self.food_age += dt;
         self.dead_age += dt;
+        self.eat_age += dt;
         self.particles.update(dt);
         self.popups.update(dt);
         self.shake.update(dt);
         self.bump.update(dt);
         self.turn_kick = (self.turn_kick - dt * 5.0).max(0.0);
         self.gulp = (self.gulp - dt * 3.5).max(0.0);
+        if self.state == State::Ready && Self::size_for(view) != self.size {
+            let best = self.best;
+            *self = Self::sized(Self::size_for(view));
+            self.best = best;
+        }
         let steer = self.read_steer(input, view);
         match self.state {
             State::Ready => {
-                if Self::size_for(view) != self.size {
-                    let best = self.best;
-                    *self = Self::sized(Self::size_for(view));
-                    self.best = best;
-                }
                 if !self.intro_said && self.clock > 0.4 {
                     self.intro_said = true;
                     sfx::say(sfx::Say::SnakeIntro);
@@ -768,11 +800,15 @@ mod tests {
     fn portrait_screen_gets_a_tall_board() {
         let mut s = Snake::new();
         s.update(&Input::default(), &View::fit(1080.0, 2400.0), 0.01);
-        assert_eq!(s.size, ivec2(SHORT, LONG));
+        assert_eq!(s.size.x, PHONE_SHORT);
+        assert!(s.size.y >= LONG && s.size.y <= MAX_LONG);
         let v = View::fit(1080.0, 2400.0);
-        let (tall, _) = s.layout(&v);
+        let (tall, o) = s.layout(&v);
         let (wide, _) = Snake::new().layout(&v);
         assert!(tall > wide * 1.3, "tall {tall} wide {wide}");
+        let unused = v.h - LAYOUT_TOP - tall * s.size.y as f32;
+        assert!(unused < tall * 3.0, "{unused} left over, top {o:?}");
+        assert_eq!(Snake::size_for(&View::ipad_portrait()), ivec2(SHORT, LONG));
     }
 
     #[test]
@@ -1269,9 +1305,28 @@ mod tests {
             let dy = (s.food.y - at.y).abs();
             dx.min(size.x - dx) + dy.min(size.y - dy)
         };
-        let want = if slow && frame % 40 != 0 {
+        let room = |d: Dir| {
+            let start = wrapped(head + d.delta());
+            let blocked: std::collections::HashSet<IVec2> =
+                s.body.iter().take(s.body.len() - 1).copied().collect();
+            let mut seen = std::collections::HashSet::from([start]);
+            let mut todo = vec![start];
+            while let Some(p) = todo.pop() {
+                if seen.len() > s.body.len() * 2 {
+                    break;
+                }
+                for n in Dir::ALL {
+                    let q = wrapped(p + n.delta());
+                    if !blocked.contains(&q) && seen.insert(q) {
+                        todo.push(q);
+                    }
+                }
+            }
+            seen.len() > s.body.len() * 2
+        };
+        let want = if slow && frame % 30 != 0 {
             s.heading()
-        } else if slow && (frame / 40) % 3 == 2 {
+        } else if slow && (frame / 30) % 5 == 4 {
             Dir::ALL
                 .into_iter()
                 .filter(|d| free(*d))
@@ -1281,7 +1336,7 @@ mod tests {
             Dir::ALL
                 .into_iter()
                 .filter(|d| free(*d))
-                .min_by_key(|d| gap(*d))
+                .min_by_key(|d| (!room(*d), gap(*d)))
                 .unwrap_or(s.dir)
         };
         if want != s.heading() && s.queued.is_empty() {
@@ -1318,8 +1373,8 @@ mod tests {
     #[test]
     fn a_weak_player_still_eats_and_gets_an_easier_start_after_two_poor_runs() {
         fresh_player();
-        let first = play(true, 60 * 60);
-        assert!(first.score >= 2, "score {} {:?}", first.score, first.state);
+        let first = play(true, 60 * 120);
+        assert!(first.score >= 3, "score {} {:?}", first.score, first.state);
         for _ in 0..GENTLE_AFTER {
             let mut s = Snake::new();
             s.wrap = false;
