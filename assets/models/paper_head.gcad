@@ -1,0 +1,20 @@
+body body
+plane XY offset=-0.697
+rect 1.7 1.7
+body: extrude 1.394
+color #ffffff
+body crown
+plane XY offset=0.595
+rect 1.02 1.02 at=-0.05,0
+crown: extrude 0.51
+color #ffffff
+body eye_l
+plane XY offset=0.04
+rect 0.12 0.2 at=0.85,0.476
+eye_l: extrude 0.26
+color #1a1f33
+body eye_r
+plane XY offset=0.04
+rect 0.12 0.2 at=0.85,-0.476
+eye_r: extrude 0.26
+color #1a1f33

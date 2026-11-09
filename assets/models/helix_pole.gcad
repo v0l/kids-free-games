@@ -1,0 +1,5 @@
+body pole
+plane XY offset=-0.5
+ngon 1 32
+pole: extrude 1
+color #dbcdf2

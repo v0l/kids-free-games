@@ -22,6 +22,15 @@ const BALL: Col = Col::new(1.0, 0.52, 0.12, 1.0);
 const POLE: Col = Col::new(0.86, 0.8, 0.95, 1.0);
 const STEP: f32 = TAU / SEGMENTS as f32;
 
+pub static MODELS: &[&str] = &["helix_ball", "helix_pole"];
+
+const BALL_MODEL: Shape = Shape::Model("helix_ball", 0);
+const POLE_MODEL: Shape = Shape::Model("helix_pole", 0);
+
+fn nothing_spawned(root: Query<(), With<Root>>) -> bool {
+    root.is_empty()
+}
+
 pub struct HelixWorld;
 
 impl Plugin for HelixWorld {
@@ -29,8 +38,12 @@ impl Plugin for HelixWorld {
         app.add_systems(
             Update,
             (
-                spawn.run_if(opened(World3d::Helix)),
-                sync.run_if(is_open(World3d::Helix)),
+                stock(MODELS).run_if(is_open(World3d::Helix)),
+                spawn
+                    .run_if(is_open(World3d::Helix))
+                    .run_if(stocked(MODELS))
+                    .run_if(nothing_spawned),
+                sync.run_if(is_open(World3d::Helix)).run_if(stocked(MODELS)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -119,7 +132,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
                 s,
                 &mut kit,
                 Role::Ball,
-                Shape::Ball,
+                BALL_MODEL,
                 Paint::new(Finish::Satin, BALL),
                 Transform::default(),
             );
@@ -128,7 +141,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
                     s,
                     &mut kit,
                     Role::Trail(k),
-                    Shape::Ball,
+                    BALL_MODEL,
                     Paint::new(Finish::Glow, Col::new(1.0, 0.6, 0.2, 0.3)),
                     Transform::default(),
                 );
@@ -282,7 +295,7 @@ fn tower_parts(t: &mut ChildSpawnerCommands, kit: &mut Kit, g: &Helix) {
         t,
         kit,
         Role::Pole,
-        Shape::Cylinder(32),
+        POLE_MODEL,
         Paint::new(Finish::Satin, POLE),
         Transform::from_xyz(0.0, (top + bottom) / 2.0, 0.0).with_scale(Vec3::new(
             RING_INNER * 2.06,

@@ -23,6 +23,17 @@ pub fn plugin() -> GcadPlugin {
     }
 }
 
+pub fn game_models() -> impl Iterator<Item = &'static str> {
+    [
+        crate::games::hotel::world::MODELS,
+        crate::games::helix::world::MODELS,
+        crate::games::paper::world::MODELS,
+    ]
+    .into_iter()
+    .flatten()
+    .copied()
+}
+
 pub fn path(name: &str) -> String {
     format!("models/{name}.gcad")
 }
@@ -239,8 +250,8 @@ fn warm_up(
     mut library: ResMut<Library>,
 ) {
     let started = Instant::now();
-    let hotel = crate::games::hotel::world::MODELS;
-    library.start(&assets, hotel);
+    let hotel: Vec<&'static str> = game_models().collect();
+    library.start(&assets, &hotel);
     let models = Models::load(&assets, &mut graphs);
     let mut pending: Vec<(String, Handle<WorldAsset>)> = hotel
         .iter()
@@ -437,6 +448,10 @@ mod tests {
             ("hotel_car", Vec3::new(1.44, 1.0, 2.4)),
             ("hotel_wardrobe", Vec3::new(1.1, 1.7, 0.63)),
             ("hotel_umbrella", Vec3::new(1.5, 1.8, 1.43)),
+            ("helix_ball", Vec3::ONE),
+            ("helix_pole", Vec3::ONE),
+            ("paper_cube", Vec3::ONE),
+            ("paper_head", Vec3::new(1.76, 1.802, 1.7)),
         ];
         let mut wrong = vec![];
         for (name, size_was) in want {

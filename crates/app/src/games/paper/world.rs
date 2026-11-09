@@ -19,7 +19,16 @@ const SEA: Col = Col::new(0.46, 0.95, 0.88, 1.0);
 const REBUILDS_PER_FRAME: usize = 24;
 const TRAIL_WIDTH: f32 = 0.95;
 const TRAIL_ALPHA: f32 = 0.5;
+const EYE: Col = Col::new(0.1, 0.12, 0.2, 1.0);
 const HEAD_SIZE: f32 = 1.7;
+
+pub static MODELS: &[&str] = &["paper_cube", "paper_head"];
+
+const CUBE: Shape = Shape::Model("paper_cube", 0);
+
+fn nothing_spawned(roster: Query<(), With<Roster>>) -> bool {
+    roster.is_empty()
+}
 
 pub struct PaperWorld;
 
@@ -28,8 +37,12 @@ impl Plugin for PaperWorld {
         app.add_systems(
             Update,
             (
-                spawn.run_if(opened(World3d::Paper)),
-                sync.run_if(is_open(World3d::Paper)),
+                stock(MODELS).run_if(is_open(World3d::Paper)),
+                spawn
+                    .run_if(is_open(World3d::Paper))
+                    .run_if(stocked(MODELS))
+                    .run_if(nothing_spawned),
+                sync.run_if(is_open(World3d::Paper)).run_if(stocked(MODELS)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -75,7 +88,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         },
     );
     let ground = |kit: &mut Kit, col: Col, at: Transform| {
-        let part = kit.part(Shape::Cube, Paint::new(Finish::Floor, col), at);
+        let part = kit.part(CUBE, Paint::new(Finish::Floor, col), at);
         (part, NotShadowCaster)
     };
     let side = SIZE + 0.0;
@@ -111,37 +124,15 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
             w.spawn((Mover(id), Transform::default(), Visibility::Hidden))
                 .with_children(|m| {
                     let paint = |c: Col| Paint::new(Finish::Gloss, c);
-                    m.spawn(kit.part(
-                        Shape::Cube,
-                        paint(col),
-                        Transform::from_xyz(0.0, 0.0, 0.0).with_scale(Vec3::new(
-                            HEAD_SIZE,
-                            HEAD_SIZE * 0.82,
-                            HEAD_SIZE,
-                        )),
-                    ));
-                    m.spawn(kit.part(
-                        Shape::Cube,
-                        paint(col.lerp(WHITE, 0.45)),
-                        Transform::from_xyz(-0.05, HEAD_SIZE * 0.5, 0.0).with_scale(Vec3::new(
-                            HEAD_SIZE * 0.6,
-                            HEAD_SIZE * 0.3,
-                            HEAD_SIZE * 0.6,
-                        )),
-                    ));
-                    for z in [-0.28, 0.28] {
-                        m.spawn(
-                            kit.part(
-                                Shape::Cube,
-                                paint(Col::new(0.1, 0.12, 0.2, 1.0)),
-                                Transform::from_xyz(
-                                    HEAD_SIZE * 0.5,
-                                    HEAD_SIZE * 0.1,
-                                    z * HEAD_SIZE,
-                                )
-                                .with_scale(Vec3::new(0.12, 0.26, 0.2)),
-                            ),
-                        );
+                    for (i, tone) in [col, col.lerp(WHITE, 0.45), EYE, EYE]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        m.spawn(kit.part(
+                            Shape::Model("paper_head", i as u16),
+                            paint(tone),
+                            Transform::default().with_scale(Vec3::ONE),
+                        ));
                     }
                 });
             w.spawn((
@@ -158,7 +149,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
             w.spawn((
                 Debris(k),
                 kit.part(
-                    Shape::Cube,
+                    CUBE,
                     Paint::new(Finish::Matte, color(k % MAX_PLAYERS)),
                     Transform::default(),
                 ),

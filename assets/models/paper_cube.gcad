@@ -1,0 +1,5 @@
+body cube
+plane XY offset=-0.5
+rect 1 1
+cube: extrude 1
+color #ffffff
