@@ -444,6 +444,16 @@ mod tests {
     }
 
     #[test]
+    fn every_ball_sort_model_builds_fast() {
+        let started = std::time::Instant::now();
+        for m in crate::games::ballsort::world::MODELS {
+            build(m);
+        }
+        let ms = started.elapsed().as_secs_f64() * 1000.0;
+        assert!(ms < 150.0, "ball sort models took {ms:.0} ms");
+    }
+
+    #[test]
     fn every_hotel_model_builds_fast() {
         let started = std::time::Instant::now();
         for m in crate::games::hotel::world::MODELS {
