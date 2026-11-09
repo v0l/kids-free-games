@@ -154,6 +154,11 @@ Garden (`crates/app/src/games/garden/world.rs`) has no fixed 3D object (no bed f
 
 `helix_ball` (24x24 shell) and `helix_pole` (32-gon prism) replace `Shape::Ball` and `Shape::Cylinder(32)`; `paper_cube` (ground, debris) and `paper_head` (body, crown, two eyes, tinted per part) replace `Shape::Cube`. Both games wait for `stocked(MODELS)` before spawning. Models are built at startup and are not baked.
 
+- Sizes against origin/main aedb1e9 (same machine, `small` profile): web bundle 51494985 B to 51501265 B (wasm 25442 KiB to 25448 KiB, 7155 KiB gzipped both), Android arm64 APK 36363356 B to 36367560 B, iOS simulator app 42988 KiB to 43004 KiB (binary 18312528 B to 18312608 B). The four `.gcad` files are about 0.5 KB.
+- Screenshots 111, 112, 113, 115, 116 (Helix) and 151, 152, 154, 155, 156 (Paper Land) before and after: 99.98-100% of pixels within 16 levels, mean difference 0.0-0.15.
+- Android emulator `kidsgames-test` (x86_64, swiftshader_indirect, three cold starts, the first with a fresh install): the four new models are ready with the rest at 5205, 1242 and 1587 ms after start (those include the hero and tree, and the hotel models bake-loaded), so they add no measurable time; the new models were built (4 builds) on the first start and reused on later ones.
+- Shape variants still in use after this step: `Cube` (Hotel, Trains, Ball Sort), `Sphere` (Trains, Hotel), `Ball` (Trains, Ball Sort), `Cylinder(n)`, `Cone(n)` (Trains, Ball Sort), `Tube`, `Torus` (Ball Sort), `Disc`, `Plane`, `Quad`, `Ring`, `Sector`. None can go until Trains (#365) and Ball Sort (#366) land.
+
 ### Checks
 
 `crates/app/src/gcad.rs` tests build every shipped `.gcad` (everything in `assets/models` but `*_base` and `motion`) with `gcad_bevy::build`: each builds mesh-only, has triangles within its budget (hero 14000, tree 12000, people 3000, other hotel props 1500, other props 4000), no empty or unnamed part and a real size; every hotel model is listed in `MODELS` and on disk; people have every part the hotel recolours and animates; the bed, desk, sofa, car, wardrobe and umbrella keep the size of the primitives they replaced within 3 cm; all hotel models build in under 1.5 s on the test machine. The hotel and trains tests run against the gcad models.
