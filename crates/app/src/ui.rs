@@ -282,6 +282,21 @@ impl Pen {
         );
     }
 
+    pub fn ribbon_in(&mut self, view: &View, title: &str, r: Rect, t: f32) {
+        let size = kg_core::sizing::ribbon_font(view, title, r);
+        let wob = (t * 2.5).sin() * 0.015;
+        self.ui("p_ribbon", r, Draw::rot(wob));
+        let size = kg_core::sizing::fit_size(title, size, r.w * 0.7);
+        self.text_outline(
+            title,
+            r.center().x,
+            r.center().y - r.h * 0.08,
+            size,
+            WHITE,
+            Color::from_rgba(140, 20, 30, 255),
+        );
+    }
+
     pub fn hint(&mut self, label: &str, c: Vec2, pulse: f32) {
         let k = self.view.map_or(1.0, |v| v.text_k());
         let size = 32.0 * k * pulse;

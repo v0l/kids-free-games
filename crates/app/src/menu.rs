@@ -60,9 +60,12 @@ pub fn header(view: &View) -> Header {
     let gap = 20.0;
     if tag.w + player.w + gap <= view.w - 40.0 {
         let left = view.w / 2.0 - (tag.w + player.w + gap) / 2.0;
-        tag.x = left;
-        player.x = left + tag.w + gap;
-        player.y = tag.y + tag.h / 2.0 - player.h / 2.0;
+        let py = tag.y + tag.h / 2.0 - player.h / 2.0;
+        if py >= title_band.1 {
+            tag.x = left;
+            player.x = left + tag.w + gap;
+            player.y = py;
+        }
     }
     Header {
         title_size,

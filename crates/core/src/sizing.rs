@@ -165,6 +165,112 @@ pub fn ribbon_h(view: &View, title: &str, k: f32) -> f32 {
     ribbon_rect(view, title, 0.0, 0.0, k).0.h
 }
 
+pub fn label_button(view: &View, label: &str, design_h: f32) -> (f32, f32) {
+    let h = view.tap(design_h);
+    if label.is_empty() {
+        return (h, h);
+    }
+    let w = (measure(label, h * 0.46) + h * 0.9)
+        .max(h * 1.6)
+        .min(view.w - 2.0 * view.edge().min(16.0));
+    (w, h)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TitleBar {
+    pub left: Option<Rect>,
+    pub right: Option<Rect>,
+    pub title: (f32, f32),
+    pub ribbon: Rect,
+    pub bottom: f32,
+}
+
+pub fn title_bar(view: &View, title: &str, left: Option<&str>, right: Option<&str>) -> TitleBar {
+    title_bar_in(view, view.rect(), title, left, right)
+}
+
+pub fn title_bar_in(
+    view: &View,
+    area: Rect,
+    title: &str,
+    left: Option<&str>,
+    right: Option<&str>,
+) -> TitleBar {
+    let m = view.edge().min(16.0);
+    let gap = view.gap();
+    let mut lw = left.map(|l| label_button(view, l, 56.0));
+    let mut rw = right.map(|l| label_button(view, l, 56.0));
+    let used = lw.map_or(0.0, |s| s.0) + rw.map_or(0.0, |s| s.0);
+    let room = area.w
+        - 2.0 * m
+        - if lw.is_some() && rw.is_some() {
+            gap
+        } else {
+            0.0
+        };
+    if used > room {
+        let k = room / used;
+        lw = lw.map(|(w, h)| ((w * k).max(view.touch()), h));
+        rw = rw.map(|(w, h)| ((w * k).max(view.touch()), h));
+    }
+    let top = area.y + 8.0;
+    let left = lw.map(|(w, h)| Rect::new(area.x + m, top, w, h));
+    let right = rw.map(|(w, h)| Rect::new(area.x + area.w - m - w, top, w, h));
+    let row_h = lw.or(rw).map_or(0.0, |s| s.1);
+    let cx = area.x + area.w / 2.0;
+    let (rr, _) = ribbon_rect(view, title, cx, 0.0, 1.0);
+    let rr = Rect::new(
+        rr.x,
+        rr.y,
+        rr.w.min(area.w - 20.0),
+        rr.w.min(area.w - 20.0) * RIBBON_ASPECT,
+    );
+    let side = left
+        .map_or(m, |r| r.x + r.w - area.x)
+        .max(right.map_or(m, |r| area.x + area.w - r.x));
+    let middle = area.w - 2.0 * (side + gap * 0.5);
+    let rr = if rr.w > middle && row_h > 0.0 && middle >= rr.w * 0.6 {
+        let w = middle;
+        Rect::new(cx - w / 2.0, 0.0, w, w * RIBBON_ASPECT)
+    } else {
+        rr
+    };
+    let inline = rr.w <= middle;
+    let cy = if inline || row_h == 0.0 {
+        (top + row_h / 2.0).max(area.y + rr.h / 2.0 + 6.0)
+    } else {
+        top + row_h + gap * 0.5 + rr.h / 2.0
+    };
+    let ribbon = Rect::new(cx - rr.w / 2.0, cy - rr.h / 2.0, rr.w, rr.h);
+    TitleBar {
+        left,
+        right,
+        title: (cx, cy),
+        ribbon,
+        bottom: (cy + rr.h / 2.0).max(top + row_h),
+    }
+}
+
+pub fn ribbon_font(view: &View, title: &str, r: Rect) -> f32 {
+    let (full, size) = ribbon_rect(view, title, 0.0, 0.0, 1.0);
+    size * (r.w / full.w).min(1.0)
+}
+
+pub fn key_rows_that_fit(view: &View, h: f32) -> usize {
+    ((h + view.key_gap()) / (view.touch() + view.key_gap()))
+        .floor()
+        .max(1.0) as usize
+}
+
+pub fn keys_h(view: &View, rows: usize) -> f32 {
+    rows as f32 * view.touch() + (rows as f32 - 1.0).max(0.0) * view.key_gap()
+}
+
+pub fn grid_cols(view: &View, w: f32, n: usize, max: usize) -> usize {
+    let fit = ((w + view.key_gap()) / (view.touch() + view.key_gap())).floor() as usize;
+    fit.clamp(1, max.min(n).max(1))
+}
+
 #[derive(Clone, Debug)]
 enum Part {
     Space(f32),

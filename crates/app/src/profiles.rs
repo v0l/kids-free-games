@@ -60,101 +60,84 @@ impl Profiles {
         }
     }
 
-    pub fn gate_rect(_view: &View) -> Rect {
-        Rect::new(10.0, 10.0, 200.0, 52.0)
+    pub fn gate_rect(view: &View) -> Rect {
+        Self::edit_layout(view, 0, true).gate
     }
 
     pub fn link_rect(view: &View) -> Rect {
-        Rect::new(view.w - 196.0, 10.0, 186.0, 52.0)
+        Self::pick_bar(view).right.unwrap_or_default()
+    }
+
+    pub fn pick_bar(view: &View) -> kg_core::sizing::TitleBar {
+        kg_core::sizing::title_bar(view, PICK_TITLE, None, Some(LINK_LABEL))
+    }
+
+    pub fn gear_rect(view: &View, card: Rect) -> Rect {
+        let d = view.tap(52.0);
+        Rect::new(card.x + card.w - d * 0.75, card.y - d * 0.25, d, d)
     }
 
     pub fn card_rects(view: &View, n: usize) -> Vec<Rect> {
         let n = n + usize::from(n < MAX_PROFILES);
-        let cols = if view.w > view.h { 4 } else { 3 }.min(n.max(1));
-        let size = ((view.w - 80.0) / cols as f32 - 24.0).min(200.0);
+        let top_bar = Self::pick_bar(view).bottom;
+        let gear = view.tap(52.0);
+        let gap = 24.0f32.max(view.gap()).max(gear * 0.3);
+        let label = view.text(30.0) * 1.35;
+        let top = top_bar + gap + gear * 0.25;
+        let room_h = view.h - top - view.edge().min(20.0);
+        let room_w = view.w - 2.0 * view.edge().max(40.0) - gear * 0.25;
+        let size_for = |cols: usize| {
+            let rows = n.div_ceil(cols) as f32;
+            let by_w = (room_w - gap * (cols as f32 - 1.0)) / cols as f32;
+            let by_h = (room_h - gap * (rows - 1.0)) / rows - label;
+            by_w.min(by_h).min(200.0 * view.text_k().min(1.6))
+        };
+        let cols = (1..=n.max(1))
+            .max_by(|a, b| size_for(*a).total_cmp(&size_for(*b)))
+            .unwrap_or(1);
+        let size = size_for(cols).max(view.touch());
         let rows = n.div_ceil(cols);
-        let top = 190.0f32.max(view.h * 0.5 - rows as f32 * (size + 60.0) / 2.0 + 30.0);
+        let grid_h = rows as f32 * (size + label) + (rows as f32 - 1.0) * gap;
+        let top = top.max(top + (room_h - grid_h) / 2.0 * 0.6);
         (0..n)
             .map(|i| {
                 let (c, r) = (i % cols, i / cols);
                 let in_row = (n - r * cols).min(cols);
-                let row_w = in_row as f32 * size + (in_row as f32 - 1.0) * 24.0;
+                let row_w = in_row as f32 * size + (in_row as f32 - 1.0) * gap;
                 let left = view.w / 2.0 - row_w / 2.0;
                 Rect::new(
-                    left + c as f32 * (size + 24.0),
-                    top + r as f32 * (size + 60.0),
+                    left + c as f32 * (size + gap),
+                    top + r as f32 * (size + label + gap),
                     size,
-                    size + 40.0,
+                    size + label,
                 )
             })
             .collect()
     }
 
+    pub fn edit_layout(view: &View, avatar: usize, editing: bool) -> EditLayout {
+        edit_layout(view, avatar, editing)
+    }
+
     pub fn avatar_rects(view: &View) -> Vec<Rect> {
-        let wide = view.w > view.h;
-        let cols = 6;
-        let d = ((view.w - 60.0) / cols as f32 - 10.0).min(if wide { 62.0 } else { 96.0 });
-        let row_w = cols as f32 * (d + 10.0) - 10.0;
-        let top = if wide { 160.0 } else { 240.0 };
-        (0..AVATARS.len())
-            .map(|i| {
-                let (c, r) = (i % cols, i / cols);
-                Rect::new(
-                    view.w / 2.0 - row_w / 2.0 + c as f32 * (d + 10.0),
-                    top + r as f32 * (d + 10.0),
-                    d,
-                    d,
-                )
-            })
+        Self::edit_layout(view, 0, false)
+            .avatars
+            .iter()
+            .map(|a| a.1)
             .collect()
     }
 
     pub fn name_rect(view: &View) -> Rect {
-        let rows = AVATARS.len().div_ceil(6);
-        let av = Self::avatar_rects(view);
-        let below = av[(rows - 1) * av.len() / rows].y + av[0].h + 24.0;
-        let w = (view.w - 80.0).min(520.0);
-        let h = if view.w > view.h { 64.0 } else { 76.0 };
-        Rect::new(view.w / 2.0 - w / 2.0, below - 8.0, w, h)
+        Self::edit_layout(view, 0, false).name
     }
 
     pub fn key_rects(view: &View) -> Vec<(char, Rect)> {
-        let name = Self::name_rect(view);
-        let top = name.y + name.h + 18.0;
-        let kw = ((view.w - 40.0) / 10.0 - 6.0).min(72.0);
-        let room = view.h - top - 110.0;
-        let kh = kw.min(68.0).min(room / 3.0 - 8.0).max(36.0);
-        let mut out = vec![];
-        for (r, row) in KEYS.iter().enumerate() {
-            let n = row.len() as f32;
-            let left = view.w / 2.0 - (n * (kw + 6.0) - 6.0) / 2.0;
-            for (i, ch) in row.chars().enumerate() {
-                out.push((
-                    ch,
-                    Rect::new(
-                        left + i as f32 * (kw + 6.0),
-                        top + r as f32 * (kh + 8.0),
-                        kw,
-                        kh,
-                    ),
-                ));
-            }
-        }
-        let last = out.last().unwrap().1;
-        out.push(('<', Rect::new(last.x + last.w + 6.0, last.y, kw * 1.7, kh)));
-        out
+        Self::edit_layout(view, 0, false).keys
     }
 
     pub fn action_rects(view: &View) -> (Rect, Rect, Rect) {
-        let keys = Self::key_rects(view);
-        let bottom = keys.iter().map(|(_, r)| r.y + r.h).fold(0.0, f32::max) + 16.0;
-        let y = bottom.min(view.h - 92.0);
-        let w = 260.0f32.min(view.w / 2.0 - 30.0);
-        (
-            Rect::new(view.w / 2.0 - w / 2.0, y, w, 84.0),
-            Rect::new(view.w / 2.0 - w / 2.0 - w - 20.0, y + 10.0, w * 0.8, 70.0),
-            Rect::new(view.w / 2.0 + w / 2.0 + 20.0, y + 10.0, w * 0.8, 70.0),
-        )
+        let l = Self::edit_layout(view, 0, true);
+        (l.ok, l.back, l.delete)
     }
 
     pub fn update(&mut self, input: &Input, view: &View, dt: f32) {
@@ -213,11 +196,10 @@ impl Profiles {
                 v.push(Self::link_rect(view));
                 v
             }
-            Mode::Edit { .. } => {
-                let mut v: Vec<Rect> = Self::key_rects(view).into_iter().map(|k| k.1).collect();
-                let (a, b, c) = Self::action_rects(view);
-                v.extend([a, b, c]);
-                v.extend(Self::avatar_rects(view));
+            Mode::Edit { avatar, id, .. } => {
+                let l = Self::edit_layout(view, *avatar, id.is_some());
+                let mut v: Vec<Rect> = l.keys.iter().map(|k| k.1).collect();
+                v.extend(l.buttons());
                 v
             }
         };
@@ -241,7 +223,7 @@ impl Profiles {
             return;
         }
         for (i, r) in cards.iter().enumerate() {
-            let edit = Rect::new(r.x + r.w - 50.0, r.y - 6.0, 56.0, 56.0);
+            let edit = Self::gear_rect(view, *r);
             if i < list.len() && edit.contains(input.pos) {
                 sfx::play(Sfx::Tap);
                 self.mode = Mode::Edit {
@@ -297,14 +279,25 @@ impl Profiles {
             }
         }
         let submit = input.action && !name.trim().is_empty();
+        let lay = Self::edit_layout(view, avatar, id.is_some());
         if input.pressed || submit {
-            for (i, r) in Self::avatar_rects(view).iter().enumerate() {
+            for (i, r) in &lay.avatars {
                 if input.pressed && r.contains(input.pos) {
-                    avatar = i;
+                    avatar = *i;
                     sfx::play(Sfx::Pop);
                 }
             }
-            for (ch, r) in Self::key_rects(view) {
+            if let Some((prev, next)) = lay.arrows {
+                let n = AVATARS.len();
+                if input.tapped_in(prev) {
+                    avatar = (avatar + n - 1) % n;
+                    sfx::play(Sfx::Click);
+                } else if input.tapped_in(next) {
+                    avatar = (avatar + 1) % n;
+                    sfx::play(Sfx::Click);
+                }
+            }
+            for (ch, r) in lay.keys.iter().copied() {
                 if input.pressed && r.contains(input.pos) {
                     sfx::play(Sfx::Click);
                     if ch == '<' {
@@ -318,7 +311,7 @@ impl Profiles {
                     }
                 }
             }
-            let (ok, back, delete) = Self::action_rects(view);
+            let (ok, back, delete) = (lay.ok, lay.back, lay.delete);
             if (input.pressed && ok.contains(input.pos) || submit) && !name.trim().is_empty() {
                 match &id {
                     Some(id) => profile::rename(id, &name, avatar),
@@ -375,9 +368,10 @@ impl Profiles {
         let plum = Color::from_rgba(50, 15, 80, 255);
         match &self.mode {
             Mode::Pick => {
-                pen.ribbon(view, "Who's playing?", vec2(view.w / 2.0, 100.0), self.t);
+                let bar = Self::pick_bar(view);
+                pen.ribbon_in(view, PICK_TITLE, bar.ribbon, self.t);
                 let link = Self::link_rect(view);
-                pen.painted_button(link, "Link device", Tone::Blue, pressed(link), 1.0);
+                pen.painted_button(link, LINK_LABEL, Tone::Blue, pressed(link), 1.0);
                 let list = profile::list();
                 let current = profile::current_id();
                 for (i, r) in Self::card_rects(view, list.len()).iter().enumerate() {
@@ -390,17 +384,15 @@ impl Profiles {
                             pen.circle(c, d * 0.56, Color::new(1.0, 0.9, 0.4, 0.55));
                         }
                         pen.avatar(p.avatar, c, d * 0.9);
-                        pen.text_outline(&p.name, c.x, r.y + r.h - 4.0, 30.0, WHITE, plum);
-                        let e = vec2(r.x + r.w - 22.0, r.y + 22.0);
-                        pen.painted_round(
-                            Rect::new(e.x - 26.0, e.y - 26.0, 52.0, 52.0),
-                            "icon_gear",
-                            0.0,
-                        );
+                        let ns = kg_core::sizing::fit_size(&p.name, view.text(30.0), r.w + 20.0);
+                        pen.text_outline(&p.name, c.x, r.y + r.h - ns * 0.6, ns, WHITE, plum);
+                        pen.painted_round(Self::gear_rect(view, *r), "icon_gear", 0.0);
                     } else {
                         pen.circle(c, d * 0.45, Color::new(1.0, 1.0, 1.0, 0.25));
                         pen.text_outline("+", c.x, c.y - 4.0, d * 0.5, WHITE, plum);
-                        pen.text_outline("New player", c.x, r.y + r.h - 4.0, 28.0, WHITE, plum);
+                        let ns =
+                            kg_core::sizing::fit_size("New player", view.text(28.0), r.w + 20.0);
+                        pen.text_outline("New player", c.x, r.y + r.h - ns * 0.6, ns, WHITE, plum);
                     }
                 }
             }
@@ -415,17 +407,16 @@ impl Profiles {
                 } else {
                     "New player"
                 };
-                let ry = if view.w > view.h { 66.0 } else { 90.0 };
-                pen.ribbon(view, title, vec2(view.w / 2.0, ry), self.t);
-                pen.text_center(
-                    "Pick your animal",
-                    view.w / 2.0,
-                    Self::avatar_rects(view)[0].y - 28.0,
-                    30.0,
-                    WHITE,
-                );
-                for (i, r) in Self::avatar_rects(view).iter().enumerate() {
-                    let on = i == *sel;
+                let lay = Self::edit_layout(view, *sel, id.is_some());
+                if let Some((rr, _)) = lay.ribbon {
+                    pen.ribbon_in(view, title, rr, self.t);
+                }
+                if let Some(y) = lay.prompt {
+                    let cx = lay.name.center().x;
+                    pen.text_center("Pick your animal", cx, y, view.text(30.0), WHITE);
+                }
+                for (i, r) in &lay.avatars {
+                    let on = i == sel;
                     let k = if on {
                         1.12 + (self.t * 5.0).sin() * 0.03
                     } else {
@@ -434,9 +425,13 @@ impl Profiles {
                     if on {
                         pen.circle(r.center(), r.w * 0.62, Color::new(1.0, 0.9, 0.3, 0.7));
                     }
-                    pen.avatar(i, r.center(), r.w * k);
+                    pen.avatar(*i, r.center(), r.w * k);
                 }
-                let nr = Self::name_rect(view);
+                if let Some((a, b)) = lay.arrows {
+                    pen.key_cap(a, "<", pressed(a));
+                    pen.key_cap(b, ">", pressed(b));
+                }
+                let nr = lay.name;
                 pen.painted_panel(nr, WHITE);
                 let shown = if name.is_empty() {
                     "Type your name".to_string()
@@ -452,22 +447,22 @@ impl Profiles {
                     &shown,
                     nr.center().x,
                     nr.center().y,
-                    40.0,
+                    kg_core::sizing::fit_size(&shown, nr.h * 0.52, nr.w - 40.0),
                     if name.is_empty() {
                         Color::new(0.4, 0.35, 0.5, 0.6)
                     } else {
                         BODY
                     },
                 );
-                for (ch, r) in Self::key_rects(view) {
-                    let label = if ch == '<' {
+                for (ch, r) in &lay.keys {
+                    let label = if *ch == '<' {
                         "DEL".to_string()
                     } else {
                         ch.to_string()
                     };
-                    pen.key_cap(r, &label, pressed(r));
+                    pen.key_cap(*r, &label, pressed(*r));
                 }
-                let (ok, back, delete) = Self::action_rects(view);
+                let (ok, back, delete) = (lay.ok, lay.back, lay.delete);
                 let ready = !name.trim().is_empty();
                 pen.painted_button(
                     ok,
@@ -477,25 +472,24 @@ impl Profiles {
                     if ready { 1.0 } else { 0.45 },
                 );
                 if !profile::list().is_empty() {
-                    pen.painted_button(back, "Back", Tone::Blue, pressed(back), 1.0);
+                    pen.painted_button(back, BACK_LABEL, Tone::Blue, pressed(back), 1.0);
                 }
                 if let Some(pid) = id {
-                    pen.text_center(
-                        SOURCE_NOTE,
-                        view.w / 2.0,
-                        (ok.y + ok.h + 22.0).min(view.h - 12.0),
-                        18.0,
-                        Color::new(1.0, 1.0, 1.0, 0.75),
-                    );
+                    if let Some(y) = lay.note {
+                        let s =
+                            kg_core::sizing::fit_size(SOURCE_NOTE, view.text(18.0), view.w - 24.0);
+                        pen.text_center(
+                            SOURCE_NOTE,
+                            view.w / 2.0,
+                            y,
+                            s,
+                            Color::new(1.0, 1.0, 1.0, 0.75),
+                        );
+                    }
                     let on = kg_core::gate::enabled_for(pid);
-                    let g = Self::gate_rect(view);
                     pen.painted_button(
-                        g,
-                        if on {
-                            "Hold: unlock all"
-                        } else {
-                            "Hold: lock again"
-                        },
+                        lay.gate,
+                        if on { GATE_LABEL } else { "Hold: lock again" },
                         Tone::Blue,
                         (self.gate_hold / kg_core::gate::HOLD_SECS).clamp(0.0, 1.0),
                         0.85,
@@ -518,6 +512,309 @@ pub const SOURCE_NOTE: &str = "Free software (GPL-3.0). Source: github.com/v0l/k
 
 pub fn chip_label(name: &str) -> String {
     format!("Playing as {name}")
+}
+
+pub const PICK_TITLE: &str = "Who's playing?";
+pub const LINK_LABEL: &str = "Link device";
+pub const GATE_LABEL: &str = "Hold: unlock all";
+pub const BACK_LABEL: &str = "Back";
+const ABC: &str = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+#[derive(Clone, Debug, Default)]
+pub struct EditLayout {
+    pub ribbon: Option<(Rect, f32)>,
+    pub prompt: Option<f32>,
+    pub avatars: Vec<(usize, Rect)>,
+    pub arrows: Option<(Rect, Rect)>,
+    pub name: Rect,
+    pub keys: Vec<(char, Rect)>,
+    pub ok: Rect,
+    pub back: Rect,
+    pub delete: Rect,
+    pub gate: Rect,
+    pub note: Option<f32>,
+    pub bottom: f32,
+}
+
+impl EditLayout {
+    pub fn buttons(&self) -> Vec<Rect> {
+        let mut v: Vec<Rect> = self.avatars.iter().map(|a| a.1).collect();
+        if let Some((a, b)) = self.arrows {
+            v.extend([a, b]);
+        }
+        v.extend([self.ok, self.back, self.delete, self.gate]);
+        v.retain(|r| r.w > 0.0);
+        v
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Avatars {
+    Grid,
+    Strip,
+    Small,
+}
+
+fn avatar_grid(
+    view: &View,
+    area: Rect,
+    y: f32,
+    sel: usize,
+    mode: Avatars,
+) -> (Vec<(usize, Rect)>, Option<(Rect, Rect)>, f32) {
+    let gap = view.key_gap().max(10.0);
+    let d = view.kid_tap(96.0).min(area.w / 3.0).max(view.touch());
+    let n = AVATARS.len();
+    match mode {
+        Avatars::Grid => {
+            let cols = (((area.w + gap) / (d + gap)).floor() as usize).clamp(1, 6);
+            let rows = n.div_ceil(cols);
+            let row_w = cols as f32 * (d + gap) - gap;
+            let left = area.x + area.w / 2.0 - row_w / 2.0;
+            let rects = (0..n)
+                .map(|i| {
+                    let (c, r) = (i % cols, i / cols);
+                    (
+                        i,
+                        Rect::new(left + c as f32 * (d + gap), y + r as f32 * (d + gap), d, d),
+                    )
+                })
+                .collect();
+            (rects, None, y + rows as f32 * (d + gap) - gap)
+        }
+        Avatars::Strip => avatar_grid_sized(view, area, y, sel, d),
+        Avatars::Small => avatar_grid_sized(view, area, y, sel, view.touch()),
+    }
+}
+
+fn name_keys(view: &View, area: Rect, y: f32) -> (Vec<(char, Rect)>, f32) {
+    let m = view.edge().min(16.0);
+    let pad = Rect::new(area.x + m, y, area.w - 2.0 * m, view.h);
+    let k = kg_core::sizing::keypad(view, pad, ABC.len() + 1, 10, 68.0);
+    let mut out: Vec<(char, Rect)> = ABC.chars().zip(k.keys.iter().copied()).collect();
+    let mut del = k.keys[ABC.len()];
+    let in_last = (ABC.len() + 1) % k.cols;
+    if in_last != 0 {
+        let free = (k.cols - in_last).min(1);
+        del.w += free as f32 * (del.w + view.key_gap());
+    }
+    out.push(('<', del));
+    (out, k.bottom)
+}
+
+fn edit_try(
+    view: &View,
+    sel: usize,
+    editing: bool,
+    mode: Avatars,
+    split: bool,
+    prompt: bool,
+) -> EditLayout {
+    let gap = view.gap();
+    let m = view.edge().min(16.0);
+    let (left, right) = if split {
+        let w = view.w / 2.0;
+        (Rect::new(0.0, 0.0, w, view.h), Rect::new(w, 0.0, w, view.h))
+    } else {
+        (view.rect(), view.rect())
+    };
+    let bar = kg_core::sizing::title_bar_in(
+        view,
+        left,
+        "Edit player",
+        Some(BACK_LABEL),
+        editing.then_some(GATE_LABEL),
+    );
+    let ribbon = Some((
+        bar.ribbon,
+        kg_core::sizing::ribbon_font(view, "Edit player", bar.ribbon),
+    ));
+    let mut y = bar.bottom + gap;
+    let prompt_y = prompt.then(|| {
+        let s = view.text(30.0);
+        y += s * 1.3;
+        y - s * 0.65
+    });
+    let (avatars, arrows, bottom) = avatar_grid(view, left, y, sel, mode);
+    y = bottom + gap;
+    let nw = (left.w - 2.0 * m).min(520.0 * view.text_k());
+    let name = Rect::new(left.x + left.w / 2.0 - nw / 2.0, y, nw, view.tap(76.0));
+    y = name.y + name.h + gap;
+    let (keys, keys_bottom) = if split {
+        let (keys, b) = name_keys(view, right, 0.0);
+        let h = b;
+        let dy = ((view.h - h) / 2.0).max(m);
+        let keys: Vec<(char, Rect)> = keys
+            .into_iter()
+            .map(|(c, r)| (c, r.offset(vec2(0.0, dy))))
+            .collect();
+        (keys, b + dy)
+    } else {
+        let (keys, b) = name_keys(view, left, y);
+        y = b + gap;
+        (keys, b)
+    };
+    let (bw, bh) = kg_core::sizing::label_button(view, "Let's go!", 84.0);
+    let row = Rect::new(left.x + m, y, left.w - 2.0 * m, bh);
+    let (ok, delete) = if editing {
+        let r = kg_core::sizing::row(row, 2, gap);
+        (r[0], r[1])
+    } else {
+        let w = bw.max(row.w * 0.6).min(row.w);
+        (
+            Rect::new(row.x + (row.w - w) / 2.0, y, w, bh),
+            Rect::default(),
+        )
+    };
+    let actions_bottom = y + bh;
+    let note_h = 18.0 * view.text_k() * 1.4;
+    let bottom = actions_bottom.max(keys_bottom);
+    let note =
+        (editing && actions_bottom + note_h <= view.h).then_some(actions_bottom + note_h * 0.6);
+    EditLayout {
+        ribbon,
+        prompt: prompt_y,
+        avatars,
+        arrows,
+        name,
+        keys,
+        ok,
+        back: bar.left.unwrap_or_default(),
+        delete,
+        gate: bar.right.unwrap_or_default(),
+        note,
+        bottom,
+    }
+}
+
+fn edit_compact(view: &View, sel: usize, editing: bool) -> EditLayout {
+    let gap = view.gap();
+    let m = view.edge().min(16.0);
+    let t = view.touch();
+    let top = 8.0;
+    let (bw, _) = kg_core::sizing::label_button(view, BACK_LABEL, 56.0);
+    let back = Rect::new(m, top, bw, t);
+    let gate = if editing {
+        let (gw, _) = kg_core::sizing::label_button(view, GATE_LABEL, 56.0);
+        let gw = gw.min(view.w * 0.3);
+        Rect::new(view.w - m - gw, top, gw, t)
+    } else {
+        Rect::default()
+    };
+    let right_edge = if editing { gate.x - gap } else { view.w - m };
+    let del_w = view.key_w().max(t);
+    let tall = view.portrait();
+    let (name, del, y2) = if tall {
+        let ny = top + t + gap;
+        let del = Rect::new(view.w - m - del_w, ny, del_w, t);
+        (Rect::new(m, ny, del.x - gap - m, t), del, ny + t + gap)
+    } else {
+        let del = Rect::new(right_edge - del_w, top, del_w, t);
+        let name = Rect::new(
+            back.x + back.w + gap,
+            top,
+            del.x - gap - back.x - back.w - gap,
+            t,
+        );
+        (name, del, top + t + gap)
+    };
+    let actions_w = if tall {
+        view.w - 2.0 * m
+    } else if editing {
+        view.w * 0.36
+    } else {
+        view.w * 0.22
+    };
+    let strip_w = if tall {
+        view.w
+    } else {
+        view.w - actions_w - gap - m
+    };
+    let strip = Rect::new(0.0, 0.0, strip_w, view.h);
+    let (avatars, arrows, _) = avatar_grid_sized(view, strip, y2, sel, t);
+    let ay = if tall { y2 + t + view.key_gap() } else { y2 };
+    let act = Rect::new(view.w - m - actions_w, ay, actions_w, t);
+    let (ok, delete) = if editing {
+        let r = kg_core::sizing::row(act, 2, gap);
+        (r[0], r[1])
+    } else {
+        (act, Rect::default())
+    };
+    let pad = Rect::new(m, ay + t + gap, view.w - 2.0 * m, view.h);
+    let k = kg_core::sizing::keypad(view, pad, ABC.len(), 13, 68.0);
+    let mut keys: Vec<(char, Rect)> = ABC.chars().zip(k.keys.iter().copied()).collect();
+    keys.push(('<', del));
+    EditLayout {
+        ribbon: None,
+        prompt: None,
+        avatars,
+        arrows,
+        name,
+        keys,
+        ok,
+        back,
+        delete,
+        gate,
+        note: None,
+        bottom: k.bottom,
+    }
+}
+
+fn avatar_grid_sized(
+    view: &View,
+    area: Rect,
+    y: f32,
+    sel: usize,
+    d: f32,
+) -> (Vec<(usize, Rect)>, Option<(Rect, Rect)>, f32) {
+    let gap = view.key_gap().max(10.0);
+    let n = AVATARS.len();
+    let a = view.touch();
+    let inner = area.w - 2.0 * (a + gap) - 2.0 * view.edge().min(16.0);
+    let shown = (((inner + gap) / (d + gap)).floor() as usize).clamp(1, n);
+    let start = sel.saturating_sub(shown / 2).min(n - shown);
+    let row_w = shown as f32 * (d + gap) - gap;
+    let left = area.x + area.w / 2.0 - row_w / 2.0;
+    let rects = (0..shown)
+        .map(|j| (start + j, Rect::new(left + j as f32 * (d + gap), y, d, d)))
+        .collect();
+    let ay = y + (d - a) / 2.0;
+    let arrows = (shown < n).then(|| {
+        (
+            Rect::new(left - gap - a, ay, a, a),
+            Rect::new(left + row_w + gap, ay, a, a),
+        )
+    });
+    (rects, arrows, y + d)
+}
+
+pub fn edit_layout(view: &View, sel: usize, editing: bool) -> EditLayout {
+    let splits: &[bool] = if view.portrait() {
+        &[false]
+    } else {
+        &[false, true]
+    };
+    for split in splits.iter().copied() {
+        for (mode, prompt) in [
+            (Avatars::Grid, true),
+            (Avatars::Grid, false),
+            (Avatars::Strip, true),
+            (Avatars::Strip, false),
+            (Avatars::Small, false),
+        ] {
+            let l = edit_try(view, sel, editing, mode, split, prompt);
+            let rows = l
+                .avatars
+                .iter()
+                .map(|a| (a.1.y * 10.0) as i64)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len();
+            if l.bottom <= view.h - view.edge().min(16.0) && rows <= 2 {
+                return l;
+            }
+        }
+    }
+    edit_compact(view, sel, editing)
 }
 
 pub fn player_chip_at(view: &View, y: f32) -> Rect {
@@ -773,6 +1070,84 @@ mod tests {
     }
 
     #[test]
+    fn profile_screens_are_twelve_mm_on_every_screen() {
+        use kg_core::sizing::*;
+        kg_core::save::reset_for_test();
+        for (name, v) in test_views() {
+            for editing in [false, true] {
+                for sel in [0, 5, 11] {
+                    let l = Profiles::edit_layout(&v, sel, editing);
+                    let what = format!("{name} edit={editing} sel={sel}");
+                    let keys: Vec<Rect> = l.keys.iter().map(|k| k.1).collect();
+                    assert_eq!(keys.len(), 27, "{what}");
+                    check_keys(&v, &what, &keys).unwrap();
+                    check_buttons(&v, &what, &l.buttons()).unwrap();
+                    let mut all = keys.clone();
+                    all.extend(l.buttons());
+                    all.push(l.name);
+                    if let Some((r, _)) = l.ribbon {
+                        all.push(r.scaled_about_center(0.9));
+                        check_inside(&v, &what, r).unwrap();
+                    }
+                    check_apart(&what, &all).unwrap();
+                    check_inside(&v, &what, l.name).unwrap();
+                    assert!(
+                        l.avatars.iter().any(|a| a.0 == sel),
+                        "{what}: selected animal hidden"
+                    );
+                    if name == "phone portrait" {
+                        let cols = keys
+                            .iter()
+                            .filter(|k| (k.y - keys[0].y).abs() < 0.5)
+                            .count();
+                        assert_eq!(cols, 7, "{what}");
+                    }
+                }
+            }
+            for n in 0..=MAX_PROFILES {
+                let cards = Profiles::card_rects(&v, n);
+                let what = format!("{name} {n} players");
+                let mut all = cards.clone();
+                check_buttons(&v, &what, &cards).unwrap();
+                let gears: Vec<Rect> = cards
+                    .iter()
+                    .take(n)
+                    .map(|c| Profiles::gear_rect(&v, *c))
+                    .collect();
+                check_buttons(&v, &what, &gears).unwrap();
+                check_apart(&what, &gears).unwrap();
+                all.push(Profiles::link_rect(&v));
+                check_apart(&what, &all).unwrap();
+                check_buttons(&v, &what, &[Profiles::link_rect(&v)]).unwrap();
+                let bar = Profiles::pick_bar(&v);
+                assert!(!bar.ribbon.overlaps(&Profiles::link_rect(&v)), "{what}");
+            }
+        }
+    }
+
+    #[test]
+    fn portrait_phones_keep_one_column_with_seven_keys_a_row() {
+        for (v, want) in [
+            (kg_core::sizing::phone_portrait(), 7),
+            (View::fit(390.0, 844.0), 6),
+        ] {
+            for editing in [false, true] {
+                let l = Profiles::edit_layout(&v, 0, editing);
+                let k = &l.keys;
+                let cols = k.iter().filter(|c| (c.1.y - k[0].1.y).abs() < 0.5).count();
+                assert!(cols >= want, "{cols} columns in {v:?} editing={editing}");
+                let keys: Vec<Rect> = k.iter().map(|c| c.1).collect();
+                kg_core::sizing::check_keys(&v, "phone", &keys).unwrap();
+                kg_core::sizing::check_buttons(&v, "phone", &l.buttons()).unwrap();
+                let mut all = keys.clone();
+                all.extend(l.buttons());
+                all.push(l.name);
+                kg_core::sizing::check_apart("phone", &all).unwrap();
+            }
+        }
+    }
+
+    #[test]
     fn edit_layout_fits_every_screen_without_overlap() {
         for v in [
             View::ipad_landscape(),
@@ -780,12 +1155,13 @@ mod tests {
             View::fit(390.0, 844.0),
             View::fit(844.0, 390.0),
         ] {
-            let keys = Profiles::key_rects(&v);
-            let (ok, _, _) = Profiles::action_rects(&v);
-            let name = Profiles::name_rect(&v);
-            let last_av = *Profiles::avatar_rects(&v).last().unwrap();
+            let l = Profiles::edit_layout(&v, 0, false);
+            let keys = l.keys.clone();
+            let ok = l.ok;
+            let name = l.name;
+            let last_av = l.avatars.last().unwrap().1;
             assert!(
-                last_av.y + last_av.h <= name.y,
+                last_av.y + last_av.h <= name.y || !last_av.overlaps(&name),
                 "avatars hit the name box in {v:?}"
             );
             for (i, (_, a)) in keys.iter().enumerate() {
