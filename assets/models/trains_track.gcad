@@ -1,0 +1,18 @@
+body bed
+plane XY
+rect 160 2.8
+bed: extrude 0.1
+color #968778
+body rails
+plane XY offset=0.12
+rect 160 0.09 at=0,0.55
+rail_l: extrude 0.1
+rect 160 0.09 at=0,-0.55
+rail_r: extrude 0.1
+color #b9bec8
+body sleepers
+plane XY offset=0.085
+rect 0.28 1.5 at=-44,0
+sleeper: extrude 0.07
+repeat sleeper count=110 step=0.8,0
+color #875a37

@@ -1,0 +1,10 @@
+body trunk
+plane XY
+ngon 0.4 8
+trunk: extrude 1.4
+color #825a37
+body crown
+plane XY offset=1
+ngon 2 12
+crown: extrude 3.2 scale=0
+color #46aa46

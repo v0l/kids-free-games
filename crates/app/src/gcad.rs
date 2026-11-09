@@ -29,6 +29,7 @@ pub fn game_models() -> impl Iterator<Item = &'static str> {
         crate::games::helix::world::MODELS,
         crate::games::paper::world::MODELS,
         crate::games::ballsort::world::MODELS,
+        crate::games::trains::world::MODELS,
     ]
     .into_iter()
     .flatten()
@@ -419,6 +420,20 @@ mod tests {
     }
 
     #[test]
+    fn every_trains_model_is_warmed_and_on_disk() {
+        let names = shipped();
+        for m in crate::games::trains::world::MODELS {
+            assert!(names.iter().any(|n| n == m), "{m} is not in assets/models");
+        }
+        for n in names.iter().filter(|n| n.starts_with("trains_")) {
+            assert!(
+                crate::games::trains::world::MODELS.contains(&n.as_str()),
+                "{n} ships but trains never loads it"
+            );
+        }
+    }
+
+    #[test]
     fn the_ball_sort_tube_has_the_parts_the_game_paints_and_the_size_it_had() {
         let tube = build("ballsort_tube");
         let parts = part_names(&tube);
@@ -461,6 +476,32 @@ mod tests {
         }
         let ms = started.elapsed().as_secs_f64() * 1000.0;
         assert!(ms < 1500.0, "all hotel models took {ms:.0} ms");
+    }
+
+    #[test]
+    fn trains_models_keep_their_parts_and_size() {
+        let wheel = part_names(&build("trains_wheel"));
+        for p in ["rim", "hub", "knob"] {
+            assert!(wheel.iter().any(|n| n == p), "wheel has no {p}");
+        }
+        let engine = part_names(&build("trains_engine"));
+        for p in ["boiler", "funnel", "cab", "headlamp"] {
+            assert!(engine.iter().any(|n| n == p), "engine has no {p}");
+        }
+        let carriage = part_names(&build("trains_carriage"));
+        for p in ["side_l", "side_r", "end_l", "end_r"] {
+            assert!(carriage.iter().any(|n| n == p), "carriage has no {p}");
+        }
+        let crown = |n: &str| part_names(&build(n)).iter().any(|p| p == "crown");
+        assert!(crown("trains_tree_round") && crown("trains_tree_pine"));
+        for (name, want) in [
+            ("trains_carriage", Vec3::new(2.945, 0.895, 1.22)),
+            ("trains_station", Vec3::new(6.6, 5.19, 6.506)),
+            ("trains_platform", Vec3::new(60.0, 0.425, 6.3)),
+        ] {
+            let got = size(&build(name));
+            assert!((got - want).abs().max_element() < 0.15, "{name}: {got} not {want}");
+        }
     }
 
     #[test]

@@ -1,0 +1,8 @@
+body pole
+plane XY
+ngon 0.14 10
+pole: extrude 3
+color #32466e
+body bulb
+bulb: blob 0,0,3.1 r=0.25 mode=shell segments=12
+color #ffed99 part=bulb

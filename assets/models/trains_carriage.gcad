@@ -1,0 +1,33 @@
+body floor
+plane XY offset=0.21
+rect 2.7 1.1
+floor: extrude 0.24
+color #3c3e50
+body sides
+plane XY offset=0.45
+rect 2.7 0.1 at=0,0.54
+side_l: extrude 0.6
+rect 2.7 0.1 at=0,-0.54
+side_r: extrude 0.6
+rect 0.1 1.1 at=1.3,0
+end_l: extrude 0.6
+rect 0.1 1.1 at=-1.3,0
+end_r: extrude 0.6
+color #ffc832
+body trim
+plane XY offset=1.035
+rect 2.74 0.14 at=0,0.54
+trim_l: extrude 0.07
+rect 2.74 0.14 at=0,-0.54
+trim_r: extrude 0.07
+color #ffffff
+body planks
+plane XY offset=0.45
+rect 2.4 0.9
+planks: extrude 0.06
+color #aa6e46
+body hitch
+plane XY offset=0.41
+rect 0.25 0.12 at=1.45,0
+hitch: extrude 0.08
+color #3c3e50

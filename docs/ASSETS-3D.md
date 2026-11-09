@@ -135,6 +135,19 @@ Rounded boxes (`block round=`) and spheres already existed. Ball Sort added `tor
 | `hotel_car`, `hotel_entrance` | | two cars, one door frame | car colour, trim |
 | `hotel_coin`, `hotel_coin_top` | 10-gon column, scaled per coin | coin piles and tips | height, bob |
 
+### Take Away Trains inventory
+
+| model | made of | instances | per-instance |
+|---|---|---|---|
+| `trains_track`, `trains_platform` | ballast, rails, 110 sleepers via `repeat`; slab and yellow edge | one each | |
+| `trains_lamp`, `trains_bench`, `trains_sign` | 10-gon pole and glow shell; boxes; 8-gon post and boards | 2, 1, 1 | |
+| `trains_station` | walls, eave, pyramid roof (a rotated square with `scale=0`), windows, door, beacon, chimney | one | |
+| `trains_tree_round`, `trains_tree_pine`, `trains_hill` | 8-gon trunk, shell crown or frustum; one shell ellipsoid | 26 trees, 7 hills | `crown` and hill colour, scale |
+| `trains_engine`, `trains_carriage` | chassis, 24-gon boiler, rings, face, funnel, cab, bumper; floor, sides, trim, planks | one, up to 3 | carriage `side_*` and `end_*` colour |
+| `trains_wheel` | 18-gon rim, hub, knob shell, named parts `rim`, `hub`, `knob` | 6 + 4 per carriage | spins every frame as a whole entity (`Role::Wheel`) |
+
+Still in Rust in trains: the sky quad, the tiled ground, gravel and platform textures, and the smoke puffs (scaled and faded every frame). Riders use the hotel people models.
+
 Still drawn from primitives in the hotel, on purpose: floors, zones, the pool water, ripples, wakes, dust, shadows, pads and their progress dots (flat layers sized from the layout each frame or animated by scale), the walls, locked doors and pool rim (boxes sized from the layout, `cuboid`/`cuboid2`), and the splash drops and rings (scaled every frame).
 
 ### Ball Sort inventory

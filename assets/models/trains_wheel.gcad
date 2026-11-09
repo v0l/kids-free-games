@@ -1,0 +1,13 @@
+body rim
+plane XY offset=-0.07
+ngon 2 18
+rim: extrude 0.14
+color #323750
+body hub
+plane XY offset=-0.065
+ngon 1.1 14
+hub: extrude 0.17
+color #ffcd32
+body knob
+knob: blob 0.62,0,0.09 r=0.14,0.14,0.08 mode=shell segments=10
+color #eb5a46 part=knob gloss=0.6

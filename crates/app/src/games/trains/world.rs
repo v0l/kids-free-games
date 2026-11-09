@@ -1,5 +1,6 @@
 use super::{TrainsPlay, SHEET};
 use crate::game3d::*;
+use crate::gcad::Shelf;
 use crate::games::hotel::build::Model;
 use crate::games::hotel::models::{body, guest_look, rgb, Stance, PEOPLE};
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
@@ -17,6 +18,21 @@ const RAIL_Y: f32 = 0.1;
 const CHIMNEY_X: f32 = 0.95;
 const CHIMNEY_Y: f32 = 1.95;
 
+pub static MODELS: &[&str] = &[
+    "trains_track",
+    "trains_platform",
+    "trains_lamp",
+    "trains_bench",
+    "trains_sign",
+    "trains_station",
+    "trains_tree_round",
+    "trains_tree_pine",
+    "trains_hill",
+    "trains_engine",
+    "trains_carriage",
+    "trains_wheel",
+];
+
 pub struct TrainsWorld;
 
 impl Plugin for TrainsWorld {
@@ -25,9 +41,11 @@ impl Plugin for TrainsWorld {
             Update,
             (
                 stock(PEOPLE).run_if(is_open(World3d::Trains)),
+                stock(MODELS).run_if(is_open(World3d::Trains)),
                 spawn.run_if(opened(World3d::Trains)),
                 sync.run_if(is_open(World3d::Trains))
-                    .run_if(stocked(PEOPLE)),
+                    .run_if(stocked(PEOPLE))
+                    .run_if(stocked(MODELS)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -37,6 +55,7 @@ impl Plugin for TrainsWorld {
 
 #[derive(Component)]
 pub struct Root {
+    built: bool,
     carriages: usize,
     seed: u32,
     riders: usize,
@@ -67,12 +86,6 @@ fn at(x: f32, y: f32, z: f32) -> Vec3 {
 
 fn cube(center: Vec3, size: Vec3) -> Transform {
     Transform::from_translation(center).with_scale(size)
-}
-
-fn along_x(center: Vec3, len: f32, dia: f32) -> Transform {
-    Transform::from_translation(center)
-        .with_rotation(Quat::from_rotation_z(FRAC_PI_2))
-        .with_scale(Vec3::new(dia, len, dia))
 }
 
 fn put(
@@ -109,6 +122,7 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
     let world = spawn_world(
         &mut commands,
         Root {
+            built: false,
             carriages: 0,
             seed: 0,
             riders: 0,
@@ -133,7 +147,6 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
         ));
     });
     commands.entity(world.root).with_children(|w| {
-        scenery(w, &mut kit);
         w.spawn((Role::Train, Transform::default(), Visibility::default()));
         for k in 0..SMOKE {
             w.spawn((
@@ -148,7 +161,54 @@ fn spawn(mut commands: Commands, mut kit: Kit) {
     });
 }
 
-fn scenery(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
+fn finish_of(part: &str) -> Option<Finish> {
+    match part {
+        "bulb" | "headlamp" => Some(Finish::Glow),
+        "pole" | "board" | "beacon" | "rail_l" | "rail_r" | "boiler" | "ring_back"
+        | "ring_front" | "face" | "funnel" | "funnel_cap" | "dome" | "window_a" | "window_b"
+        | "window_c" | "side_l" | "side_r" | "end_l" | "end_r" | "rim" | "hub" | "crown"
+        | "eye_a" | "eye_b" | "pupil_a" | "pupil_b" | "knob" => Some(Finish::Gloss),
+        _ => None,
+    }
+}
+
+fn spawn_model(
+    out: &mut ChildSpawnerCommands,
+    kit: &mut Kit,
+    shelf: &Shelf,
+    name: &'static str,
+    t: Transform,
+    tint: impl Fn(&str) -> Option<Col>,
+) {
+    for (i, part) in shelf.get(name).iter().enumerate() {
+        let finish = finish_of(&part.name).unwrap_or(if part.gloss {
+            Finish::Gloss
+        } else {
+            Finish::Matte
+        });
+        let mut color = tint(&part.name).unwrap_or(part.color);
+        if finish == Finish::Glow {
+            color.a = 0.95;
+        }
+        out.spawn(kit.part(
+            Shape::Model(name, i as u16),
+            Paint::new(finish, color),
+            t,
+        ));
+    }
+}
+
+fn plain(
+    out: &mut ChildSpawnerCommands,
+    kit: &mut Kit,
+    shelf: &Shelf,
+    name: &'static str,
+    t: Transform,
+) {
+    spawn_model(out, kit, shelf, name, t, |_| None);
+}
+
+fn scenery(w: &mut ChildSpawnerCommands, kit: &mut Kit, shelf: &Shelf) {
     let grass = Col::new(0.45, 0.78, 0.3, 1.0);
     put(
         w,
@@ -166,14 +226,7 @@ fn scenery(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
         3.5,
         Transform::from_xyz(0.0, 0.0, -22.0),
     );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(150, 135, 120),
-        cube(at(0.0, 0.05, 0.0), at(160.0, 0.1, 2.8)),
-    );
+    plain(w, kit, shelf, "trains_track", Transform::default());
     tiled(
         w,
         kit,
@@ -182,47 +235,21 @@ fn scenery(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
         1.4,
         Transform::from_xyz(0.0, 0.102, 0.0),
     );
-    for side in [-1.0f32, 1.0] {
-        put(
-            w,
-            kit,
-            Shape::Cube,
-            Finish::Gloss,
-            rgb(185, 190, 200),
-            cube(at(0.0, RAIL_Y + 0.07, 0.55 * side), at(160.0, 0.1, 0.09)),
-        );
-    }
-    let mut x = -44.0;
-    while x < 44.0 {
-        put(
-            w,
-            kit,
-            Shape::Cube,
-            Finish::Matte,
-            rgb(135, 90, 55),
-            cube(at(x, RAIL_Y + 0.02, 0.0), at(0.28, 0.07, 1.5)),
-        );
-        x += 0.8;
-    }
-    platform(w, kit);
-    station(w, kit);
-    trees(w, kit);
-    hills(w, kit);
-}
-
-fn platform(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
-    let (z0, z1) = (2.2, 8.5);
-    put(
+    platform(w, kit, shelf);
+    plain(
         w,
         kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(225, 205, 170),
-        cube(
-            at(0.0, PLATFORM_Y / 2.0, (z0 + z1) / 2.0),
-            at(60.0, PLATFORM_Y, z1 - z0),
-        ),
+        shelf,
+        "trains_station",
+        Transform::from_translation(at(-8.0, 0.0, -5.5)),
     );
+    trees(w, kit, shelf);
+    hills(w, kit, shelf);
+}
+
+fn platform(w: &mut ChildSpawnerCommands, kit: &mut Kit, shelf: &Shelf) {
+    let (z0, z1) = (2.2, 8.5);
+    plain(w, kit, shelf, "trains_platform", Transform::default());
     tiled(
         w,
         kit,
@@ -231,172 +258,17 @@ fn platform(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
         2.0,
         Transform::from_xyz(0.0, PLATFORM_Y + 0.003, (z0 + z1) / 2.0),
     );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(255, 205, 40),
-        cube(
-            at(0.0, PLATFORM_Y + 0.012, z0 + 0.18),
-            at(60.0, 0.025, 0.22),
-        ),
-    );
     for x in [-7.0f32, 7.5] {
-        lamp(w, kit, at(x, PLATFORM_Y, 7.2));
+        let t = Transform::from_translation(at(x, PLATFORM_Y, 7.2));
+        plain(w, kit, shelf, "trains_lamp", t);
     }
-    bench(w, kit, at(-3.2, PLATFORM_Y, 7.6));
-    sign(w, kit, at(4.4, PLATFORM_Y, 7.4));
+    let bench = Transform::from_translation(at(-3.2, PLATFORM_Y, 7.6));
+    plain(w, kit, shelf, "trains_bench", bench);
+    let sign = Transform::from_translation(at(4.4, PLATFORM_Y, 7.4));
+    plain(w, kit, shelf, "trains_sign", sign);
 }
 
-fn lamp(w: &mut ChildSpawnerCommands, kit: &mut Kit, base: Vec3) {
-    put(
-        w,
-        kit,
-        Shape::Cylinder(10),
-        Finish::Gloss,
-        rgb(50, 70, 110),
-        cube(base + at(0.0, 1.5, 0.0), at(0.14, 3.0, 0.14)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Sphere,
-        Finish::Glow,
-        Col::new(1.0, 0.93, 0.6, 0.95),
-        cube(base + at(0.0, 3.1, 0.0), at(0.5, 0.5, 0.5)),
-    );
-}
-
-fn bench(w: &mut ChildSpawnerCommands, kit: &mut Kit, base: Vec3) {
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(165, 105, 60),
-        cube(base + at(0.0, 0.5, 0.0), at(1.8, 0.1, 0.5)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(165, 105, 60),
-        cube(base + at(0.0, 0.85, 0.22), at(1.8, 0.35, 0.08)),
-    );
-    for s in [-0.75f32, 0.75] {
-        put(
-            w,
-            kit,
-            Shape::Cube,
-            Finish::Matte,
-            rgb(70, 80, 100),
-            cube(base + at(s, 0.25, 0.0), at(0.1, 0.5, 0.45)),
-        );
-    }
-}
-
-fn sign(w: &mut ChildSpawnerCommands, kit: &mut Kit, base: Vec3) {
-    put(
-        w,
-        kit,
-        Shape::Cylinder(8),
-        Finish::Matte,
-        rgb(80, 85, 100),
-        cube(base + at(0.0, 1.0, 0.0), at(0.12, 2.0, 0.12)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Gloss,
-        rgb(40, 110, 200),
-        cube(base + at(0.0, 2.1, 0.0), at(1.6, 0.7, 0.1)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        WHITE,
-        cube(base + at(0.0, 2.1, 0.06), at(1.4, 0.5, 0.03)),
-    );
-}
-
-fn station(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
-    let base = at(-8.0, 0.0, -5.5);
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(250, 232, 190),
-        cube(base + at(0.0, 1.3, 0.0), at(6.0, 2.6, 3.4)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(215, 90, 70),
-        cube(base + at(0.0, 2.7, 0.0), at(6.6, 0.2, 4.0)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cone(4),
-        Finish::Matte,
-        rgb(205, 70, 60),
-        Transform::from_translation(base + at(0.0, 3.5, 0.0))
-            .with_rotation(Quat::from_rotation_y(FRAC_PI_2 / 2.0))
-            .with_scale(Vec3::new(9.2, 1.5, 5.6)),
-    );
-    for dx in [-1.8f32, 0.0, 1.8] {
-        put(
-            w,
-            kit,
-            Shape::Cube,
-            Finish::Gloss,
-            rgb(130, 200, 240),
-            cube(base + at(dx, 1.5, 1.72), at(0.8, 0.9, 0.06)),
-        );
-        put(
-            w,
-            kit,
-            Shape::Cube,
-            Finish::Matte,
-            WHITE,
-            cube(base + at(dx, 1.5, 1.70), at(1.0, 1.1, 0.04)),
-        );
-    }
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(150, 95, 60),
-        cube(base + at(2.5, 0.8, 1.72), at(0.9, 1.6, 0.06)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cylinder(12),
-        Finish::Gloss,
-        rgb(255, 210, 60),
-        cube(base + at(0.0, 5.1, 0.0), at(1.0, 0.18, 1.0)),
-    );
-    put(
-        w,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(120, 125, 140),
-        cube(base + at(2.3, 3.8, -0.6), at(0.7, 1.6, 0.7)),
-    );
-}
-
-fn trees(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
+fn trees(w: &mut ChildSpawnerCommands, kit: &mut Kit, shelf: &Shelf) {
     let greens = [
         rgb(70, 170, 70),
         rgb(95, 190, 80),
@@ -412,208 +284,44 @@ fn trees(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
         }
         let s = 1.0 + ((k * 0.9).cos() * 0.5 + 0.5) * 0.9;
         let c = greens[i % greens.len()];
-        put(
-            w,
-            kit,
-            Shape::Cylinder(8),
-            Finish::Matte,
-            rgb(130, 90, 55),
-            cube(at(x, 0.7 * s, z), at(0.4 * s, 1.4 * s, 0.4 * s)),
-        );
-        if i % 2 == 0 {
-            put(
-                w,
-                kit,
-                Shape::Sphere,
-                Finish::Gloss,
-                c,
-                cube(at(x, 2.3 * s, z), at(2.2 * s, 2.2 * s, 2.2 * s)),
-            );
+        let name = if i % 2 == 0 {
+            "trains_tree_round"
         } else {
-            put(
-                w,
-                kit,
-                Shape::Cone(12),
-                Finish::Gloss,
-                c,
-                cube(at(x, 2.6 * s, z), at(2.0 * s, 3.2 * s, 2.0 * s)),
-            );
-        }
+            "trains_tree_pine"
+        };
+        let t = Transform::from_translation(at(x, 0.0, z)).with_scale(Vec3::splat(s));
+        spawn_model(w, kit, shelf, name, t, |part| {
+            (part == "crown").then_some(c)
+        });
     }
 }
 
-fn hills(w: &mut ChildSpawnerCommands, kit: &mut Kit) {
+fn hills(w: &mut ChildSpawnerCommands, kit: &mut Kit, shelf: &Shelf) {
     let tones = [rgb(110, 200, 110), rgb(90, 185, 120), rgb(130, 210, 100)];
     for i in 0..7 {
         let k = i as f32;
         let x = -48.0 + k * 16.0;
-        put(
-            w,
-            kit,
-            Shape::Ball,
-            Finish::Matte,
-            tones[i % 3],
-            cube(
-                at(x, -2.0, -38.0 - (i % 2) as f32 * 7.0),
-                at(32.0, 14.0 + (i % 3) as f32 * 4.0, 20.0),
-            ),
+        let t = cube(
+            at(x, -2.0, -38.0 - (i % 2) as f32 * 7.0),
+            at(32.0, 14.0 + (i % 3) as f32 * 4.0, 20.0),
         );
+        spawn_model(w, kit, shelf, "trains_hill", t, |_| Some(tones[i % 3]));
     }
 }
 
-fn train_parts(t: &mut ChildSpawnerCommands, kit: &mut Kit, cars: usize) {
+fn train_parts(t: &mut ChildSpawnerCommands, kit: &mut Kit, shelf: &Shelf, cars: usize) {
     let len = ENGINE_LEN + cars as f32 * CARRIAGE_LEN;
     let ex = len / 2.0 - ENGINE_LEN / 2.0;
-    let red = rgb(232, 62, 58);
-    let dark = rgb(60, 62, 80);
-    put(
+    plain(
         t,
         kit,
-        Shape::Cube,
-        Finish::Matte,
-        dark,
-        cube(at(ex, 0.38, 0.0), at(ENGINE_LEN, 0.22, 1.1)),
+        shelf,
+        "trains_engine",
+        Transform::from_translation(at(ex, 0.0, 0.0)),
     );
-    put(
-        t,
-        kit,
-        Shape::Cylinder(24),
-        Finish::Gloss,
-        red,
-        along_x(at(ex + 0.45, 0.98, 0.0), 1.9, 1.05),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cylinder(24),
-        Finish::Gloss,
-        rgb(255, 205, 50),
-        along_x(at(ex - 0.5, 0.98, 0.0), 0.09, 1.1),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cylinder(24),
-        Finish::Gloss,
-        rgb(255, 205, 50),
-        along_x(at(ex + 0.98, 0.98, 0.0), 0.09, 1.1),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cylinder(24),
-        Finish::Gloss,
-        rgb(190, 40, 45),
-        along_x(at(ex + 1.45, 0.98, 0.0), 0.2, 1.0),
-    );
-    put(
-        t,
-        kit,
-        Shape::Sphere,
-        Finish::Glow,
-        Col::new(1.0, 0.95, 0.6, 1.0),
-        cube(at(ex + 1.58, 1.2, 0.0), at(0.32, 0.32, 0.32)),
-    );
-    for side in [-1.0f32, 1.0] {
-        put(
-            t,
-            kit,
-            Shape::Sphere,
-            Finish::Gloss,
-            WHITE,
-            cube(at(ex + 1.5, 0.86, 0.24 * side), at(0.28, 0.34, 0.2)),
-        );
-        put(
-            t,
-            kit,
-            Shape::Sphere,
-            Finish::Gloss,
-            rgb(30, 30, 50),
-            cube(at(ex + 1.6, 0.84, 0.25 * side), at(0.12, 0.18, 0.1)),
-        );
-    }
-    put(
-        t,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(120, 25, 40),
-        cube(at(ex + 1.57, 0.55, 0.0), at(0.08, 0.07, 0.34)),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cylinder(14),
-        Finish::Gloss,
-        rgb(40, 40, 60),
-        cube(at(ex + CHIMNEY_X - 0.1, 1.72, 0.0), at(0.34, 0.5, 0.34)),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cylinder(14),
-        Finish::Gloss,
-        rgb(255, 205, 50),
-        cube(at(ex + CHIMNEY_X - 0.1, 1.98, 0.0), at(0.52, 0.1, 0.52)),
-    );
-    put(
-        t,
-        kit,
-        Shape::Sphere,
-        Finish::Gloss,
-        rgb(255, 205, 50),
-        cube(at(ex + 0.1, 1.55, 0.0), at(0.5, 0.42, 0.5)),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(235, 90, 70),
-        cube(at(ex - 1.0, 1.0, 0.0), at(1.0, 1.25, 1.12)),
-    );
-    put(
-        t,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(60, 80, 160),
-        cube(at(ex - 1.0, 1.7, 0.0), at(1.3, 0.14, 1.4)),
-    );
-    for side in [-1.0f32, 1.0] {
-        put(
-            t,
-            kit,
-            Shape::Cube,
-            Finish::Gloss,
-            rgb(140, 210, 245),
-            cube(at(ex - 1.0, 1.2, 0.575 * side), at(0.5, 0.5, 0.04)),
-        );
-    }
-    put(
-        t,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(255, 205, 50),
-        cube(at(ex + 1.72, 0.3, 0.0), at(0.4, 0.3, 1.2)),
-    );
-    for s in 0..4 {
-        put(
-            t,
-            kit,
-            Shape::Cube,
-            Finish::Matte,
-            rgb(60, 62, 80),
-            cube(
-                at(ex + 1.93, 0.3, (s as f32 - 1.5) * 0.28),
-                at(0.06, 0.3, 0.08),
-            ),
-        );
-    }
     for (dx, r) in [(-0.95, 0.4), (-0.15, 0.4), (1.05, 0.28)] {
         for side in [-1.0f32, 1.0] {
-            wheel(t, kit, at(ex + dx, RAIL_Y + r, 0.66 * side), r);
+            wheel(t, kit, shelf, at(ex + dx, RAIL_Y + r, 0.66 * side), r);
         }
     }
     let palette = [
@@ -624,115 +332,32 @@ fn train_parts(t: &mut ChildSpawnerCommands, kit: &mut Kit, cars: usize) {
     ];
     for c in 0..cars {
         let cx = ex - ENGINE_LEN / 2.0 - CARRIAGE_LEN * (c as f32 + 0.5);
-        carriage(t, kit, cx, palette[c % palette.len()]);
-        let hitch = cx + CARRIAGE_LEN / 2.0;
-        put(
+        let color = palette[c % palette.len()];
+        spawn_model(
             t,
             kit,
-            Shape::Cube,
-            Finish::Matte,
-            dark,
-            cube(at(hitch, 0.45, 0.0), at(0.25, 0.08, 0.12)),
+            shelf,
+            "trains_carriage",
+            Transform::from_translation(at(cx, 0.0, 0.0)),
+            |part| matches!(part, "side_l" | "side_r" | "end_l" | "end_r").then_some(color),
         );
-    }
-}
-
-fn carriage(t: &mut ChildSpawnerCommands, kit: &mut Kit, cx: f32, color: Col) {
-    let l = CARRIAGE_LEN - 0.2;
-    let floor_top = FLOOR_Y;
-    put(
-        t,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(60, 62, 80),
-        cube(at(cx, floor_top - 0.12, 0.0), at(l, 0.24, 1.1)),
-    );
-    for side in [-1.0f32, 1.0] {
-        put(
-            t,
-            kit,
-            Shape::Cube,
-            Finish::Gloss,
-            color,
-            cube(at(cx, floor_top + 0.3, 0.54 * side), at(l, 0.6, 0.1)),
-        );
-        put(
-            t,
-            kit,
-            Shape::Cube,
-            Finish::Matte,
-            WHITE,
-            cube(
-                at(cx, floor_top + 0.62, 0.54 * side),
-                at(l + 0.04, 0.07, 0.14),
-            ),
-        );
-    }
-    for end in [-1.0f32, 1.0] {
-        put(
-            t,
-            kit,
-            Shape::Cube,
-            Finish::Gloss,
-            color,
-            cube(
-                at(cx + (l / 2.0 - 0.05) * end, floor_top + 0.3, 0.0),
-                at(0.1, 0.6, 1.1),
-            ),
-        );
-    }
-    for dx in [-0.8f32, 0.8] {
-        for side in [-1.0f32, 1.0] {
-            wheel(t, kit, at(cx + dx, RAIL_Y + 0.26, 0.66 * side), 0.26);
+        for dx in [-0.8f32, 0.8] {
+            for side in [-1.0f32, 1.0] {
+                wheel(t, kit, shelf, at(cx + dx, RAIL_Y + 0.26, 0.66 * side), 0.26);
+            }
         }
     }
-    put(
-        t,
-        kit,
-        Shape::Cube,
-        Finish::Matte,
-        rgb(170, 110, 70),
-        cube(at(cx, floor_top + 0.03, 0.0), at(l - 0.3, 0.06, 0.9)),
-    );
 }
 
-fn wheel(t: &mut ChildSpawnerCommands, kit: &mut Kit, pos: Vec3, r: f32) {
-    let thick = 0.14;
+fn wheel(t: &mut ChildSpawnerCommands, kit: &mut Kit, shelf: &Shelf, pos: Vec3, r: f32) {
     t.spawn((
         Role::Wheel(r),
-        Transform::from_translation(pos).with_rotation(Quat::from_rotation_x(FRAC_PI_2)),
+        Transform::from_translation(pos)
+            .with_rotation(Quat::from_rotation_x(FRAC_PI_2))
+            .with_scale(Vec3::new(r, 1.0, r)),
         Visibility::default(),
     ))
-    .with_children(|w| {
-        put(
-            w,
-            kit,
-            Shape::Cylinder(18),
-            Finish::Gloss,
-            rgb(50, 55, 80),
-            cube(Vec3::ZERO, at(r * 2.0, thick, r * 2.0)),
-        );
-        put(
-            w,
-            kit,
-            Shape::Cylinder(14),
-            Finish::Gloss,
-            rgb(255, 205, 50),
-            cube(at(0.0, 0.01, 0.0), at(r * 1.1, thick + 0.03, r * 1.1)),
-        );
-        put(
-            w,
-            kit,
-            Shape::Sphere,
-            Finish::Gloss,
-            rgb(235, 90, 70),
-            cube(
-                at(r * 0.62, thick / 2.0 + 0.02, 0.0),
-                at(r * 0.28, r * 0.28, r * 0.28),
-            ),
-        );
-    });
+    .with_children(|w| plain(w, kit, shelf, "trains_wheel", Transform::default()));
 }
 
 fn spawn_rider(out: &mut ChildSpawnerCommands, kit: &mut Kit, look: u8, arms_up: bool) {
@@ -801,13 +426,22 @@ fn sync(
     let Ok((root_e, mut root)) = roots.single_mut() else {
         return;
     };
+    let Some(shelf) = kit.shelf(MODELS) else {
+        return;
+    };
+    if !root.built {
+        root.built = true;
+        commands
+            .entity(root_e)
+            .with_children(|w| scenery(w, &mut kit, &shelf));
+    }
     let cars = carriages(g.riders.len());
     if root.carriages != cars {
         root.carriages = cars;
         if let Some((train, ..)) = nodes.iter().find(|n| *n.1 == Role::Train) {
             let mut e = commands.entity(train);
             e.despawn_children();
-            e.with_children(|t| train_parts(t, &mut kit, cars));
+            e.with_children(|t| train_parts(t, &mut kit, &shelf, cars));
         }
     }
     if root.seed != g.question.seed || root.riders != g.riders.len() {

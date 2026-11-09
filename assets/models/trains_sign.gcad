@@ -1,0 +1,15 @@
+body post
+plane XY
+ngon 0.12 8
+post: extrude 2
+color #505564
+body board
+plane XY offset=1.75
+rect 1.6 0.1
+board: extrude 0.7
+color #286ec8
+body plate
+plane XY offset=1.85
+rect 1.4 0.03 at=0,-0.06
+plate: extrude 0.5
+color #ffffff

@@ -1,0 +1,17 @@
+body seat
+plane XY offset=0.45
+rect 1.8 0.5
+seat: extrude 0.1
+color #a5693c
+body back
+plane XY offset=0.675
+rect 1.8 0.08 at=0,-0.22
+back: extrude 0.35
+color #a5693c
+body legs
+plane XY
+rect 0.1 0.45 at=0.75,0
+leg_l: extrude 0.5
+rect 0.1 0.45 at=-0.75,0
+leg_r: extrude 0.5
+color #465064

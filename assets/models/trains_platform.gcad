@@ -1,0 +1,10 @@
+body slab
+plane XY
+rect 60 6.3 at=0,-5.35
+slab: extrude 0.4
+color #e1cdaa
+body stripe
+plane XY offset=0.4
+rect 60 0.22 at=0,-2.38
+stripe: extrude 0.025
+color #ffcd28

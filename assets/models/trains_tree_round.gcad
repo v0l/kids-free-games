@@ -1,0 +1,8 @@
+body trunk
+plane XY
+ngon 0.4 8
+trunk: extrude 1.4
+color #825a37
+body crown
+crown: blob 0,0,2.3 r=1.1 mode=shell segments=20
+color #46aa46 part=crown gloss=0.6
