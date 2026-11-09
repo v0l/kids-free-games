@@ -525,7 +525,7 @@ pub fn player_chip_at(view: &View, y: f32) -> Rect {
         .map(|p| p.name)
         .unwrap_or_else(|| "Guest".into());
     let w = measure(&chip_label(&name), 26.0) + 130.0;
-    Rect::new(view.w / 2.0 - w / 2.0, y, w, CHIP_H)
+    Rect::new(view.w / 2.0 - w / 2.0, y, w, view.tap(CHIP_H))
 }
 
 pub fn draw_player_chip(pen: &mut Pen, r: Rect, scroll: f32) {

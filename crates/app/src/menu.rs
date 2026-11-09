@@ -10,8 +10,13 @@ use kg_core::games::Kind;
 use kg_core::geom::{Color, Rect, WHITE};
 use kg_core::sfx::{self, Sfx};
 
-pub const HOME: Rect = Rect::new(14.0, 12.0, 60.0, 48.0);
-pub const MUSIC: Rect = HOME;
+pub fn home_rect(view: &View) -> Rect {
+    view.home()
+}
+
+pub fn music_rect(view: &View) -> Rect {
+    view.home()
+}
 const LAUNCH_TIME: f32 = 0.22;
 const WAVE: f32 = 6.0;
 const TAG_SIZE: f32 = 26.0;
@@ -19,9 +24,14 @@ pub const TAGLINE: &str = "No ads. No tracking. Just play.";
 pub const TITLE: &str = "Learn and Play Kids Games";
 pub const LABEL_H: f32 = 46.0;
 pub const SCROLL_ROOM: f32 = 1.3;
+pub const TILE_MM: f32 = 22.0;
 
 pub fn mute_rect(view: &View) -> Rect {
-    Rect::new(view.w - 74.0, 12.0, 60.0, 48.0)
+    view.top_right(0)
+}
+
+pub fn label_h(view: &View) -> f32 {
+    view.tap(LABEL_H)
 }
 
 pub struct Header {
@@ -37,10 +47,14 @@ pub fn header(view: &View) -> Header {
     let fit = view.w * 0.9 / measure(TITLE, 1.0);
     let title_size = (view.w / 13.0).min(64.0).min(fit);
     let reach = title_size * (0.5 + kg_core::outline::OUTLINE_FRAC + 0.08) + WAVE;
-    let title_y = 14.0 + reach;
+    let corner = view.home();
+    let clear = corner.y + corner.h + 4.0;
+    let wide = view.w / 2.0 + measure(TITLE, title_size) / 2.0 + 8.0 < view.top_right(0).x;
+    let title_y = if wide { 14.0 + reach } else { clear + reach };
     let title_band = (title_y - reach, title_y + reach);
-    let tag_h = TAG_SIZE + 14.0;
-    let tag_w = measure(TAGLINE, TAG_SIZE) + 40.0;
+    let tag_size = TAG_SIZE.min(kg_core::sizing::fit_size(TAGLINE, TAG_SIZE, view.w - 80.0));
+    let tag_h = tag_size + 14.0;
+    let tag_w = measure(TAGLINE, tag_size) + 40.0;
     let mut tag = Rect::new(view.w / 2.0 - tag_w / 2.0, title_band.1 + 8.0, tag_w, tag_h);
     let mut player = crate::profiles::player_chip_at(view, tag.y + tag.h + 12.0);
     let gap = 20.0;
@@ -80,14 +94,18 @@ pub fn layout(view: &View, kinds: &[Kind]) -> Layout {
     let pad = 22.0;
     let top = header(view).bottom + pad * 0.5;
     let secs = sections(kinds);
-    let label_space = secs.len() as f32 * LABEL_H;
+    let label_space = secs.len() as f32 * label_h(view);
+    let min_tile = view.from_mm(TILE_MM).max(view.short() * 0.16);
+    let by_w = |cols: usize| (view.w - pad * (cols as f32 + 1.0)) / cols as f32;
     let fit = |cols: usize| {
         let rows: usize = secs.iter().map(|(_, n)| n.div_ceil(cols)).sum();
-        let by_w = (view.w - pad * (cols as f32 + 1.0)) / cols as f32;
         let by_h = ((view.h * SCROLL_ROOM - top - label_space - pad) / rows as f32 - pad) / 1.18;
-        by_w.min(by_h)
+        by_w(cols).min(by_h.max(min_tile))
     };
-    let cols = (2..=6).max_by(|a, b| fit(*a).total_cmp(&fit(*b))).unwrap();
+    let cols = (2..=6)
+        .filter(|c| *c == 2 || by_w(*c) >= min_tile)
+        .max_by(|a, b| fit(*a).total_cmp(&fit(*b)))
+        .unwrap();
     let tw = fit(cols);
     let th = tw * 1.18;
     let left = (view.w - cols as f32 * tw - (cols as f32 - 1.0) * pad) / 2.0;
@@ -95,8 +113,8 @@ pub fn layout(view: &View, kinds: &[Kind]) -> Layout {
     let mut tiles = vec![];
     let mut labels = vec![];
     for (kind, n) in secs {
-        labels.push((Rect::new(left, y, view.w - left * 2.0, LABEL_H), kind));
-        y += LABEL_H;
+        labels.push((Rect::new(left, y, view.w - left * 2.0, label_h(view)), kind));
+        y += label_h(view);
         for i in 0..n {
             let (c, r) = (i % cols, i / cols);
             tiles.push(Rect::new(
@@ -300,7 +318,7 @@ impl App {
         if let Some((_, game)) = &mut self.current {
             self.home_press = approach(
                 self.home_press,
-                if input.down && HOME.contains(input.pos) {
+                if input.down && home_rect(view).contains(input.pos) {
                     1.0
                 } else {
                     0.0
@@ -308,32 +326,32 @@ impl App {
                 20.0,
                 dt,
             );
-            if self.reporting.is_none() && input.tapped_in(HOME) {
+            if self.reporting.is_none() && input.tapped_in(home_rect(view)) {
                 self.ui_owned = true;
             }
-            if self.reporting.is_none() && (input.tapped_in(HOME) || input.back) {
+            if self.reporting.is_none() && (input.tapped_in(home_rect(view)) || input.back) {
                 self.go_home();
                 return;
             }
             if let Some((hit, age)) = &mut self.reporting {
                 *age += dt;
-                let (_, yes, no) = report_rects(view);
+                let r = report_rects(view);
                 if input.pressed {
                     self.ui_owned = true;
                 }
-                if input.tapped_in(yes) {
+                if input.tapped_in(r.yes) {
                     kg_core::net::block_player(&hit.player, &hit.game);
                     sfx::play(Sfx::Pop);
                     self.reporting = None;
-                } else if input.tapped_in(no) || input.back {
+                } else if input.tapped_in(r.no) || input.back {
                     sfx::play(Sfx::Tap);
                     self.reporting = None;
                 }
                 return;
             }
             if input.pressed {
-                self.ui_owned =
-                    HOME.contains(input.pos) || crate::ui::report_hit_at(input.pos).is_some();
+                self.ui_owned = home_rect(view).contains(input.pos)
+                    || crate::ui::report_hit_at(input.pos).is_some();
                 if let Some(hit) = crate::ui::report_hit_at(input.pos) {
                     sfx::play(Sfx::Tap);
                     self.reporting = Some((hit, 0.0));
@@ -373,12 +391,12 @@ impl App {
             }
             return;
         }
-        if input.tapped_in(mute_rect(view)) {
+        if input.tapped_in(mute_rect(view).offset(vec2(0.0, -self.scroll))) {
             sfx::toggle_mute();
             sfx::play(Sfx::Tap);
             return;
         }
-        if input.tapped_in(MUSIC) {
+        if input.tapped_in(music_rect(view).offset(vec2(0.0, -self.scroll))) {
             sfx::toggle_music();
             sfx::play(Sfx::Tap);
             return;
@@ -403,7 +421,7 @@ impl App {
             self.focus = Some(next);
             let r = rects[next];
             if r.y - self.scroll < header(view).bottom {
-                self.scroll = r.y - header(view).bottom - LABEL_H;
+                self.scroll = r.y - header(view).bottom - label_h(view);
             } else if r.y + r.h - self.scroll > view.h - 16.0 {
                 self.scroll = r.y + r.h - view.h + 16.0;
             }
@@ -451,7 +469,7 @@ impl App {
 
     fn update_lock(&mut self, mut sheet: LockSheet, input: &Input, view: &View, dt: f32) {
         sheet.age += dt;
-        let r = lock_rects(view);
+        let r = lock_rects(view, self.entries[sheet.game].info.name);
         let game = self.entries[sheet.game].info.key;
         sheet.hold = if input.down && r.hold.contains(input.pos) {
             sheet.hold + dt
@@ -505,8 +523,7 @@ impl App {
                     self.feel.flash_color().with_alpha(self.feel.flash_alpha()),
                 );
             }
-            let r = Rect::new(HOME.x, HOME.y - 4.0, HOME.h + 8.0, HOME.h + 8.0);
-            pen.painted_round(r, "icon_home", self.home_press);
+            pen.painted_round(home_rect(view), "icon_home", self.home_press);
             self.draw_curtain(pen, view);
             return;
         }
@@ -518,9 +535,9 @@ impl App {
             return;
         }
         self.draw_title(pen, view);
-        let m = mute_rect(view);
+        let up = vec2(0.0, -self.scroll);
         pen.painted_round(
-            Rect::new(m.x + 4.0, m.y - 4.0 - self.scroll, m.h + 8.0, m.h + 8.0),
+            mute_rect(view).offset(up),
             if sfx::muted() {
                 "icon_audio_off"
             } else {
@@ -529,12 +546,7 @@ impl App {
             0.0,
         );
         pen.painted_round(
-            Rect::new(
-                MUSIC.x,
-                MUSIC.y - 4.0 - self.scroll,
-                MUSIC.h + 8.0,
-                MUSIC.h + 8.0,
-            ),
+            music_rect(view).offset(up),
             if sfx::music_on() {
                 "icon_music"
             } else {
@@ -554,7 +566,7 @@ impl App {
                 Kind::Arcade => ("Play", Tone::Orange),
                 Kind::Learn => ("Learn", Tone::Green),
             };
-            let w = measure(text, 30.0) + 80.0;
+            let w = (measure(text, 30.0) + 80.0).max(view.touch() * 1.6);
             pen.painted_button(Rect::new(r.x, r.y + 2.0, w, r.h - 4.0), text, tone, 0.0, a);
         }
         for (i, (r, e)) in lay.tiles.iter().zip(&self.entries).enumerate() {
@@ -742,88 +754,91 @@ impl App {
     }
 }
 
-pub fn report_rects(view: &View) -> (Rect, Rect, Rect) {
-    let w = 560.0f32.min(view.w - 30.0);
-    let panel = Rect::new(view.center().x - w / 2.0, view.center().y - 190.0, w, 380.0);
-    let bw = w - 80.0;
-    let yes = Rect::new(panel.x + 40.0, panel.y + 160.0, bw, 78.0);
-    let no = Rect::new(panel.x + 40.0, panel.y + 262.0, bw, 78.0);
-    (panel, yes, no)
+pub struct ReportRects {
+    pub sheet: kg_core::sizing::Sheet,
+    pub yes: Rect,
+    pub no: Rect,
+}
+
+const REPORT_NOTE: &str = "We hide them from your boards and tell a grown up.";
+
+pub fn report_rects(view: &View) -> ReportRects {
+    let mut s = kg_core::sizing::Stack::new(view, 560.0);
+    s.text(38.0, "Report this player?");
+    s.text(22.0, REPORT_NOTE);
+    let b = s.buttons(78.0, &["Hide and report", "Cancel"]);
+    let sheet = s.layout();
+    ReportRects {
+        yes: sheet.button(b, 0),
+        no: sheet.button(b, 1),
+        sheet,
+    }
 }
 
 fn draw_report_sheet(pen: &mut Pen, view: &View, hit: &ReportHit, age: f32) {
     let fade = ease_out_cubic(age / 0.15);
     pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.6 * fade));
-    let (panel, yes, no) = report_rects(view);
-    pen.painted_panel(panel, WHITE);
-    let c = panel.center().x;
-    pen.text_center(
-        &format!("Report {}?", hit.name),
-        c,
-        panel.y + 56.0,
-        38.0,
-        crate::ui::INK,
-    );
-    pen.text_center(
-        "We hide them from your boards and tell a grown up.",
-        c,
-        panel.y + 108.0,
-        22.0,
-        crate::ui::BODY,
-    );
-    pen.painted_button(yes, "Hide and report", Tone::Orange, 0.0, 1.0);
-    pen.painted_button(no, "Cancel", Tone::Blue, 0.0, 1.0);
+    let r = report_rects(view);
+    pen.painted_panel(r.sheet.panel, WHITE);
+    let title = format!("Report {}?", hit.name);
+    pen.sheet_text(&r.sheet, 0, Some(&title), crate::ui::INK);
+    pen.sheet_text(&r.sheet, 1, None, crate::ui::BODY);
+    pen.painted_button(r.yes, "Hide and report", Tone::Orange, 0.0, 1.0);
+    pen.painted_button(r.no, "Cancel", Tone::Blue, 0.0, 1.0);
 }
 
 pub struct LockRects {
+    pub sheet: kg_core::sizing::Sheet,
     pub panel: Rect,
     pub primary: Rect,
     pub close: Rect,
     pub hold: Rect,
 }
 
-pub fn lock_rects(view: &View) -> LockRects {
-    let w = 580.0f32.min(view.w - 30.0);
-    let panel = Rect::new(view.center().x - w / 2.0, view.center().y - 230.0, w, 460.0);
-    let bw = w - 80.0;
+fn lock_line(cost: i64, have: i64) -> String {
+    if cost == 0 {
+        "Your first arcade game is free.".to_string()
+    } else if have >= cost {
+        format!("Spend {cost} learning stars to play it. You have {have}.")
+    } else {
+        format!("Learn to earn {cost} stars. You have {have}.")
+    }
+}
+
+const LOCK_HOLD: &str = "Grown up? Hold to open all";
+
+pub fn lock_rects(view: &View, name: &str) -> LockRects {
+    lock_rects_for(view, name)
+}
+
+fn lock_rects_for(view: &View, name: &str) -> LockRects {
+    let cost = kg_core::gate::cost();
+    let have = kg_core::gate::available();
+    let mut s = kg_core::sizing::Stack::new(view, 580.0);
+    s.text(38.0, &format!("{name} is locked"));
+    s.text(24.0, &lock_line(cost, have));
+    s.text(22.0, "Get questions right, quickly, to earn stars.");
+    let b = s.buttons(70.0, &["Learn to unlock", "Not now", LOCK_HOLD]);
+    let sheet = s.layout();
     LockRects {
-        panel,
-        primary: Rect::new(panel.x + 40.0, panel.y + 190.0, bw, 78.0),
-        close: Rect::new(panel.x + 40.0, panel.y + 284.0, bw, 62.0),
-        hold: Rect::new(panel.x + 40.0, panel.y + 370.0, bw, 62.0),
+        panel: sheet.panel,
+        primary: sheet.button(b, 0),
+        close: sheet.button(b, 1),
+        hold: sheet.button(b, 2),
+        sheet,
     }
 }
 
 fn draw_lock_sheet(pen: &mut Pen, view: &View, sheet: &LockSheet, name: &str) {
     let fade = ease_out_cubic(sheet.age / 0.15);
     pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.6 * fade));
-    let r = lock_rects(view);
+    let r = lock_rects_for(view, name);
     pen.painted_panel(r.panel, WHITE);
-    let c = r.panel.center().x;
     let cost = kg_core::gate::cost();
     let have = kg_core::gate::available();
-    pen.text_center(
-        &format!("{name} is locked"),
-        c,
-        r.panel.y + 52.0,
-        38.0,
-        crate::ui::INK,
-    );
-    let line = if cost == 0 {
-        "Your first arcade game is free.".to_string()
-    } else if have >= cost {
-        format!("Spend {cost} learning stars to play it. You have {have}.")
-    } else {
-        format!("Learn to earn {cost} stars. You have {have}.")
-    };
-    pen.text_center(&line, c, r.panel.y + 104.0, 24.0, crate::ui::BODY);
-    pen.text_center(
-        "Get questions right, quickly, to earn stars.",
-        c,
-        r.panel.y + 140.0,
-        22.0,
-        crate::ui::BODY,
-    );
+    pen.sheet_text(&r.sheet, 0, None, crate::ui::INK);
+    pen.sheet_text(&r.sheet, 1, None, crate::ui::BODY);
+    pen.sheet_text(&r.sheet, 2, None, crate::ui::BODY);
     if have >= cost {
         pen.painted_button(r.primary, "Unlock and play", Tone::Green, 0.0, 1.0);
     } else {
@@ -831,13 +846,7 @@ fn draw_lock_sheet(pen: &mut Pen, view: &View, sheet: &LockSheet, name: &str) {
     }
     pen.painted_button(r.close, "Not now", Tone::Blue, 0.0, 1.0);
     let held = (sheet.hold / kg_core::gate::HOLD_SECS).clamp(0.0, 1.0);
-    pen.painted_button(
-        r.hold,
-        "Grown up? Hold to open all",
-        Tone::Orange,
-        held,
-        0.8,
-    );
+    pen.painted_button(r.hold, LOCK_HOLD, Tone::Orange, held, 0.8);
 }
 
 fn progress_bar(pen: &mut Pen, ir: Rect, progress: f32) {
@@ -976,7 +985,7 @@ mod tests {
                 "tagline touches tiles in {v:?}"
             );
             assert!(
-                h.title_band.1 < HOME.y + HOME.h
+                h.title_band.0 >= home_rect(&v).y + home_rect(&v).h
                     || mute_rect(&v).x > v.w / 2.0 + measure(TITLE, h.title_size) / 2.0,
                 "title runs under the mute button in {v:?}"
             );
@@ -1231,7 +1240,7 @@ mod tests {
         app.open(app_index("snake"));
         let leo = "123e4567-e89b-42d3-a456-426614174000";
         app.reporting = Some((hit(leo), 0.0));
-        let (_, yes, _) = report_rects(&v);
+        let yes = report_rects(&v).yes;
         app.update(&Input::press_at(yes.center()), &v, 1.0 / 60.0);
         assert!(app.reporting.is_none());
         assert!(kg_core::net::is_blocked(leo));
@@ -1245,7 +1254,7 @@ mod tests {
         app.open(app_index("snake"));
         let leo = "123e4567-e89b-42d3-a456-426614174000";
         app.reporting = Some((hit(leo), 0.0));
-        let (_, _, no) = report_rects(&v);
+        let no = report_rects(&v).no;
         app.update(&Input::press_at(no.center()), &v, 1.0 / 60.0);
         assert!(app.reporting.is_none());
         assert!(!kg_core::net::is_blocked(leo));
@@ -1258,7 +1267,7 @@ mod tests {
         let mut app = menu();
         app.open(app_index("snake"));
         app.reporting = Some((hit("123e4567-e89b-42d3-a456-426614174000"), 0.0));
-        app.update(&Input::press_at(HOME.center()), &v, 1.0 / 60.0);
+        app.update(&Input::press_at(home_rect(&v).center()), &v, 1.0 / 60.0);
         assert!(app.current.is_some());
         assert!(app.reporting.is_some());
     }
@@ -1269,7 +1278,7 @@ mod tests {
         let mut app = menu();
         app.open(app_index("fruit"));
         app.reporting = Some((hit("123e4567-e89b-42d3-a456-426614174000"), 0.0));
-        let (_, _, no) = report_rects(&v);
+        let no = report_rects(&v).no;
         let mut s = kg_core::engine::Script::new(v);
         app.update(&s.press(no.center()), &v, 1.0 / 60.0);
         assert!(app.reporting.is_none());
@@ -1371,7 +1380,7 @@ mod tests {
         let v = View::ipad_landscape();
         let mut app = menu();
         let (music, sound) = (sfx::music_on(), sfx::muted());
-        app.update(&Input::press_at(MUSIC.center()), &v, 1.0 / 60.0);
+        app.update(&Input::press_at(music_rect(&v).center()), &v, 1.0 / 60.0);
         assert_eq!(sfx::music_on(), !music);
         assert_eq!(sfx::muted(), sound);
         app.update(&Input::press_at(mute_rect(&v).center()), &v, 1.0 / 60.0);
@@ -1427,6 +1436,48 @@ mod tests {
 mod gate_tests {
     use super::*;
 
+    #[test]
+    fn menu_buttons_and_sheets_are_twelve_mm_on_every_screen() {
+        use kg_core::sizing::*;
+        kg_core::save::reset_for_test();
+        kg_core::profile::create("Mia", 0);
+        let app = App::new();
+        for (name, v) in test_views() {
+            let corners = [home_rect(&v), mute_rect(&v)];
+            check_buttons(&v, name, &corners).unwrap();
+            check_apart(name, &corners).unwrap();
+            let h = header(&v);
+            check_buttons(&v, &format!("{name} player chip"), &[h.player]).unwrap();
+            assert!(h.title_band.0 >= 0.0, "{name}");
+            for (r, _) in app.layout(&v).labels {
+                assert!(v.to_mm(r.h) >= TOUCH_MM - 0.01, "{name} label {r:?}");
+            }
+            for t in app.layout(&v).tiles {
+                check_buttons(
+                    &v,
+                    &format!("{name} tile"),
+                    &[Rect::new(0.0, 0.0, t.w, t.h)],
+                )
+                .unwrap();
+            }
+            let r = report_rects(&v);
+            check_sheet(&v, &format!("{name} report"), &r.sheet).unwrap();
+            let l = lock_rects(&v, "Road Hopper");
+            check_sheet(&v, &format!("{name} lock"), &l.sheet).unwrap();
+            check_apart(name, &[l.primary, l.close, l.hold]).unwrap();
+            if v.portrait() {
+                assert!(l.panel.w >= v.short() * 0.85, "{name} lock sheet is narrow");
+                assert!(
+                    r.sheet.panel.w >= v.short() * 0.85,
+                    "{name} report sheet is narrow"
+                );
+            }
+            for sheet in [&r.sheet, &l.sheet] {
+                check_sheet_text(&v, dpr_of(name), name, sheet).unwrap();
+            }
+        }
+    }
+
     fn menu() -> App {
         kg_core::save::reset_for_test();
         kg_core::profile::create("Mia", 0);
@@ -1463,7 +1514,7 @@ mod gate_tests {
         assert!(app.locked.is_some());
         assert!(app.launch.is_none());
         let _ = c;
-        let r = lock_rects(&v);
+        let r = lock_rects(&v, app.entries[i].info.name);
         tap(&mut app, &v, r.primary.center());
         assert!(app.locked.is_none());
         let (l, _) = app.launch.unwrap();
@@ -1477,7 +1528,8 @@ mod gate_tests {
         let i = arcade_index(&app);
         app.pick(i, &app.layout(&v).tiles);
         assert!(app.locked.is_some());
-        tap(&mut app, &v, lock_rects(&v).primary.center());
+        let at = lock_rects(&v, app.entries[i].info.name).primary.center();
+        tap(&mut app, &v, at);
         assert_eq!(app.launch.map(|l| l.0), Some(i));
         assert!(kg_core::gate::open(app.entries[i].info.key));
     }
@@ -1488,7 +1540,8 @@ mod gate_tests {
         let mut app = menu();
         let i = arcade_index(&app);
         app.pick(i, &app.layout(&v).tiles);
-        tap(&mut app, &v, lock_rects(&v).close.center());
+        let at = lock_rects(&v, app.entries[i].info.name).close.center();
+        tap(&mut app, &v, at);
         assert!(app.locked.is_none());
         assert!(!kg_core::gate::open(app.entries[i].info.key));
     }
@@ -1499,7 +1552,7 @@ mod gate_tests {
         let mut app = menu();
         let i = arcade_index(&app);
         app.pick(i, &app.layout(&v).tiles);
-        let at = lock_rects(&v).hold.center();
+        let at = lock_rects(&v, app.entries[i].info.name).hold.center();
         for _ in 0..4 {
             let mut held = Input::press_at(at);
             held.pressed = false;

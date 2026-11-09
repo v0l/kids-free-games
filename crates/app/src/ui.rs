@@ -165,7 +165,48 @@ pub fn chip_rect(view: &View, side: Side, label: &str, value: &str) -> Rect {
     kg_core::fx::chip_rect(view, side, label, value)
 }
 
+pub struct Pop {
+    c: Vec2,
+    s: f32,
+    drop: f32,
+}
+
+impl Pop {
+    pub fn new(c: Vec2, s: f32, drop: f32) -> Self {
+        Self { c, s, drop }
+    }
+
+    pub fn point(&self, p: Vec2) -> Vec2 {
+        self.c + (p - self.c) * self.s + vec2(0.0, self.drop)
+    }
+
+    pub fn rect(&self, r: Rect) -> Rect {
+        let p = self.point(r.point());
+        Rect::new(p.x, p.y, r.w * self.s, r.h * self.s)
+    }
+}
+
 impl Pen {
+    pub fn sheet_text(
+        &mut self,
+        sheet: &kg_core::sizing::Sheet,
+        part: usize,
+        replace: Option<&str>,
+        col: Color,
+    ) {
+        let (lines, size, r) = sheet.lines(part);
+        let cx = r.center().x;
+        if let Some(s) = replace {
+            let size = kg_core::sizing::fit_size(s, size, r.w);
+            let y = sheet.line_y(part, 0);
+            self.text_center(s, cx, y, size, col);
+            return;
+        }
+        for (n, l) in lines.to_vec().iter().enumerate() {
+            self.text_center(l, cx, sheet.line_y(part, n), size, col);
+        }
+    }
+
     pub fn ui(&mut self, name: &str, dest: Rect, d: Draw) {
         self.sprite("ui", name, dest, d);
     }
@@ -195,7 +236,7 @@ impl Pen {
             label,
             r.center().x,
             r.y + r.h * 0.45,
-            r.h * 0.46,
+            kg_core::sizing::label_size(label, r),
             WHITE.with_alpha(alpha),
             tone.ink().with_alpha(alpha),
         );
@@ -224,31 +265,30 @@ impl Pen {
     }
 
     pub fn ribbon(&mut self, view: &View, title: &str, c: Vec2, t: f32) {
-        let size = 54.0;
-        let tw = measure(title, size);
-        let w = (tw + 260.0).min(view.w - 20.0);
-        let rs = crate::art::size("ui", "p_ribbon");
-        let h = w * rs.y / rs.x;
+        self.ribbon_k(view, title, c, t, 1.0);
+    }
+
+    pub fn ribbon_k(&mut self, view: &View, title: &str, c: Vec2, t: f32, k: f32) {
+        let (r, size) = kg_core::sizing::ribbon_rect(view, title, c.x, c.y, k);
         let wob = (t * 2.5).sin() * 0.015;
-        self.ui(
-            "p_ribbon",
-            Rect::new(c.x - w / 2.0, c.y - h / 2.0, w, h),
-            Draw::rot(wob),
-        );
+        self.ui("p_ribbon", r, Draw::rot(wob));
         self.text_outline(
             title,
             c.x,
-            c.y - h * 0.08,
-            size.min(w * 0.7 / tw * size),
+            c.y - r.h * 0.08,
+            size,
             WHITE,
             Color::from_rgba(140, 20, 30, 255),
         );
     }
 
     pub fn hint(&mut self, label: &str, c: Vec2, pulse: f32) {
-        let size = 32.0 * pulse;
-        let w = measure(label, size) + 70.0;
-        let r = Rect::new(c.x - w / 2.0, c.y - 32.0 * pulse, w, 64.0 * pulse);
+        let k = self.view.map_or(1.0, |v| v.text_k());
+        let size = 32.0 * k * pulse;
+        let w = measure(label, size) + 70.0 * k;
+        let w = self.view.map_or(w, |v| w.min(v.w - 16.0));
+        let size = kg_core::sizing::fit_size(label, size, w - 40.0 * k);
+        let r = Rect::new(c.x - w / 2.0, c.y - 32.0 * k * pulse, w, 64.0 * k * pulse);
         self.round_rect(
             r.offset(vec2(0.0, 4.0)),
             r.h / 2.0,
@@ -384,55 +424,104 @@ impl Pen {
         }
     }
 
-    pub fn results(&mut self, view: &View, r: &Results, age: f32) {
+    pub fn results(&mut self, view: &View, r: &Results, age: f32) -> kg_core::sizing::Results {
         let board = shown_rows(r.game, r.rank);
-        self.results_with(view, r, age, board);
+        self.results_with(view, r, age, board)
     }
 
-    pub fn results_with(&mut self, view: &View, r: &Results, age: f32, board: Vec<ShownRow>) {
+    pub fn results_actions(
+        &mut self,
+        view: &View,
+        r: &Results,
+        actions: &[&str],
+        age: f32,
+    ) -> kg_core::sizing::Results {
+        let board = shown_rows(r.game, r.rank);
+        let reportable = board.iter().any(|e| !e.player.is_empty());
+        let lay = kg_core::sizing::results_layout(
+            view,
+            r.title,
+            r.line,
+            actions,
+            board.len(),
+            reportable,
+        );
+        self.results_layout(view, r, age, &board, &lay);
+        lay
+    }
+
+    pub fn results_with(
+        &mut self,
+        view: &View,
+        r: &Results,
+        age: f32,
+        board: Vec<ShownRow>,
+    ) -> kg_core::sizing::Results {
+        let reportable = board.iter().any(|e| !e.player.is_empty());
+        let lay = kg_core::sizing::results_layout(
+            view,
+            r.title,
+            r.line,
+            &[r.action],
+            board.len(),
+            reportable,
+        );
+        self.results_layout(view, r, age, &board, &lay);
+        lay
+    }
+
+    pub fn results_layout(
+        &mut self,
+        view: &View,
+        r: &Results,
+        age: f32,
+        board: &[ShownRow],
+        lay: &kg_core::sizing::Results,
+    ) {
         let fade = ease_out_cubic(age / 0.2);
         self.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55 * fade));
-        let row_h = 46.0;
-        let pw = 580.0f32.min(view.w - 30.0);
-        let ph = 230.0 + board.len() as f32 * row_h + if board.is_empty() { 0.0 } else { 20.0 };
+        let sheet = &lay.sheet;
         let s = ease_out_back(age / 0.32).max(0.01);
-        let c = view.center() + vec2(0.0, 24.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
-        let p = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
+        let drop = (1.0 - ease_out_cubic(age / 0.32)) * 90.0;
+        let pop = Pop::new(sheet.panel.center(), s, drop);
+        let p = pop.rect(sheet.panel);
+        let k = sheet.k * s;
         self.painted_panel(p, WHITE);
-        self.ribbon(view, r.title, vec2(c.x, p.y + 8.0 * s), age);
+        if let Some((rr, _)) = sheet.ribbon {
+            self.ribbon_k(view, r.title, pop.point(rr.center()), age, sheet.k * s);
+        }
         let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
-        self.text_center(
-            r.line,
-            c.x,
-            p.y + 92.0 * s,
-            34.0 * s,
-            BODY.with_alpha(a(0.12)),
-        );
+        let (lines, size, _) = sheet.lines(lay.line);
+        for (n, l) in lines.iter().enumerate() {
+            let at = pop.point(vec2(p.center().x, sheet.line_y(lay.line, n)));
+            self.text_center(l, p.center().x, at.y, size * s, BODY.with_alpha(a(0.12)));
+        }
         if r.rank == Some(0) {
-            let k = ease_out_back(((age - 0.35) / 0.3).clamp(0.0, 1.0));
-            if k > 0.0 {
+            let kk = ease_out_back(((age - 0.35) / 0.3).clamp(0.0, 1.0));
+            if kk > 0.0 {
                 let wob = (age * 6.0).sin() * 0.06;
-                self.trophy(vec2(p.x + 46.0 * s, p.y + 70.0 * s), 92.0 * k);
+                let best = pop.rect(sheet.rect(lay.best));
+                self.trophy(vec2(p.x + 46.0 * k, p.y + 70.0 * k), 92.0 * kk * sheet.k);
+                let st = 70.0 * kk * sheet.k;
                 self.ui(
                     "p_star",
-                    Rect::new(p.x + p.w - 90.0 * s, p.y + 30.0 * s, 70.0 * k, 70.0 * k),
+                    Rect::new(p.x + p.w - 90.0 * k, p.y + 30.0 * k, st, st),
                     Draw::rot(wob),
                 );
                 self.text_outline(
                     "New best!",
-                    c.x,
-                    p.y + 132.0 * s,
-                    30.0 * s * (1.0 + wob * 0.5),
+                    best.center().x,
+                    best.center().y,
+                    30.0 * k * (1.0 + wob * 0.5),
                     GOLD_TEXT,
                     Color::from_rgba(130, 50, 0, 255),
                 );
             }
         }
-        let top = p.y + 160.0 * s;
-        for (i, e) in board.iter().enumerate() {
-            let y = top + i as f32 * row_h * s;
+        let rk = lay.row_h / 46.0 * s;
+        for (i, e) in board.iter().take(lay.rows).enumerate() {
             let la = a(0.2 + i as f32 * 0.05);
-            let row = Rect::new(p.x + 40.0 * s, y, p.w - 80.0 * s, (row_h - 6.0) * s);
+            let row = pop.rect(lay.row(i));
             if e.mine {
                 self.round_rect(
                     row,
@@ -443,38 +532,36 @@ impl Pen {
                 self.round_rect(row, row.h / 2.0, Color::new(0.4, 0.3, 0.6, 0.08 * la));
             }
             let cy = row.center().y;
+            let txt = (26.0 * rk).min(row.h * 0.62);
             self.text_center(
                 &e.place.to_string(),
-                row.x + 26.0 * s,
+                row.x + 26.0 * rk,
                 cy,
-                26.0 * s,
+                txt,
                 BODY.with_alpha(la),
             );
             if e.place == 1 {
-                self.crown(vec2(row.x + 26.0 * s, cy - 24.0 * s), 26.0 * s);
+                self.crown(vec2(row.x + 26.0 * rk, cy - row.h * 0.55), txt);
             }
-            self.avatar(e.avatar, vec2(row.x + 72.0 * s, cy), row.h * 0.95);
-            let nw = measure(&e.name, 26.0) * s;
+            self.avatar(e.avatar, vec2(row.x + 72.0 * rk, cy), row.h * 0.95);
+            let nw = measure(&e.name, txt);
             self.text_center(
                 &e.name,
-                row.x + 104.0 * s + nw / 2.0,
+                row.x + 104.0 * rk + nw / 2.0,
                 cy,
-                26.0 * s,
+                txt,
                 BODY.with_alpha(la),
             );
             let sc = (r.format)(e.score);
-            let sw = measure(&sc, 30.0) * s;
+            let st = (30.0 * rk).min(row.h * 0.7);
+            let sw = measure(&sc, st);
             if !e.player.is_empty() {
-                let hit = Rect::new(
-                    row.x + row.w - 18.0 * s - sw - 56.0 * s,
-                    row.y,
-                    48.0 * s,
-                    row.h,
-                );
-                let ic = 26.0 * s;
+                let hit = lay.report_hit(lay.row(i), sw / s);
+                let ic = (26.0 * rk).min(hit.w * 0.6);
+                let hc = pop.point(hit.center());
                 self.ui(
                     "icon_report",
-                    Rect::new(hit.center().x - ic / 2.0, cy - ic / 2.0, ic, ic),
+                    Rect::new(hc.x - ic / 2.0, cy - ic / 2.0, ic, ic),
                     Draw::tint(Color::new(0.45, 0.35, 0.6, 0.55 * la)),
                 );
                 REPORT_HITS.with(|h| {
@@ -488,48 +575,67 @@ impl Pen {
             }
             self.text_outline(
                 &sc,
-                row.x + row.w - 18.0 * s - sw / 2.0,
+                row.x + row.w - 18.0 * rk - sw / 2.0,
                 cy,
-                30.0 * s,
+                st,
                 WHITE.with_alpha(la),
                 Color::from_rgba(70, 30, 100, 255).with_alpha(la),
             );
         }
-        let by = p.y + p.h - 46.0 * s;
         let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-        let bw = (measure(r.action, 30.0) + 110.0) * s * pulse;
-        self.painted_button(
-            Rect::new(c.x - bw / 2.0, by - 10.0 * s, bw, 78.0 * s * pulse),
-            r.action,
-            Tone::Green,
-            0.0,
-            a(0.3),
-        );
+        let tones = [Tone::Green, Tone::Blue, Tone::Orange];
+        for (j, b) in lay.buttons().iter().enumerate() {
+            let label = sheet.parts[lay.action]
+                .lines
+                .get(j)
+                .map_or("", |s| s.as_str());
+            let br = pop.rect(*b);
+            let br = if j == 0 {
+                br.scaled_about_center(pulse)
+            } else {
+                br
+            };
+            self.painted_button(br, label, tones[j % 3], 0.0, a(0.3));
+        }
     }
 
-    pub fn panel(&mut self, view: &View, title: &str, lines: &[&str], age: f32) {
+    pub fn panel(
+        &mut self,
+        view: &View,
+        title: &str,
+        lines: &[&str],
+        age: f32,
+    ) -> kg_core::sizing::Sheet {
+        let (sheet, ids) = kg_core::sizing::panel_layout(view, title, lines);
         let fade = ease_out_cubic(age / 0.2);
         self.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
-        let pw = 560.0f32.min(view.w - 40.0);
-        let ph = 150.0 + lines.len() as f32 * 64.0;
         let s = ease_out_back(age / 0.32).max(0.01);
-        let c = view.center() + vec2(0.0, 20.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
-        let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
-        self.painted_panel(r, WHITE);
-        self.ribbon(view, title, vec2(c.x, r.y + 8.0 * s), age);
-        for (i, l) in lines.iter().enumerate() {
+        let pop = Pop::new(
+            sheet.panel.center(),
+            s,
+            (1.0 - ease_out_cubic(age / 0.32)) * 90.0,
+        );
+        self.painted_panel(pop.rect(sheet.panel), WHITE);
+        if let Some((rr, _)) = sheet.ribbon {
+            self.ribbon_k(view, title, pop.point(rr.center()), age, sheet.k * s);
+        }
+        let cx = sheet.panel.center().x;
+        for (i, id) in ids.iter().enumerate() {
             let la = ((age - 0.12 - i as f32 * 0.06) / 0.2).clamp(0.0, 1.0);
-            let last = i + 1 == lines.len();
-            let y = r.y + 96.0 * s + i as f32 * 64.0 * s + (1.0 - la) * 16.0;
-            if last && lines.len() > 1 {
+            let rise = (1.0 - la) * 16.0;
+            let part = &sheet.parts[*id];
+            if !part.rects.is_empty() {
                 let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-                let bw = (measure(l, 30.0) + 110.0) * s * pulse;
-                let br = Rect::new(c.x - bw / 2.0, y - 8.0 * s, bw, 78.0 * s * pulse);
-                self.painted_button(br, l, Tone::Green, 0.0, la);
+                let br = pop.rect(part.rects[0]).scaled_about_center(pulse);
+                self.painted_button(br.offset(vec2(0.0, rise)), lines[i], Tone::Green, 0.0, la);
             } else {
-                self.text_center(l, c.x, y + 14.0 * s, 34.0 * s, BODY.with_alpha(la));
+                for (n, l) in part.lines.iter().enumerate() {
+                    let y = pop.point(vec2(cx, sheet.line_y(*id, n))).y + rise;
+                    self.text_center(l, cx, y, part.size * s, BODY.with_alpha(la));
+                }
             }
         }
+        sheet
     }
 
     pub fn avatar(&mut self, i: usize, c: Vec2, d: f32) {

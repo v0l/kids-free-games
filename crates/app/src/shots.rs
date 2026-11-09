@@ -619,32 +619,20 @@ impl Shot {
             }
             Stage::Game(p) => {
                 p.draw(pen, view);
-                home_button(pen);
+                home_button(pen, view);
             }
             Stage::Flappy(p) => {
                 p.draw(pen, view);
                 pen.offset = glam::Vec2::ZERO;
-                let r = kg_core::geom::Rect::new(
-                    crate::menu::HOME.x,
-                    crate::menu::HOME.y - 4.0,
-                    crate::menu::HOME.h + 8.0,
-                    crate::menu::HOME.h + 8.0,
-                );
-                pen.painted_round(r, "icon_home", 0.0);
+                pen.painted_round(crate::menu::home_rect(view), "icon_home", 0.0);
             }
         }
     }
 }
 
-fn home_button(pen: &mut Pen) {
+fn home_button(pen: &mut Pen, view: &View) {
     pen.offset = glam::Vec2::ZERO;
-    let r = kg_core::geom::Rect::new(
-        crate::menu::HOME.x,
-        crate::menu::HOME.y - 4.0,
-        crate::menu::HOME.h + 8.0,
-        crate::menu::HOME.h + 8.0,
-    );
-    pen.painted_round(r, "icon_home", 0.0);
+    pen.painted_round(crate::menu::home_rect(view), "icon_home", 0.0);
 }
 
 fn draw_backdrop(pen: &mut Pen, view: &View) {

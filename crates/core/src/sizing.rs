@@ -169,7 +169,7 @@ pub fn ribbon_h(view: &View, title: &str, k: f32) -> f32 {
 enum Part {
     Space(f32),
     Text { size: f32, text: String },
-    Block(f32),
+    Block(f32, f32),
     Buttons { h: f32, labels: Vec<String> },
 }
 
@@ -195,6 +195,7 @@ pub struct Sheet {
     pub panel: Rect,
     pub ribbon: Option<(Rect, f32)>,
     pub k: f32,
+    pub fits: bool,
     pub parts: Vec<Laid>,
 }
 
@@ -261,7 +262,11 @@ impl Stack {
     }
 
     pub fn block(&mut self, design: f32) -> usize {
-        self.parts.push(Part::Block(design));
+        self.block_min(design, 0.0)
+    }
+
+    pub fn block_min(&mut self, design: f32, min: f32) -> usize {
+        self.parts.push(Part::Block(design, min));
         self.parts.len() - 1
     }
 
@@ -304,7 +309,12 @@ impl Stack {
                 .all(|l| measure(l, size * 0.8) <= w - h * 0.45)
     }
 
-    fn heights(&self, k: f32, inner: f32, force_rows: bool) -> (f32, Vec<(f32, bool, f32, Vec<String>)>) {
+    fn heights(
+        &self,
+        k: f32,
+        inner: f32,
+        force_rows: bool,
+    ) -> (f32, Vec<(f32, bool, f32, Vec<String>)>) {
         let v = &self.view;
         let gap = v.gap();
         let mut total = self.top_room(k) + self.pad(k);
@@ -312,7 +322,7 @@ impl Stack {
         for p in &self.parts {
             let item = match p {
                 Part::Space(d) => (d * k, false, 0.0, vec![]),
-                Part::Block(d) => (d * k, false, 0.0, vec![]),
+                Part::Block(d, min) => ((d * k).max(*min), false, 0.0, vec![]),
                 Part::Text { size, text } => {
                     let s = (size * k).max(v.text(*size)).min(size * k.max(v.text_k()));
                     let lines = wrap(text, s, inner);
@@ -362,12 +372,15 @@ impl Stack {
                 break;
             }
         }
-        let (k, total, items) = pick.unwrap_or_else(|| {
-            let k = 0.4;
-            let inner = panel_w - 2.0 * self.pad(k);
-            let (t, i) = self.heights(k, inner, true);
-            (k, t, i)
-        });
+        let (k, total, items, fits) = match pick {
+            Some((k, t, i)) => (k, t, i, true),
+            None => {
+                let k = 0.4;
+                let inner = panel_w - 2.0 * self.pad(k);
+                let (t, i) = self.heights(k, inner, true);
+                (k, t, i, false)
+            }
+        };
         let ribbon_top = ribbon_top(k);
         let pad = self.pad(k);
         let inner = panel_w - 2.0 * pad;
@@ -398,8 +411,7 @@ impl Stack {
                     } else {
                         let w = if n == 1 {
                             inner.min(
-                                (measure(&labels[0], size * 0.46) + size * 1.6)
-                                    .max(inner * 0.62),
+                                (measure(&labels[0], size * 0.46) + size * 1.6).max(inner * 0.62),
                             )
                         } else {
                             inner
@@ -431,9 +443,121 @@ impl Stack {
             panel,
             ribbon,
             k,
+            fits,
             parts,
         }
     }
+}
+
+pub fn board_shape(game: &str, rank: Option<usize>) -> (usize, bool) {
+    if let Some(online) = crate::net::online_board(game) {
+        return (online.len(), online.iter().any(|r| !r.mine));
+    }
+    let n = crate::profile::board(game).len().min(5);
+    let n = if rank.is_some_and(|r| r >= 5) {
+        n.max(5)
+    } else {
+        n
+    };
+    (n, false)
+}
+
+pub fn results_for(
+    view: &View,
+    game: &str,
+    rank: Option<usize>,
+    title: &str,
+    line: &str,
+    actions: &[&str],
+) -> Results {
+    let (rows, reportable) = board_shape(game, rank);
+    results_layout(view, title, line, actions, rows, reportable)
+}
+
+pub struct Results {
+    pub sheet: Sheet,
+    pub line: usize,
+    pub best: usize,
+    pub board: usize,
+    pub action: usize,
+    pub rows: usize,
+    pub row_h: f32,
+}
+
+impl Results {
+    pub fn row(&self, i: usize) -> Rect {
+        let b = self.sheet.rect(self.board);
+        Rect::new(b.x, b.y + i as f32 * self.row_h, b.w, self.row_h - 4.0)
+    }
+
+    pub fn report_hit(&self, row: Rect, score_w: f32) -> Rect {
+        let d = row.h.max(48.0 * self.sheet.k);
+        Rect::new(
+            row.x + row.w - score_w - d - 18.0 * self.sheet.k,
+            row.y,
+            d,
+            row.h,
+        )
+    }
+
+    pub fn buttons(&self) -> Vec<Rect> {
+        self.sheet.parts[self.action].rects.clone()
+    }
+}
+
+pub fn results_layout(
+    view: &View,
+    title: &str,
+    line: &str,
+    actions: &[&str],
+    rows: usize,
+    reportable: bool,
+) -> Results {
+    let mut n = rows;
+    loop {
+        let mut s = Stack::new(view, 580.0).ribbon(title);
+        let line_i = s.text(34.0, line);
+        let best = s.block(40.0);
+        let k_guess = view.sheet_w(580.0) / 580.0;
+        let min_row = if reportable { view.touch() + 4.0 } else { 0.0 };
+        let row_h = (46.0 * k_guess.max(view.text_k()).min(2.4)).max(min_row);
+        let board = s.block_min(n as f32 * 46.0, n as f32 * row_h);
+        let action = s.buttons(78.0, actions);
+        let sheet = s.layout();
+        if sheet.fits || n == 0 {
+            let row_h = if n == 0 {
+                0.0
+            } else {
+                sheet.rect(board).h / n as f32
+            };
+            return Results {
+                sheet,
+                line: line_i,
+                best,
+                board,
+                action,
+                rows: n,
+                row_h,
+            };
+        }
+        n -= 1;
+    }
+}
+
+pub fn panel_layout(view: &View, title: &str, lines: &[&str]) -> (Sheet, Vec<usize>) {
+    let mut s = Stack::new(view, 560.0).ribbon(title);
+    let mut ids = vec![];
+    for (i, l) in lines.iter().enumerate() {
+        let last = i + 1 == lines.len();
+        ids.push(if last && lines.len() > 1 {
+            s.button(78.0, l)
+        } else if l.is_empty() {
+            s.space(30.0)
+        } else {
+            s.text(34.0, l)
+        });
+    }
+    (s.layout(), ids)
 }
 
 pub struct Keys {
@@ -452,7 +576,11 @@ pub fn keypad(view: &View, area: Rect, n: usize, max_cols: usize, design_h: f32)
         .min(design_h * 1.3)
         .max(min_w);
     let room = (area.h - gap * (rows as f32 - 1.0)) / rows as f32;
-    let kh = room.min(kw.max(design_h)).min(design_h * 1.6).max(view.touch()).max(28.0);
+    let kh = room
+        .min(kw.max(design_h))
+        .min(design_h * 1.6)
+        .max(view.touch())
+        .max(28.0);
     let grid_w = cols as f32 * kw + (cols as f32 - 1.0) * gap;
     let left = area.x + (area.w - grid_w) / 2.0;
     let keys: Vec<Rect> = (0..n)
@@ -574,7 +702,13 @@ pub fn check_keys(view: &View, what: &str, rects: &[Rect]) -> Result<(), String>
     Ok(())
 }
 
-fn check_targets(view: &View, what: &str, rects: &[Rect], w_mm: f32, h_mm: f32) -> Result<(), String> {
+fn check_targets(
+    view: &View,
+    what: &str,
+    rects: &[Rect],
+    w_mm: f32,
+    h_mm: f32,
+) -> Result<(), String> {
     for r in rects {
         let (w, h) = (view.to_mm(r.w), view.to_mm(r.h));
         if w < w_mm - 0.01 || h < h_mm - 0.01 {
@@ -620,12 +754,20 @@ pub fn check_sheet(view: &View, what: &str, sheet: &Sheet) -> Result<(), String>
     check_buttons(view, what, &buttons)?;
     check_apart(what, &buttons)?;
     for (i, p) in sheet.parts.iter().enumerate() {
-        if p.rect.y < sheet.panel.y - 0.5 || p.rect.y + p.rect.h > sheet.panel.y + sheet.panel.h + 0.5 {
-            return Err(format!("{what}: part {i} {:?} spills out of {:?}", p.rect, sheet.panel));
+        if p.rect.y < sheet.panel.y - 0.5
+            || p.rect.y + p.rect.h > sheet.panel.y + sheet.panel.h + 0.5
+        {
+            return Err(format!(
+                "{what}: part {i} {:?} spills out of {:?}",
+                p.rect, sheet.panel
+            ));
         }
         for r in &p.rects {
             if r.x < sheet.panel.x - 0.5 || r.x + r.w > sheet.panel.x + sheet.panel.w + 0.5 {
-                return Err(format!("{what}: button {r:?} spills out of {:?}", sheet.panel));
+                return Err(format!(
+                    "{what}: button {r:?} spills out of {:?}",
+                    sheet.panel
+                ));
             }
         }
         if !p.lines.is_empty() && p.size > 0.0 && p.rects.is_empty() {
@@ -651,6 +793,22 @@ pub fn check_text(view: &View, dpr: f32, what: &str, size: f32) -> Result<(), St
         return Err(format!(
             "{what}: {size} units draws at {px:.0} px, past the {MAX_GLYPH} px glyph bucket"
         ));
+    }
+    Ok(())
+}
+
+pub fn check_sheet_text(view: &View, dpr: f32, what: &str, sheet: &Sheet) -> Result<(), String> {
+    for p in &sheet.parts {
+        if p.rects.is_empty() {
+            check_text(view, dpr, what, p.size)?;
+        } else {
+            for (r, l) in p.rects.iter().zip(&p.lines) {
+                check_text(view, dpr, what, label_size(l, *r))?;
+            }
+        }
+    }
+    if let Some((_, size)) = sheet.ribbon {
+        check_text(view, dpr, what, size)?;
     }
     Ok(())
 }
@@ -701,9 +859,7 @@ mod tests {
             );
             let sheet = s.layout();
             check_sheet(&v, name, &sheet).unwrap();
-            for p in &sheet.parts {
-                check_text(&v, dpr_of(name), name, p.size).unwrap();
-            }
+            check_sheet_text(&v, dpr_of(name), name, &sheet).unwrap();
         }
     }
 
@@ -723,8 +879,43 @@ mod tests {
     }
 
     #[test]
+    fn results_and_panels_fit_every_screen() {
+        for (name, v) in test_views() {
+            for rows in [0, 3, 5] {
+                for reportable in [false, true] {
+                    let r = results_layout(
+                        &v,
+                        "Nice try!",
+                        "Cleared 40 of 52 bricks",
+                        &["Try again", "Levels"],
+                        rows,
+                        reportable,
+                    );
+                    let what = format!("{name} results {rows} rows");
+                    check_sheet(&v, &what, &r.sheet).unwrap();
+                    check_sheet_text(&v, dpr_of(name), &what, &r.sheet).unwrap();
+                    if reportable && r.rows > 0 {
+                        let row = r.row(0);
+                        check_buttons(&v, &what, &[r.report_hit(row, 40.0)]).unwrap();
+                    }
+                    if v.portrait() {
+                        assert!(r.sheet.panel.w >= v.short() * 0.85, "{what}");
+                    }
+                }
+            }
+            let (p, _) = panel_layout(&v, "Sky Jumper", &["Tap to jump", "", "Tap to start"]);
+            check_sheet(&v, name, &p).unwrap();
+            check_sheet_text(&v, dpr_of(name), name, &p).unwrap();
+        }
+    }
+
+    #[test]
     fn long_lines_wrap_inside_the_panel() {
-        let lines = wrap("We hide them from your boards and tell a grown up.", 50.0, 500.0);
+        let lines = wrap(
+            "We hide them from your boards and tell a grown up.",
+            50.0,
+            500.0,
+        );
         assert!(lines.len() >= 2);
         assert!(lines.iter().all(|l| measure(l, 50.0) <= 500.0));
         assert_eq!(wrap("", 30.0, 100.0), vec![String::new()]);
