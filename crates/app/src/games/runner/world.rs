@@ -829,71 +829,8 @@ mod tests {
     }
 
     #[test]
-    fn the_shipped_bake_is_fresh_when_it_exists() {
-        let root = assets_root();
-        if !gcad_bevy::bake::baked_dir(&root).is_dir() {
-            eprintln!("skipped: assets/gcad-baked is missing, run scripts/bake.sh");
-            return;
-        }
-        let problems = gcad_bevy::bake::check(&root, crate::gcad::bake_settings);
-        assert!(
-            problems.is_empty(),
-            "stale bake, run scripts/bake.sh: {problems:#?}"
-        );
-    }
-
-    #[test]
-    fn a_fresh_bake_of_the_models_passes_the_check() {
-        let root = assets_root();
-        let copy = std::env::temp_dir().join(format!("kg-bake-{}", std::process::id()));
-        std::fs::create_dir_all(copy.join("models")).unwrap();
-        for entry in std::fs::read_dir(root.join("models")).unwrap() {
-            let path = entry.unwrap().path();
-            std::fs::copy(&path, copy.join("models").join(path.file_name().unwrap())).unwrap();
-        }
-        let before = gcad_bevy::bake::check(&copy, crate::gcad::bake_settings);
-        assert!(before.iter().all(|p| p.contains("index")), "{before:?}");
-        let baked = gcad_bevy::bake::bake(&copy, crate::gcad::bake_settings).unwrap();
-        assert_eq!(
-            baked.index.entries.len(),
-            PROPS.len() + 1 + crate::games::hotel::world::MODELS.len()
-        );
-        let problems = gcad_bevy::bake::check(&copy, crate::gcad::bake_settings);
-        std::fs::write(copy.join("models/hero.gcad"), "").unwrap();
-        let stale = gcad_bevy::bake::check(&copy, crate::gcad::bake_settings);
-        std::fs::remove_dir_all(&copy).unwrap();
-        assert!(problems.is_empty(), "{problems:#?}");
-        assert!(stale.iter().any(|p| p.contains("hero")), "{stale:?}");
-    }
-
-    #[test]
-    fn the_bake_key_is_the_key_models_load_asks_for() {
-        let root = assets_root();
-        let mut assets: Vec<(String, gcad_bevy::GcadSettings)> =
-            vec![("models/hero.gcad".into(), crate::gcad::settings(None))];
-        for (name, scale) in PROPS {
-            assets.push((
-                format!("models/prop_{name}.gcad"),
-                crate::gcad::settings(scale),
-            ));
-        }
-        for name in crate::games::hotel::world::MODELS {
-            assets.push((crate::gcad::path(name), gcad_bevy::GcadSettings::default()));
-        }
-        for (asset, loaded) in assets {
-            let baked =
-                crate::gcad::bake_settings(&asset).unwrap_or_else(|| panic!("{asset} not baked"));
-            assert_eq!(baked, loaded, "{asset}");
-            let text = std::fs::read_to_string(root.join(&asset)).unwrap();
-            let sources =
-                gcad_bevy::Sources::read(&asset, &text, |n| std::fs::read(root.join(n)).ok())
-                    .unwrap();
-            assert_eq!(
-                gcad_bevy::bake::key_of(&root, &asset, &baked).unwrap(),
-                gcad_bevy::cache_key(&sources, &loaded).unwrap(),
-                "{asset}"
-            );
-        }
+    fn the_app_never_looks_for_a_shipped_bake() {
+        assert_eq!(crate::gcad::plugin().baked_dir, None);
     }
 
     #[test]

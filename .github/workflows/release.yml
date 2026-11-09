@@ -76,10 +76,6 @@ jobs:
         with:
           key: ${{ matrix.target }}
 
-      - name: Bake and check the models
-        shell: bash
-        run: scripts/bake.sh
-
       - name: Build
         run: cargo build --release --locked -p kids_games --target ${{ matrix.target }}
 
@@ -132,13 +128,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
-            libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
-
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -174,13 +163,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libgl1-mesa-dev libx11-dev libxcursor-dev libxrandr-dev libxi-dev \
-            libxkbcommon-dev libwayland-dev libasound2-dev libudev-dev
 
       - uses: dtolnay/rust-toolchain@stable
         with:

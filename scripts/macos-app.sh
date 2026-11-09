@@ -7,7 +7,6 @@ VERSION=${VERSION:-$(sed -n '/^\[workspace.package\]/,/^\[/s/^version = "\(.*\)"
 BUILD=${BUILD:-$VERSION}
 SIGN_IDENTITY=${SIGN_IDENTITY:--}
 APP=$OUT/KidsGames.app
-scripts/bake.sh
 rm -rf "$APP" "$OUT/icon.iconset"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources/assets/art" "$APP/Contents/Resources/assets/models" "$OUT/icon.iconset"
 sed -e "s/__VERSION__/$VERSION/g" -e "s/__BUILD__/$BUILD/g" packaging/macos/Info.plist > "$APP/Contents/Info.plist"
@@ -20,8 +19,6 @@ rm -rf "$OUT/icon.iconset"
 cp "$BIN" "$APP/Contents/MacOS/kids_games"
 cp assets/art/*.kga "$APP/Contents/Resources/assets/art/"
 cp assets/models/* "$APP/Contents/Resources/assets/models/"
-mkdir -p "$APP/Contents/Resources/assets/gcad-baked"
-cp assets/gcad-baked/* "$APP/Contents/Resources/assets/gcad-baked/"
 cp assets/sound.kgs assets/sound_words.kgs assets/Fredoka-SemiBold.ttf "$APP/Contents/Resources/assets/"
 echo "APPL????" > "$APP/Contents/PkgInfo"
 if [ -n "${ENTITLEMENTS:-}" ]; then

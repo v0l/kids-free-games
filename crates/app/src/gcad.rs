@@ -1,4 +1,4 @@
-use crate::games::runner::world::{Models, PROPS};
+use crate::games::runner::world::Models;
 use bevy::platform::time::Instant;
 use bevy::prelude::*;
 use bevy::world_serialization::WorldAsset;
@@ -16,17 +16,11 @@ pub fn settings(scale: Option<f32>) -> GcadSettings {
     }
 }
 
-pub fn bake_settings(asset: &str) -> Option<GcadSettings> {
-    if asset == "models/hero.gcad" {
-        return Some(settings(None));
+pub fn plugin() -> GcadPlugin {
+    GcadPlugin {
+        baked_dir: None,
+        ..GcadPlugin::default()
     }
-    let name = asset.strip_prefix("models/")?.strip_suffix(".gcad")?;
-    if crate::games::hotel::world::MODELS.contains(&name) {
-        return Some(GcadSettings::default());
-    }
-    let prop = name.strip_prefix("prop_")?;
-    let (_, scale) = PROPS.iter().find(|(p, _)| *p == prop)?;
-    Some(settings(*scale))
 }
 
 pub fn path(name: &str) -> String {
@@ -225,7 +219,7 @@ pub struct ModelsPlugin;
 
 impl Plugin for ModelsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(GcadPlugin::default())
+        app.add_plugins(plugin())
             .init_resource::<Library>()
             .add_systems(Startup, warm_up)
             .add_systems(Update, report_ready.run_if(resource_exists::<Warming>));
@@ -284,10 +278,10 @@ fn report_ready(
     });
     if warming.pending.is_empty() {
         info!(
-            "every model ready {:.0} ms after start, {} builds, {} baked",
+            "every model ready {:.0} ms after start, {} builds, {} from disk cache",
             started.elapsed().as_secs_f64() * 1000.0,
             stats.builds(),
-            stats.hits_baked()
+            stats.hits_disk()
         );
         commands.remove_resource::<Warming>();
     }

@@ -215,7 +215,7 @@ fn main() {
                 .disable::<WinitPlugin>(),
         )
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(5)))
-        .add_plugins(gcad_bevy::GcadPlugin::default())
+        .add_plugins(kids_games::gcad::plugin())
         .insert_resource(ClearColor(Color::srgb(0.78, 0.78, 0.8)))
         .insert_resource(GlobalAmbientLight {
             color: Color::WHITE,

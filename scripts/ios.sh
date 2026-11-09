@@ -6,7 +6,6 @@ BUNDLE_ID=${BUNDLE_ID:-io.v0l.kidsgames}
 PROFILE=${PROFILE:-small}
 APP=target/ios/KidsGames.app
 start=$(date +%s)
-scripts/bake.sh
 cargo build -p kids_games --bin kids_games --profile "$PROFILE" --target "$TARGET"
 rm -rf "$APP"
 mkdir -p "$APP"
@@ -15,8 +14,6 @@ mkdir -p "$APP/assets/art"
 cp assets/art/*.kga "$APP/assets/art/"
 mkdir -p "$APP/assets/models"
 cp assets/models/* "$APP/assets/models/"
-mkdir -p "$APP/assets/gcad-baked"
-cp assets/gcad-baked/* "$APP/assets/gcad-baked/"
 cp assets/sound.kgs assets/sound_words.kgs "$APP/assets/"
 sed "s/__BUNDLE_ID__/$BUNDLE_ID/" ios/Info.plist > "$APP/Info.plist"
 if [ "$TARGET" = aarch64-apple-ios ]; then

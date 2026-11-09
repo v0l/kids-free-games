@@ -17,35 +17,32 @@ The five buildings are `prop_building1.gcad` to `prop_building5.gcad`, two lines
 
 `ModelsPlugin` starts loading every model the runner uses (`Models::load`: hero, six clips, 13 props) at app start and logs `model <name> ready N ms after start` as each one lands; the runner reuses those handles. The game runs Bevy without `multi_threaded`, so Bevy's task pools, and the builds on them, run on the main thread during the first frames, the same as with the old loader. gcad-bevy keeps each build in memory, and on desktop also on disk (`~/.cache/gcad/bevy`, keyed on gcad version, text, includes and settings), so the second start needs no build at all. The runner stays on "Getting ready..." and ignores taps until the hero has loaded (`RunnerPlay::loaded`).
 
-## The shipped bake
+## Built at startup, nothing baked
 
-`scripts/bake.sh` runs `cargo run --release -p kids_games --example bake` (gcad-bevy's `bake::bake` with `kids_games::gcad::bake_settings`, the same `settings(scale)` the runner loads with) and then `--check`. It writes `assets/gcad-baked/`: one `.bin` per model and an index, 14 files and 1.33 MB (389 KB gzipped), in 0.6 s. `scripts/android.sh`, `scripts/ios.sh`, `scripts/web.sh`, `scripts/macos-app.sh` and the desktop job of the release workflow run it and the three app scripts copy `assets/gcad-baked/` next to `assets/models/`. The directory is generated, not committed (`.gitignore`): it changes on every gcad bump and rebuilding it costs less than a second.
+The app ships no pre-built meshes (decision for #371, reversing the shipping part of #358). `kids_games::gcad::plugin()` is `GcadPlugin` with `baked_dir: None`, so the loader never looks for `assets/gcad-baked` and the web makes no request for it. Bake support stays in gcad-engines and gcad2glb as a library feature for other engines. `scripts/bake.sh`, the `bake` example and `bake_settings` are gone, and no build script or release job bakes or copies anything but `assets/models/*.gcad`. The test `the_app_never_looks_for_a_shipped_bake` pins the plugin setting; the budget and named-parts tests over every shipped `.gcad` are unchanged.
 
-Tests in `world.rs` keep the bake honest: `the_bake_key_is_the_key_models_load_asks_for` checks that `bake::key_of` equals the cache key of every `Models::load` asset, and `a_fresh_bake_of_the_models_passes_the_check` bakes a copy of the models, checks it passes and that editing a model makes `bake::check` report it. `bake_settings` is built from `PROPS`, so a new prop is baked and checked without another edit.
+`ModelsPlugin` builds all 50 models (hero, props and the hotel set) in the startup warm-up and logs `every model ready N ms after start, B builds, D from disk cache`. gcad-bevy's writable disk cache is kept: the first start fills it, later starts read it. The web has no disk cache, so it builds on every start. Native builds use the `parallel` feature; wasm32 builds on the main thread.
 
-Time until every model is ready (release, `ModelsPlugin`):
+Time until every model is ready (release, same machines as before):
 
-| | no bake, empty cache | no bake, warm disk cache | shipped bake, first start |
+| | first start, empty cache | second start, warm cache | shipped bake (old, 0 builds) |
 |---|---|---|---|
-| Desktop, private headless sway | 672-730 ms, 14 builds | 103-113 ms | 108-112 ms, 0 builds |
-| Android emulator `kidsgames-test` x86_64 | 1337 ms, 14 builds | 558-675 ms | 496-798 ms, 0 builds |
-| iOS simulator, iPad Pro 11-inch (M4) | 942 ms, 14 builds | 110-112 ms | 106-115 ms, 0 builds |
-| Web, headless Chrome | 2765-3044 ms, 14 builds | no disk cache | 2081-2677 ms, 0 builds |
+| Desktop, private headless sway | 762 ms, 50 builds | 116 ms | 108-124 ms |
+| Android emulator `kidsgames-test` x86_64 | 2350 ms, 50 builds | 1161 ms | 496-1078 ms |
+| iOS simulator, iPad Pro 11-inch (M4) | 1803 ms, 50 builds | 191 ms | 106-179 ms |
+| Web, headless Chrome | 3000-3184 ms, 50 builds | no disk cache | 2081-2677 ms |
 
-The game logs `every model ready N ms after start, B builds, K baked` when the last model lands. Final branch, shipped bake: desktop headless sway 121-124 ms, Android emulator `kidsgames-test` x86_64 948-1078 ms (software rendering, busy host), iOS simulator iPad Pro 11-inch (M4) 174-179 ms, web headless Chrome 2514 ms, all with 0 builds and 14 baked.
-
-On the web the models wait for the 13 MB of sound files that load first; loading them after the models would cut that number further.
+The menu does not wait for the models: only the runner and the hotel need them, and the runner already shows "Getting ready..." until the hero has loaded. The web is about 0.5 s slower than with the bake and it still lands behind the 13 MB of sound files, so the warm-up was left as it is.
 
 Source sizes: the sixteen `.gcad` files are 140549 B (29069 B gzipped), of which the props are 9313 B. The twelve prop GLBs they replace were 1100352 B; before that the hero and tree GLBs were 722524 B.
 
-With the shipped bake (same machine and profile, measured by building with and without `assets/gcad-baked`):
+Sizes without the bake (same machine and profile as the bake measurements):
 
-| | without bake | with bake | delta |
+| | with bake | without bake | delta |
 |---|---|---|---|
-| Web bundle (`scripts/web.sh`, small) | 49615608 B | 50951885 B | +1336277 B raw (392868 B gzipped) |
-| Android x86_64 APK (`scripts/android.sh`, small) | 35720095 B | 36121911 B | +401816 B (the APK deflates it) |
-| iOS simulator app | 40900 KiB | 42240 KiB | +1340 KiB |
-
+| Web bundle (`scripts/web.sh`, small) | 50951885 B | 49664695 B | -1287190 B raw |
+| Android x86_64 APK (`scripts/android.sh`, small) | 36121911 B | 35763384 B | -358527 B (the APK deflates it) |
+| iOS simulator app | 42240 KiB | 41092 KiB | -1148 KiB |
 
 ## Tests
 
@@ -160,7 +157,7 @@ Garden (`crates/app/src/games/garden/world.rs`) has no fixed 3D object (no bed f
 ### Hotel numbers
 
 - Triangles: a standing person is 1696 (the primitive version was 4952: ten 480-triangle spheres, six boxes and two 10-sided cylinders), the swimmer about 1500, every prop under 1500.
-- Build on the Android emulator `kidsgames-test` (x86_64, cold start with app data cleared, `gcad_bevy` debug log, measured before the shipped bake landed), three runs: the 36 hotel models take 0 or 1 ms each, 8 to 10 ms together, against the 150 ms budget. The hero (1034-1088 ms) and tree (219-241 ms) are unchanged. `bake_settings` now lists every hotel model, so release builds ship them in `assets/gcad-baked` (50 entries) and do not build them at all.
+- Build on the Android emulator `kidsgames-test` (x86_64, cold start with app data cleared, `gcad_bevy` debug log, measured before the shipped bake landed), three runs: the 36 hotel models take 0 or 1 ms each, 8 to 10 ms together, against the 150 ms budget. The hero (1034-1088 ms) and tree (219-241 ms) are unchanged. Release builds now build them at startup, see "Built at startup".
 - Emulator: the hotel opens and draws with every model from `.gcad` (`docs/shots/hotel-emulator.png`).
 - Screenshots 170-183 before and after (`scripts/shots.sh`, headless Chrome): 99.5-99.95% of pixels within 16 levels, mean difference 0.03-0.27. The low-poly shells differ from the old 20-segment spheres at the edges only.
 - Sizes against 83f7744 (same machine and profile): web bundle 49540006 B to 49664393 B, wasm 25939198 B to 26053064 B, Android arm64 APK 35774371 B to 35841018 B. The 42 hotel `.gcad` files are 10521 B (2543 B gzipped). iOS not rebuilt for this step.
