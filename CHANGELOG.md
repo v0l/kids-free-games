@@ -6,6 +6,8 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-11-09
+
 ### Added
 
 - Helix ball and tower pole, and Paper Land heads and debris cubes, are `.gcad` files (`helix_*`, `paper_*`) built at startup.
