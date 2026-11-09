@@ -61,6 +61,13 @@ impl Cam {
         vec2(f.x + (n.x * 0.5 + 0.5) * f.w, f.y + (0.5 - n.y * 0.5) * f.h)
     }
 
+    pub fn ground_dir(&self, screen_dir: Vec2) -> Vec2 {
+        let (fwd, right, _) = self.basis();
+        let r = vec2(right.x, right.z).normalize_or_zero();
+        let u = vec2(fwd.x, fwd.z).normalize_or_zero();
+        r * screen_dir.x - u * screen_dir.y
+    }
+
     pub fn ground(&self, view: &View, s: Vec2, height: f32) -> Option<Vec2> {
         let f = view.full();
         let (fwd, right, up) = self.basis();

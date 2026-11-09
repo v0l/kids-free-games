@@ -78,6 +78,7 @@ pub struct Clash {
     pub combo: u32,
     pub combo_t: f32,
     pub steer: f32,
+    pub stick: DirControl,
     pub toast: Option<(String, f32)>,
     pub press: Option<Press>,
 }
@@ -249,6 +250,7 @@ impl Clash {
             combo: 0,
             combo_t: 0.0,
             steer: 0.0,
+            stick: DirControl::new(DirectionMode::Stick),
             toast: None,
             press: None,
         };
@@ -397,7 +399,7 @@ impl Clash {
         match self.screen {
             Screen::Title => self.update_title(input, view, dt),
             Screen::Tower => self.update_tower(input, view, dt),
-            Screen::Playing => self.update_playing(input, view, dt),
+            Screen::Playing => self.update_playing(input, dt),
             Screen::Over => self.update_over(input, view, dt),
         }
     }
@@ -507,7 +509,7 @@ impl Clash {
         }
     }
 
-    fn update_playing(&mut self, input: &Input, view: &View, dt: f32) {
+    fn update_playing(&mut self, input: &Input, dt: f32) {
         if input.back {
             self.show_title();
             return;
@@ -526,13 +528,15 @@ impl Clash {
         }
         self.run_t += dt;
         if self.ending == 0.0 {
-            if let Some(at) = input.aim(self.centre(view), STEER_DEAD_MM) {
-                let d = at - self.centre(view);
-                self.steer = d.y.atan2(d.x);
-            } else if !input.down {
+            let held = self.stick.read(input, dt);
+            if input.axis != Vec2::ZERO {
                 let turn = sim::turn_for(self.world.player().level()) * dt * 0.8;
                 self.steer = sim::wrap_angle(self.steer + turn * input.axis.x);
+            } else if let Some(a) = held.angle() {
+                self.steer = a;
             }
+        } else {
+            self.stick.reset();
         }
         let steer = if self.world.player_alive() {
             Some(self.steer)
@@ -975,18 +979,45 @@ mod tests {
     }
 
     #[test]
-    fn steering_follows_the_finger_relative_to_the_snake() {
+    fn the_heading_follows_the_stick_angle_not_the_finger_position() {
+        let v = View::ipad_landscape();
+        for (drag, want) in [
+            (vec2(0.0, 1.0), std::f32::consts::FRAC_PI_2),
+            (vec2(1.0, 0.0), 0.0),
+            (vec2(0.0, -1.0), -std::f32::consts::FRAC_PI_2),
+            (vec2(-1.0, 0.0), std::f32::consts::PI),
+        ] {
+            let mut c = fresh();
+            c.start(Mode::Arena, 1);
+            let mut sc = Script::new(v);
+            let from = vec2(120.0, 600.0);
+            let r = DirControl::radius(&sc.press(from)) * 0.8;
+            let mut frames = vec![sc.press(from)];
+            frames.extend((0..30).map(|_| sc.drag_to(from + drag * r)));
+            for f in &frames {
+                c.update(f, &v, 1.0 / 60.0);
+            }
+            let diff = sim::wrap_angle(c.steer - want).abs();
+            assert!(diff < 0.05, "{drag:?} -> {}", c.steer);
+        }
+    }
+
+    #[test]
+    fn releasing_the_stick_keeps_the_last_heading_and_hides_the_stick() {
         let mut c = fresh();
         let v = View::ipad_landscape();
         c.start(Mode::Arena, 1);
-        let target = c.centre(&v) + vec2(0.0, 200.0);
-        for _ in 0..60 {
-            let mut i = Input::press_at(target);
-            i.pressed = false;
-            c.update(&i, &v, 1.0 / 60.0);
+        let mut sc = Script::new(v);
+        let from = vec2(300.0, 300.0);
+        c.update(&sc.press(from), &v, 1.0 / 60.0);
+        for _ in 0..10 {
+            c.update(&sc.drag_to(from + vec2(0.0, 60.0)), &v, 1.0 / 60.0);
         }
-        let a = c.world.player().angle;
-        assert!((a - std::f32::consts::FRAC_PI_2).abs() < 0.3, "{a}");
+        assert!(c.stick.active);
+        c.update(&sc.release(), &v, 1.0 / 60.0);
+        c.update(&sc.idle(), &v, 1.0 / 60.0);
+        assert!(!c.stick.active);
+        assert!((c.steer - std::f32::consts::FRAC_PI_2).abs() < 0.05);
     }
 
     #[test]

@@ -16,7 +16,6 @@ pub const SHEET: &str = "hotel";
 pub struct HotelPlay {
     pub h: Hotel,
     pub sparks: Particles,
-    mm: f32,
 }
 
 impl HotelPlay {
@@ -28,7 +27,6 @@ impl HotelPlay {
         Self {
             h,
             sparks: Particles::default(),
-            mm: kg_core::engine::FALLBACK_MM,
         }
     }
 
@@ -49,7 +47,6 @@ impl Default for HotelPlay {
 
 impl crate::games::Play for HotelPlay {
     fn update(&mut self, input: &Input, view: &View, dt: f32) {
-        self.mm = input.mm();
         self.h.update(input, view, dt);
         self.sparks.update(dt);
         let cam = self.h.cam(view);
@@ -66,7 +63,7 @@ impl crate::games::Play for HotelPlay {
         pen.particles(&self.sparks);
         hud.draw_flyers(pen);
         hud.draw_hud(pen);
-        hud.draw_stick(pen, self.mm);
+        hud.draw_stick(pen);
         hud.draw_overlay(pen);
     }
 

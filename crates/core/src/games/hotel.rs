@@ -615,7 +615,7 @@ impl Game for Hotel {
         self.age_effects(dt);
         match self.mode {
             Mode::Play => {
-                let dir = self.stick.read(input, Vec2::ZERO, dt).opt();
+                let dir = self.stick.read(input, dt).opt();
                 let world = dir.map(|d| self.cam(view).ground_dir(d));
                 if world.is_some() && !self.learned_move {
                     self.learned_move = true;

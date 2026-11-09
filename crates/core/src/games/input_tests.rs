@@ -272,7 +272,7 @@ fn spell_opens_a_level_from_a_scripted_tap() {
 }
 
 #[test]
-fn clash_starts_on_enter_and_steers_toward_a_scripted_finger() {
+fn clash_starts_on_enter_and_steers_by_a_scripted_stick() {
     use super::clash::*;
     fresh();
     let v = view();
@@ -282,9 +282,9 @@ fn clash_starts_on_enter_and_steers_toward_a_scripted_finger() {
         g.update(&f, &v, DT);
     }
     assert_eq!(g.screen, Screen::Playing);
-    let below = g.centre(&v) + vec2(0.0, 250.0);
-    let mut frames = vec![sc.press(below)];
-    frames.push(sc.drag_to(below));
+    let start = vec2(200.0, 500.0);
+    let mut frames = vec![sc.press(start)];
+    frames.push(sc.drag_to(start + vec2(0.0, 250.0)));
     for f in &frames {
         g.update(f, &v, DT);
     }

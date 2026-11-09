@@ -112,6 +112,7 @@ pub struct Paper {
     pub skill: f32,
     pub milestone: Option<i64>,
     pub steer: Option<f32>,
+    pub stick: DirControl,
     last_claim_say: f32,
 }
 
@@ -161,6 +162,7 @@ impl Paper {
             skill,
             milestone: arena::next_milestone(best.max(0)),
             steer: None,
+            stick: DirControl::new(DirectionMode::Stick),
             last_claim_say: -10.0,
         };
         g.zoom = g.target_zoom();
@@ -228,7 +230,8 @@ impl Paper {
             .collect()
     }
 
-    fn read_input(&self, input: &Input, view: &View) -> Option<f32> {
+    fn read_input(&mut self, input: &Input, view: &View) -> Option<f32> {
+        let held = self.stick.read(input, 0.0);
         let keys = if input.axis != Vec2::ZERO {
             input.axis
         } else {
@@ -237,12 +240,8 @@ impl Paper {
         if keys != Vec2::ZERO {
             return Some(world::angle_of(keys));
         }
-        let head = self.to_screen(view, self.me().pos);
-        if let Some(finger) = input.aim(head, STEER_DEAD_MM) {
-            let at = self.eye(view).ground(view, finger, camera::SLAB)?;
-            return Some(world::angle_of(at - self.me().pos));
-        }
-        input.swipe.map(|d| world::angle_of(d.delta().as_vec2()))
+        let dir = held.opt()?;
+        Some(world::angle_of(self.eye(view).ground_dir(dir)))
     }
 
     pub fn aim(&mut self, angle: f32) {

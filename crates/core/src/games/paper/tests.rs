@@ -640,37 +640,39 @@ fn the_game_waits_for_the_first_touch() {
     }
     assert_eq!(g.state, State::Ready);
     assert_eq!(g.me().pos, at);
-    let below = g.to_screen(&v, at) + vec2(0.0, 200.0);
-    g.update(&Input::press_at(below), &v, 1.0 / 60.0);
+    let mut sc = crate::input::Script::new(v);
+    let from = vec2(300.0, 300.0);
+    let r = DirControl::radius(&sc.idle());
+    g.update(&sc.press(from), &v, 1.0 / 60.0);
+    g.update(&sc.drag_to(from + vec2(0.0, r)), &v, 1.0 / 60.0);
     assert_eq!(g.state, State::Playing);
-    assert!((g.me().want - DOWN).abs() < 0.1);
+    let want = world::angle_of(g.eye(&v).ground_dir(vec2(0.0, 1.0)));
+    assert!(wrap_angle(g.me().want - want).abs() < 0.1);
 }
 
 #[test]
-fn holding_a_finger_steers_the_head_toward_it() {
+fn holding_the_stick_steers_the_head_by_the_drag_angle() {
     fresh_player();
     let v = View::ipad_landscape();
     let mut g = Paper::new();
     g.state = State::Playing;
     g.w.players[0].speed = arena::PLAYER_SPEED;
-    let hold = |g: &Paper, off: Vec2| Input {
-        pos: g.to_screen(&v, g.me().pos) + off,
-        down: true,
-        ..Default::default()
-    };
-    let ahead = g.me().pos + vec2(-9.0, -9.0);
-    let target = -PI * 0.75;
-    let off = g.to_screen(&v, ahead) - g.to_screen(&v, g.me().pos);
+    let mut sc = crate::input::Script::new(v);
+    let from = vec2(300.0, 300.0);
+    let r = DirControl::radius(&sc.idle());
+    g.update(&sc.press(from), &v, 1.0 / 60.0);
+    let drag = vec2(1.0, -1.0).normalize();
     for _ in 0..40 {
-        let i = hold(&g, off);
-        g.update(&i, &v, 1.0 / 60.0);
+        g.update(&sc.drag_to(from + drag * r * 0.8), &v, 1.0 / 60.0);
     }
-    assert!((g.me().angle - target).abs() < 0.12, "{}", g.me().angle);
-    let i = hold(&g, vec2(3.0, 0.0));
-    g.update(&i, &v, 1.0 / 60.0);
+    let want = world::angle_of(g.eye(&v).ground_dir(drag));
+    assert!(wrap_angle(g.me().want - want).abs() < 0.1, "{}", g.me().want);
+    assert!(wrap_angle(g.me().angle - want).abs() < 0.2, "{}", g.me().angle);
+    let kept = g.me().want;
+    g.update(&sc.drag_to(from + vec2(1.0, 0.0)), &v, 1.0 / 60.0);
     assert!(
-        (g.me().want - g.me().angle).abs() < 0.2,
-        "a finger on the head is ignored"
+        wrap_angle(g.me().want - kept).abs() < 0.2,
+        "a finger inside the dead zone is ignored"
     );
 }
 

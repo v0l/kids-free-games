@@ -386,15 +386,10 @@ impl Hud<'_> {
         }
     }
 
-    pub fn draw_stick(&self, pen: &mut Pen, mm: f32) {
-        let s = &self.h.stick;
-        if !s.active || self.h.mode != Mode::Play {
-            return;
+    pub fn draw_stick(&self, pen: &mut Pen) {
+        if self.h.mode == Mode::Play {
+            crate::stick::draw_stick(pen, &self.h.stick);
         }
-        let r = (kg_core::engine::STICK_MM * mm).max(30.0);
-        pen.circle(s.origin, r, Color::new(1.0, 1.0, 1.0, 0.18));
-        let k = s.origin + s.knob.clamp_length_max(r);
-        pen.circle(k, r * 0.45, Color::new(1.0, 1.0, 1.0, 0.55));
     }
 
     pub fn draw_overlay(&self, pen: &mut Pen) {

@@ -541,16 +541,24 @@ fn draw_aim(g: &Clash, pen: &mut Pen, view: &View) {
     }
     let c = g.to_screen(view, p.head());
     let dir = vec2(g.steer.cos(), g.steer.sin());
+    let side = vec2(-dir.y, dir.x);
     let r = p.radius() * g.zoom;
-    let fade = if g.run_t < 6.0 { 0.9 } else { 0.35 };
-    for k in 0..3 {
-        let at = c + dir * (r * 2.2 + k as f32 * r * 0.9);
-        pen.circle(
-            at,
-            r * (0.22 - k as f32 * 0.04),
-            Color::new(1.0, 1.0, 1.0, fade - k as f32 * 0.15),
-        );
-    }
+    let fade = if g.run_t < 6.0 { 1.0 } else { 0.8 };
+    let from = c + dir * r * 1.5;
+    let tip = c + dir * r * 3.6;
+    let wing = r * 0.8;
+    let back = tip - dir * wing * 1.3;
+    let width = (r * 0.3).max(5.0);
+    let white = Color::new(1.0, 1.0, 1.0, fade);
+    let outline = PLUM.with_alpha(fade);
+    pen.line(from, back, width + 5.0, outline);
+    pen.line(tip, back + side * wing, width + 5.0, outline);
+    pen.line(tip, back - side * wing, width + 5.0, outline);
+    pen.line(from, back, width, white);
+    pen.line(tip, back + side * wing, width, white);
+    pen.line(tip, back - side * wing, width, white);
+    pen.circle(tip, width * 0.5 + 2.5, outline);
+    pen.circle(tip, width * 0.5, white);
 }
 
 fn draw_minimap(g: &Clash, pen: &mut Pen, view: &View) {
@@ -730,6 +738,9 @@ fn draw_play(g: &Clash, pen: &mut Pen, view: &View) {
         pen.fill_screen(view, WHITE.with_alpha(g.flash * 0.5));
     }
     draw_hud(g, pen, view);
+    if g.screen == Screen::Playing && g.ending == 0.0 {
+        crate::stick::draw_stick(pen, &g.stick);
+    }
     if g.combo >= 3 && g.combo_t > 0.0 {
         pen.text_outline(
             &format!("x{}", g.combo),
@@ -752,7 +763,7 @@ fn draw_play(g: &Clash, pen: &mut Pen, view: &View) {
     if g.run_t < 7.0 && g.ending == 0.0 {
         let pulse = 1.0 + (g.t * 5.0).sin() * 0.05;
         let (label, y) = if g.training {
-            ("Drag to steer, eat the gold eggs", view.h * 0.82)
+            ("Drag anywhere to steer, eat gold eggs", view.h * 0.82)
         } else {
             ("Eat smaller snakes", view.h * 0.86)
         };

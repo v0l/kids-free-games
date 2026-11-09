@@ -478,9 +478,11 @@ pub fn draw(g: &Paper, pen: &mut Pen, view: &View) {
         State::Ready => {
             draw_board(g, pen, view);
             draw_ready(g, pen, view);
+            crate::stick::draw_stick(pen, &g.stick);
         }
         State::Playing => {
             draw_arrows(g, pen, view);
+            crate::stick::draw_stick(pen, &g.stick);
             draw_share(g, pen);
             draw_board(g, pen, view);
             draw_minimap(g, pen, view);

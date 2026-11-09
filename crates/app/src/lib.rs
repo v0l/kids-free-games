@@ -11,6 +11,7 @@ pub mod menu;
 pub mod packs;
 pub mod paint;
 pub mod platform;
+pub mod stick;
 pub mod profiles;
 pub mod shots;
 pub mod text;

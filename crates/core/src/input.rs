@@ -105,7 +105,6 @@ pub const HOLD_SECS: f32 = 0.45;
 pub const PAD_DEAD: f32 = 0.2;
 pub const STICK_MM: f32 = 9.0;
 pub const STICK_DEAD: f32 = 0.12;
-pub const STEER_DEAD_MM: f32 = 2.5;
 pub const AXIS_ON: f32 = 0.5;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -164,7 +163,6 @@ impl Direction {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DirectionMode {
     Stick,
-    Steer,
     Swipe,
     Keys,
 }
@@ -175,6 +173,7 @@ pub struct DirControl {
     pub origin: Vec2,
     pub knob: Vec2,
     pub active: bool,
+    pub radius: f32,
     pub smoothing: f32,
     smooth: Vec2,
 }
@@ -186,6 +185,7 @@ impl DirControl {
             origin: Vec2::ZERO,
             knob: Vec2::ZERO,
             active: false,
+            radius: 0.0,
             smoothing: 0.0,
             smooth: Vec2::ZERO,
         }
@@ -206,8 +206,8 @@ impl DirControl {
         STICK_MM * input.mm()
     }
 
-    pub fn read(&mut self, input: &Input, centre: Vec2, dt: f32) -> Direction {
-        let raw = self.raw(input, centre);
+    pub fn read(&mut self, input: &Input, dt: f32) -> Direction {
+        let raw = self.raw(input);
         if self.smoothing <= 0.0 {
             return raw;
         }
@@ -219,7 +219,7 @@ impl DirControl {
         Direction::new(self.smooth)
     }
 
-    fn raw(&mut self, input: &Input, centre: Vec2) -> Direction {
+    fn raw(&mut self, input: &Input) -> Direction {
         if input.axis != Vec2::ZERO {
             self.active = false;
             return Direction::new(input.axis);
@@ -229,17 +229,13 @@ impl DirControl {
             DirectionMode::Swipe => input
                 .swipe
                 .map_or(Direction::NONE, |d| Direction::new(d.delta().as_vec2())),
-            DirectionMode::Steer => input
-                .aim(centre, STEER_DEAD_MM)
-                .map_or(Direction::NONE, |p| {
-                    Direction::new((p - centre).normalize())
-                }),
             DirectionMode::Stick => self.stick(input),
         }
     }
 
     fn stick(&mut self, input: &Input) -> Direction {
         let radius = Self::radius(input);
+        self.radius = radius;
         if input.pressed {
             self.origin = input.pos;
             self.active = true;
@@ -329,11 +325,6 @@ impl Input {
 
     pub fn direction(&self) -> Direction {
         Direction::new(self.axis)
-    }
-
-    pub fn aim(&self, from: Vec2, dead_mm: f32) -> Option<Vec2> {
-        (self.down && !self.cancelled && (self.pos - from).length() > dead_mm * self.mm())
-            .then_some(self.pos)
     }
 
     pub fn drag_delta(&self) -> Vec2 {
@@ -1169,13 +1160,59 @@ mod tests {
         let (mut s, _) = script();
         let mut c = DirControl::new(DirectionMode::Stick);
         let i = s.press(vec2(300.0, 300.0));
-        assert!(c.read(&i, Vec2::ZERO, 0.016).is_zero());
+        assert!(c.read(&i, 0.016).is_zero());
         let r = DirControl::radius(&i);
         let i = s.drag_to(vec2(300.0 + r * STICK_DEAD * 0.5, 300.0));
-        assert!(c.read(&i, Vec2::ZERO, 0.016).is_zero());
+        assert!(c.read(&i, 0.016).is_zero());
         let i = s.drag_to(vec2(300.0 + r * 0.5, 300.0));
-        let d = c.read(&i, Vec2::ZERO, 0.016);
+        let d = c.read(&i, 0.016);
         assert!((d.vec.x - 0.5).abs() < 0.01 && d.vec.y == 0.0);
+    }
+
+    #[test]
+    fn the_stick_angle_is_the_drag_angle_from_where_it_landed() {
+        let (mut s, _) = script();
+        let mut c = DirControl::new(DirectionMode::Stick);
+        let i = s.press(vec2(700.0, 200.0));
+        c.read(&i, 0.016);
+        let r = DirControl::radius(&i);
+        for (to, deg) in [
+            (vec2(1.0, 0.0), 0.0),
+            (vec2(0.0, 1.0), 90.0),
+            (vec2(-1.0, 0.0), 180.0),
+            (vec2(0.0, -1.0), -90.0),
+            (vec2(1.0, 1.0), 45.0),
+        ] {
+            let i = s.drag_to(vec2(700.0, 200.0) + to.normalize() * r * 0.9);
+            let a = c.read(&i, 0.016).angle().unwrap().to_degrees();
+            assert!((a - deg).abs() < 1.0, "{to:?} {a}");
+        }
+    }
+
+    #[test]
+    fn releasing_the_stick_returns_to_neutral() {
+        let (mut s, _) = script();
+        let mut c = DirControl::new(DirectionMode::Stick);
+        let i = s.press(vec2(300.0, 300.0));
+        c.read(&i, 0.016);
+        let r = DirControl::radius(&i);
+        let i = s.drag_to(vec2(300.0 + r, 300.0));
+        assert!(!c.read(&i, 0.016).is_zero() && c.active);
+        let i = s.release();
+        assert!(c.read(&i, 0.016).is_zero());
+        assert!(!c.active && c.knob == Vec2::ZERO);
+        let i = s.idle();
+        assert!(c.read(&i, 0.016).is_zero());
+    }
+
+    #[test]
+    fn the_stick_lands_where_the_finger_lands() {
+        let (mut s, _) = script();
+        let mut c = DirControl::new(DirectionMode::Stick);
+        let at = vec2(812.0, 95.0);
+        let i = s.press(at);
+        c.read(&i, 0.016);
+        assert!(c.active && c.origin == at && c.radius > 0.0);
     }
 
     #[test]
@@ -1183,16 +1220,16 @@ mod tests {
         let (mut s, _) = script();
         let mut c = DirControl::new(DirectionMode::Stick);
         let i = s.press(vec2(300.0, 300.0));
-        c.read(&i, Vec2::ZERO, 0.016);
+        c.read(&i, 0.016);
         let r = DirControl::radius(&i);
         let i = s.drag_to(vec2(300.0 + r * 4.0, 300.0));
-        let d = c.read(&i, Vec2::ZERO, 0.016);
+        let d = c.read(&i, 0.016);
         assert!((d.strength() - 1.0).abs() < 1e-4);
         let i = s.drag_to(vec2(300.0 + r * 3.0, 300.0));
-        let d = c.read(&i, Vec2::ZERO, 0.016);
+        let d = c.read(&i, 0.016);
         assert!(d.is_zero());
         let i = s.drag_to(vec2(300.0 + r * 2.0, 300.0));
-        assert!(c.read(&i, Vec2::ZERO, 0.016).vec.x < 0.0);
+        assert!(c.read(&i, 0.016).vec.x < 0.0);
     }
 
     #[test]
@@ -1205,7 +1242,7 @@ mod tests {
         let both = s.keys(&[Key::Up, Key::Right], 1)[0].clone();
         assert!((both.axis.length() - 1.0).abs() < 1e-5);
         let mut c = DirControl::new(DirectionMode::Stick);
-        let d = c.read(&both, Vec2::ZERO, 0.016);
+        let d = c.read(&both, 0.016);
         assert_eq!(d.vec, both.axis);
     }
 
@@ -1226,25 +1263,13 @@ mod tests {
     }
 
     #[test]
-    fn steer_mode_aims_at_the_finger_past_the_dead_zone() {
-        let (mut s, _) = script();
-        let mut c = DirControl::new(DirectionMode::Steer);
-        let centre = vec2(400.0, 300.0);
-        let i = s.press(centre + vec2(2.0, 0.0));
-        assert!(c.read(&i, centre, 0.016).is_zero());
-        let i = s.drag_to(centre + vec2(0.0, 200.0));
-        let d = c.read(&i, centre, 0.016);
-        assert!((d.vec - vec2(0.0, 1.0)).length() < 1e-4);
-    }
-
-    #[test]
     fn swipe_mode_reports_one_direction_per_swipe() {
         let (mut s, _) = script();
         let mut c = DirControl::new(DirectionMode::Swipe);
         let frames = s.swipe(vec2(300.0, 300.0), Dir::Left, 4);
         let hits: Vec<_> = frames
             .iter()
-            .map(|f| c.read(f, Vec2::ZERO, 0.016))
+            .map(|f| c.read(f, 0.016))
             .filter(|d| !d.is_zero())
             .collect();
         assert_eq!(hits.len(), 1);
@@ -1256,16 +1281,16 @@ mod tests {
         let (mut s, _) = script();
         let mut c = DirControl::new(DirectionMode::Keys).smoothed(10.0);
         let held = s.keys(&[Key::Right], 1)[0].clone();
-        let d1 = c.read(&held, Vec2::ZERO, 0.016);
+        let d1 = c.read(&held, 0.016);
         assert!(d1.vec.x > 0.0 && d1.vec.x < 0.5);
         for _ in 0..120 {
-            c.read(&held, Vec2::ZERO, 0.016);
+            c.read(&held, 0.016);
         }
-        assert!(c.read(&held, Vec2::ZERO, 0.016).vec.x > 0.99);
+        assert!(c.read(&held, 0.016).vec.x > 0.99);
         for _ in 0..240 {
-            c.read(&Input::default(), Vec2::ZERO, 0.016);
+            c.read(&Input::default(), 0.016);
         }
-        assert!(c.read(&Input::default(), Vec2::ZERO, 0.016).is_zero());
+        assert!(c.read(&Input::default(), 0.016).is_zero());
     }
 
     #[test]
@@ -1326,7 +1351,7 @@ mod tests {
         assert!(i.cancelled && i.released && !i.down && i.swipe.is_none());
         assert!(!i.tap_released());
         let mut c = DirControl::new(DirectionMode::Stick);
-        assert!(c.read(&i, Vec2::ZERO, 0.016).is_zero());
+        assert!(c.read(&i, 0.016).is_zero());
         let after = s.idle();
         assert!(!after.down && !after.cancelled);
     }
