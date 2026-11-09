@@ -542,13 +542,13 @@ fn draw_aim(g: &Clash, pen: &mut Pen, view: &View) {
     let c = g.to_screen(view, p.head());
     let dir = vec2(g.steer.cos(), g.steer.sin());
     let side = vec2(-dir.y, dir.x);
-    let r = p.radius() * g.zoom;
+    let r = (p.radius() * g.zoom).max(26.0);
     let fade = if g.run_t < 6.0 { 1.0 } else { 0.8 };
     let from = c + dir * r * 1.5;
-    let tip = c + dir * r * 3.6;
-    let wing = r * 0.8;
+    let tip = c + dir * r * 4.2;
+    let wing = r * 0.9;
     let back = tip - dir * wing * 1.3;
-    let width = (r * 0.3).max(5.0);
+    let width = (r * 0.34).max(8.0);
     let white = Color::new(1.0, 1.0, 1.0, fade);
     let outline = PLUM.with_alpha(fade);
     pen.line(from, back, width + 5.0, outline);
