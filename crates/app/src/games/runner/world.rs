@@ -381,7 +381,13 @@ fn animate_hero(
         if want == "run" {
             if let Some(a) = player.animation_mut(node) {
                 let secs = clip_secs(&graphs, &clips, &graph, node);
-                a.set_speed((secs * g.speed / STRIDE_METRES).clamp(0.6, 3.0));
+                if crate::shots::requested().is_some() {
+                    let strides = g.dist / STRIDE_METRES;
+                    a.set_speed(0.0);
+                    a.seek_to(strides.fract() * secs);
+                } else {
+                    a.set_speed((secs * g.speed / STRIDE_METRES).clamp(0.6, 3.0));
+                }
             }
         }
     }
