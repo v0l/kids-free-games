@@ -109,7 +109,12 @@ impl Clipped {
         for k in 0..5 {
             let a = angle + k as f32 * TAU / 5.0 - FRAC_PI_2;
             let p = |ang: f32, rad: f32| c + vec2(ang.cos(), ang.sin()) * rad;
-            self.flat_tri(p(a, r), p(a - PI / 5.0, r * 0.45), p(a + PI / 5.0, r * 0.45), col);
+            self.flat_tri(
+                p(a, r),
+                p(a - PI / 5.0, r * 0.45),
+                p(a + PI / 5.0, r * 0.45),
+                col,
+            );
             self.flat_tri(c, p(a - PI / 5.0, r * 0.45), p(a + PI / 5.0, r * 0.45), col);
         }
     }
@@ -184,7 +189,10 @@ pub fn resample(points: &[Vec2], step: f32) -> Vec<Sample> {
     }
     let last = *points.last().unwrap();
     let dir = out.last().map_or(Vec2::X, |l| l.dir);
-    if out.last().is_none_or(|l| (l.pos - last).length() > step * 0.25) {
+    if out
+        .last()
+        .is_none_or(|l| (l.pos - last).length() > step * 0.25)
+    {
         out.push(Sample { pos: last, dir, s });
     }
     let n = out.len();
@@ -206,11 +214,21 @@ mod tests {
     #[test]
     fn a_triangle_half_outside_is_cut_at_the_edge() {
         let mut m = Clipped::new(Rect::new(0.0, 0.0, 10.0, 10.0));
-        m.flat_tri(vec2(5.0, 5.0), vec2(15.0, 5.0), vec2(5.0, 8.0), Color::new(1.0, 1.0, 1.0, 1.0));
+        m.flat_tri(
+            vec2(5.0, 5.0),
+            vec2(15.0, 5.0),
+            vec2(5.0, 8.0),
+            Color::new(1.0, 1.0, 1.0, 1.0),
+        );
         assert!(m.verts.iter().all(|p| p.pos.x <= 10.0 + 1e-4));
         assert!(m.verts.len() >= 4);
         let mut out = Clipped::new(Rect::new(0.0, 0.0, 10.0, 10.0));
-        out.flat_tri(vec2(20.0, 5.0), vec2(25.0, 5.0), vec2(22.0, 8.0), Color::new(1.0, 1.0, 1.0, 1.0));
+        out.flat_tri(
+            vec2(20.0, 5.0),
+            vec2(25.0, 5.0),
+            vec2(22.0, 8.0),
+            Color::new(1.0, 1.0, 1.0, 1.0),
+        );
         assert!(out.idx.is_empty());
     }
 

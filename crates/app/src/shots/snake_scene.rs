@@ -49,7 +49,11 @@ fn heading(p: &SnakePlay) -> Option<Dir> {
 fn steer(p: &mut SnakePlay, view: &View, frames: usize) {
     for _ in 0..frames {
         let input = match heading(p) {
-            Some(d) if p.g.state == State::Playing && d != p.g.heading() && p.g.queued.is_empty() => Input::key(d),
+            Some(d)
+                if p.g.state == State::Playing && d != p.g.heading() && p.g.queued.is_empty() =>
+            {
+                Input::key(d)
+            }
             _ => Input::default(),
         };
         p.update(&input, view, DT);
@@ -157,14 +161,18 @@ pub fn setup(n: u32, view: &View) -> Stage {
             until_score(&mut p, view, 6);
             steer(&mut p, view, 90);
             let head = p.g.body[0];
-            let d = p.g.heading().delta();
-            let ahead = ivec2((head.x + d.x * 2).rem_euclid(p.g.size.x), (head.y + d.y * 2).rem_euclid(p.g.size.y));
+            p.g.queued.clear();
+            let d = p.g.dir.delta();
+            let ahead = ivec2(
+                (head.x + d.x).rem_euclid(p.g.size.x),
+                (head.y + d.y).rem_euclid(p.g.size.y),
+            );
             p.g.food = ahead;
             p.g.food_age = 2.0;
-            let step = p.g.step_time();
-            while p.g.frac() < 0.5 {
-                p.update(&Input::default(), view, step / 8.0);
+            while p.g.frac() < 0.4 && p.g.body[0] == head {
+                p.update(&Input::default(), view, DT);
             }
+            p.g.face = kg_core::games::snake::angle_of(p.g.dir);
         }
         39 => {
             start(&mut p, view);
@@ -172,7 +180,9 @@ pub fn setup(n: u32, view: &View) -> Stage {
             steer(&mut p, view, 40);
             let side = kg_core::games::snake::left_of(p.g.heading());
             p.update(&Input::key(side), view, DT);
-            let extra: usize = crate::web::query("frame").and_then(|f| f.parse().ok()).unwrap_or(1);
+            let extra: usize = crate::web::query("frame")
+                .and_then(|f| f.parse().ok())
+                .unwrap_or(1);
             for _ in 0..extra {
                 p.update(&Input::default(), view, DT);
             }
@@ -217,7 +227,8 @@ pub fn check() {
         let over = get(36);
         assert!(over.g.shows_results() && over.g.rank.is_some_and(|r| r > 0));
         assert_eq!(get(37).g.rank, Some(0));
-        assert!(get(38).g.mouth() > 0.4);
+        let open = get(38);
+        assert!(open.g.mouth() > 0.4, "mouth {}", open.g.mouth());
         assert_eq!(get(39).g.state, State::Playing);
     }
 }

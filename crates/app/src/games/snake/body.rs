@@ -72,7 +72,10 @@ fn radius_at(g: &Snake, s: f32, total: f32, cell: f32) -> f32 {
     } else {
         1.0
     };
-    let neck = 1.0 - 0.08 * (1.0 - ((s - 0.35) / 0.6).clamp(0.0, 1.0)).max(0.0) * ((s - 0.1) / 0.3).clamp(0.0, 1.0);
+    let neck = 1.0
+        - 0.08
+            * (1.0 - ((s - 0.35) / 0.6).clamp(0.0, 1.0)).max(0.0)
+            * ((s - 0.1) / 0.3).clamp(0.0, 1.0);
     let swell = g
         .bulges
         .iter()
@@ -113,7 +116,13 @@ fn rings(g: &Snake, cell: f32, o: Vec2) -> Vec<Ring> {
         .collect()
 }
 
-fn strip(m: &mut Clipped, rings: &[Ring], off: Vec2, inner: impl Fn(&Ring) -> (f32, f32), cols: impl Fn(&Ring) -> (Color, Color)) {
+fn strip(
+    m: &mut Clipped,
+    rings: &[Ring],
+    off: Vec2,
+    inner: impl Fn(&Ring) -> (f32, f32),
+    cols: impl Fn(&Ring) -> (Color, Color),
+) {
     for w in rings.windows(2) {
         let (a, b) = (&w[0], &w[1]);
         let (a0, a1) = inner(a);
@@ -146,15 +155,33 @@ fn tube(m: &mut Clipped, g: &Snake, rings: &[Ring], cell: f32, head: &Head) {
     let line = cell * 0.07;
     let shadow = vec2(cell * 0.16, cell * 0.24);
     let soft = SHADOW.with_alpha(SHADOW.a * 0.5);
-    strip(m, rings, shadow, |r| (-r.r - line * 2.5, r.r + line * 2.5), |_| (soft, soft));
+    strip(
+        m,
+        rings,
+        shadow,
+        |r| (-r.r - line * 2.5, r.r + line * 2.5),
+        |_| (soft, soft),
+    );
     caps(m, rings, shadow, line * 2.5, soft, head.r);
     strip(m, rings, shadow, |r| (-r.r, r.r), |_| (SHADOW, SHADOW));
     caps(m, rings, shadow, 0.0, SHADOW, head.r);
     m.ellipse(head.c + shadow, head.radii, head.angle, SHADOW);
-    strip(m, rings, Vec2::ZERO, |r| (-r.r - line, r.r + line), |_| (OUTLINE, OUTLINE));
+    strip(
+        m,
+        rings,
+        Vec2::ZERO,
+        |r| (-r.r - line, r.r + line),
+        |_| (OUTLINE, OUTLINE),
+    );
     caps(m, rings, Vec2::ZERO, line, OUTLINE, 0.0);
     m.ellipse(head.c, head.radii + Vec2::splat(line), head.angle, OUTLINE);
-    strip(m, rings, Vec2::ZERO, |r| (-r.r, r.r), |_| (pal.deep, pal.deep));
+    strip(
+        m,
+        rings,
+        Vec2::ZERO,
+        |r| (-r.r, r.r),
+        |_| (pal.deep, pal.deep),
+    );
     if let Some(t) = rings.last() {
         m.ellipse(t.c, Vec2::splat(t.r), 0.0, pal.deep);
     }
@@ -165,7 +192,13 @@ fn tube(m: &mut Clipped, g: &Snake, rings: &[Ring], cell: f32, head: &Head) {
         |r| (r.r * 0.45, r.r * 0.92),
         |_| (BELLY.with_alpha(0.0), BELLY),
     );
-    strip(m, rings, Vec2::ZERO, |r| (-r.r * 0.86, r.r * 0.55), |_| (pal.body, pal.body));
+    strip(
+        m,
+        rings,
+        Vec2::ZERO,
+        |r| (-r.r * 0.86, r.r * 0.55),
+        |_| (pal.body, pal.body),
+    );
     strip(
         m,
         rings,
@@ -197,7 +230,10 @@ fn spots(m: &mut Clipped, g: &Snake, rings: &[Ring], cell: f32) {
             let c = r.c - r.n * r.r * 0.12;
             let edge = cell * 0.04;
             let (fill, rim) = if dead {
-                (Color::new(0.85, 0.85, 0.8, 1.0), Color::new(0.6, 0.6, 0.6, 1.0))
+                (
+                    Color::new(0.85, 0.85, 0.8, 1.0),
+                    Color::new(0.6, 0.6, 0.6, 1.0),
+                )
             } else {
                 (SPOT, SPOT_EDGE)
             };
@@ -249,9 +285,19 @@ fn face(m: &mut Clipped, g: &Snake, head: &Head, cell: f32) {
         WHITE.with_alpha(0.28),
     );
     let snout = head.c + f * head.radii.x * 0.48;
-    m.ellipse(snout, vec2(head.r * 0.42, head.r * 0.62), head.angle, BELLY.lerp(pal.body, if dead { 0.6 } else { 0.0 }));
+    m.ellipse(
+        snout,
+        vec2(head.r * 0.42, head.r * 0.62),
+        head.angle,
+        BELLY.lerp(pal.body, if dead { 0.6 } else { 0.0 }),
+    );
     for s in [-1.0, 1.0] {
-        m.ellipse(snout + f * head.r * 0.22 + side * s * head.r * 0.2, Vec2::splat(head.r * 0.05), 0.0, OUTLINE.with_alpha(0.7));
+        m.ellipse(
+            snout + f * head.r * 0.22 + side * s * head.r * 0.2,
+            Vec2::splat(head.r * 0.05),
+            0.0,
+            OUTLINE.with_alpha(0.7),
+        );
     }
     let mouth = g.mouth();
     let mc = head.c + f * head.radii.x * 0.86;
@@ -262,15 +308,30 @@ fn face(m: &mut Clipped, g: &Snake, head: &Head, cell: f32) {
             let tip = base + f * cell * 0.55 * tongue;
             m.line(base, tip, cell * 0.09, TONGUE);
             for s in [-1.0, 1.0] {
-                m.line(tip, tip + (f + side * s * 0.8).normalize() * cell * 0.16, cell * 0.07, TONGUE);
+                m.line(
+                    tip,
+                    tip + (f + side * s * 0.8).normalize() * cell * 0.16,
+                    cell * 0.07,
+                    TONGUE,
+                );
             }
         }
         if mouth > 0.05 {
             let w = head.r * (0.40 + 0.40 * mouth);
             let h = head.r * 0.58 * mouth;
-            m.ellipse(mc - f * h * 0.3, vec2(h + head.r * 0.05, w + head.r * 0.05), head.angle, OUTLINE);
+            m.ellipse(
+                mc - f * h * 0.3,
+                vec2(h + head.r * 0.05, w + head.r * 0.05),
+                head.angle,
+                OUTLINE,
+            );
             m.ellipse(mc - f * h * 0.3, vec2(h, w), head.angle, MOUTH_IN);
-            m.ellipse(mc - f * h * 0.5, vec2(h * 0.45, w * 0.55), head.angle, TONGUE);
+            m.ellipse(
+                mc - f * h * 0.5,
+                vec2(h * 0.45, w * 0.55),
+                head.angle,
+                TONGUE,
+            );
         } else {
             let a = mc - f * head.r * 0.12;
             for s in [-1.0, 1.0] {
@@ -285,7 +346,12 @@ fn face(m: &mut Clipped, g: &Snake, head: &Head, cell: f32) {
         m.ellipse(tip, Vec2::splat(cell * 0.06), 0.0, TONGUE);
     }
     for s in [-1.0, 1.0] {
-        m.ellipse(head.c + side * s * head.r * 0.62 + f * head.r * 0.15, vec2(head.r * 0.2, head.r * 0.14), head.angle, BLUSH.with_alpha(if dead { 0.0 } else { 0.55 }));
+        m.ellipse(
+            head.c + side * s * head.r * 0.62 + f * head.r * 0.15,
+            vec2(head.r * 0.2, head.r * 0.14),
+            head.angle,
+            BLUSH.with_alpha(if dead { 0.0 } else { 0.55 }),
+        );
     }
     eyes(m, g, head, cell);
 }
@@ -300,7 +366,12 @@ fn eyes(m: &mut Clipped, g: &Snake, head: &Head, cell: f32) {
     let wide = 1.0 + 0.12 * g.mouth();
     for s in [-1.0, 1.0] {
         let c = head.c + side * s * head.r * 0.44 - f * head.r * 0.10;
-        m.ellipse(c + vec2(0.0, er * 0.12), Vec2::splat(er * wide + cell * 0.05), 0.0, OUTLINE);
+        m.ellipse(
+            c + vec2(0.0, er * 0.12),
+            Vec2::splat(er * wide + cell * 0.05),
+            0.0,
+            OUTLINE,
+        );
         if dead {
             m.ellipse(c, Vec2::splat(er * wide), 0.0, WHITE);
             let k = er * 0.55;
@@ -312,14 +383,24 @@ fn eyes(m: &mut Clipped, g: &Snake, head: &Head, cell: f32) {
         }
         let open = 1.0 - lid;
         if open < 0.15 {
-            m.line(c - side * er * 0.9, c + side * er * 0.9, cell * 0.06, OUTLINE);
+            m.line(
+                c - side * er * 0.9,
+                c + side * er * 0.9,
+                cell * 0.06,
+                OUTLINE,
+            );
             continue;
         }
         m.ellipse(c, vec2(er * wide, er * wide * open), 0.0, WHITE);
         let p = c + look * er * 0.38;
         let pr = er * 0.55;
         m.ellipse(p, vec2(pr, pr * open), 0.0, PUPIL);
-        m.ellipse(p + vec2(-pr * 0.35, -pr * 0.4 * open), Vec2::splat(pr * 0.32), 0.0, WHITE);
+        m.ellipse(
+            p + vec2(-pr * 0.35, -pr * 0.4 * open),
+            Vec2::splat(pr * 0.32),
+            0.0,
+            WHITE,
+        );
     }
 }
 
@@ -330,7 +411,11 @@ fn dizzy(m: &mut Clipped, g: &Snake, head: &Head, cell: f32) {
     let grow = (g.dead_age / 0.3).clamp(0.0, 1.0);
     for k in 0..3 {
         let a = g.dead_age * 3.0 + k as f32 * TAU / 3.0;
-        let p = head.c + vec2(a.cos() * head.r * 1.15, a.sin() * head.r * 0.5 - head.r * 0.9);
+        let p = head.c
+            + vec2(
+                a.cos() * head.r * 1.15,
+                a.sin() * head.r * 0.5 - head.r * 0.9,
+            );
         m.star(p, cell * 0.2 * grow, a, Color::new(1.0, 0.85, 0.2, 1.0));
     }
 }
@@ -356,9 +441,15 @@ pub fn draw_snake(pen: &mut Pen, g: &Snake, o: Vec2, cell: f32, board: Rect) {
                     dir: r.dir,
                 })
                 .collect();
-            let lo = rs.iter().fold(Vec2::splat(f32::MAX), |a, r| a.min(r.c)) - Vec2::splat(cell * 2.0);
-            let hi = rs.iter().fold(Vec2::splat(f32::MIN), |a, r| a.max(r.c)) + Vec2::splat(cell * 2.0);
-            if hi.x < board.x || hi.y < board.y || lo.x > board.x + board.w || lo.y > board.y + board.h {
+            let lo =
+                rs.iter().fold(Vec2::splat(f32::MAX), |a, r| a.min(r.c)) - Vec2::splat(cell * 2.0);
+            let hi =
+                rs.iter().fold(Vec2::splat(f32::MIN), |a, r| a.max(r.c)) + Vec2::splat(cell * 2.0);
+            if hi.x < board.x
+                || hi.y < board.y
+                || lo.x > board.x + board.w
+                || lo.y > board.y + board.h
+            {
                 continue;
             }
             let head = head_shape(g, &rs, cell);
@@ -397,7 +488,9 @@ mod tests {
     #[test]
     fn the_tube_follows_the_body_without_gaps() {
         let mut g = snake();
-        g.body = [ivec2(5, 5), ivec2(5, 6), ivec2(6, 6), ivec2(7, 6)].into_iter().collect();
+        g.body = [ivec2(5, 5), ivec2(5, 6), ivec2(6, 6), ivec2(7, 6)]
+            .into_iter()
+            .collect();
         let rs = rings(&g, 40.0, Vec2::ZERO);
         for w in rs.windows(2) {
             assert!((w[1].c - w[0].c).length() < 40.0 * 0.2);

@@ -324,7 +324,10 @@ impl Snake {
         let d = self.food.as_vec2() - head;
         let d = vec2(wrap_delta(d.x, size.x), wrap_delta(d.y, size.y));
         let near = (1.0 - (d.length() - 0.6) / (MOUTH_CELLS - 0.6)).clamp(0.0, 1.0);
-        let ahead = d.normalize_or_zero().dot(Vec2::from_angle(self.face)).max(0.0);
+        let ahead = d
+            .normalize_or_zero()
+            .dot(Vec2::from_angle(self.face))
+            .max(0.0);
         (near * (0.4 + 0.6 * ahead)).max(self.gulp)
     }
 
@@ -418,7 +421,11 @@ impl Snake {
     pub fn size_for(view: &View) -> IVec2 {
         let (avail_w, avail_h) = (view.w - 40.0, view.h - LAYOUT_TOP - 20.0);
         let (short, long) = (avail_w.min(avail_h), avail_w.max(avail_h));
-        let across = if long / short > 1.7 { PHONE_SHORT } else { SHORT };
+        let across = if long / short > 1.7 {
+            PHONE_SHORT
+        } else {
+            SHORT
+        };
         let along = ((long / (short / across as f32)).floor() as i32).clamp(LONG, MAX_LONG);
         if view.h > view.w {
             ivec2(across, along)
@@ -491,7 +498,10 @@ impl Snake {
             match e {
                 Event::Ate(p) => {
                     sfx::play(Sfx::Crunch);
-                    sfx::play_step(Sfx::Pop, (self.score.saturating_sub(1) % STAGE_APPLES) as usize * 2);
+                    sfx::play_step(
+                        Sfx::Pop,
+                        (self.score.saturating_sub(1) % STAGE_APPLES) as usize * 2,
+                    );
                     let at = center(p);
                     self.particles
                         .sparkle(at, Color::from_rgba(230, 60, 60, 255));
@@ -1110,7 +1120,12 @@ mod tests {
         let before = s.drawn_head();
         s.update(&Input::key(Dir::Up), &phone(), DT);
         assert_eq!(s.dir, Dir::Up);
-        assert!(up_by(&s, before) > 0.02, "head {:?} -> {:?}", before, s.drawn_head());
+        assert!(
+            up_by(&s, before) > 0.02,
+            "head {:?} -> {:?}",
+            before,
+            s.drawn_head()
+        );
         assert!((s.drawn_head() - before).length() < 0.3);
     }
 
@@ -1155,7 +1170,11 @@ mod tests {
                         s.update(&Input::default(), &phone(), DT);
                         let n = s.body.len();
                         let cells: std::collections::HashSet<_> = s.body.iter().collect();
-                        assert_eq!(cells.len(), n, "overlap after {first:?} {second:?} at {frac}");
+                        assert_eq!(
+                            cells.len(),
+                            n,
+                            "overlap after {first:?} {second:?} at {frac}"
+                        );
                         assert_ne!(s.state, State::Dead);
                     }
                 }
@@ -1219,7 +1238,18 @@ mod tests {
         );
         s.update(&input, &view, DT);
         assert_eq!(s.heading(), Dir::Up);
-        s.update(&t.poll(&crate::input::Raw { units_per_mm: Some(16.0), screen: vec2(view.w, view.h) * view.scale, ..Default::default() }, &view), &view, DT);
+        s.update(
+            &t.poll(
+                &crate::input::Raw {
+                    units_per_mm: Some(16.0),
+                    screen: vec2(view.w, view.h) * view.scale,
+                    ..Default::default()
+                },
+                &view,
+            ),
+            &view,
+            DT,
+        );
         assert_eq!(s.heading(), Dir::Up);
         assert!(s.queued.len() <= 1);
     }
@@ -1324,7 +1354,14 @@ mod tests {
         swipe: Option<(Dir, u8)>,
     }
 
-    fn bot_input(bot: &mut Bot, s: &Snake, sc: &mut Script, v: &View, slow: bool, frame: usize) -> Input {
+    fn bot_input(
+        bot: &mut Bot,
+        s: &Snake,
+        sc: &mut Script,
+        v: &View,
+        slow: bool,
+        frame: usize,
+    ) -> Input {
         let mid = vec2(v.w / 2.0, v.h / 2.0);
         if let Some((d, k)) = bot.swipe {
             bot.swipe = (k < 2).then_some((d, k + 1));
@@ -1366,7 +1403,7 @@ mod tests {
             }
             seen.len() > s.body.len() * 2
         };
-        let want = if slow && frame % 30 != 0 {
+        let want = if slow && !frame.is_multiple_of(30) {
             s.heading()
         } else if slow && (frame / 30) % 5 == 4 {
             Dir::ALL
@@ -1422,7 +1459,9 @@ mod tests {
             s.wrap = false;
             s.best = Best(9);
             s.moves = 99;
-            s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)].into_iter().collect();
+            s.body = [ivec2(LONG - 1, 3), ivec2(LONG - 2, 3)]
+                .into_iter()
+                .collect();
             s.tick();
         }
         let s = Snake::new();

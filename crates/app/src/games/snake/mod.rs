@@ -118,12 +118,20 @@ pub fn draw(g: &Snake, pen: &mut Pen, view: &View) {
             }
             lines.push("Swipe to start");
             pen.panel(view, "Snake", &lines, g.clock);
-            let swing = if (g.clock / 1.4) as i32 % 2 == 0 { Vec2::X } else { Vec2::NEG_Y };
+            let swing = if (g.clock / 1.4) as i32 % 2 == 0 {
+                Vec2::X
+            } else {
+                Vec2::NEG_Y
+            };
             board::swipe_hint(pen, view, g.clock, swing);
         }
         State::Playing if g.score == 0 && g.moves < 30 => {
             let want = g.food.as_vec2() - g.body[0].as_vec2();
-            let want = if want.x.abs() > want.y.abs() { vec2(want.x.signum(), 0.0) } else { vec2(0.0, want.y.signum()) };
+            let want = if want.x.abs() > want.y.abs() {
+                vec2(want.x.signum(), 0.0)
+            } else {
+                vec2(0.0, want.y.signum())
+            };
             board::swipe_hint(pen, view, g.clock, want);
         }
         State::Dead if g.shows_results() => {
