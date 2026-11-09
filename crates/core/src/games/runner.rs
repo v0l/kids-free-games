@@ -3,6 +3,7 @@ use crate::feel::{self, Impact};
 use crate::fx::approach;
 use crate::fx::*;
 use crate::geom::*;
+use crate::input::clear_swipe;
 use crate::sfx::{self, Sfx};
 use glam::{vec2, vec3, Vec2, Vec3};
 
@@ -28,6 +29,9 @@ pub const WIN_DELAY: f32 = 1.2;
 pub const STAR_START: f32 = 0.3;
 pub const STAR_GAP: f32 = 0.25;
 pub const COIN_SCORE: u32 = 10;
+pub const SWIPE_MM_RUNNER: f32 = 4.0;
+pub const JUMP_BUFFER: f32 = 0.45;
+pub const LANE_RATE: f32 = 24.0;
 
 static NEXT_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
@@ -165,6 +169,8 @@ pub struct Runner {
     pub finale: f32,
     queued_jump: f32,
     slide_on_land: bool,
+    swipe_anchor: Option<Vec2>,
+    touch_swiped: bool,
 }
 
 pub fn kinds_for(level: u32) -> &'static [Kind] {
@@ -511,6 +517,8 @@ impl Runner {
             finale: 0.0,
             queued_jump: 0.0,
             slide_on_land: false,
+            swipe_anchor: None,
+            touch_swiped: false,
         }
     }
 
@@ -633,7 +641,7 @@ impl Runner {
 
     fn jump(&mut self, view: &View) {
         if !self.grounded() {
-            self.queued_jump = 0.18;
+            self.queued_jump = JUMP_BUFFER;
             return;
         }
         self.vy = JUMP_V;
@@ -661,8 +669,40 @@ impl Runner {
         sfx::play(Sfx::Swish);
     }
 
+    fn touch_dir(&mut self, input: &Input) -> Option<Dir> {
+        if input.pressed {
+            self.swipe_anchor = Some(input.pos);
+            self.touch_swiped = false;
+        }
+        if !input.down {
+            self.swipe_anchor = None;
+            return None;
+        }
+        let anchor = self.swipe_anchor?;
+        let dir = clear_swipe(input.pos - anchor, SWIPE_MM_RUNNER * input.mm())?;
+        self.swipe_anchor = Some(input.pos);
+        self.touch_swiped = true;
+        Some(dir)
+    }
+
+    fn side_tap(&self, input: &Input, view: &View) -> Option<Dir> {
+        if !input.tap_released() || self.touch_swiped {
+            return None;
+        }
+        let third = view.w / 3.0;
+        if input.pos.x < third {
+            Some(Dir::Left)
+        } else if input.pos.x > third * 2.0 {
+            Some(Dir::Right)
+        } else {
+            None
+        }
+    }
+
     fn steer(&mut self, input: &Input, view: &View) {
-        match input.dir() {
+        let touch = self.touch_dir(input);
+        let tap = self.side_tap(input, view);
+        match input.key_dir.or(touch).or(tap) {
             Some(Dir::Left) => self.change_lane(-1, view),
             Some(Dir::Right) => self.change_lane(1, view),
             Some(Dir::Up) => self.jump(view),
@@ -674,7 +714,7 @@ impl Runner {
 
     fn body(&mut self, dt: f32, view: &View) {
         let want = lane_x(self.lane);
-        self.x = approach(self.x, want, 16.0, dt);
+        self.x = approach(self.x, want, LANE_RATE, dt);
         self.lean = approach(self.lean, 0.0, 9.0, dt);
         self.kick = approach(self.kick, 0.0, 6.0, dt);
         self.queued_jump = (self.queued_jump - dt).max(0.0);
@@ -924,6 +964,7 @@ impl Game for Runner {
                     return;
                 }
                 if input.pressed || input.action {
+                    self.touch_swiped = true;
                     self.state = State::Playing;
                     sfx::say(sfx::Say::Go);
                 }
@@ -1337,6 +1378,93 @@ mod tests {
         g.update(&Input::key(Dir::Right), &view, 1.0 / 60.0);
         g.update(&Input::key(Dir::Right), &view, 1.0 / 60.0);
         assert_eq!(g.lane, 1);
+    }
+
+    fn playing(lane: i32) -> Runner {
+        let mut g = Runner::with_level(5);
+        g.state = State::Playing;
+        g.lane = lane;
+        g.x = lane_x(lane);
+        g
+    }
+
+    #[test]
+    fn a_swipe_changes_lane_before_the_finger_lifts() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(0);
+        let mut sc = Script::new(view);
+        let mut frames = vec![sc.press(vec2(500.0, 400.0))];
+        for i in 1..=3 {
+            frames.push(sc.drag_to(vec2(500.0 - 8.0 * i as f32, 400.0)));
+        }
+        Script::feed(&mut g, &view, &frames);
+        assert_eq!(g.lane, -1);
+    }
+
+    #[test]
+    fn two_swipes_in_one_touch_move_two_lanes() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(1);
+        let mut sc = Script::new(view);
+        let mut frames = vec![sc.press(vec2(700.0, 400.0))];
+        for i in 1..=12 {
+            frames.push(sc.drag_to(vec2(700.0 - 8.0 * i as f32, 400.0)));
+        }
+        Script::feed(&mut g, &view, &frames);
+        assert_eq!(g.lane, -1);
+    }
+
+    #[test]
+    fn a_tap_on_the_left_or_right_third_changes_lane() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(0);
+        let mut sc = Script::new(view);
+        Script::feed(&mut g, &view, &sc.tap(vec2(view.w * 0.9, 400.0)));
+        assert_eq!(g.lane, 1);
+        Script::feed(&mut g, &view, &sc.tap(vec2(view.w * 0.1, 400.0)));
+        Script::feed(&mut g, &view, &sc.tap(vec2(view.w * 0.1, 400.0)));
+        assert_eq!(g.lane, -1);
+        Script::feed(&mut g, &view, &sc.tap(vec2(view.w * 0.5, 400.0)));
+        assert_eq!(g.lane, -1);
+    }
+
+    #[test]
+    fn a_jump_asked_for_well_before_landing_is_buffered() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(0);
+        g.update(&Input::key(Dir::Up), &view, 1.0 / 60.0);
+        let mut asked = false;
+        let mut jumped_again = false;
+        for _ in 0..120 {
+            let input = if !asked && g.vy < 0.0 {
+                asked = true;
+                Input::key(Dir::Up)
+            } else {
+                Input::default()
+            };
+            g.update(&input, &view, 1.0 / 60.0);
+            if asked && g.vy > 5.0 {
+                jumped_again = true;
+            }
+        }
+        assert!(asked && jumped_again);
+    }
+
+    #[test]
+    fn a_lane_change_is_mostly_done_in_120_ms() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(0);
+        g.update(&Input::key(Dir::Left), &view, 1.0 / 60.0);
+        for _ in 0..7 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+        }
+        let done = (g.x - lane_x(0)) / (lane_x(-1) - lane_x(0));
+        assert!(done > 0.9, "{done}");
     }
 
     #[test]
