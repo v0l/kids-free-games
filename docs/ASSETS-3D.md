@@ -144,7 +144,7 @@ Still drawn from primitives in the hotel, on purpose: floors, zones, the pool wa
 | `ballsort_tube` | `glass` (28-gon wall, extruded ring), `foot` (28-gon), `rim` (torus), `glint` (box) | one per spot | `glass` is painted `Finish::Glass` by part name and keeps its `Role::Glass(i)`; the others keep their old paints |
 | `ballsort_ball` | `ball`, a 28-segment shell | every ball, sharing one mesh | colour and hidden/revealed paint from `ball_paint`, squash by scale |
 
-Still in Rust: the backdrop quad, the wood board and edge (boxes sized to the layout), the shadow discs and the glow rings (scaled per frame). Models are built from the `.gcad` at startup and are not baked. Screenshots 250-253 and 255 before and after: 89-94% of pixels within 16 levels, mean difference 2.3-3.6 (the low-poly ball and the faceted wall differ at the edges); looked at, same picture.
+Still in Rust: the backdrop quad, the wood board and edge (boxes sized to the layout), the shadow discs and the glow rings (scaled per frame). Models are built from the `.gcad` at startup and are not baked. Cold start on the emulator `kidsgames-test` (x86_64, app data cleared): all 52 models, the two ball sort ones included, are ready 2403 ms after start with 52 builds and 0 cache hits; the ball sort pair lands in the same millisecond as the hotel set, so its own cost is under 1 ms. Native test budget: both build in under 150 ms in debug. Screenshots 250-253 and 255 before and after: 89-94% of pixels within 16 levels, mean difference 2.3-3.6 (the low-poly ball and the faceted wall differ at the edges); looked at, same picture.
 
 ### Procedural geometry that stays in Rust
 
