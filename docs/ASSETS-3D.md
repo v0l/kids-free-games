@@ -117,7 +117,7 @@ The hotel needed shapes gcad-mesh did not have, added to gcad master in 434c02e 
 - `extrude d scale=k` (a frustum: pots, bins, toilets, lamp shades) and `scale=0` (a cone: the umbrella).
 - `blob ... mode=shell segments=N`: a UV ellipsoid of `N*N` triangles. A plain shell meshes to about 2000 triangles, which put a guest at 27000.
 
-Rounded boxes (`block round=`) and spheres already existed; torus and sector are left for Helix and Ball Sort.
+Rounded boxes (`block round=`) and spheres already existed. Ball Sort added `torus d tube at= around= sides=` (gcad master 9d57587, pinned in gcad-engines f5c4848); sector is left for Helix.
 
 ### Hotel inventory
 
@@ -136,6 +136,15 @@ Rounded boxes (`block round=`) and spheres already existed; torus and sector are
 | `hotel_coin`, `hotel_coin_top` | 10-gon column, scaled per coin | coin piles and tips | height, bob |
 
 Still drawn from primitives in the hotel, on purpose: floors, zones, the pool water, ripples, wakes, dust, shadows, pads and their progress dots (flat layers sized from the layout each frame or animated by scale), the walls, locked doors and pool rim (boxes sized from the layout, `cuboid`/`cuboid2`), and the splash drops and rings (scaled every frame).
+
+### Ball Sort inventory
+
+| model | made of | instances | per-instance |
+|---|---|---|---|
+| `ballsort_tube` | `glass` (28-gon wall, extruded ring), `foot` (28-gon), `rim` (torus), `glint` (box) | one per spot | `glass` is painted `Finish::Glass` by part name and keeps its `Role::Glass(i)`; the others keep their old paints |
+| `ballsort_ball` | `ball`, a 28-segment shell | every ball, sharing one mesh | colour and hidden/revealed paint from `ball_paint`, squash by scale |
+
+Still in Rust: the backdrop quad, the wood board and edge (boxes sized to the layout), the shadow discs and the glow rings (scaled per frame). Models are built from the `.gcad` at startup and are not baked. Screenshots 250-253 and 255 before and after: 89-94% of pixels within 16 levels, mean difference 2.3-3.6 (the low-poly ball and the faceted wall differ at the edges); looked at, same picture.
 
 ### Procedural geometry that stays in Rust
 
