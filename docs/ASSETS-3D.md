@@ -147,6 +147,11 @@ Still drawn from primitives in the hotel, on purpose: floors, zones, the pool wa
 | Hotel | walls, locked doors, pool rim, floors, zones, pads | sized from `Layout` per hotel; a model per size would be a file per wall |
 | Paper Land | land contours and trails (`paper/land.rs`) | marching squares over the live ownership grid |
 | Helix | ring sectors (`Shape::Sector`) | sized by `RING_OUTER`, `RING_INNER`, `SEGMENTS` and generated per tower |
+| Times Table Garden | ground and soil beds (`Shape::Plane`) | flat layers, the ground a fixed backdrop colour and the beds sized from the layout |
+| Times Table Garden | flower shadows (`Shape::Disc`) | flat blob scaled with the flower every frame |
+| Times Table Garden | flowers, bee, butterfly, watering can (`Shape::Quad`, `Skin::Sprite`) | 2D sprite billboards; the art is the sprite sheet, not geometry |
+
+Garden (`crates/app/src/games/garden/world.rs`) has no fixed 3D object (no bed frames or pots), so there is no `garden_<object>.gcad`. Its rendering is unchanged.
 
 ### Checks
 
