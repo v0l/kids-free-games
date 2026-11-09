@@ -1455,6 +1455,27 @@ mod tests {
     }
 
     #[test]
+    fn a_slide_asked_for_in_the_air_is_buffered_and_inputs_during_a_slide_are_not_dropped() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(0);
+        g.update(&Input::key(Dir::Up), &view, 1.0 / 60.0);
+        g.update(&Input::key(Dir::Down), &view, 1.0 / 60.0);
+        for _ in 0..90 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+            if g.sliding() {
+                break;
+            }
+        }
+        assert!(g.sliding());
+        g.update(&Input::key(Dir::Left), &view, 1.0 / 60.0);
+        assert_eq!(g.lane, -1);
+        assert!(g.sliding());
+        g.update(&Input::key(Dir::Up), &view, 1.0 / 60.0);
+        assert!(g.vy > 0.0 && !g.sliding());
+    }
+
+    #[test]
     fn a_lane_change_is_mostly_done_in_120_ms() {
         setup();
         let view = View::ipad_landscape();
