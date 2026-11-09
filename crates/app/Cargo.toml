@@ -18,7 +18,7 @@ glam.workspace = true
 image = { version = "0.25", default-features = false }
 serde_json = "1"
 serde = { version = "1", features = ["derive"] }
-gcad-bevy = { git = "https://github.com/v0l/gcad-engines", rev = "e367a57fd890636b8d89579e8aff731ba774f300", default-features = false }
+gcad-bevy = { git = "https://github.com/v0l/gcad-engines", rev = "f5c484877af36db16fdf8d168a703b31e8fb3fdf", default-features = false }
 cpal = "0.17"
 bevy = { version = "0.20", default-features = false, features = [
   "std",
@@ -50,7 +50,7 @@ bevy = { version = "0.20", default-features = false, features = [
 bevy = { version = "0.20", default-features = false, features = ["x11", "wayland"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-gcad-bevy = { git = "https://github.com/v0l/gcad-engines", rev = "e367a57fd890636b8d89579e8aff731ba774f300", default-features = false, features = ["parallel"] }
+gcad-bevy = { git = "https://github.com/v0l/gcad-engines", rev = "f5c484877af36db16fdf8d168a703b31e8fb3fdf", default-features = false, features = ["parallel"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 bevy = { version = "0.20", default-features = false, features = ["android-game-activity"] }
@@ -60,7 +60,7 @@ jni = "0.21"
 objc2 = "0.6"
 
 [dev-dependencies]
-gcad2glb = { git = "https://github.com/v0l/gcad", rev = "434c02e72c9d4cbcb5331479733bf7a2f7611f82", default-features = false }
+gcad2glb = { git = "https://github.com/v0l/gcad", rev = "9d575873fea67c6bb30f7bafb5cf854958d2811e", default-features = false }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 bevy = { version = "0.20", default-features = false, features = ["webgl2", "web"] }

@@ -1,6 +1,7 @@
 use super::{BallSortPlay, SHEET};
 use crate::game3d::*;
 use crate::game3d::{Lens, Rig};
+use crate::gcad::Shelf;
 use bevy::prelude::*;
 use kg_core::engine::View;
 use kg_core::games::ballsort::*;
@@ -18,6 +19,8 @@ const SHADE: Col = Col::new(0.2, 0.08, 0.02, 0.28);
 const WOOD: Col = Col::new(0.9, 0.74, 0.58, 1.0);
 const WOOD_EDGE: Col = Col::new(0.62, 0.36, 0.18, 1.0);
 
+pub static MODELS: &[&str] = &["ballsort_tube", "ballsort_ball"];
+
 pub struct BallSortWorld;
 
 impl Plugin for BallSortWorld {
@@ -25,8 +28,10 @@ impl Plugin for BallSortWorld {
         app.add_systems(
             Update,
             (
+                stock(MODELS).run_if(is_open(World3d::BallSort)),
                 spawn.run_if(opened(World3d::BallSort)),
-                sync.run_if(is_open(World3d::BallSort)),
+                sync.run_if(is_open(World3d::BallSort))
+                    .run_if(stocked(MODELS)),
             )
                 .chain()
                 .in_set(Sync3d),
@@ -99,7 +104,7 @@ fn ball_paint(color: u8, revealed: bool) -> Paint {
     Paint::new(Finish::Gloss, Col::new(c.r, c.g, c.b, 1.0))
 }
 
-fn build_board(commands: &mut Commands, kit: &mut Kit, board: Entity, g: &BallSort) {
+fn build_board(commands: &mut Commands, kit: &mut Kit, shelf: &Shelf, board: Entity, g: &BallSort) {
     let (mut lo, mut hi) = (glam::Vec2::splat(f32::MAX), glam::Vec2::splat(f32::MIN));
     for s in &g.spots {
         lo = lo.min(*s);
@@ -145,50 +150,22 @@ fn build_board(commands: &mut Commands, kit: &mut Kit, board: Entity, g: &BallSo
                 ),
                 Role::Static,
             ));
-            b.spawn((
-                kit.part(
-                    Shape::Cylinder(28),
-                    Paint::new(Finish::Gloss, FOOT),
-                    Transform::from_xyz(x, BASE / 2.0, z).with_scale(Vec3::new(1.2, BASE, 1.2)),
-                ),
-                Role::Static,
-            ));
-            b.spawn((
-                kit.part(
-                    Shape::Tube(28),
-                    Paint::new(Finish::Glass, GLASS),
-                    Transform::from_xyz(x, TUBE_H / 2.0, z).with_scale(Vec3::new(
-                        TUBE_R * 2.06,
-                        TUBE_H,
-                        TUBE_R * 2.06,
-                    )),
-                ),
-                Role::Glass(i),
-            ));
-            b.spawn((
-                kit.part(
-                    Shape::Torus,
-                    Paint::new(Finish::Gloss, RIM),
-                    Transform::from_xyz(x, TUBE_H, z).with_scale(Vec3::new(
-                        TUBE_R * 2.16,
-                        TUBE_R * 2.4,
-                        TUBE_R * 2.16,
-                    )),
-                ),
-                Role::Static,
-            ));
-            b.spawn((
-                kit.part(
-                    Shape::Cube,
-                    Paint::new(Finish::Glow, WHITE.with_alpha(0.4)),
-                    Transform::from_xyz(x - 0.3, TUBE_H * 0.5, z + 0.43).with_scale(Vec3::new(
-                        0.07,
-                        TUBE_H * 0.78,
-                        0.02,
-                    )),
-                ),
-                Role::Static,
-            ));
+            for (n, part) in shelf.get("ballsort_tube").iter().enumerate() {
+                let (finish, color, role) = match part.name.as_str() {
+                    "glass" => (Finish::Glass, GLASS, Role::Glass(i)),
+                    "foot" => (Finish::Gloss, FOOT, Role::Static),
+                    "rim" => (Finish::Gloss, RIM, Role::Static),
+                    _ => (Finish::Glow, WHITE.with_alpha(0.4), Role::Static),
+                };
+                b.spawn((
+                    kit.part(
+                        Shape::Model("ballsort_tube", n as u16),
+                        Paint::new(finish, color),
+                        Transform::from_xyz(x, 0.0, z),
+                    ),
+                    role,
+                ));
+            }
             b.spawn((
                 kit.part(
                     Shape::Torus,
@@ -202,9 +179,9 @@ fn build_board(commands: &mut Commands, kit: &mut Kit, board: Entity, g: &BallSo
             for ball in tube {
                 b.spawn((
                     kit.part(
-                        Shape::Ball,
+                        Shape::Model("ballsort_ball", 0),
                         ball_paint(ball.color, ball.revealed),
-                        Transform::default().with_scale(Vec3::splat(BALL_D)),
+                        Transform::default(),
                     ),
                     Role::Ball(ball.id),
                 ));
@@ -237,6 +214,9 @@ fn sync(
     };
     let g = &p.g;
     let view = view_of(&pen);
+    let Some(shelf) = kit.shelf(MODELS) else {
+        return;
+    };
     let (Ok(mut root), Ok(board)) = (root.single_mut(), board.single()) else {
         return;
     };
@@ -266,7 +246,7 @@ fn sync(
         root.key = key;
         let mut b = commands.entity(board);
         b.despawn_children();
-        build_board(&mut commands, &mut kit, board, g);
+        build_board(&mut commands, &mut kit, &shelf, board, g);
         return;
     }
     let poses: HashMap<u8, kg_core::games::ballsort::BallPose> =
@@ -292,7 +272,7 @@ fn sync(
                     let (sx, sy) = (1.0 + sq * 0.5, 1.0 - sq);
                     let at =
                         Transform::from_xyz(b.pos.x, b.pos.y - BALL_D * (1.0 - sy) * 0.5, b.pos.z)
-                            .with_scale(Vec3::new(sx, sy, sx) * BALL_D);
+                            .with_scale(Vec3::new(sx, sy, sx));
                     t.set_if_neq(at);
                     kit.repaint(
                         &mut part,

@@ -1,0 +1,20 @@
+body glass
+plane XY
+ngon 1.03 28
+ngon 0.99 28
+glass: extrude 3.66
+color #d1f2ff
+body foot
+plane XY
+ngon 1.2 28
+foot: extrude 0.14
+color #8c73d9
+body rim
+plane XY offset=3.66
+rim: torus 1.08 0.09 around=40 sides=10
+color #ebf7ff
+body glint
+plane XY offset=0.457
+rect 0.07 0.02 at=-0.3,-0.43
+glint: extrude 2.855
+color #ffffff

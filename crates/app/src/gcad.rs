@@ -28,6 +28,7 @@ pub fn game_models() -> impl Iterator<Item = &'static str> {
         crate::games::hotel::world::MODELS,
         crate::games::helix::world::MODELS,
         crate::games::paper::world::MODELS,
+        crate::games::ballsort::world::MODELS,
     ]
     .into_iter()
     .flatten()
@@ -401,6 +402,45 @@ mod tests {
                 "{n} ships but the hotel never loads it"
             );
         }
+    }
+
+    #[test]
+    fn every_ball_sort_model_is_loaded_and_on_disk() {
+        let names = shipped();
+        for m in crate::games::ballsort::world::MODELS {
+            assert!(names.iter().any(|n| n == m), "{m} is not in assets/models");
+        }
+        for n in names.iter().filter(|n| n.starts_with("ballsort_")) {
+            assert!(
+                crate::games::ballsort::world::MODELS.contains(&n.as_str()),
+                "{n} ships but ball sort never loads it"
+            );
+        }
+    }
+
+    #[test]
+    fn the_ball_sort_tube_has_the_parts_the_game_paints_and_the_size_it_had() {
+        let tube = build("ballsort_tube");
+        let parts = part_names(&tube);
+        for want in ["glass", "foot", "rim", "glint"] {
+            assert!(parts.iter().any(|p| p == want), "{parts:?}");
+        }
+        let s = size(&tube);
+        let h = kg_core::games::ballsort::TUBE_H;
+        assert!((s.y - (h + 0.045)).abs() < 0.02, "{s}");
+        assert!(
+            (s.x - 1.17).abs() < 0.05 && (s.z - 1.17).abs() < 0.05,
+            "{s}"
+        );
+    }
+
+    #[test]
+    fn the_ball_sort_ball_is_one_part_as_wide_as_the_old_sphere() {
+        let ball = build("ballsort_ball");
+        assert_eq!(part_names(&ball), ["ball"]);
+        let s = size(&ball);
+        let d = kg_core::games::ballsort::BALL_D;
+        assert!((s.x - d).abs() < 0.02 && (s.y - d).abs() < 0.02, "{s}");
     }
 
     #[test]
