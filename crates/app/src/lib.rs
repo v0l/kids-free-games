@@ -108,10 +108,13 @@ fn frame(
         .safe
         .get(px_size, platform::insets_px)
         .scaled(1.0 / dpi);
-    let view = View::fit_safe(lw, lh, inset);
     let per_mm = *state
         .per_mm
         .get_or_insert_with(|| platform::units_per_mm_px().map(|px| px / dpi));
+    let view = match per_mm {
+        Some(d) => View::fit_safe(lw, lh, inset).with_density(d),
+        None => View::fit_safe(lw, lh, inset),
+    };
     let raw = state
         .gather
         .raw(&mut devices, win, per_mm, time.delta_secs().min(1.0 / 20.0));

@@ -17,6 +17,7 @@ pub struct View {
     pub h: f32,
     pub scale: f32,
     pub inset: Insets,
+    pub mm: f32,
 }
 
 impl View {
@@ -38,7 +39,19 @@ impl View {
                 right: px.right / scale,
                 bottom: px.bottom / scale,
             },
+            mm: guess_units_per_mm(screen_w, screen_h) / scale,
         }
+    }
+
+    pub fn with_density(mut self, units_per_mm: f32) -> Self {
+        if units_per_mm.is_finite() && units_per_mm > 0.0 {
+            self.mm = units_per_mm / self.scale;
+        }
+        self
+    }
+
+    pub fn device(w: f32, h: f32, dpr: f32, ppi: f32, px: Insets) -> Self {
+        Self::fit_safe(w, h, px).with_density(ppi / 25.4 / dpr)
     }
 
     pub fn ipad_landscape() -> Self {

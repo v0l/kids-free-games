@@ -21,3 +21,4 @@ pub mod rng;
 pub mod safe;
 pub mod save;
 pub mod sfx;
+pub mod sizing;
