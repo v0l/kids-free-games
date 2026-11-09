@@ -668,9 +668,19 @@ impl Snake {
 
     fn read_steer(&mut self, input: &Input, view: &View) -> Option<Dir> {
         let threshold = SNAKE_SWIPE_MM * input.mm();
-        let swipe = self
-            .swipes
-            .track(input.pos, input.down && !input.cancelled, input.pressed, threshold);
+        let live = input.down && !input.cancelled;
+        let mut points: Vec<Vec2> = input.path.clone();
+        if points.is_empty() && (live || input.pressed) {
+            points.push(input.pos);
+        }
+        let mut swipe = None;
+        for (i, p) in points.iter().enumerate() {
+            let first = i == 0 && input.pressed;
+            swipe = swipe.or(self.swipes.track(*p, true, first, threshold));
+        }
+        if !live {
+            self.swipes.track(input.pos, false, false, threshold);
+        }
         let pad = if input.axis.length() > 0.6 {
             Some(Dir::from_vec(input.axis))
         } else {
@@ -1180,6 +1190,38 @@ mod tests {
 
     fn sc_mm(v: &View) -> f32 {
         6.0 / v.scale
+    }
+
+    #[test]
+    fn a_whole_swipe_delivered_in_one_frame_still_turns_the_snake() {
+        let mut s = playing_at(0.7);
+        let view = phone();
+        let mut t = crate::input::InputTracker::default();
+        let from = view.to_screen(vec2(500.0, 600.0));
+        let touches: Vec<_> = (0..=10)
+            .map(|i| {
+                let f = match i {
+                    0 => crate::input::Finger::Started,
+                    10 => crate::input::Finger::Ended,
+                    _ => crate::input::Finger::Held,
+                };
+                (1u64, f, from + vec2(0.0, -6.0 * i as f32))
+            })
+            .collect();
+        let input = t.poll(
+            &crate::input::Raw {
+                touches,
+                units_per_mm: Some(16.0),
+                screen: vec2(view.w, view.h) * view.scale,
+                ..Default::default()
+            },
+            &view,
+        );
+        s.update(&input, &view, DT);
+        assert_eq!(s.heading(), Dir::Up);
+        s.update(&t.poll(&crate::input::Raw { units_per_mm: Some(16.0), screen: vec2(view.w, view.h) * view.scale, ..Default::default() }, &view), &view, DT);
+        assert_eq!(s.heading(), Dir::Up);
+        assert!(s.queued.len() <= 1);
     }
 
     #[test]

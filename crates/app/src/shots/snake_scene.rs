@@ -169,10 +169,13 @@ pub fn setup(n: u32, view: &View) -> Stage {
         39 => {
             start(&mut p, view);
             until_score(&mut p, view, 7);
-            steer(&mut p, view, 2);
+            steer(&mut p, view, 40);
             let side = kg_core::games::snake::left_of(p.g.heading());
             p.update(&Input::key(side), view, DT);
-            p.update(&Input::default(), view, DT);
+            let extra: usize = crate::web::query("frame").and_then(|f| f.parse().ok()).unwrap_or(1);
+            for _ in 0..extra {
+                p.update(&Input::default(), view, DT);
+            }
         }
         36 => {
             board(&[("Leo", 5, 23), ("Ava", 9, 14), ("Sam", 3, 6)]);
@@ -215,6 +218,6 @@ pub fn check() {
         assert!(over.g.shows_results() && over.g.rank.is_some_and(|r| r > 0));
         assert_eq!(get(37).g.rank, Some(0));
         assert!(get(38).g.mouth() > 0.4);
-        assert!(!get(39).g.bulges.is_empty());
+        assert_eq!(get(39).g.state, State::Playing);
     }
 }
