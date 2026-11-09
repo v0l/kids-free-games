@@ -179,7 +179,7 @@ Garden (`crates/app/src/games/garden/world.rs`) has no fixed 3D object (no bed f
 - Sizes against origin/main aedb1e9 (same machine, `small` profile): web bundle 51494985 B to 51501265 B (wasm 25442 KiB to 25448 KiB, 7155 KiB gzipped both), Android arm64 APK 36363356 B to 36367560 B, iOS simulator app 42988 KiB to 43004 KiB (binary 18312528 B to 18312608 B). The four `.gcad` files are about 0.5 KB.
 - Screenshots 111, 112, 113, 115, 116 (Helix) and 151, 152, 154, 155, 156 (Paper Land) before and after: 99.98-100% of pixels within 16 levels, mean difference 0.0-0.15.
 - Android emulator `kidsgames-test` (x86_64, swiftshader_indirect, three cold starts, the first with a fresh install): the four new models are ready with the rest at 5205, 1242 and 1587 ms after start (those include the hero and tree, and the hotel models bake-loaded), so they add no measurable time; the new models were built (4 builds) on the first start and reused on later ones.
-- Shape variants still in use after this step: `Cube` (Hotel, Trains, Ball Sort), `Sphere` (Trains, Hotel), `Ball` (Trains, Ball Sort), `Cylinder(n)`, `Cone(n)` (Trains, Ball Sort), `Tube`, `Torus` (Ball Sort), `Disc`, `Plane`, `Quad`, `Ring`, `Sector`. None can go until Trains (#365) and Ball Sort (#366) land.
+- Final state (#376): `Shape` keeps `Cube` (Hotel walls and Ball Sort board), `Sphere` (Trains smoke, Hotel), `Torus` (Ball Sort selection glow), `Disc`, `Ring`, `Plane`, `Quad`, `Sector` and `Model`. `Ball`, `Cylinder(n)`, `Cone(n)` and `Tube(n)` had no user left and were deleted with `tube_mesh`.
 
 ### Checks
 
