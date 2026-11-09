@@ -16,7 +16,7 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ### Changed
 
-- Removed the unused `Ball`, `Cylinder`, `Cone` and `Tube` shapes and their mesh builders from `game3d.rs`; every fixed model now comes from `.gcad`.
+- Removed the unused `Ball`, `Cylinder`, `Cone` and `Tube` shapes and their mesh builders from `game3d.rs`; every fixed model now comes from `.gcad`. Web wasm 3.9 KB smaller, Android arm64 APK 0.8 KB smaller, iOS simulator app unchanged.
 - Every runner prop (barrier, hurdle, gate, train, coin, finish arch, road, five buildings) is built from its `.gcad` source by gcad-mesh at startup, like the hero and the trees. The 12 prebuilt GLBs, `art/3d/props/build.sh` and the glTF loader are gone; gcad is pinned to 888da75. The iOS app is 1.5 MB smaller, the Android APK 0.4 MB and the web bundle 2.0 MB.
 - Models load through the `gcad-bevy` crate (v0l/gcad-engines 7d1fc40, gcad 75e25dd) instead of the game's own loader. `crates/app/src/gcad.rs` keeps only the fit settings and the startup warm-up. Desktop builds keep built models in `~/.cache/gcad/bevy`, so a second start has every model ready in about 25 ms instead of 485 ms. Web is 222 KB bigger, the APK 128 KB and the iOS app 160 KiB.
 

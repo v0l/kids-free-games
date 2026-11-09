@@ -93,7 +93,7 @@ Measured with the `gcad2glb` command (kernel on) against the gcad-mesh build:
 
 ## Primitive games
 
-The other 3D games used to build every object in Rust from `game3d::Shape` primitives. They move to `.gcad` one game at a time (#336). The Happy Hotel is done; the rest follow the same rules.
+The other 3D games used to build every object in Rust from `game3d::Shape` primitives. They moved to `.gcad` one game at a time (#336): Happy Hotel, Helix, Paper Land, Take Away Trains and Ball Sort are done, and Times Table Garden has no fixed 3D object. Every fixed model is now a `.gcad` file built at startup (`Shape::Model`); what is left in `Shape` is listed in the table below, each with a reason it stays in Rust.
 
 ### How a primitive game loads its models
 
@@ -163,7 +163,14 @@ Still in Rust: the backdrop quad, the wood board and edge (boxes sized to the la
 
 | game | what | why |
 |---|---|---|
-| Hotel | walls, locked doors, pool rim, floors, zones, pads | sized from `Layout` per hotel; a model per size would be a file per wall |
+| Hotel | walls, locked doors, pool rim (`Shape::Cube`), floors, zones, pads (`Shape::Plane`, `Shape::Disc`) | sized from `Layout` per hotel; a model per size would be a file per wall |
+| Hotel | progress dots, shadows (`Shape::Disc`), splash rings and ripples (`Shape::Ring`), splash drops (`Shape::Sphere`) | flat or tiny effects scaled and faded every frame |
+| Take Away Trains | sky (`Shape::Quad`, `Skin::Sprite`), ground, gravel and platform (`Shape::Plane`, `Skin::Tile`) | a backdrop and tiled textures, not geometry |
+| Take Away Trains | smoke puffs (`Shape::Sphere`, `Finish::Ghost`) | scaled and faded every frame |
+| Ball Sort | backdrop (`Shape::Quad`), wood board and edge (`Shape::Cube`, `Skin::Tile`) | the board is sized to the layout of each level |
+| Ball Sort | shadow discs (`Shape::Disc`), selection glow (`Shape::Torus`) | flat blob and a glow ring scaled and faded per frame |
+| Helix | sky, clouds and splats (`Shape::Quad`) | sprite layers |
+| Runner | sky (`Shape::Quad`), shadow (`Shape::Disc`), grass and finish line (`Shape::Plane`) | backdrop and flat layers sized to the course |
 | Paper Land | land contours and trails (`paper/land.rs`) | marching squares over the live ownership grid |
 | Helix | ring sectors (`Shape::Sector`) | sized by `RING_OUTER`, `RING_INNER`, `SEGMENTS` and generated per tower |
 | Times Table Garden | ground and soil beds (`Shape::Plane`) | flat layers, the ground a fixed backdrop colour and the beds sized from the layout |
@@ -179,7 +186,13 @@ Garden (`crates/app/src/games/garden/world.rs`) has no fixed 3D object (no bed f
 - Sizes against origin/main aedb1e9 (same machine, `small` profile): web bundle 51494985 B to 51501265 B (wasm 25442 KiB to 25448 KiB, 7155 KiB gzipped both), Android arm64 APK 36363356 B to 36367560 B, iOS simulator app 42988 KiB to 43004 KiB (binary 18312528 B to 18312608 B). The four `.gcad` files are about 0.5 KB.
 - Screenshots 111, 112, 113, 115, 116 (Helix) and 151, 152, 154, 155, 156 (Paper Land) before and after: 99.98-100% of pixels within 16 levels, mean difference 0.0-0.15.
 - Android emulator `kidsgames-test` (x86_64, swiftshader_indirect, three cold starts, the first with a fresh install): the four new models are ready with the rest at 5205, 1242 and 1587 ms after start (those include the hero and tree, and the hotel models bake-loaded), so they add no measurable time; the new models were built (4 builds) on the first start and reused on later ones.
-- Final state (#376): `Shape` keeps `Cube` (Hotel walls and Ball Sort board), `Sphere` (Trains smoke, Hotel), `Torus` (Ball Sort selection glow), `Disc`, `Ring`, `Plane`, `Quad`, `Sector` and `Model`. `Ball`, `Cylinder(n)`, `Cone(n)` and `Tube(n)` had no user left and were deleted with `tube_mesh`.
+### Final state (#376)
+
+`Shape` keeps `Cube`, `Sphere`, `Torus`, `Disc`, `Ring`, `Plane`, `Quad`, `Sector` and `Model`, each used by the pieces in the table above. `Ball`, `Cylinder(n)`, `Cone(n)` and `Tube(n)` had no user left once Trains (#365) and Ball Sort (#366) landed, and were deleted with `tube_mesh`.
+
+- Sizes against origin/main f78b052 (same machine, `small` profile): web bundle 49674888 B to 49670993 B (wasm 26057279 B to 26053384 B, 7156 KiB to 7154 KiB gzipped), Android arm64 APK 35849521 B to 35848733 B (`.so` 34501 KiB to 34497 KiB), iOS simulator app 41168 KiB both (binary 18312592 B both: the dropped code fit inside the Mach-O segment padding).
+- `cargo test --release --workspace`: 1006 and 259 passed.
+- Screenshots of every 3D game before and after (helix 110-119, paper 150-159, hotel 170-183, runner 200-210, trains 220-229, ball sort 250-259, garden 260-269): all but the runner are 100.00% within 16 levels. Runner shots differ only in the hero's stride phase, which is not deterministic between shot runs (two runs of the same build differ by as much); rerunning after builds and taking the best match per frame gives 98.83-100%, and outside the hero's box (x 370-580, y 280-720 at 1024x768) 99.97-100%. The runner uses none of the deleted shapes. Shot determinism is #380.
 
 ### Checks
 
