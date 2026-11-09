@@ -373,9 +373,11 @@ fn animate_hero(
         return;
     };
     let node = models.clips[at];
+    let shot = crate::shots::requested().is_some();
+    let blend = if shot { Duration::ZERO } else { Duration::from_millis(120) };
     for (mut player, mut tr) in &mut players {
         if tr.get_main_animation() != Some(node) {
-            let a = tr.play(&mut player, node, Duration::from_millis(120));
+            let a = tr.play(&mut player, node, blend);
             match want {
                 "run" | "idle" => {
                     a.repeat();
@@ -392,10 +394,17 @@ fn animate_hero(
                 _ => {}
             }
         }
+        if shot && want != "run" {
+            if let Some(a) = player.animation_mut(node) {
+                let secs = clip_secs(&graphs, &clips, &graph, node);
+                a.set_speed(0.0);
+                a.seek_to(g.t.rem_euclid(secs.max(0.01)));
+            }
+        }
         if want == "run" {
             if let Some(a) = player.animation_mut(node) {
                 let secs = clip_secs(&graphs, &clips, &graph, node);
-                match run_pose(g.dist, secs, crate::shots::requested().is_some(), g.speed) {
+                match run_pose(g.dist, secs, shot, g.speed) {
                     RunPose::Seek(t) => {
                         a.set_speed(0.0);
                         a.seek_to(t);
