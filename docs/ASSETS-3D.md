@@ -155,7 +155,7 @@ Still drawn from primitives in the hotel, on purpose: floors, zones, the pool wa
 ### Hotel numbers
 
 - Triangles: a standing person is 1696 (the primitive version was 4952: ten 480-triangle spheres, six boxes and two 10-sided cylinders), the swimmer about 1500, every prop under 1500.
-- Build on the Android emulator `kidsgames-test` (x86_64, cold start with app data cleared, `gcad_bevy` debug log), three runs: the 36 hotel models take 0 or 1 ms each, 8 to 10 ms together, against the 150 ms budget. The hero (1034-1088 ms) and tree (219-241 ms) are unchanged.
+- Build on the Android emulator `kidsgames-test` (x86_64, cold start with app data cleared, `gcad_bevy` debug log, measured before the shipped bake landed), three runs: the 36 hotel models take 0 or 1 ms each, 8 to 10 ms together, against the 150 ms budget. The hero (1034-1088 ms) and tree (219-241 ms) are unchanged. `bake_settings` now lists every hotel model, so release builds ship them in `assets/gcad-baked` (50 entries) and do not build them at all.
 - Emulator: the hotel opens and draws with every model from `.gcad` (`docs/shots/hotel-emulator.png`).
 - Screenshots 170-183 before and after (`scripts/shots.sh`, headless Chrome): 99.5-99.95% of pixels within 16 levels, mean difference 0.03-0.27. The low-poly shells differ from the old 20-segment spheres at the edges only.
 - Sizes against 83f7744 (same machine and profile): web bundle 49540006 B to 49664393 B, wasm 25939198 B to 26053064 B, Android arm64 APK 35774371 B to 35841018 B. The 42 hotel `.gcad` files are 10521 B (2543 B gzipped). iOS not rebuilt for this step.

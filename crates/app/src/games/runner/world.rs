@@ -854,7 +854,10 @@ mod tests {
         let before = gcad_bevy::bake::check(&copy, crate::gcad::bake_settings);
         assert!(before.iter().all(|p| p.contains("index")), "{before:?}");
         let baked = gcad_bevy::bake::bake(&copy, crate::gcad::bake_settings).unwrap();
-        assert_eq!(baked.index.entries.len(), PROPS.len() + 1);
+        assert_eq!(
+            baked.index.entries.len(),
+            PROPS.len() + 1 + crate::games::hotel::world::MODELS.len()
+        );
         let problems = gcad_bevy::bake::check(&copy, crate::gcad::bake_settings);
         std::fs::write(copy.join("models/hero.gcad"), "").unwrap();
         let stale = gcad_bevy::bake::check(&copy, crate::gcad::bake_settings);
@@ -873,6 +876,9 @@ mod tests {
                 format!("models/prop_{name}.gcad"),
                 crate::gcad::settings(scale),
             ));
+        }
+        for name in crate::games::hotel::world::MODELS {
+            assets.push((crate::gcad::path(name), gcad_bevy::GcadSettings::default()));
         }
         for (asset, loaded) in assets {
             let baked =
