@@ -78,6 +78,7 @@ pub struct Input {
     pub scroll: f32,
     pub pinch: f32,
     pub pointers: Vec<Touch>,
+    pub path: Vec<Vec2>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -464,12 +465,32 @@ pub struct PrimaryFinger {
     known: Vec<u64>,
     pos: Vec2,
     held: Vec<(u64, Vec2)>,
+    used: Option<u64>,
+    path: Vec<Vec2>,
 }
 
 impl PrimaryFinger {
     pub fn update(&mut self, events: &[(u64, Finger, Vec2)]) -> Pointer {
         let touches = self.with_held(events);
-        self.step(&touches)
+        self.used = None;
+        let out = self.step(&touches);
+        self.path = match self.used {
+            Some(id) => events
+                .iter()
+                .filter(|e| e.0 == id)
+                .map(|e| e.2)
+                .collect(),
+            None => Vec::new(),
+        };
+        out
+    }
+
+    pub fn path(&self) -> &[Vec2] {
+        &self.path
+    }
+
+    pub fn clear_path(&mut self) {
+        self.path.clear();
     }
 
     fn with_held(&mut self, events: &[(u64, Finger, Vec2)]) -> Vec<(u64, Finger, Vec2)> {
@@ -515,6 +536,7 @@ impl PrimaryFinger {
             ..Default::default()
         };
         if let Some(id) = self.id {
+            self.used = Some(id);
             match find(id) {
                 Some((_, f, p)) if f != Finger::Ended => {
                     out.pos = p;
@@ -541,13 +563,15 @@ impl PrimaryFinger {
                 .or_else(|| fresh(&self.known, None).and_then(find))
             {
                 self.id = Some(id);
+                self.used = Some(id);
                 out = Pointer {
                     pos: p,
                     down: true,
                     pressed: true,
                     released: false,
                 };
-            } else if let Some((_, _, p)) = tap {
+            } else if let Some((tap_id, _, p)) = tap {
+                self.used = Some(tap_id);
                 out = Pointer {
                     pos: p,
                     down: false,
@@ -663,6 +687,7 @@ impl InputTracker {
         if !raw.touches.is_empty() || self.fingers.active() {
             return self.fingers.update(&raw.touches);
         }
+        self.fingers.clear_path();
         raw.mouse
     }
 
@@ -714,7 +739,23 @@ impl InputTracker {
             self.swipes.track(pos, false, false, SWIPE_MM * mm);
             None
         } else {
-            self.swipes.track(pos, down, pressed, SWIPE_MM * mm)
+            let mut path: Vec<Vec2> = if raw.touches.is_empty() && !self.fingers.active() {
+                Vec::new()
+            } else {
+                self.fingers.path().iter().map(|p| view.to_view(*p)).collect()
+            };
+            if path.is_empty() && down {
+                path.push(pos);
+            }
+            let mut found = None;
+            for (i, p) in path.iter().enumerate() {
+                let first = i == 0 && pressed;
+                found = found.or(self.swipes.track(*p, true, first, SWIPE_MM * mm));
+            }
+            if !down {
+                self.swipes.track(pos, false, false, SWIPE_MM * mm);
+            }
+            found
         };
         let key_dir = [
             (Key::Up, Dir::Up),
@@ -773,6 +814,11 @@ impl InputTracker {
             scroll: raw.scroll,
             pinch: raw.pinch,
             pointers,
+            path: if cancelled {
+                Vec::new()
+            } else {
+                self.fingers.path().iter().map(|p| view.to_view(*p)).collect()
+            },
         }
     }
 }
@@ -1439,6 +1485,99 @@ mod tests {
         assert_eq!(swipes(&m), vec![Dir::Up]);
         assert_eq!(m[0].pressed, touch[0].pressed);
         assert_eq!(m.last().unwrap().released, touch.last().unwrap().released);
+    }
+
+    #[test]
+    fn a_swipe_inside_one_frame_still_reports_its_direction() {
+        let v = View::ipad_landscape();
+        let mut t = InputTracker::default();
+        let from = v.to_screen(vec2(500.0, 400.0));
+        let step = vec2(-SWIPE_MM * 6.0, 0.0) * v.scale;
+        let i = t.poll(
+            &Raw {
+                touches: vec![
+                    (1, Finger::Started, from),
+                    (1, Finger::Held, from + step),
+                    (1, Finger::Held, from + step * 2.0),
+                    (1, Finger::Ended, from + step * 2.0),
+                ],
+                units_per_mm: Some(6.0),
+                screen: vec2(v.w, v.h) * v.scale,
+                ..Default::default()
+            },
+            &v,
+        );
+        assert_eq!(i.swipe, Some(Dir::Left));
+        assert!(i.pressed && i.released && i.swiped);
+        assert!(!i.tap_released());
+        assert!((i.start - vec2(500.0, 400.0)).length() < 0.01);
+    }
+
+    #[test]
+    fn a_swipe_inside_one_frame_fires_once_not_every_frame_after() {
+        let v = View::ipad_landscape();
+        let mut t = InputTracker::default();
+        let from = v.to_screen(vec2(500.0, 400.0));
+        let step = vec2(-SWIPE_MM * 6.0, 0.0) * v.scale;
+        let base = Raw {
+            units_per_mm: Some(6.0),
+            screen: vec2(v.w, v.h) * v.scale,
+            ..Default::default()
+        };
+        let first = t.poll(
+            &Raw {
+                touches: vec![
+                    (1, Finger::Started, from),
+                    (1, Finger::Held, from + step * 2.0),
+                    (1, Finger::Ended, from + step * 2.0),
+                ],
+                ..base.clone()
+            },
+            &v,
+        );
+        assert_eq!(first.swipe, Some(Dir::Left));
+        for _ in 0..5 {
+            let next = t.poll(&base, &v);
+            assert_eq!(next.swipe, None);
+            assert!(next.path.is_empty());
+        }
+    }
+
+    #[test]
+    fn a_tap_inside_one_frame_is_still_a_tap() {
+        let v = View::ipad_landscape();
+        let mut t = InputTracker::default();
+        let at = v.to_screen(vec2(500.0, 400.0));
+        let i = t.poll(
+            &Raw {
+                touches: vec![(1, Finger::Started, at), (1, Finger::Ended, at)],
+                units_per_mm: Some(6.0),
+                screen: vec2(v.w, v.h) * v.scale,
+                ..Default::default()
+            },
+            &v,
+        );
+        assert_eq!(i.swipe, None);
+        assert!(i.tap_released());
+    }
+
+    #[test]
+    fn a_press_and_move_in_one_frame_swipes_while_the_finger_is_down() {
+        let v = View::ipad_landscape();
+        let mut t = InputTracker::default();
+        let from = v.to_screen(vec2(500.0, 400.0));
+        let step = vec2(0.0, SWIPE_MM * 6.0 * 1.5) * v.scale;
+        let i = t.poll(
+            &Raw {
+                touches: vec![(1, Finger::Started, from), (1, Finger::Held, from + step)],
+                units_per_mm: Some(6.0),
+                screen: vec2(v.w, v.h) * v.scale,
+                ..Default::default()
+            },
+            &v,
+        );
+        assert_eq!(i.swipe, Some(Dir::Down));
+        assert!(i.down && i.pressed);
     }
 
     #[test]

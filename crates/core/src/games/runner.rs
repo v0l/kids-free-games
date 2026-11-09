@@ -669,20 +669,36 @@ impl Runner {
         sfx::play(Sfx::Swish);
     }
 
-    fn touch_dir(&mut self, input: &Input) -> Option<Dir> {
+    fn touch_dirs(&mut self, input: &Input) -> Vec<Dir> {
         if input.pressed {
-            self.swipe_anchor = Some(input.pos);
+            self.swipe_anchor = None;
             self.touch_swiped = false;
+        }
+        let points: Vec<Vec2> = if input.path.is_empty() {
+            if input.down || input.pressed {
+                vec![input.pos]
+            } else {
+                Vec::new()
+            }
+        } else {
+            input.path.clone()
+        };
+        let mut dirs = Vec::new();
+        for p in points {
+            let Some(anchor) = self.swipe_anchor else {
+                self.swipe_anchor = Some(p);
+                continue;
+            };
+            if let Some(dir) = clear_swipe(p - anchor, SWIPE_MM_RUNNER * input.mm()) {
+                self.swipe_anchor = Some(p);
+                self.touch_swiped = true;
+                dirs.push(dir);
+            }
         }
         if !input.down {
             self.swipe_anchor = None;
-            return None;
         }
-        let anchor = self.swipe_anchor?;
-        let dir = clear_swipe(input.pos - anchor, SWIPE_MM_RUNNER * input.mm())?;
-        self.swipe_anchor = Some(input.pos);
-        self.touch_swiped = true;
-        Some(dir)
+        dirs
     }
 
     fn side_tap(&self, input: &Input, view: &View) -> Option<Dir> {
@@ -700,15 +716,21 @@ impl Runner {
     }
 
     fn steer(&mut self, input: &Input, view: &View) {
-        let touch = self.touch_dir(input);
+        let touch = self.touch_dirs(input);
         let tap = self.side_tap(input, view);
-        match input.key_dir.or(touch).or(tap) {
-            Some(Dir::Left) => self.change_lane(-1, view),
-            Some(Dir::Right) => self.change_lane(1, view),
-            Some(Dir::Up) => self.jump(view),
-            Some(Dir::Down) => self.slide(),
-            None if input.action => self.jump(view),
-            None => {}
+        let mut dirs: Vec<Dir> = input.key_dir.into_iter().collect();
+        dirs.extend(touch);
+        dirs.extend(tap);
+        if dirs.is_empty() && input.action {
+            self.jump(view);
+        }
+        for dir in dirs {
+            match dir {
+                Dir::Left => self.change_lane(-1, view),
+                Dir::Right => self.change_lane(1, view),
+                Dir::Up => self.jump(view),
+                Dir::Down => self.slide(),
+            }
         }
     }
 
@@ -1473,6 +1495,36 @@ mod tests {
         assert!(g.sliding());
         g.update(&Input::key(Dir::Up), &view, 1.0 / 60.0);
         assert!(g.vy > 0.0 && !g.sliding());
+    }
+
+    #[test]
+    fn a_whole_swipe_delivered_in_one_frame_still_moves_the_lane() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = playing(1);
+        let mut t = crate::input::InputTracker::default();
+        let from = view.to_screen(vec2(700.0, 400.0));
+        let touches: Vec<_> = (0..=12)
+            .map(|i| {
+                let f = match i {
+                    0 => crate::input::Finger::Started,
+                    12 => crate::input::Finger::Ended,
+                    _ => crate::input::Finger::Held,
+                };
+                (1u64, f, from + vec2(-8.0 * i as f32, 0.0) * view.scale)
+            })
+            .collect();
+        let input = t.poll(
+            &crate::input::Raw {
+                touches,
+                units_per_mm: Some(6.0),
+                screen: vec2(view.w, view.h) * view.scale,
+                ..Default::default()
+            },
+            &view,
+        );
+        g.update(&input, &view, 1.0 / 60.0);
+        assert_eq!(g.lane, -1);
     }
 
     #[test]
