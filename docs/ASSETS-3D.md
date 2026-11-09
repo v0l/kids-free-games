@@ -117,7 +117,7 @@ The hotel needed shapes gcad-mesh did not have, added to gcad master in 434c02e 
 - `extrude d scale=k` (a frustum: pots, bins, toilets, lamp shades) and `scale=0` (a cone: the umbrella).
 - `blob ... mode=shell segments=N`: a UV ellipsoid of `N*N` triangles. A plain shell meshes to about 2000 triangles, which put a guest at 27000.
 
-Rounded boxes (`block round=`) and spheres already existed. Ball Sort added `torus d tube at= around= sides=` (gcad master 9d57587, pinned in gcad-engines f5c4848); sector is left for Helix.
+Rounded boxes (`block round=`) and spheres already existed. Ball Sort added `torus d tube at= around= sides=` and `extrude d open=1` (gcad master 9d57587, pinned in gcad-engines f5c4848); sector is left for Helix.
 
 ### Hotel inventory
 
@@ -141,10 +141,10 @@ Still drawn from primitives in the hotel, on purpose: floors, zones, the pool wa
 
 | model | made of | instances | per-instance |
 |---|---|---|---|
-| `ballsort_tube` | `glass` (28-gon wall, extruded ring), `foot` (28-gon), `rim` (torus), `glint` (box) | one per spot | `glass` is painted `Finish::Glass` by part name and keeps its `Role::Glass(i)`; the others keep their old paints |
+| `ballsort_tube` | `glass` (28-gon wall, `extrude open=1`: one wall, no caps), `foot` (28-gon), `rim` (torus), `glint` (box) | one per spot | `glass` is painted `Finish::Glass` by part name and keeps its `Role::Glass(i)`; the others keep their old paints |
 | `ballsort_ball` | `ball`, a 28-segment shell | every ball, sharing one mesh | colour and hidden/revealed paint from `ball_paint`, squash by scale |
 
-Still in Rust: the backdrop quad, the wood board and edge (boxes sized to the layout), the shadow discs and the glow rings (scaled per frame). Models are built from the `.gcad` at startup and are not baked. Cold start on the emulator `kidsgames-test` (x86_64, app data cleared): all 52 models, the two ball sort ones included, are ready 2403 ms after start with 52 builds and 0 cache hits; the ball sort pair lands in the same millisecond as the hotel set, so its own cost is under 1 ms. Native test budget: both build in under 150 ms in debug. Screenshots 250-253 and 255 before and after: 89-94% of pixels within 16 levels, mean difference 2.3-3.6 (the low-poly ball and the faceted wall differ at the edges); looked at, same picture.
+Still in Rust: the backdrop quad, the wood board and edge (boxes sized to the layout), the shadow discs and the glow rings (scaled per frame). Models are built from the `.gcad` at startup and are not baked. Cold start on the emulator `kidsgames-test` (x86_64, app data cleared): all 52 models, the two ball sort ones included, are ready 2403 ms after start with 52 builds and 0 cache hits; the ball sort pair lands in the same millisecond as the hotel set, so its own cost is under 1 ms. Native test budget: both build in under 150 ms in debug. Screenshots 250 and 253 before and after: 99.88% and 99.76% of pixels within 16 levels, mean difference 0.24 and 0.35. A first version with a closed double-walled ring left 89-94%: the caps and inner wall changed the glass shading, so gcad-mesh got `extrude d open=1` (gcad df083cd, pinned in gcad-engines 6098862).
 
 ### Procedural geometry that stays in Rust
 

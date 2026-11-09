@@ -1,8 +1,7 @@
 body glass
 plane XY
 ngon 1.03 28
-ngon 0.99 28
-glass: extrude 3.66
+glass: extrude 3.66 open=1
 color #d1f2ff
 body foot
 plane XY

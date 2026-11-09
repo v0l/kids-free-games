@@ -1,3 +1,3 @@
 body ball
-ball: blob 0,0,0 r=0.42 mode=shell segments=28
+ball: blob 0,0,0 r=0.42 mode=shell segments=32
 color #e6e6e6 part=ball gloss=0.6
