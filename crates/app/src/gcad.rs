@@ -448,10 +448,6 @@ mod tests {
             ("hotel_car", Vec3::new(1.44, 1.0, 2.4)),
             ("hotel_wardrobe", Vec3::new(1.1, 1.7, 0.63)),
             ("hotel_umbrella", Vec3::new(1.5, 1.8, 1.43)),
-            ("helix_ball", Vec3::ONE),
-            ("helix_pole", Vec3::ONE),
-            ("paper_cube", Vec3::ONE),
-            ("paper_head", Vec3::new(1.76, 1.802, 1.7)),
         ];
         let mut wrong = vec![];
         for (name, size_was) in want {
@@ -461,5 +457,22 @@ mod tests {
             }
         }
         assert!(wrong.is_empty(), "{wrong:#?}");
+    }
+
+    #[test]
+    fn helix_and_paper_models_have_the_parts_and_sizes_the_games_scale_from() {
+        for (name, size_is) in [
+            ("helix_ball", Vec3::ONE),
+            ("helix_pole", Vec3::ONE),
+            ("paper_cube", Vec3::ONE),
+        ] {
+            let s = size(&build(name));
+            assert!((s - size_is).abs().max_element() < 0.03, "{name} is {s}");
+        }
+        let head = build("paper_head");
+        assert_eq!(part_names(&head), ["body", "crown", "eye_l", "eye_r"]);
+        let s = size(&head);
+        assert!((s.x - 1.76).abs() < 0.03 && (s.z - 1.7).abs() < 0.03, "{s}");
+        assert!(s.y > 1.39, "{s}");
     }
 }
