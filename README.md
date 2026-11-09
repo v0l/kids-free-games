@@ -58,7 +58,7 @@ A release is a pushed tag. `.github/workflows/release.yml` builds the signed And
 The APK is signed with the same release key as agentbench, from four repository secrets that use the same names: `SIGNING_KEYSTORE_BASE64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS`. A run without them fails. To build the APK on your own machine:
 
 ```sh
-KEYSTORE=~/.keystores/foreman-release.jks KEYSTORE_PASS=$(cat ~/.keystores/foreman-release.pass) KEY_ALIAS=foreman scripts/release.sh
+KEYSTORE=~/.keystore KEYSTORE_PASS=... KEY_ALIAS=upload scripts/release.sh
 ```
 
 The same Android job also builds the App Bundle for Google Play, `kids_games-<tag>-android.aab`. Play only accepts a bundle signed with the upload key registered for the app, so it uses a second secret set, `PLAY_UPLOAD_KEYSTORE_BASE64`, `PLAY_UPLOAD_STORE_PASSWORD`, `PLAY_UPLOAD_KEY_PASSWORD` and `PLAY_UPLOAD_KEY_ALIAS`, made from the upload keystore (`~/kgdist/upload.jks`). A tag build fails without them; a manual dry run falls back to the APK key. Set them with `base64 -w0 ~/kgdist/upload.jks | gh secret set PLAY_UPLOAD_KEYSTORE_BASE64 --repo v0l/kids-free-games` and `gh secret set` for the other three.
