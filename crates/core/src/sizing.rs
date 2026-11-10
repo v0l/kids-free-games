@@ -1245,6 +1245,19 @@ mod tests {
     }
 
     #[test]
+    fn a_two_choice_welcome_sheet_fits_every_screen() {
+        for (name, v) in test_views() {
+            let mut s = Stack::new(&v, 580.0).ribbon("Welcome!");
+            s.text(26.0, "Make a player or link this device to another one.");
+            let b = s.buttons(84.0, &["Make a player", "Link to another device"]);
+            let sheet = s.layout();
+            check_sheet(&v, name, &sheet).unwrap();
+            check_sheet_text(&v, dpr_of(name), name, &sheet).unwrap();
+            check_apart(name, &[sheet.button(b, 0), sheet.button(b, 1)]).unwrap();
+        }
+    }
+
+    #[test]
     fn long_lines_wrap_inside_the_panel() {
         let lines = wrap(
             "We hide them from your boards and tell a grown up.",
