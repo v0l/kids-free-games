@@ -42,7 +42,9 @@ fn first_frame(g: &mut Runner, frames: &[Input], hit: impl Fn(&Runner) -> bool) 
 }
 
 fn ms(f: Option<usize>) -> String {
-    f.map_or("never".into(), |f| format!("{:5.1}", f as f32 * DT * 1000.0))
+    f.map_or("never".into(), |f| {
+        format!("{:5.1}", f as f32 * DT * 1000.0)
+    })
 }
 
 fn main() {
@@ -58,7 +60,9 @@ fn main() {
         let inputs = drag(&mut sc, from, Dir::Left, per_frame, frames);
         let lane = first_frame(&mut g, &inputs, |g| g.lane == -1);
         let mut g = fresh(0);
-        let vis = first_frame(&mut g, &inputs, |g| g.x < -0.3 * kg_core::games::runner::LANE_W);
+        let vis = first_frame(&mut g, &inputs, |g| {
+            g.x < -0.3 * kg_core::games::runner::LANE_W
+        });
         println!("{speed:>6} | lane  | {} ms | {} ms", ms(lane), ms(vis));
 
         let mut sc = Script::new(view);

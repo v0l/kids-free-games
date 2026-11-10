@@ -13,5 +13,9 @@ pub fn draw_stick(pen: &mut Pen, stick: &DirControl) {
     pen.circle(stick.origin, r, Color::new(1.0, 1.0, 1.0, 0.18));
     pen.ring(stick.origin, r, 3.0, Color::new(1.0, 1.0, 1.0, 0.35));
     let knob: Vec2 = stick.knob.clamp_length_max(r);
-    pen.circle(stick.origin + knob, r * 0.45, Color::new(1.0, 1.0, 1.0, 0.55));
+    pen.circle(
+        stick.origin + knob,
+        r * 0.45,
+        Color::new(1.0, 1.0, 1.0, 0.55),
+    );
 }

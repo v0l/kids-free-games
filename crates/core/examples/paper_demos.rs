@@ -22,8 +22,13 @@ fn world(seed: u64) -> World {
 
 fn main() {
     kg_core::save::use_memory_only();
-    let want: usize = std::env::args().nth(1).and_then(|v| v.parse().ok()).unwrap_or(60_000);
-    let out = std::env::args().nth(2).unwrap_or("/tmp/kgrl/paper_demos.bin".into());
+    let want: usize = std::env::args()
+        .nth(1)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(60_000);
+    let out = std::env::args()
+        .nth(2)
+        .unwrap_or("/tmp/kgrl/paper_demos.bin".into());
     let threads = 16;
     let per = want / threads;
     let parts: Vec<Vec<u8>> = std::thread::scope(|s| {
@@ -73,5 +78,10 @@ fn main() {
     for p in parts {
         f.write_all(&p).unwrap();
     }
-    println!("{} samples, grid {} scalars {} -> {out}", per * threads, rl::grid_len(), rl::SCALARS);
+    println!(
+        "{} samples, grid {} scalars {} -> {out}",
+        per * threads,
+        rl::grid_len(),
+        rl::SCALARS
+    );
 }

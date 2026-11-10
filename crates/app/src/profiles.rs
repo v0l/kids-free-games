@@ -12,6 +12,7 @@ pub const BACKSPACE: char = '\u{8}';
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Mode {
+    Welcome,
     Pick,
     Edit {
         id: Option<String>,
@@ -41,12 +42,7 @@ impl Default for Profiles {
 impl Profiles {
     pub fn new() -> Self {
         let mode = if profile::list().is_empty() {
-            Mode::Edit {
-                id: None,
-                name: String::new(),
-                avatar: 0,
-                confirm_delete: false,
-            }
+            Mode::Welcome
         } else {
             Mode::Pick
         };
@@ -57,6 +53,20 @@ impl Profiles {
             link: None,
             press: None,
             gate_hold: 0.0,
+        }
+    }
+
+    pub fn welcome_rects(view: &View) -> WelcomeRects {
+        let mut s = kg_core::sizing::Stack::new(view, 580.0).ribbon(WELCOME_TITLE);
+        s.text(26.0, WELCOME_NOTE);
+        let art = s.block_min(120.0, view.tap(60.0));
+        let b = s.buttons(84.0, &[MAKE_LABEL, LINK_DEVICE_LABEL]);
+        let sheet = s.layout();
+        WelcomeRects {
+            make: sheet.button(b, 0),
+            link: sheet.button(b, 1),
+            art: sheet.rect(art),
+            sheet,
         }
     }
 
@@ -146,6 +156,13 @@ impl Profiles {
             l.update(input, view, dt);
             if l.done {
                 self.link = None;
+                if self.mode == Mode::Welcome {
+                    if !profile::list().is_empty() {
+                        kg_core::net::clear_redeem();
+                        self.mode = Mode::Pick;
+                    }
+                    return;
+                }
                 self.mode = Mode::Pick;
                 if profile::current_id().is_some()
                     && kg_core::net::redeem_state() == kg_core::net::Redeem::Done
@@ -162,6 +179,7 @@ impl Profiles {
             .and_then(|p| self.hit_rect(view, p));
         self.update_gate(input, view, dt);
         match self.mode.clone() {
+            Mode::Welcome => self.update_welcome(input, view),
             Mode::Pick => self.update_pick(input, view),
             Mode::Edit {
                 id,
@@ -191,6 +209,10 @@ impl Profiles {
 
     fn hit_rect(&self, view: &View, p: glam::Vec2) -> Option<Rect> {
         let mut all: Vec<Rect> = match &self.mode {
+            Mode::Welcome => {
+                let w = Self::welcome_rects(view);
+                vec![w.make, w.link]
+            }
             Mode::Pick => {
                 let mut v = Self::card_rects(view, profile::list().len());
                 v.push(Self::link_rect(view));
@@ -205,6 +227,25 @@ impl Profiles {
         };
         all.retain(|r| r.contains(p));
         all.first().copied()
+    }
+
+    fn update_welcome(&mut self, input: &Input, view: &View) {
+        if !input.pressed {
+            return;
+        }
+        let w = Self::welcome_rects(view);
+        if input.tapped_in(w.make) {
+            sfx::play(Sfx::Tap);
+            self.mode = Mode::Edit {
+                id: None,
+                name: String::new(),
+                avatar: 0,
+                confirm_delete: false,
+            };
+        } else if input.tapped_in(w.link) {
+            sfx::play(Sfx::Tap);
+            self.link = Some(crate::link::Link::new());
+        }
     }
 
     fn update_pick(&mut self, input: &Input, view: &View) {
@@ -263,6 +304,10 @@ impl Profiles {
         mut confirm_delete: bool,
     ) {
         let erasing = input.typed.contains(&BACKSPACE);
+        if input.back && !erasing && id.is_none() && profile::list().is_empty() {
+            self.mode = Mode::Welcome;
+            return;
+        }
         if input.back && !erasing && !profile::list().is_empty() {
             self.mode = Mode::Pick;
             return;
@@ -326,9 +371,13 @@ impl Profiles {
                 }
                 return;
             }
-            if input.pressed && back.contains(input.pos) && !profile::list().is_empty() {
+            if input.pressed && back.contains(input.pos) {
                 sfx::play(Sfx::Tap);
-                self.mode = Mode::Pick;
+                self.mode = if profile::list().is_empty() {
+                    Mode::Welcome
+                } else {
+                    Mode::Pick
+                };
                 return;
             }
             if let (true, Some(pid)) = (input.pressed && delete.contains(input.pos), &id) {
@@ -336,12 +385,7 @@ impl Profiles {
                     profile::delete(pid);
                     sfx::play(Sfx::Crunch);
                     self.mode = if profile::list().is_empty() {
-                        Mode::Edit {
-                            id: None,
-                            name: String::new(),
-                            avatar: 0,
-                            confirm_delete: false,
-                        }
+                        Mode::Welcome
                     } else {
                         Mode::Pick
                     };
@@ -367,6 +411,22 @@ impl Profiles {
         let pressed = |r: Rect| (self.press == Some(r)) as i32 as f32;
         let plum = Color::from_rgba(50, 15, 80, 255);
         match &self.mode {
+            Mode::Welcome => {
+                let w = Self::welcome_rects(view);
+                pen.painted_panel(w.sheet.panel, WHITE);
+                if let Some((rr, _)) = w.sheet.ribbon {
+                    pen.ribbon_in(view, WELCOME_TITLE, rr, self.t);
+                }
+                pen.sheet_text(&w.sheet, 0, None, BODY);
+                let d = w.art.h.min(w.art.w / 4.0);
+                for (i, avatar) in [0usize, 3, 6].into_iter().enumerate() {
+                    let x = w.art.center().x + (i as f32 - 1.0) * d * 1.15;
+                    let bob = ((self.t * 3.0 + i as f32 * 1.7).sin() * 0.04 + 1.0) * d;
+                    pen.avatar(avatar, vec2(x, w.art.center().y), bob * 0.9);
+                }
+                pen.painted_button(w.make, MAKE_LABEL, Tone::Green, pressed(w.make), 1.0);
+                pen.painted_button(w.link, LINK_DEVICE_LABEL, Tone::Blue, pressed(w.link), 1.0);
+            }
             Mode::Pick => {
                 let bar = Self::pick_bar(view);
                 pen.ribbon_in(view, PICK_TITLE, bar.ribbon, self.t);
@@ -471,9 +531,7 @@ impl Profiles {
                     pressed(ok),
                     if ready { 1.0 } else { 0.45 },
                 );
-                if !profile::list().is_empty() {
-                    pen.painted_button(back, BACK_LABEL, Tone::Blue, pressed(back), 1.0);
-                }
+                pen.painted_button(back, BACK_LABEL, Tone::Blue, pressed(back), 1.0);
                 if let Some(pid) = id {
                     if let Some(y) = lay.note {
                         let s =
@@ -506,6 +564,18 @@ impl Profiles {
         }
     }
 }
+
+pub struct WelcomeRects {
+    pub sheet: kg_core::sizing::Sheet,
+    pub art: Rect,
+    pub make: Rect,
+    pub link: Rect,
+}
+
+const WELCOME_TITLE: &str = "Welcome!";
+const WELCOME_NOTE: &str = "Make a player, or link this device to another one.";
+const MAKE_LABEL: &str = "Make a player";
+const LINK_DEVICE_LABEL: &str = "Link to another device";
 
 pub const CHIP_H: f32 = 60.0;
 pub const SOURCE_NOTE: &str = "Free software (GPL-3.0). Source: github.com/v0l/kids-free-games";
@@ -862,6 +932,8 @@ mod tests {
         kg_core::save::reset_for_test();
         let v = View::ipad_landscape();
         let mut p = Profiles::new();
+        assert_eq!(p.mode, Mode::Welcome);
+        tap(&mut p, &v, Profiles::welcome_rects(&v).make.center());
         assert!(matches!(p.mode, Mode::Edit { id: None, .. }));
         let av = Profiles::avatar_rects(&v);
         tap(&mut p, &v, av[3].center());
@@ -888,10 +960,66 @@ mod tests {
     }
 
     #[test]
+    fn a_fresh_state_offers_both_choices() {
+        kg_core::save::reset_for_test();
+        for (name, v) in kg_core::sizing::test_views() {
+            let p = Profiles::new();
+            assert_eq!(p.mode, Mode::Welcome, "{name}");
+            let w = Profiles::welcome_rects(&v);
+            kg_core::sizing::check_buttons(&v, name, &[w.make, w.link]).unwrap();
+            kg_core::sizing::check_apart(name, &[w.make, w.link]).unwrap();
+            kg_core::sizing::check_sheet(&v, name, &w.sheet).unwrap();
+        }
+    }
+
+    #[test]
+    fn linking_from_the_empty_state_imports_profiles_without_making_one() {
+        kg_core::save::reset_for_test();
+        let v = View::ipad_landscape();
+        let mut p = Profiles::new();
+        tap(&mut p, &v, Profiles::welcome_rects(&v).link.center());
+        assert!(p.link.is_some());
+        assert!(profile::list().is_empty());
+        let id = "0f8fad5b-d9cb-469f-a165-70867728950e";
+        profile::adopt(id, "Mia", 2).unwrap();
+        p.link.as_mut().unwrap().done = true;
+        p.update(&Input::default(), &v, 1.0 / 60.0);
+        assert!(p.link.is_none());
+        assert_eq!(p.mode, Mode::Pick);
+        assert!(!p.done);
+        assert_eq!(profile::list().len(), 1);
+        assert_eq!(profile::list()[0].id, id);
+    }
+
+    #[test]
+    fn cancelling_the_link_returns_to_the_empty_state() {
+        kg_core::save::reset_for_test();
+        let v = View::ipad_landscape();
+        let mut p = Profiles::new();
+        tap(&mut p, &v, Profiles::welcome_rects(&v).link.center());
+        tap(&mut p, &v, crate::link::Link::back_rect(&v).center());
+        assert!(p.link.is_none());
+        assert_eq!(p.mode, Mode::Welcome);
+        assert!(profile::list().is_empty());
+        assert!(!p.done);
+    }
+
+    #[test]
+    fn backing_out_of_the_new_player_form_returns_to_the_empty_state() {
+        kg_core::save::reset_for_test();
+        let v = View::ipad_landscape();
+        let mut p = Profiles::new();
+        tap(&mut p, &v, Profiles::welcome_rects(&v).make.center());
+        tap(&mut p, &v, Profiles::action_rects(&v).1.center());
+        assert_eq!(p.mode, Mode::Welcome);
+    }
+
+    #[test]
     fn a_hardware_keyboard_types_the_name_and_enter_saves() {
         kg_core::save::reset_for_test();
         let v = View::ipad_landscape();
         let mut p = Profiles::new();
+        tap(&mut p, &v, Profiles::welcome_rects(&v).make.center());
         p.update(
             &Input {
                 typed: "leox".chars().collect(),
@@ -1104,6 +1232,8 @@ mod tests {
                     }
                 }
             }
+            let w = Profiles::welcome_rects(&v);
+            kg_core::sizing::check_buttons(&v, name, &[w.make, w.link]).unwrap();
             for n in 0..=MAX_PROFILES {
                 let cards = Profiles::card_rects(&v, n);
                 let what = format!("{name} {n} players");

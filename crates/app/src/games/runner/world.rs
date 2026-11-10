@@ -374,7 +374,11 @@ fn animate_hero(
     };
     let node = models.clips[at];
     let shot = crate::shots::requested().is_some();
-    let blend = if shot { Duration::ZERO } else { Duration::from_millis(120) };
+    let blend = if shot {
+        Duration::ZERO
+    } else {
+        Duration::from_millis(120)
+    };
     for (mut player, mut tr) in &mut players {
         if tr.get_main_animation() != Some(node) {
             let a = tr.play(&mut player, node, blend);
@@ -705,7 +709,10 @@ mod tests {
             RunPose::Seek(t) => assert!((t - 0.5 * secs).abs() < 1e-5, "{t}"),
             other => panic!("{other:?}"),
         }
-        assert_eq!(run_pose(15.0, secs, true, 9.0), run_pose(15.0, secs, true, 2.0));
+        assert_eq!(
+            run_pose(15.0, secs, true, 9.0),
+            run_pose(15.0, secs, true, 2.0)
+        );
     }
 
     #[test]

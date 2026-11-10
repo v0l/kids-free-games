@@ -500,7 +500,10 @@ mod tests {
             ("trains_platform", Vec3::new(60.0, 0.425, 6.3)),
         ] {
             let got = size(&build(name));
-            assert!((got - want).abs().max_element() < 0.15, "{name}: {got} not {want}");
+            assert!(
+                (got - want).abs().max_element() < 0.15,
+                "{name}: {got} not {want}"
+            );
         }
     }
 

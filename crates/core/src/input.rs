@@ -475,11 +475,7 @@ impl PrimaryFinger {
         self.used = None;
         let out = self.step(&touches);
         self.path = match self.used {
-            Some(id) => events
-                .iter()
-                .filter(|e| e.0 == id)
-                .map(|e| e.2)
-                .collect(),
+            Some(id) => events.iter().filter(|e| e.0 == id).map(|e| e.2).collect(),
             None => Vec::new(),
         };
         out
@@ -742,7 +738,11 @@ impl InputTracker {
             let mut path: Vec<Vec2> = if raw.touches.is_empty() && !self.fingers.active() {
                 Vec::new()
             } else {
-                self.fingers.path().iter().map(|p| view.to_view(*p)).collect()
+                self.fingers
+                    .path()
+                    .iter()
+                    .map(|p| view.to_view(*p))
+                    .collect()
             };
             if path.is_empty() && down {
                 path.push(pos);
@@ -817,7 +817,11 @@ impl InputTracker {
             path: if cancelled {
                 Vec::new()
             } else {
-                self.fingers.path().iter().map(|p| view.to_view(*p)).collect()
+                self.fingers
+                    .path()
+                    .iter()
+                    .map(|p| view.to_view(*p))
+                    .collect()
             },
         }
     }

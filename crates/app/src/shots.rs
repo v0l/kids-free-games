@@ -42,6 +42,7 @@ pub const SCENES: &[(u32, &str)] = &[
     (5, "link: show code"),
     (6, "link: type code"),
     (7, "menu with the lock sheet"),
+    (8, "welcome, no players"),
     (10, "flappy ready"),
     (11, "flappy first flight with the hint"),
     (12, "flappy mid run"),
@@ -462,6 +463,14 @@ fn setup(n: u32, view: &View) -> Stage {
                 app.update(&Input::default(), view, DT);
             }
             Stage::Menu(Box::new(app))
+        }
+        8 => {
+            kg_core::save::reset_for_test();
+            let mut p = Profiles::new();
+            for _ in 0..60 {
+                p.update(&Input::default(), view, DT);
+            }
+            Stage::Profiles(Box::new(p))
         }
         3..=6 => {
             players();

@@ -666,8 +666,16 @@ fn holding_the_stick_steers_the_head_by_the_drag_angle() {
         g.update(&sc.drag_to(from + drag * r * 0.8), &v, 1.0 / 60.0);
     }
     let want = world::angle_of(g.eye(&v).ground_dir(drag));
-    assert!(wrap_angle(g.me().want - want).abs() < 0.1, "{}", g.me().want);
-    assert!(wrap_angle(g.me().angle - want).abs() < 0.2, "{}", g.me().angle);
+    assert!(
+        wrap_angle(g.me().want - want).abs() < 0.1,
+        "{}",
+        g.me().want
+    );
+    assert!(
+        wrap_angle(g.me().angle - want).abs() < 0.2,
+        "{}",
+        g.me().angle
+    );
     let kept = g.me().want;
     g.update(&sc.drag_to(from + vec2(1.0, 0.0)), &v, 1.0 / 60.0);
     assert!(

@@ -1,8 +1,8 @@
 use super::{TrainsPlay, SHEET};
 use crate::game3d::*;
-use crate::gcad::Shelf;
 use crate::games::hotel::build::Model;
 use crate::games::hotel::models::{body, guest_look, rgb, Stance, PEOPLE};
+use crate::gcad::Shelf;
 use bevy::ecs::hierarchy::ChildSpawnerCommands;
 use bevy::prelude::*;
 use kg_core::engine::View;
@@ -190,11 +190,7 @@ fn spawn_model(
         if finish == Finish::Glow {
             color.a = 0.95;
         }
-        out.spawn(kit.part(
-            Shape::Model(name, i as u16),
-            Paint::new(finish, color),
-            t,
-        ));
+        out.spawn(kit.part(Shape::Model(name, i as u16), Paint::new(finish, color), t));
     }
 }
 
