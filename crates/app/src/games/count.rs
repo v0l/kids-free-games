@@ -1,13 +1,13 @@
 use super::Play;
-use crate::draw::{measure, Draw};
+use crate::draw::Draw;
 use crate::paint::Pen;
 use crate::ui::Results;
 use glam::{vec2, Vec2};
-use kg_core::engine::{Game, Input, View, HUD_LEFT};
+use kg_core::engine::{Game, Input, View};
 use kg_core::fx::{ease_out_back, ease_out_cubic, Bump};
 use kg_core::games::count::*;
 use kg_core::geom::{darker, with_alpha, Color, Rect, WHITE};
-use kg_core::learn::{hud_bottom, ui_scale, Ladder, UP_STREAK};
+use kg_core::learn::{hud_bottom, Ladder, UP_STREAK};
 
 pub const KEY: &str = GAME;
 const SHEET: &str = "count";
@@ -105,36 +105,18 @@ fn draw_backdrop(pen: &mut Pen, view: &View, t: f32) {
 pub fn draw_hud(
     pen: &mut Pen,
     view: &View,
+    h: &kg_core::learn::Hud,
     ladder: &Ladder,
     label: &str,
     accent: Color,
     bump: &Bump,
 ) {
-    let k = ui_scale(view);
-    let tw = measure(label, 28.0 * k) + 44.0 * k;
-    let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0 * k);
-    pen.round_rect(
-        Rect::new(chip.x, chip.y + 4.0, chip.w, chip.h),
-        chip.h / 2.0,
-        Color::new(0.0, 0.0, 0.0, 0.18),
-    );
-    pen.round_rect(chip, chip.h / 2.0, with_alpha(WHITE, 0.94));
-    pen.text_center(
-        label,
-        chip.x + chip.w / 2.0,
-        chip.y + chip.h / 2.0,
-        28.0 * k,
-        darker(accent, 0.6),
-    );
-    for i in 0..ladder.levels {
-        let from_right = (ladder.levels - 1 - i) as f32;
-        let c = vec2(
-            view.w - 30.0 - 22.0 * k - from_right * 44.0 * k,
-            chip.y + chip.h / 2.0,
-        );
+    pen.hud_title(view, h, label, darker(accent, 0.6));
+    let r = h.star_r;
+    for (i, c) in h.stars.iter().enumerate().take(ladder.levels) {
         pen.star(
-            c + vec2(0.0, 2.0),
-            22.0 * k,
+            *c + vec2(0.0, 2.0),
+            r * 1.1,
             0.0,
             Color::new(0.1, 0.05, 0.25, 0.35),
         );
@@ -143,19 +125,13 @@ pub fn draw_hud(
         } else {
             with_alpha(WHITE, 0.55)
         };
-        pen.star(c, 20.0 * k, 0.0, fill);
+        pen.star(*c, r, 0.0, fill);
     }
-    let bar_w = (view.w - 180.0).min(520.0 * k);
-    let gap = 8.0 * k;
-    let seg = (bar_w - gap * (UP_STREAK as f32 - 1.0)) / UP_STREAK as f32;
-    let x0 = view.w / 2.0 - bar_w / 2.0;
+    let Some(bar) = h.progress else { return };
+    let gap = (bar.h * 0.45).max(4.0);
+    let seg = (bar.w - gap * (UP_STREAK as f32 - 1.0)) / UP_STREAK as f32;
     for j in 0..UP_STREAK {
-        let r = Rect::new(
-            x0 + j as f32 * (seg + gap),
-            chip.y + chip.h + 12.0,
-            seg,
-            18.0 * k,
-        );
+        let r = Rect::new(bar.x + j as f32 * (seg + gap), bar.y, seg, bar.h);
         let filled = j < ladder.streak;
         let last = filled && j + 1 == ladder.streak;
         let sc = if last { bump.scale(0.35) } else { 1.0 };
@@ -182,25 +158,16 @@ pub fn draw_hud(
     }
 }
 
-fn draw_goal(g: &Count, pen: &mut Pen, view: &View) {
-    let k = ui_scale(view);
-    let y = goal_row_y(view);
-    let button = levels_button(view);
-    let room = if g.first_time {
-        view.w - 2.0 * HUD_LEFT
-    } else {
-        button.x - 20.0 - HUD_LEFT
-    };
-    let text = g.goal_text();
-    let size = (26.0 * k).min(room / text.len() as f32 * 2.0);
-    let left = if g.first_time {
-        view.w / 2.0
-    } else {
-        HUD_LEFT + room / 2.0
-    };
-    pen.text_outline(&text, left, y, size, WHITE, INK);
-    if !g.first_time {
-        pen.painted_button(button, "Levels", crate::ui::Tone::Blue, 0.0, 1.0);
+pub fn draw_goal(
+    pen: &mut Pen,
+    view: &View,
+    h: &kg_core::learn::Hud,
+    text: &str,
+    first_time: bool,
+) {
+    pen.hud_goal(view, h, text, first_time, WHITE, INK);
+    if let (false, Some(b)) = (first_time, h.levels) {
+        pen.painted_button(b, "Levels", crate::ui::Tone::Blue, 0.0, 1.0);
     }
 }
 
@@ -404,16 +371,18 @@ pub fn draw(g: &Count, pen: &mut Pen, view: &View) {
         draw_levels(g, pen, view);
         return;
     }
+    let h = hud(view);
     draw_hud(
         pen,
         view,
+        &h,
         &g.ladder,
         &level_name(g.ladder.level),
         Color::from_rgba(250, 170, 60, 255),
         &g.streak_bump,
     );
     pen.offset = g.shake.offset();
-    draw_goal(g, pen, view);
+    draw_goal(pen, view, &h, &g.goal_text(), g.first_time);
     draw_prompt(g, pen, view);
     draw_things(g, pen, view);
     draw_buttons(g, pen, view);

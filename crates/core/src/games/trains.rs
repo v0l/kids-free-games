@@ -513,25 +513,34 @@ pub fn cam(view: &View) -> Cam {
     }
 }
 
+pub const HUD_TITLE: &str = "Level 8";
+pub const HUD_GOAL: &str = "Get 4 right in a row to reach Remember the riders";
+
+pub fn hud(view: &View) -> crate::learn::Hud {
+    crate::learn::learn_hud(
+        view,
+        &crate::learn::HudSpec {
+            title: HUD_TITLE,
+            levels: crate::learn::LevelsAt::Goal,
+            stars: LEVELS as u32,
+            progress: 18.0,
+            goal: HUD_GOAL,
+        },
+    )
+}
+
 pub fn goal_row_y(view: &View) -> f32 {
-    hud_bottom(view) + 34.0
+    hud(view).goal.map_or(hud_bottom(view), |r| r.center().y)
 }
 
 pub fn prompt_rect(view: &View) -> Rect {
     let k = ui_scale(view).min(1.25);
     let w = (view.w - 60.0).min(560.0);
-    Rect::new(
-        view.w / 2.0 - w / 2.0,
-        goal_row_y(view) + 34.0 * k,
-        w,
-        92.0 * k,
-    )
+    Rect::new(view.w / 2.0 - w / 2.0, hud(view).bottom, w, 92.0 * k)
 }
 
 pub fn levels_button(view: &View) -> Rect {
-    let k = ui_scale(view);
-    let r = crate::sizing::corner_button(view, "Levels", 170.0 * k, 46.0 * k, 0.0);
-    Rect::new(r.x, (goal_row_y(view) - r.h / 2.0).max(8.0), r.w, r.h)
+    hud(view).levels.unwrap_or_default()
 }
 
 pub fn button_height(view: &View) -> f32 {

@@ -1,3 +1,4 @@
+use super::{count, mathpop, spell, trains};
 use crate::engine::View;
 use crate::geom::Rect;
 use crate::sizing::*;
@@ -184,6 +185,128 @@ fn all_problems(v: &View) -> Vec<String> {
     );
     s("report panel", &panel);
     out
+}
+
+#[test]
+fn every_learning_top_bar_fits_between_home_and_levels() {
+    use crate::learn::{hud_problems, HudSpec, LevelsAt, UP_STREAK};
+    let mathpop_titles: Vec<String> = mathpop::LEVEL_NAMES
+        .iter()
+        .enumerate()
+        .map(|(i, n)| format!("Level {}: {}", i + 1, n))
+        .collect();
+    let spell_goals: Vec<String> = spell::LEVELS
+        .iter()
+        .map(|l| format!("{}: spell 10 words", l.name))
+        .collect();
+    let count_titles: Vec<String> = (0..count::RANGES.len()).map(count::level_name).collect();
+    let count_goals: Vec<String> = (0..count::RANGES.len())
+        .map(|i| {
+            format!(
+                "Get {UP_STREAK} right in a row to reach {}",
+                count::level_name(i)
+            )
+        })
+        .collect();
+    let trains_goals: Vec<String> = (0..trains::LEVELS)
+        .map(|i| {
+            format!(
+                "Get {UP_STREAK} right in a row to reach {}",
+                trains::level_name(i)
+            )
+        })
+        .collect();
+    fn refs(v: &[String]) -> Vec<&str> {
+        v.iter().map(|s| s.as_str()).collect()
+    }
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        for t in &mathpop_titles {
+            let spec = HudSpec {
+                title: t,
+                levels: LevelsAt::Top,
+                stars: 0,
+                progress: 18.0,
+                goal: "",
+            };
+            bad.extend(hud_problems(&v, &format!("{name} mathpop"), &spec, &[]));
+        }
+        let spec = HudSpec {
+            title: "Level 10",
+            levels: LevelsAt::Top,
+            stars: 0,
+            progress: 40.0,
+            goal: spell::HUD_GOAL,
+        };
+        bad.extend(hud_problems(
+            &v,
+            &format!("{name} spell"),
+            &spec,
+            &refs(&spell_goals),
+        ));
+        for t in &count_titles {
+            let spec = HudSpec {
+                title: t,
+                levels: LevelsAt::Goal,
+                stars: count::RANGES.len() as u32,
+                progress: 18.0,
+                goal: count::HUD_GOAL,
+            };
+            bad.extend(hud_problems(
+                &v,
+                &format!("{name} count"),
+                &spec,
+                &refs(&count_goals),
+            ));
+        }
+        let spec = HudSpec {
+            title: "Level 8",
+            levels: LevelsAt::Goal,
+            stars: trains::LEVELS as u32,
+            progress: 18.0,
+            goal: trains::HUD_GOAL,
+        };
+        bad.extend(hud_problems(
+            &v,
+            &format!("{name} trains"),
+            &spec,
+            &refs(&trains_goals),
+        ));
+        let hb = [
+            mathpop::hud(&v),
+            spell::hud(&v),
+            count::hud(&v),
+            trains::hud(&v),
+        ];
+        for h in &hb {
+            if let Some(l) = h.levels {
+                if l.overlaps(&h.bar.title) {
+                    bad.push(format!(
+                        "{name}: Levels {l:?} overlaps the title room {:?}",
+                        h.bar.title
+                    ));
+                }
+            }
+        }
+        if mathpop::question_rect(&v).y < mathpop::hud(&v).bottom - 0.5 {
+            bad.push(format!("{name}: mathpop question under the top bar"));
+        }
+        if spell::layout(&v, 5, 8).picture.y < spell::hud(&v).bottom - 0.5 {
+            bad.push(format!("{name}: spell picture under the top bar"));
+        }
+        if count::prompt_y(&v) - count::prompt_size(&v) * 0.6 < count::hud(&v).bottom - 0.5 {
+            bad.push(format!("{name}: count prompt under the top bar"));
+        }
+        if trains::prompt_rect(&v).y < trains::hud(&v).bottom - 0.5 {
+            bad.push(format!("{name}: trains prompt under the top bar"));
+        }
+    }
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]

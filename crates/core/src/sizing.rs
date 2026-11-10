@@ -14,6 +14,7 @@ pub const BODY_SIZE: f32 = 26.0;
 pub const SHEET_SHARE: f32 = 0.92;
 pub const MAX_GLYPH: f32 = 220.0;
 const LINE: f32 = 1.22;
+pub const LINE_H: f32 = LINE;
 const RIBBON_ASPECT: f32 = 250.0 / 1145.0;
 const RIBBON_SIZE: f32 = 54.0;
 
@@ -883,6 +884,126 @@ pub fn bottom_row(view: &View, labels: &[&str], design_w: f32, design_h: f32) ->
     (0..labels.len())
         .map(|i| Rect::new(x + i as f32 * (w + gap), y, w, h))
         .collect()
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct TopBar {
+    pub home: Rect,
+    pub title: Rect,
+    pub right: Option<Rect>,
+}
+
+impl TopBar {
+    pub fn bottom(&self) -> f32 {
+        self.home.y + self.home.h
+    }
+
+    pub fn rects(&self) -> Vec<Rect> {
+        let mut v = vec![self.home, self.title];
+        v.extend(self.right);
+        v
+    }
+}
+
+pub fn top_button(view: &View, label: &str, design_w: f32) -> Rect {
+    let home = view.home();
+    let (lw, _) = label_button(view, label, home.h);
+    let w = (design_w * view.text_k().min(1.4))
+        .max(lw)
+        .min(view.w * 0.34)
+        .max(view.touch());
+    Rect::new(view.w - home.x - w, home.y, w, home.h)
+}
+
+pub fn top_bar(view: &View, right: Option<Rect>, reserve: f32) -> TopBar {
+    let home = view.home();
+    let gap = view.gap().min(16.0);
+    let x = home.x + home.w + gap;
+    let end = right.map_or(view.w - home.x - reserve, |r| r.x - gap);
+    TopBar {
+        home,
+        title: Rect::new(x, home.y, (end - x).max(0.0), home.h),
+        right,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Fitted {
+    pub lines: Vec<String>,
+    pub size: f32,
+}
+
+impl Fitted {
+    pub fn width(&self) -> f32 {
+        self.lines
+            .iter()
+            .map(|l| measure(l, self.size))
+            .fold(0.0, f32::max)
+    }
+
+    pub fn height(&self) -> f32 {
+        self.lines.len() as f32 * self.size * LINE
+    }
+
+    pub fn line_y(&self, center_y: f32, n: usize) -> f32 {
+        center_y - self.height() / 2.0 + self.size * LINE * (n as f32 + 0.5)
+    }
+}
+
+pub fn min_text(view: &View) -> f32 {
+    view.from_mm(2.4).max(14.0)
+}
+
+pub fn fit_text(view: &View, text: &str, design: f32, w: f32, h: f32) -> Fitted {
+    let floor = min_text(view).min(design);
+    let one = fit_size(text, design, w).min(h / LINE);
+    if one >= floor {
+        return Fitted {
+            lines: vec![text.to_string()],
+            size: one,
+        };
+    }
+    let two = design.min(h / (2.0 * LINE));
+    if two >= floor {
+        let lines = wrap(text, two, w);
+        if lines.len() <= 2 && lines.iter().all(|l| measure(l, two) <= w) {
+            return Fitted { lines, size: two };
+        }
+    }
+    let size = floor.min(h / LINE);
+    Fitted {
+        lines: vec![truncate(text, size, w)],
+        size,
+    }
+}
+
+pub fn truncate(text: &str, size: f32, w: f32) -> String {
+    if measure(text, size) <= w {
+        return text.to_string();
+    }
+    let mut s: String = text.to_string();
+    while !s.is_empty() {
+        s.pop();
+        let t = format!("{}...", s.trim_end());
+        if measure(&t, size) <= w {
+            return t;
+        }
+    }
+    String::new()
+}
+
+pub fn check_fitted(what: &str, f: &Fitted, room: Rect) -> Result<(), String> {
+    if f.width() > room.w + 0.5 || f.height() > room.h + 0.5 {
+        return Err(format!(
+            "{what}: {:?} at {:.0} needs {:.0}x{:.0}, room {:?}",
+            f.lines,
+            f.size,
+            f.width(),
+            f.height(),
+            room
+        ));
+    }
+    Ok(())
 }
 
 pub fn corner_button(view: &View, label: &str, design_w: f32, design_h: f32, y: f32) -> Rect {

@@ -6,7 +6,7 @@ use crate::game3d::World3d;
 use crate::paint::Pen;
 use crate::ui::{Results, Tone};
 use glam::{vec2, vec3, Vec2};
-use kg_core::engine::{Game, Input, View, HUD_LEFT};
+use kg_core::engine::{Game, Input, View};
 use kg_core::fx::ease_out_back;
 use kg_core::games::trains::*;
 use kg_core::geom::{with_alpha, Color, Rect, WHITE};
@@ -71,28 +71,6 @@ impl Play for TrainsPlay {
 
     fn as_any(&mut self) -> &mut dyn std::any::Any {
         self
-    }
-}
-
-fn draw_goal(g: &Trains, pen: &mut Pen, view: &View) {
-    let k = ui_scale(view);
-    let y = goal_row_y(view);
-    let button = levels_button(view);
-    let room = if g.first_time {
-        view.w - 2.0 * HUD_LEFT
-    } else {
-        button.x - 20.0 - HUD_LEFT
-    };
-    let text = g.goal_text();
-    let size = (26.0 * k).min(room / text.len() as f32 * 2.0);
-    let left = if g.first_time {
-        view.w / 2.0
-    } else {
-        HUD_LEFT + room / 2.0
-    };
-    pen.text_outline(&text, left, y, size, WHITE, INK);
-    if !g.first_time {
-        pen.painted_button(button, "Levels", Tone::Blue, 0.0, 1.0);
     }
 }
 
@@ -356,16 +334,18 @@ pub fn draw(g: &Trains, pen: &mut Pen, view: &View) {
         draw_levels(g, pen, view);
         return;
     }
+    let h = hud(view);
     crate::games::count::draw_hud(
         pen,
         view,
+        &h,
         &g.ladder,
         &format!("Level {}", g.ladder.level + 1),
         TRAIN_RED,
         &g.streak_bump,
     );
     pen.offset = g.shake.offset() * 0.5;
-    draw_goal(g, pen, view);
+    crate::games::count::draw_goal(pen, view, &h, &g.goal_text(), g.first_time);
     draw_prompt(g, pen, view);
     draw_left(g, pen, view);
     draw_hint(g, pen, view);

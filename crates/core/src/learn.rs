@@ -1,5 +1,7 @@
 use crate::engine::View;
+use crate::geom::Rect;
 use crate::rng as rand;
+use glam::{vec2, Vec2};
 
 pub const UP_STREAK: u32 = 4;
 pub const DOWN_SLIPS: u32 = 3;
@@ -152,6 +154,200 @@ pub fn tall(view: &View) -> bool {
 
 pub fn hud_bottom(view: &View) -> f32 {
     30.0 + 64.0 * ui_scale(view)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LevelsAt {
+    None,
+    Top,
+    Goal,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct HudSpec<'a> {
+    pub title: &'a str,
+    pub levels: LevelsAt,
+    pub stars: u32,
+    pub progress: f32,
+    pub goal: &'a str,
+}
+
+#[derive(Clone, Debug)]
+pub struct Hud {
+    pub bar: crate::sizing::TopBar,
+    pub chip: Rect,
+    pub title: crate::sizing::Fitted,
+    pub levels: Option<Rect>,
+    pub stars: Vec<Vec2>,
+    pub star_r: f32,
+    pub progress: Option<Rect>,
+    pub goal: Option<Rect>,
+    pub bottom: f32,
+}
+
+impl Hud {
+    pub fn fit_goal(
+        &self,
+        view: &View,
+        text: &str,
+        full_width: bool,
+    ) -> (Rect, crate::sizing::Fitted) {
+        let r = self.goal.unwrap_or_default();
+        let r = if full_width {
+            let m = self.bar.home.x;
+            Rect::new(m, r.y, view.w - 2.0 * m, r.h)
+        } else {
+            r
+        };
+        let k = ui_scale(view);
+        (r, crate::sizing::fit_text(view, text, 26.0 * k, r.w, r.h))
+    }
+}
+
+pub const LEVELS_LABEL: &str = "Levels";
+
+pub fn learn_hud(view: &View, spec: &HudSpec) -> Hud {
+    let k = ui_scale(view);
+    let gap = view.gap().min(16.0);
+    let home = view.home();
+    let star_r = (20.0 * k).min(home.h * 0.32);
+    let star_step = star_r * 2.2;
+    let stars_w = spec.stars as f32 * star_step;
+    let levels_top = (spec.levels == LevelsAt::Top)
+        .then(|| crate::sizing::top_button(view, LEVELS_LABEL, 150.0));
+    let pad = 18.0 * k.min(1.2);
+    let fits_beside = |reserve: f32| {
+        let bar = crate::sizing::top_bar(view, levels_top, reserve);
+        crate::sizing::fit_size(spec.title, 28.0 * k, bar.title.w - 2.0 * pad) >= 28.0 * k * 0.8
+    };
+    let stars_beside = levels_top.is_none() && spec.stars > 0 && fits_beside(stars_w + gap * 0.5);
+    let reserve = if stars_beside {
+        stars_w + gap * 0.5
+    } else {
+        0.0
+    };
+    let bar = crate::sizing::top_bar(view, levels_top, reserve);
+    let title = crate::sizing::fit_text(
+        view,
+        spec.title,
+        28.0 * k,
+        bar.title.w - 2.0 * pad,
+        bar.title.h * 0.9,
+    );
+    let chip_w = (title.width() + 2.0 * pad).min(bar.title.w);
+    let chip = Rect::new(bar.title.x, bar.title.y, chip_w, bar.title.h);
+    let mut y = bar.bottom() + gap * 0.6;
+    let star_y = if spec.stars > 0 && !stars_beside {
+        let c = y + star_r;
+        y = c + star_r + gap * 0.6;
+        c
+    } else {
+        bar.home.center().y
+    };
+    let star_right = view.w - home.x - star_r;
+    let stars = (0..spec.stars)
+        .map(|i| vec2(star_right - (spec.stars - 1 - i) as f32 * star_step, star_y))
+        .collect();
+    let progress = (spec.progress > 0.0).then(|| {
+        let bar_w = (view.w - 2.0 * home.x).min(520.0 * k);
+        if let Some(lv) = levels_top {
+            let x0 = chip.x + chip.w + gap;
+            let room = lv.x - gap - x0;
+            if room >= bar_w.min(300.0 * k) {
+                let w = room.min(bar_w);
+                let h = (spec.progress * k).min(bar.title.h);
+                return Rect::new(x0 + (room - w) / 2.0, bar.title.center().y - h / 2.0, w, h);
+            }
+        }
+        let r = Rect::new(view.w / 2.0 - bar_w / 2.0, y, bar_w, spec.progress * k);
+        y = r.y + r.h + gap * 0.6;
+        r
+    });
+    let mut levels = levels_top;
+    let goal = (!spec.goal.is_empty()).then(|| {
+        let goal_levels = spec.levels == LevelsAt::Goal;
+        let button = goal_levels.then(|| {
+            let b = crate::sizing::top_button(view, LEVELS_LABEL, 170.0);
+            Rect::new(b.x, y, b.w, b.h)
+        });
+        let end = button.map_or(view.w - home.x, |b| b.x - gap);
+        let w = end - home.x;
+        let one = 26.0 * k * crate::sizing::LINE_H;
+        let f = crate::sizing::fit_text(view, spec.goal, 26.0 * k, w, one * 2.0);
+        let h = f.height().max(button.map_or(0.0, |b| b.h));
+        let r = Rect::new(home.x, y, w, h);
+        if let Some(b) = button {
+            levels = Some(Rect::new(b.x, y + (h - b.h) / 2.0, b.w, b.h));
+        }
+        y = r.y + r.h + gap * 0.6;
+        r
+    });
+    Hud {
+        bar,
+        chip,
+        title,
+        levels,
+        stars,
+        star_r,
+        progress,
+        goal,
+        bottom: y,
+    }
+}
+
+pub fn hud_problems(view: &View, what: &str, spec: &HudSpec, goals: &[&str]) -> Vec<String> {
+    use crate::sizing::*;
+    let h = learn_hud(view, spec);
+    let mut out = vec![];
+    let mut rects = vec![h.bar.home, h.chip];
+    rects.extend(h.levels);
+    for c in &h.stars {
+        rects.push(Rect::new(
+            c.x - h.star_r,
+            c.y - h.star_r,
+            2.0 * h.star_r,
+            2.0 * h.star_r,
+        ));
+    }
+    rects.extend(h.progress);
+    rects.extend(h.goal);
+    if let Err(e) = check_apart(what, &rects) {
+        out.push(e);
+    }
+    for r in &rects {
+        if let Err(e) = check_inside(view, what, *r) {
+            out.push(e);
+        }
+    }
+    let mut buttons = vec![h.bar.home];
+    buttons.extend(h.levels);
+    if let Err(e) = check_buttons(view, what, &buttons) {
+        out.push(e);
+    }
+    if let Err(e) = check_fitted(&format!("{what} title"), &h.title, h.chip) {
+        out.push(e);
+    }
+    if h.title.size < min_text(view).min(28.0) - 0.01 {
+        out.push(format!("{what}: title shrank to {:.1}", h.title.size));
+    }
+    if h.title.lines.len() > 1
+        && !spec.title.contains(':')
+        && spec.title.split_whitespace().count() <= 2
+    {
+        out.push(format!("{what}: short title {:?} wrapped", spec.title));
+    }
+    for g in goals {
+        for full in [false, true] {
+            if full && spec.levels == LevelsAt::Goal {
+                continue;
+            }
+            let (r, f) = h.fit_goal(view, g, full && spec.levels != LevelsAt::Goal);
+            if let Err(e) = check_fitted(&format!("{what} goal"), &f, r) {
+                out.push(e);
+            }
+        }
+    }
+    out
 }
 
 #[cfg(test)]

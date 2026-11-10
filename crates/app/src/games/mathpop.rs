@@ -3,7 +3,7 @@ use crate::draw::Draw;
 use crate::paint::Pen;
 use crate::ui::{Tone, BODY};
 use glam::{vec2, Vec2};
-use kg_core::engine::{Game, Input, View, HUD_LEFT};
+use kg_core::engine::{Game, Input, View};
 use kg_core::fx::ease_out_back;
 use kg_core::games::mathpop::*;
 use kg_core::geom::{darker, with_alpha, Color, Rect, WHITE};
@@ -154,36 +154,16 @@ fn draw_backdrop(g: &MathPop, pen: &mut Pen, view: &View) {
 }
 
 fn draw_hud(g: &MathPop, pen: &mut Pen, view: &View) {
-    let k = ui_scale(view);
+    let h = hud(view);
     let label = format!("Level {}: {}", g.level + 1, LEVEL_NAMES[g.level]);
-    let tw = kg_core::font::measure(&label, 28.0 * k) + 44.0 * k;
-    let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0 * k);
-    pen.round_rect(
-        Rect::new(chip.x, chip.y + 4.0, chip.w, chip.h),
-        chip.h / 2.0,
-        Color::new(0.0, 0.0, 0.0, 0.18),
-    );
-    pen.round_rect(chip, chip.h / 2.0, with_alpha(WHITE, 0.94));
-    pen.text_center(
-        &label,
-        chip.center().x,
-        chip.center().y,
-        28.0 * k,
-        darker(PINK, 0.6),
-    );
+    pen.hud_title(view, &h, &label, darker(PINK, 0.6));
     pen.painted_button(levels_button(view), "Levels", Tone::Blue, g.press, 1.0);
-    let bar_w = (view.w - 180.0).min(520.0 * k);
-    let gap = 8.0 * k;
+    let bar = h.progress.unwrap_or_default();
     let n = QUESTIONS;
-    let seg = (bar_w - gap * (n as f32 - 1.0)) / n as f32;
-    let x0 = view.w / 2.0 - bar_w / 2.0;
+    let gap = (bar.h * 0.45).max(4.0);
+    let seg = (bar.w - gap * (n as f32 - 1.0)) / n as f32;
     for j in 0..n {
-        let r = Rect::new(
-            x0 + j as f32 * (seg + gap),
-            chip.y + chip.h + 12.0,
-            seg,
-            18.0 * k,
-        );
+        let r = Rect::new(bar.x + j as f32 * (seg + gap), bar.y, seg, bar.h);
         let filled = j < g.answered;
         let last = filled && j + 1 == g.answered;
         let sc = if last { g.streak_bump.scale(0.35) } else { 1.0 };

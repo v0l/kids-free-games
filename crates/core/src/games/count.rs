@@ -169,18 +169,32 @@ pub fn prompt_size(view: &View) -> f32 {
     62.0 * ui_scale(view)
 }
 
+pub const HUD_TITLE: &str = "Count to 20";
+pub const HUD_GOAL: &str = "Get 4 right in a row to reach Count to 20";
+
+pub fn hud(view: &View) -> crate::learn::Hud {
+    crate::learn::learn_hud(
+        view,
+        &crate::learn::HudSpec {
+            title: HUD_TITLE,
+            levels: crate::learn::LevelsAt::Goal,
+            stars: RANGES.len() as u32,
+            progress: 18.0,
+            goal: HUD_GOAL,
+        },
+    )
+}
+
 pub fn goal_row_y(view: &View) -> f32 {
-    hud_bottom(view) + 34.0
+    hud(view).goal.map_or(hud_bottom(view), |r| r.center().y)
 }
 
 pub fn prompt_y(view: &View) -> f32 {
-    hud_bottom(view) + 64.0 + prompt_size(view) * 0.7
+    hud(view).bottom + prompt_size(view) * 0.7
 }
 
 pub fn levels_button(view: &View) -> Rect {
-    let k = ui_scale(view);
-    let r = crate::sizing::corner_button(view, "Levels", 170.0 * k, 46.0 * k, 0.0);
-    Rect::new(r.x, (goal_row_y(view) - r.h / 2.0).max(8.0), r.w, r.h)
+    hud(view).levels.unwrap_or_default()
 }
 
 pub fn level_tiles(view: &View) -> Vec<Rect> {

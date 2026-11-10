@@ -3,7 +3,7 @@ use crate::draw::Draw;
 use crate::paint::Pen;
 use crate::ui::{Results, Tone, BODY};
 use glam::{vec2, Vec2};
-use kg_core::engine::{Game, Input, View, HUD_LEFT};
+use kg_core::engine::{Game, Input, View};
 use kg_core::fx::{ease_out_back, ease_out_cubic};
 use kg_core::games::spell::*;
 use kg_core::geom::{darker, with_alpha, Color, Rect, WHITE};
@@ -161,9 +161,14 @@ pub fn draw(g: &Spell, pen: &mut Pen, view: &View) {
     let l = layout(view, g.board.word.len(), g.board.tiles.len());
     let k = ui_scale(view);
     pen.offset = g.shake.offset();
+    let n = g.deck.len().max(1) as f32;
+    let row = hud(view)
+        .progress
+        .unwrap_or(Rect::new(0.0, 0.0, view.w, 40.0));
+    let step = (44.0 * k).min(row.w * 0.98 / n).min(row.h * 1.15);
     for i in 0..g.deck.len() {
         let c = vec2(
-            view.w / 2.0 + (i as f32 - (g.deck.len() as f32 - 1.0) / 2.0) * 44.0 * k,
+            row.center().x + (i as f32 - (g.deck.len() as f32 - 1.0) / 2.0) * step,
             l.stars_y,
         );
         let s = if i == g.index && g.results.len() == i {
@@ -177,7 +182,7 @@ pub fn draw(g: &Spell, pen: &mut Pen, view: &View) {
             None if i == g.index => Color::new(0.7, 0.7, 0.75, 0.9),
             None => Color::new(0.5, 0.5, 0.55, 0.45),
         };
-        pen.sprite_at("ui", "p_star", c, 38.0 * k * s, Draw::tint(tint));
+        pen.sprite_at("ui", "p_star", c, step * 0.86 * s, Draw::tint(tint));
     }
     let p = l.picture;
     pen.painted_panel(p, WHITE);
@@ -337,38 +342,25 @@ pub fn draw(g: &Spell, pen: &mut Pen, view: &View) {
 }
 
 fn draw_hud(g: &Spell, pen: &mut Pen, view: &View, l: &Layout) {
-    let k = ui_scale(view);
+    let h = hud(view);
     let label = format!("Level {}", g.level + 1);
-    let tw = crate::draw::measure(&label, 28.0 * k) + 44.0 * k;
-    let chip = Rect::new(HUD_LEFT, 18.0, tw, 46.0 * k);
-    pen.round_rect(
-        Rect::new(chip.x, chip.y + 4.0, chip.w, chip.h),
-        chip.h / 2.0,
-        Color::new(0.0, 0.0, 0.0, 0.18),
-    );
-    pen.round_rect(chip, chip.h / 2.0, with_alpha(WHITE, 0.94));
-    pen.text_center(
-        &label,
-        chip.center().x,
-        chip.center().y,
-        28.0 * k,
-        Color::from_rgba(150, 60, 30, 255),
-    );
+    pen.hud_title(view, &h, &label, Color::from_rgba(150, 60, 30, 255));
     pen.painted_button(levels_button(view), "Levels", Tone::Blue, g.press, 1.0);
+    let goal_at = h.goal.unwrap_or_default();
     if g.teach && g.screen == Screen::Play && g.phase == Phase::Playing {
         let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
         pen.hint(
             "Tap the letters to spell the word!",
-            vec2(view.w / 2.0, l.stars_y + 44.0 * k),
+            vec2(view.w / 2.0, goal_at.center().y.max(l.stars_y + 44.0)),
             pulse,
         );
     } else {
         let goal = format!("{}: spell {} words", LEVELS[g.level].name, g.deck.len());
-        pen.text_outline(
+        pen.hud_goal(
+            view,
+            &h,
             &goal,
-            view.w / 2.0,
-            l.stars_y + 40.0 * k,
-            26.0 * k,
+            true,
             WHITE,
             Color::from_rgba(120, 60, 40, 255),
         );

@@ -728,9 +728,24 @@ pub fn letter_color(i: usize) -> Color {
     hsv(0.02 + i as f32 * 0.13, 0.6, 0.98)
 }
 
+pub const HUD_TITLE: &str = "Level 12";
+pub const HUD_GOAL: &str = "Sh, ch, th, ck: spell 10 words";
+
+pub fn hud(view: &View) -> crate::learn::Hud {
+    crate::learn::learn_hud(
+        view,
+        &crate::learn::HudSpec {
+            title: HUD_TITLE,
+            levels: crate::learn::LevelsAt::Top,
+            stars: 0,
+            progress: 40.0,
+            goal: HUD_GOAL,
+        },
+    )
+}
+
 pub fn levels_button(view: &View) -> Rect {
-    let k = ui_scale(view);
-    crate::sizing::corner_button(view, "Levels", 150.0 * k, 46.0 * k, 18.0)
+    hud(view).levels.unwrap_or_default()
 }
 
 pub struct Layout {
@@ -743,7 +758,8 @@ pub struct Layout {
 
 pub fn layout(view: &View, letters: usize, tiles: usize) -> Layout {
     let k = ui_scale(view);
-    let top = 90.0 * k;
+    let h = hud(view);
+    let top = h.bottom;
     let tall = tall(view);
     let max_tile = if tall { 200.0 * k } else { 130.0 * k };
     let gap = 14.0 * k;
@@ -765,8 +781,8 @@ pub fn layout(view: &View, letters: usize, tiles: usize) -> Layout {
     let tiles_top = bottom - tiles_h;
     let slots_top = tiles_top - 40.0 * k - slot_size;
     let hs = 96.0 * k;
-    let band_h = (slots_top - 30.0 * k - top).max(120.0);
-    let side = band_h.min(view.w - 2.0 * (hs + 40.0)).max(120.0);
+    let band_h = (slots_top - 30.0 * k - top).max(80.0);
+    let side = band_h.min(view.w - 2.0 * (hs + 40.0)).max(80.0);
     let picture = Rect::new(
         (view.w - side) / 2.0,
         top + (band_h - side) / 2.0,
@@ -801,7 +817,7 @@ pub fn layout(view: &View, letters: usize, tiles: usize) -> Layout {
         slots,
         tiles: tile_rects,
         hint,
-        stars_y: 40.0,
+        stars_y: h.progress.map_or(40.0, |r| r.center().y),
     }
 }
 

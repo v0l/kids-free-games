@@ -2,7 +2,7 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::geom::*;
-use crate::learn::{choices, hud_bottom, tall, ui_scale, PRAISE};
+use crate::learn::{choices, tall, ui_scale, PRAISE};
 use crate::profile;
 use crate::rng as rand;
 use crate::sfx::{self, Sfx};
@@ -176,7 +176,7 @@ pub fn question_rect(view: &View) -> Rect {
     let w = (size * (WIDEST_QUESTION_EM + QUESTION_PAD_EM))
         .max(360.0)
         .min(view.w - 20.0);
-    Rect::new((view.w - w) / 2.0, hud_bottom(view) + 24.0, w, size * 1.25)
+    Rect::new((view.w - w) / 2.0, hud(view).bottom, w, size * 1.25)
 }
 
 fn grid(view: &View) -> (usize, Rect) {
@@ -614,9 +614,23 @@ pub fn done_layout(view: &View) -> DoneLayout {
     }
 }
 
+pub const HUD_TITLE: &str = "Level 12: Times tables to 10";
+
+pub fn hud(view: &View) -> crate::learn::Hud {
+    crate::learn::learn_hud(
+        view,
+        &crate::learn::HudSpec {
+            title: HUD_TITLE,
+            levels: crate::learn::LevelsAt::Top,
+            stars: 0,
+            progress: 18.0,
+            goal: "",
+        },
+    )
+}
+
 pub fn levels_button(view: &View) -> Rect {
-    let k = ui_scale(view);
-    crate::sizing::corner_button(view, "Levels", 150.0 * k, 46.0 * k, 18.0)
+    hud(view).levels.unwrap_or_default()
 }
 
 impl Game for MathPop {

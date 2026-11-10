@@ -207,6 +207,51 @@ impl Pen {
         }
     }
 
+    pub fn hud_title(&mut self, view: &View, h: &kg_core::learn::Hud, title: &str, ink: Color) {
+        let k = kg_core::learn::ui_scale(view);
+        let pad = 18.0 * k.min(1.2);
+        let room = h.bar.title;
+        let f = kg_core::sizing::fit_text(view, title, 28.0 * k, room.w - 2.0 * pad, room.h * 0.9);
+        let chip = Rect::new(room.x, room.y, (f.width() + 2.0 * pad).min(room.w), room.h);
+        self.round_rect(
+            chip.offset(vec2(0.0, 4.0)),
+            chip.h / 2.0,
+            Color::new(0.0, 0.0, 0.0, 0.18),
+        );
+        self.round_rect(chip, chip.h / 2.0, WHITE.with_alpha(0.94));
+        for (n, l) in f.lines.iter().enumerate() {
+            self.text_center(
+                l,
+                chip.center().x,
+                f.line_y(chip.center().y, n),
+                f.size,
+                ink,
+            );
+        }
+    }
+
+    pub fn hud_goal(
+        &mut self,
+        view: &View,
+        h: &kg_core::learn::Hud,
+        text: &str,
+        full_width: bool,
+        fill: Color,
+        edge: Color,
+    ) {
+        let (r, f) = h.fit_goal(view, text, full_width);
+        for (n, l) in f.lines.iter().enumerate() {
+            self.text_outline(
+                l,
+                r.center().x,
+                f.line_y(r.center().y, n),
+                f.size,
+                fill,
+                edge,
+            );
+        }
+    }
+
     pub fn ui(&mut self, name: &str, dest: Rect, d: Draw) {
         self.sprite("ui", name, dest, d);
     }
