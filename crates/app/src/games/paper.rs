@@ -397,6 +397,7 @@ fn draw_dead(g: &Paper, pen: &mut Pen, view: &View) {
     let r = death_panel(view);
     let c = r.center();
     let pr = Rect::new(c.x - r.w * s / 2.0, c.y - r.h * s / 2.0, r.w * s, r.h * s);
+    let s = s * (r.w / 560.0).min(r.h / 400.0).clamp(0.6, view.text_k());
     pen.painted_panel(pr, WHITE);
     let won = g.state == State::Won;
     let title = if won {
@@ -412,7 +413,8 @@ fn draw_dead(g: &Paper, pen: &mut Pen, view: &View) {
     } else {
         cause_line(g)
     };
-    pen.text_center(&line, c.x, pr.y + 96.0 * s, 28.0 * s, BODY);
+    let ls = kg_core::sizing::fit_size(&line, 28.0 * s, pr.w - 40.0);
+    pen.text_center(&line, c.x, pr.y + 96.0 * s, ls, BODY);
     let row = pr.y + pr.h * 0.5;
     let gap = pr.w / 3.0;
     let stats = [

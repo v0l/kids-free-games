@@ -653,6 +653,51 @@ impl Pen {
         sheet
     }
 
+    pub fn panel_star_row(
+        &mut self,
+        sheet: &kg_core::sizing::Sheet,
+        age: f32,
+        stars: u8,
+        lit: Color,
+        dim: Color,
+    ) {
+        let Some(row) = sheet.parts.first().map(|p| p.rect) else {
+            return;
+        };
+        let s = ease_out_back(age / 0.32).max(0.01);
+        let pop = Pop::new(
+            sheet.panel.center(),
+            s,
+            (1.0 - ease_out_cubic(age / 0.32)) * 90.0,
+        );
+        let row = pop.rect(row);
+        let r = (38.0 * sheet.k * s).min(row.h * 0.5).max(row.h * 0.3);
+        for j in 0..3u8 {
+            let k = ease_out_back(((age - 0.3 - j as f32 * 0.15) / 0.3).clamp(0.0, 1.0));
+            let fill = if j < stars { lit } else { dim };
+            let x = row.center().x + (j as f32 - 1.0) * r * 2.4;
+            self.star(vec2(x, row.center().y), r * k, 0.0, fill);
+        }
+    }
+
+    pub fn star_sprites(&mut self, area: Rect, k: f32, stars: u8, pops: [f32; 3], dim: Color) {
+        let size = (100.0 * k).min(area.h * 0.95);
+        for i in 0..3usize {
+            let lift = if i == 1 { -0.14 * size } else { 0.0 };
+            let tint = if (i as u8) < stars { WHITE } else { dim };
+            self.sprite_at(
+                "ui",
+                "p_star",
+                vec2(
+                    area.center().x + (i as f32 - 1.0) * size * 1.2,
+                    area.center().y + lift,
+                ),
+                size * pops[i].max(0.01),
+                Draw::tint(tint),
+            );
+        }
+    }
+
     pub fn done_sheet(
         &mut self,
         view: &View,

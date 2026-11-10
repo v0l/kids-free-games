@@ -658,7 +658,7 @@ pub fn panel_layout(view: &View, title: &str, lines: &[&str]) -> (Sheet, Vec<usi
         ids.push(if last && lines.len() > 1 {
             s.button(78.0, l)
         } else if l.is_empty() {
-            s.space(30.0)
+            s.block(90.0)
         } else {
             s.text(34.0, l)
         });

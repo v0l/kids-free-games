@@ -7,7 +7,7 @@ use crate::input::clear_swipe;
 use crate::sfx::{self, Sfx};
 use glam::{vec2, vec3, Vec2, Vec3};
 
-pub use super::helix::{levels_button, select_layout, SelectLayout};
+pub use super::helix::{levels_button, select_layout, win_sheet, SelectLayout};
 
 pub const GAME: &str = "runner";
 pub const MAX_LEVEL: u32 = 30;

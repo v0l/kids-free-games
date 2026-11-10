@@ -272,19 +272,14 @@ fn draw_report(g: &Count, pen: &mut Pen, view: &View, age: f32) {
             } else {
                 "Counting champion!".to_string()
             };
-            pen.panel(view, &title, &["", &next, &g.summary], age);
-            let c = view.center() + vec2(0.0, 20.0);
-            let ph = 150.0 + 3.0 * 64.0;
-            let y = c.y - ph / 2.0 + 118.0;
-            for j in 0..3u8 {
-                let k = ease_out_back(((age - 0.3 - j as f32 * 0.15) / 0.3).clamp(0.0, 1.0));
-                let fill = if j < stars {
-                    STAR_GOLD
-                } else {
-                    Color::from_rgba(150, 140, 170, 140)
-                };
-                pen.star(vec2(c.x + (j as f32 - 1.0) * 90.0, y), 38.0 * k, 0.0, fill);
-            }
+            let sheet = pen.panel(view, &title, &["", &next, &g.summary], age);
+            pen.panel_star_row(
+                &sheet,
+                age,
+                stars,
+                STAR_GOLD,
+                Color::from_rgba(150, 140, 170, 140),
+            );
         }
         Some(Report::Cleared { rank }) => {
             let total = kg_core::profile::total_stars(GAME);

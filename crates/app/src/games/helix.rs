@@ -1,15 +1,14 @@
 pub mod world;
 
 use super::Play;
-use crate::draw::measure;
 use crate::game3d::World3d;
 use crate::paint::Pen;
-use crate::ui::{plain_score, Results, Tone, BODY, INK};
+use crate::ui::{plain_score, Results, Tone, INK};
 use glam::vec2;
 use kg_core::engine::{Game, Input, View};
-use kg_core::fx::{ease_out_back, ease_out_cubic, Side};
+use kg_core::fx::{ease_out_back, Side};
 use kg_core::games::helix::*;
-use kg_core::geom::{with_alpha, Color, Rect, WHITE};
+use kg_core::geom::{Color, Rect, WHITE};
 
 pub const KEY: &str = GAME;
 const SHEET: &str = "helix";
@@ -161,67 +160,29 @@ fn draw_select(g: &Helix, pen: &mut Pen, view: &View) {
 
 fn draw_win(g: &Helix, pen: &mut Pen, view: &View) {
     let age = (g.end_t - WIN_DELAY).max(0.0);
-    let fade = ease_out_cubic(age / 0.2);
-    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
-    let pw = 560.0f32.min(view.w - 40.0);
-    let ph = 420.0;
-    let s = ease_out_back(age / 0.32).max(0.01);
-    let c = view.center() + vec2(0.0, 10.0 + (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
-    let r = Rect::new(c.x - pw * s / 2.0, c.y - ph * s / 2.0, pw * s, ph * s);
-    pen.painted_panel(r, WHITE);
-    pen.ribbon(view, "Hooray!", vec2(c.x, r.y + 8.0 * s), age);
-    let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
-    let line = format!("Level {} done!", g.level);
-    pen.text_center(
-        &line,
-        c.x,
-        r.y + 100.0 * s,
-        36.0 * s,
-        with_alpha(BODY, a(0.12)),
-    );
-    for k in 0..3usize {
-        let earned = k < g.stars as usize;
-        let pop = if earned {
-            ease_out_back(((age - STAR_START - STAR_GAP * k as f32) / 0.3).clamp(0.0, 1.0))
-        } else {
-            a(STAR_START)
-        };
-        let tint = if earned {
-            WHITE
-        } else {
-            Color::new(0.4, 0.4, 0.46, 0.85)
-        };
-        let lift = if k == 1 { -14.0 } else { 0.0 };
-        pen.sprite_at(
-            "ui",
-            "p_star",
-            vec2(c.x + (k as f32 - 1.0) * 120.0 * s, r.y + (205.0 + lift) * s),
-            100.0 * s * pop,
-            crate::draw::Draw::tint(tint),
-        );
-    }
-    let score = format!("Score {}   Best {}", g.score, g.best.0);
-    pen.text_center(
-        &score,
-        c.x,
-        r.y + 292.0 * s,
-        30.0 * s,
-        with_alpha(BODY, a(0.5)),
-    );
+    let d = win_sheet(view);
     let label = if g.level >= MAX_LEVEL {
         "Play again"
     } else {
         "Next level"
     };
-    let by = r.y + r.h - 56.0 * s;
-    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-    let bw = (measure(label, 30.0) + 110.0) * s * pulse;
-    pen.painted_button(
-        Rect::new(c.x - bw / 2.0, by - 10.0 * s, bw, 78.0 * s * pulse),
-        label,
-        Tone::Green,
-        0.0,
-        a(0.6),
+    let line = format!("Level {} done!", g.level);
+    let score = format!("Score {}   Best {}", g.score, g.best.0);
+    let (pop, k) = pen.done_sheet(view, &d, "Hooray!", &line, &score, &[label], age);
+    let a = |t: f32| ((age - t) / 0.2).clamp(0.0, 1.0);
+    let pops = [0usize, 1, 2].map(|i| {
+        if i < g.stars as usize {
+            ease_out_back(((age - STAR_START - STAR_GAP * i as f32) / 0.3).clamp(0.0, 1.0))
+        } else {
+            a(STAR_START)
+        }
+    });
+    pen.star_sprites(
+        pop.rect(d.stars()),
+        k,
+        g.stars as u8,
+        pops,
+        Color::new(0.4, 0.4, 0.46, 0.85),
     );
 }
 

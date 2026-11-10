@@ -580,38 +580,71 @@ pub struct SelectLayout {
     pub play: Rect,
 }
 
+pub fn win_sheet(view: &View) -> crate::sizing::Done {
+    crate::sizing::done_layout(view, "Hooray!", &["Next level"])
+}
+
 pub fn select_layout(view: &View) -> SelectLayout {
-    let rows = (MAX_LEVEL as usize).div_ceil(GRID_COLS);
-    let gap = 10.0;
-    let cell = (((view.w - 120.0) / GRID_COLS as f32) - gap)
-        .min(((view.h - 330.0) / rows as f32) - gap)
-        .clamp(50.0, 110.0);
+    let stacked = select_try(view, false);
+    let fits =
+        stacked.cells.iter().all(|c| c.y >= 0.0) && stacked.play.y + stacked.play.h <= view.h;
+    if fits || view.portrait() {
+        stacked
+    } else {
+        select_try(view, true)
+    }
+}
+
+fn select_try(view: &View, tucked: bool) -> SelectLayout {
+    let n = MAX_LEVEL as usize;
+    let gap = 10.0f32.max(view.key_gap());
     let ph = view.tap(76.0);
-    let cell = cell
-        .min(((view.h - 170.0 - 24.0 - ph - view.edge()) / rows as f32) - gap)
+    let m = view.edge().max(16.0);
+    let pw0 = (320.0 * view.text_k()).min(view.w - 2.0 * view.edge());
+    let grid_w = view.w - 2.0 * m;
+    let below = if tucked { 0.0 } else { 24.0 + ph };
+    let head = if tucked {
+        view.hud_top()
+    } else {
+        170.0f32.min(view.h * 0.2).max(view.hud_top())
+    };
+    let fit_cols = (((grid_w + gap) / (view.touch() + gap)).floor() as usize).max(1);
+    let fit_rows =
+        (((view.h - head - below - m + gap) / (view.touch() + gap)).floor() as usize).max(1);
+    let spare = |cols: usize| if tucked { 2usize.min(cols) } else { 0 };
+    let cols = (GRID_COLS..=fit_cols.max(GRID_COLS))
+        .find(|c| (n + spare(*c)).div_ceil(*c) <= fit_rows)
+        .unwrap_or(fit_cols)
+        .min(fit_cols);
+    let rows = (n + spare(cols)).div_ceil(cols);
+    let cell = ((grid_w / cols as f32) - gap)
+        .min(((view.h - head - below - m) / rows as f32) - gap)
+        .min(110.0 * view.text_k().min(1.4))
         .max(view.touch());
-    let gw = GRID_COLS as f32 * (cell + gap) - gap;
+    let gw = cols as f32 * (cell + gap) - gap;
     let gh = rows as f32 * (cell + gap) - gap;
-    let total = gh + 24.0 + ph;
-    let top = ((view.h - total) / 2.0 + 50.0)
-        .max(170.0)
-        .min(view.h - total - view.edge());
+    let total = gh + below;
+    let top = ((view.h - total) / 2.0 + if tucked { 0.0 } else { 50.0 })
+        .max(head.min(view.h - total - m))
+        .min(view.h - total - m);
     let left = (view.w - gw) / 2.0;
-    let cells = (0..MAX_LEVEL as usize)
+    let cells = (0..n)
         .map(|i| {
             Rect::new(
-                left + (i % GRID_COLS) as f32 * (cell + gap),
-                top + (i / GRID_COLS) as f32 * (cell + gap),
+                left + (i % cols) as f32 * (cell + gap),
+                top + (i / cols) as f32 * (cell + gap),
                 cell,
                 cell,
             )
         })
         .collect();
-    let pw = (320.0 * view.text_k()).min(view.w - 2.0 * view.edge());
-    SelectLayout {
-        cells,
-        play: Rect::new((view.w - pw) / 2.0, top + gh + 24.0, pw, ph),
-    }
+    let play = if tucked {
+        let w = 2.0 * cell + gap;
+        Rect::new(left + gw - w, top + gh - cell, w, cell)
+    } else {
+        Rect::new((view.w - pw0) / 2.0, top + gh + 24.0, pw0, ph)
+    };
+    SelectLayout { cells, play }
 }
 
 pub fn levels_button(view: &View) -> Rect {

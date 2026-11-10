@@ -88,9 +88,13 @@ fn all_problems(v: &View) -> Vec<String> {
         t("ballsort win", &r);
     }
     let bsl = ballsort::select_layout(v);
-    t("ballsort play", &[bsl.play]);
+    let mut cells = bsl.cells.clone();
+    cells.push(bsl.play);
+    t("ballsort select", &cells);
     let hs = helix::select_layout(v);
-    t("helix play", &[hs.play]);
+    let mut cells = hs.cells.clone();
+    cells.push(hs.play);
+    t("helix select", &cells);
     t("helix levels", &[helix::levels_button(v)]);
     let tl = clash::title_layout(v);
     t(
@@ -143,6 +147,42 @@ fn all_problems(v: &View) -> Vec<String> {
     let (mp, n, l) = merge::complete_layout(v);
     p("merge complete", mp, &[n, l]);
     p("paper death", paper::death_panel(v), &[]);
+    let mut s = |what: &str, sh: &Sheet| {
+        if let Err(e) = check_sheet(v, what, sh) {
+            out.push(e);
+        }
+    };
+    s("helix win", &helix::win_sheet(v).sheet);
+    s("merge complete sheet", &merge::complete_sheet(v).sheet);
+    s("breakout cleared sheet", &breakout::cleared_sheet(v).sheet);
+    s("mathpop done sheet", &mathpop::done_layout(v).done.sheet);
+    s("spell done sheet", &spell::done_layout(v).done.sheet);
+    s("memory done sheet", &memory::Memory::done_layout(v).sheet);
+    s("mathpop levels sheet", &mathpop::levels_layout(v).sheet);
+    for skip in [&ballsort::WIN_LABELS[..], &ballsort::WIN_SKIP_LABELS[..]] {
+        s(
+            "ballsort win sheet",
+            &ballsort::win_results(v, skip, Some(0)).sheet,
+        );
+    }
+    s(
+        "breakout lost sheet",
+        &results_for(
+            v,
+            breakout::KEY,
+            Some(0),
+            "Nice try!",
+            "x",
+            &breakout::LOST_LABELS,
+        )
+        .sheet,
+    );
+    let (panel, _) = panel_layout(
+        v,
+        "Lovely planting!",
+        &["", "5 of 5 right first time  1.2 s each", "Keep growing"],
+    );
+    s("report panel", &panel);
     out
 }
 

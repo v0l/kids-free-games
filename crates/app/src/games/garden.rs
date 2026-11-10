@@ -234,33 +234,16 @@ fn draw_beds(g: &Garden, pen: &mut Pen, view: &View) {
 }
 
 fn draw_report(g: &Garden, pen: &mut Pen, view: &View, age: f32) {
-    let stars_at = |pen: &mut Pen, stars: u8, y: f32| {
-        for j in 0..3u8 {
-            let k = ease_out_back(((age - 0.3 - j as f32 * 0.15) / 0.3).clamp(0.0, 1.0));
-            let fill = if j < stars {
-                STAR_GOLD
-            } else {
-                Color::from_rgba(150, 140, 170, 140)
-            };
-            pen.star(
-                vec2(view.w / 2.0 + (j as f32 - 1.0) * 90.0, y),
-                38.0 * k,
-                0.0,
-                fill,
-            );
-        }
-    };
-    let c = view.center() + vec2(0.0, 20.0);
+    let dim = Color::from_rgba(150, 140, 170, 140);
     match g.report {
         Some(Report::Round { stars }) => {
-            pen.panel(
+            let sheet = pen.panel(
                 view,
                 "Lovely planting!",
                 &["", &g.summary, "Keep growing"],
                 age,
             );
-            let ph = 150.0 + 3.0 * 64.0;
-            stars_at(pen, stars, c.y - ph / 2.0 + 118.0);
+            pen.panel_star_row(&sheet, age, stars, STAR_GOLD, dim);
         }
         Some(Report::Bloom { level, stars }) => {
             let next = if level + 1 < LEVELS {
@@ -269,9 +252,8 @@ fn draw_report(g: &Garden, pen: &mut Pen, view: &View, age: f32) {
                 String::new()
             };
             let title = format!("{} bed blooms!", level_name(level));
-            pen.panel(view, &title, &["", &next, "Keep growing"], age);
-            let ph = 150.0 + 3.0 * 64.0;
-            stars_at(pen, stars, c.y - ph / 2.0 + 118.0);
+            let sheet = pen.panel(view, &title, &["", &next, "Keep growing"], age);
+            pen.panel_star_row(&sheet, age, stars, STAR_GOLD, dim);
         }
         Some(Report::Cleared { rank }) => {
             let total = kg_core::profile::total_stars(GAME);
