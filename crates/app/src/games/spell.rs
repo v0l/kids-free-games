@@ -378,13 +378,10 @@ fn draw_hud(g: &Spell, pen: &mut Pen, view: &View, l: &Layout) {
 fn draw_levels(g: &Spell, pen: &mut Pen, view: &View) {
     let l = levels_layout(view);
     pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55));
-    pen.painted_panel(l.panel, WHITE);
-    pen.ribbon(
-        view,
-        "Pick a level",
-        vec2(view.w / 2.0, l.panel.y + 8.0),
-        g.t,
-    );
+    pen.painted_panel(l.sheet.panel, WHITE);
+    if let Some((rr, _)) = l.sheet.ribbon {
+        pen.ribbon_in(view, LEVELS_TITLE, rr, g.t);
+    }
     let open = profile::unlocked(KEY) as usize;
     for (i, r) in l.tiles.iter().enumerate() {
         let locked = i > open;
@@ -424,47 +421,34 @@ fn draw_levels(g: &Spell, pen: &mut Pen, view: &View) {
             );
         }
     }
-    pen.text_center(
-        LEVELS[g.level].name,
-        view.w / 2.0,
-        l.back.y - 26.0,
-        30.0,
-        BODY,
-    );
+    let name = LEVELS[g.level].name;
+    let cs = kg_core::sizing::fit_size(name, view.text(30.0).min(l.caption.h * 0.8), l.caption.w);
+    pen.text_center(name, l.caption.center().x, l.caption.center().y, cs, BODY);
     pen.painted_button(l.back, "Back", Tone::Green, 0.0, 1.0);
 }
 
 fn draw_done(g: &Spell, pen: &mut Pen, view: &View, age: f32) {
     let l = done_layout(view);
-    let fade = ease_out_cubic(age / 0.2);
-    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
-    let s = ease_out_back(age / 0.32).max(0.01);
-    let c = l.panel.center();
-    let p = Rect::new(
-        c.x - l.panel.w * s / 2.0,
-        c.y - l.panel.h * s / 2.0,
-        l.panel.w * s,
-        l.panel.h * s,
-    );
-    pen.painted_panel(p, WHITE);
-    pen.ribbon(view, "Level done!", vec2(c.x, p.y + 8.0 * s), age);
     let name = format!("{}: {}", g.level + 1, LEVELS[g.level].name);
-    pen.text_center(&name, c.x, p.y + 100.0 * s, 32.0 * s, BODY);
+    let (pop, k) = pen.done_sheet(view, &l.done, DONE_TITLE, &name, "", &DONE_LABELS, age);
+    let st = pop.rect(l.done.stars());
     let have = stars_for(g.slips);
-    let pop = |i: u8| ease_out_back(((age - 0.25 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
+    let popk = |i: u8| ease_out_back(((age - 0.25 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
+    let rr = (46.0 * k).min(st.h * 0.42);
     for i in 0..3u8 {
-        let x = c.x + (i as f32 - 1.0) * 100.0 * s;
+        let x = st.center().x + (i as f32 - 1.0) * rr * 2.2;
+        let y = st.center().y;
         let lit = i < have;
-        let kk = if lit { pop(i) } else { 1.0 };
-        let r = 46.0 * s * kk;
+        let kk = if lit { popk(i) } else { 1.0 };
+        let r = rr * kk;
         pen.star(
-            vec2(x, p.y + 190.0 * s + 3.0),
+            vec2(x, y + 3.0),
             r * 1.05,
             0.0,
             Color::new(0.1, 0.05, 0.25, 0.3),
         );
         pen.star(
-            vec2(x, p.y + 190.0 * s),
+            vec2(x, y),
             r,
             0.0,
             if lit {
@@ -474,18 +458,6 @@ fn draw_done(g: &Spell, pen: &mut Pen, view: &View, age: f32) {
             },
         );
     }
-    let a = ((age - 0.3) / 0.2).clamp(0.0, 1.0);
-    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-    let nb = l.next;
-    let nb = Rect::new(
-        nb.center().x - nb.w * pulse / 2.0,
-        nb.center().y - nb.h * pulse / 2.0,
-        nb.w * pulse,
-        nb.h * pulse,
-    );
-    pen.painted_button(nb, "Next level", Tone::Green, 0.0, a);
-    pen.painted_button(l.again, "Again", Tone::Orange, 0.0, a);
-    pen.painted_button(l.levels, "Levels", Tone::Blue, 0.0, a);
 }
 
 #[cfg(test)]

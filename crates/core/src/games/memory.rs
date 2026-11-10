@@ -352,7 +352,7 @@ impl Memory {
     }
 
     pub fn levels_button(view: &View) -> Rect {
-        Rect::new(view.w - 14.0 - 140.0, 12.0, 140.0, 48.0)
+        crate::sizing::corner_button(view, "Levels", 140.0, 48.0, 12.0)
     }
 
     pub fn tiles(view: &View) -> Vec<Rect> {
@@ -383,22 +383,41 @@ impl Memory {
             .iter()
             .map(|r| r.y + r.h)
             .fold(0.0, f32::max);
-        Rect::new(view.w / 2.0 - 190.0, bottom + 40.0, 380.0, 90.0)
+        let b = crate::sizing::bottom_button(view, "Play", 380.0, 90.0);
+        Rect::new(b.x, (bottom + 40.0).min(b.y), b.w, b.h)
+    }
+
+    pub fn done_layout(view: &View) -> MemoryDone {
+        let mut s = crate::sizing::Stack::new(view, 620.0).ribbon("Level 10 clear!");
+        let stars = s.block(150.0);
+        let moves = s.text(34.0, "Done in 100 moves");
+        let best = s.text(26.0, "Best: 100 moves");
+        let buttons = s.buttons(76.0, &["Levels", "Again", "Next"]);
+        MemoryDone {
+            sheet: s.layout(),
+            stars,
+            moves,
+            best,
+            buttons,
+        }
     }
 
     pub fn done_panel(view: &View) -> Rect {
-        let w = 620.0f32.min(view.w - 30.0);
-        let h = 430.0;
-        Rect::new((view.w - w) / 2.0, view.h / 2.0 - h / 2.0 + 20.0, w, h)
+        Self::done_layout(view).sheet.panel
     }
 
     pub fn done_buttons(view: &View) -> [Rect; 3] {
-        let p = Self::done_panel(view);
-        let gap = 14.0;
-        let bw = (p.w - 60.0 - gap * 2.0) / 3.0;
-        let y = p.y + p.h - 104.0;
-        [0, 1, 2].map(|k| Rect::new(p.x + 30.0 + k as f32 * (bw + gap), y, bw, 76.0))
+        let d = Self::done_layout(view);
+        [0, 1, 2].map(|k| d.sheet.button(d.buttons, k))
     }
+}
+
+pub struct MemoryDone {
+    pub sheet: crate::sizing::Sheet,
+    pub stars: usize,
+    pub moves: usize,
+    pub best: usize,
+    pub buttons: usize,
 }
 
 impl Default for Memory {

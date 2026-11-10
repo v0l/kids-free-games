@@ -1,10 +1,10 @@
 use super::Play;
 use crate::draw::Draw;
 use crate::paint::Pen;
-use crate::ui::{plain_score, Results, Tone, BODY};
+use crate::ui::{plain_score, Results, Tone};
 use glam::{vec2, Vec2};
 use kg_core::engine::{Game, Input, View};
-use kg_core::fx::{ease_out_back, ease_out_cubic, Side, CHIP_Y, INK};
+use kg_core::fx::{ease_out_back, Side, CHIP_Y, INK};
 use kg_core::games::breakout::*;
 use kg_core::geom::{with_alpha, Color, Rect, WHITE};
 use kg_core::profile;
@@ -119,30 +119,32 @@ fn draw_stars(g: &Breakout, pen: &mut Pen, view: &View) {
 
 fn draw_cleared(g: &Breakout, pen: &mut Pen, view: &View) {
     let age = g.age;
-    let fade = ease_out_cubic(age / 0.2);
-    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
-    let s = ease_out_back(age / 0.32).max(0.01);
-    let base = panel_rect(view);
-    let c = base.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
-    let r = Rect::new(
-        c.x - base.w * s / 2.0,
-        c.y - base.h * s / 2.0,
-        base.w * s,
-        base.h * s,
-    );
-    pen.painted_panel(r, WHITE);
-    pen.ribbon(view, "Level clear!", vec2(c.x, r.y + 8.0 * s), age);
+    let d = cleared_sheet(view);
+    let last = g.level >= LEVELS as u32;
+    let label = if last { "All levels" } else { "Next level" };
+    let line = if g.rank == Some(0) {
+        format!("New best! Score {}", g.score)
+    } else {
+        format!("Score {}", g.score)
+    };
+    let labels: &[&str] = if last { &[label] } else { &[label, "Levels"] };
+    let (pop, k) = pen.done_sheet(view, &d, "Level clear!", &line, "", labels, age);
+    let st = pop.rect(d.stars());
     let earned = stars_for(g.misses);
     for i in 0..3u8 {
         let t = ((age - 0.3 - i as f32 * 0.25) / 0.3).clamp(0.0, 1.0);
         let on = i < earned;
-        let k = if on { ease_out_back(t) } else { t };
-        let rise = if i == 1 { -14.0 } else { 0.0 };
+        let kk = if on { ease_out_back(t) } else { t };
+        let rise = if i == 1 { -14.0 * k } else { 0.0 };
+        let size = ((if i == 1 { 110.0 } else { 92.0 }) * k).min(st.h);
         pen.sprite_at(
             "ui",
             "p_star",
-            vec2(c.x + (i as f32 - 1.0) * 110.0 * s, r.y + (122.0 + rise) * s),
-            (if i == 1 { 110.0 } else { 92.0 }) * s * k.max(0.01),
+            vec2(
+                st.center().x + (i as f32 - 1.0) * 110.0 * k,
+                st.center().y + rise,
+            ),
+            size * kk.max(0.01),
             Draw {
                 tint: if on { WHITE } else { off_star() },
                 rotation: if on {
@@ -152,35 +154,6 @@ fn draw_cleared(g: &Breakout, pen: &mut Pen, view: &View) {
                 },
                 ..Default::default()
             },
-        );
-    }
-    let line = if g.rank == Some(0) {
-        format!("New best! Score {}", g.score)
-    } else {
-        format!("Score {}", g.score)
-    };
-    let la = ((age - 0.3) / 0.3).clamp(0.0, 1.0);
-    pen.text_center(&line, c.x, r.y + 218.0 * s, 36.0 * s, with_alpha(BODY, la));
-    let last = g.level >= LEVELS as u32;
-    let label = if last { "All levels" } else { "Next level" };
-    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-    let place = |b: Rect, k: f32| {
-        let at = c + (b.center() - base.center()) * s;
-        Rect::new(
-            at.x - b.w * s * k / 2.0,
-            at.y - b.h * s * k / 2.0,
-            b.w * s * k,
-            b.h * s * k,
-        )
-    };
-    pen.painted_button(place(next_button(view), pulse), label, Tone::Green, 0.0, la);
-    if !last {
-        pen.painted_button(
-            place(levels_button(view), 1.0),
-            "Levels",
-            Tone::Blue,
-            0.0,
-            la,
         );
     }
 }
@@ -408,20 +381,18 @@ fn draw_prompts(g: &Breakout, pen: &mut Pen, view: &View) {
         }
         State::Lost => {
             let line = format!("Cleared {} of {} bricks", g.cleared(), g.total);
-            pen.results(
-                view,
-                &Results {
-                    game: KEY,
-                    title: "Nice try!",
-                    line: &line,
-                    rank: g.rank,
-                    action: "Try again",
-                    format: plain_score,
-                },
-                g.age,
-            );
+            let r = Results {
+                game: KEY,
+                title: LOST_TITLE,
+                line: &line,
+                rank: g.rank,
+                action: "Try again",
+                format: plain_score,
+            };
             if g.first_win() {
-                pen.painted_button(lost_levels_button(view), "Levels", Tone::Blue, 0.0, 1.0);
+                pen.results_actions(view, &r, &LOST_LABELS, g.age);
+            } else {
+                pen.results(view, &r, g.age);
             }
         }
         State::Cleared => draw_cleared(g, pen, view),

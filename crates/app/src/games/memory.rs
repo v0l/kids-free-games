@@ -292,27 +292,28 @@ fn draw_done(g: &Memory, pen: &mut Pen, view: &View, age: f32) {
         view,
         Color::new(0.06, 0.04, 0.16, 0.55 * ease_out_cubic(age / 0.2)),
     );
-    let p = Memory::done_panel(view);
+    let d = Memory::done_layout(view);
     let s = ease_out_back(age / 0.32).max(0.01);
-    let c = p.center() + vec2(0.0, (1.0 - ease_out_cubic(age / 0.32)) * 90.0);
-    let sp = Rect::new(c.x - p.w * s / 2.0, c.y - p.h * s / 2.0, p.w * s, p.h * s);
-    pen.painted_panel(sp, WHITE);
-    pen.ribbon(
-        view,
-        &format!("Level {} clear!", g.level),
-        vec2(c.x, sp.y + 8.0 * s),
-        age,
+    let pop = crate::ui::Pop::new(
+        d.sheet.panel.center(),
+        s,
+        (1.0 - ease_out_cubic(age / 0.32)) * 90.0,
     );
-    let size = 100.0 * s;
+    pen.painted_panel(pop.rect(d.sheet.panel), WHITE);
+    let title = format!("Level {} clear!", g.level);
+    if let Some((rr, _)) = d.sheet.ribbon {
+        pen.ribbon_in(view, &title, pop.rect(rr), age);
+    }
+    let st = pop.rect(d.sheet.rect(d.stars));
+    let size = (100.0 * d.sheet.k * s).min(st.h * 0.9);
     for i in 0..3 {
-        let x = c.x + (i as f32 - 1.0) * size * 1.15;
-        let y = c.y - p.h * 0.5 * s + 170.0 * s;
+        let x = st.center().x + (i as f32 - 1.0) * size * 1.15;
         let earned = i < g.stars as usize;
         let k = ease_out_back(((age - 0.3 - i as f32 * 0.25) / 0.3).clamp(0.0, 1.0));
         pen.sprite_w(
             "ui",
             "p_star",
-            vec2(x, y),
+            vec2(x, st.center().y),
             size * if earned { k } else { 1.0 },
             Draw {
                 tint: if earned {
@@ -326,11 +327,15 @@ fn draw_done(g: &Memory, pen: &mut Pen, view: &View, age: f32) {
         );
     }
     let a = |d: f32| ((age - d) / 0.2).clamp(0.0, 1.0);
+    let moves = format!("Done in {} moves", g.moves);
+    let (_, ms, mr) = d.sheet.lines(d.moves);
+    let mr = pop.rect(mr);
+    let ms = kg_core::sizing::fit_size(&moves, ms * s, mr.w);
     pen.text_center(
-        &format!("Done in {} moves", g.moves),
-        c.x,
-        c.y - p.h * 0.5 * s + 262.0 * s,
-        34.0 * s,
+        &moves,
+        mr.center().x,
+        mr.center().y,
+        ms,
         BODY.with_alpha(a(0.5)),
     );
     let sub = if g.new_best {
@@ -338,11 +343,14 @@ fn draw_done(g: &Memory, pen: &mut Pen, view: &View, age: f32) {
     } else {
         format!("Best: {} moves", g.best.unwrap_or(g.moves))
     };
+    let (_, bs, br) = d.sheet.lines(d.best);
+    let br = pop.rect(br);
+    let bs = kg_core::sizing::fit_size(&sub, bs * s, br.w);
     pen.text_center(
         &sub,
-        c.x,
-        c.y - p.h * 0.5 * s + 304.0 * s,
-        26.0 * s,
+        br.center().x,
+        br.center().y,
+        bs,
         if g.new_best {
             Color::from_rgba(230, 140, 0, 255)
         } else {
@@ -350,38 +358,18 @@ fn draw_done(g: &Memory, pen: &mut Pen, view: &View, age: f32) {
         }
         .with_alpha(a(0.6)),
     );
-    let [levels, again, next] = Memory::done_buttons(view);
     let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-    let shift = c - p.center();
-    let place = |r: Rect, k: f32| {
-        Rect::new(
-            r.center().x - r.w * k * s / 2.0 + shift.x,
-            r.center().y - r.h * k * s / 2.0 + shift.y,
-            r.w * k * s,
-            r.h * k * s,
-        )
-    };
-    pen.painted_button(
-        place(levels, 1.0),
-        "Levels",
-        crate::ui::Tone::Blue,
-        0.0,
-        a(0.7),
-    );
-    pen.painted_button(
-        place(again, 1.0),
-        "Again",
-        crate::ui::Tone::Orange,
-        0.0,
-        a(0.75),
-    );
-    pen.painted_button(
-        place(next, pulse),
-        "Next",
-        crate::ui::Tone::Green,
-        0.0,
-        a(0.8),
-    );
+    let labels = [
+        ("Levels", crate::ui::Tone::Blue, 1.0, 0.7),
+        ("Again", crate::ui::Tone::Orange, 1.0, 0.75),
+        ("Next", crate::ui::Tone::Green, pulse, 0.8),
+    ];
+    for (k, (label, tone, scale, at)) in labels.into_iter().enumerate() {
+        let r = pop
+            .rect(d.sheet.button(d.buttons, k))
+            .scaled_about_center(scale);
+        pen.painted_button(r, label, tone, 0.0, a(at));
+    }
 }
 
 pub fn draw(g: &Memory, pen: &mut Pen, view: &View) {

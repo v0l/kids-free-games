@@ -121,12 +121,39 @@ fn write_stats(s: &Stats) {
 
 pub fn title_layout(view: &View) -> TitleLayout {
     let cx = view.w / 2.0;
-    let bw = (view.w * 0.8).min(460.0);
-    let bh = 84.0;
+    let bw = (view.w * 0.8)
+        .min(460.0 * view.text_k().min(1.6))
+        .max(view.sheet_w(460.0).min(view.w * 0.85));
+    let gap = view.gap().min(14.0 * view.text_k());
+    let bh = view
+        .tap(84.0)
+        .min((view.h * 0.38 - 2.0 * gap) / 3.0)
+        .max(view.touch());
     let tall = view.h > view.w;
     let preview_y = view.h * if tall { 0.36 } else { 0.4 };
-    let arrow = 74.0;
-    let reach = (view.w * 0.38).min(250.0);
+    let arrow = view.tap(74.0);
+    let reach = (view.w * 0.38)
+        .min(250.0 * view.text_k())
+        .min(view.w / 2.0 - arrow / 2.0 - view.edge().min(14.0));
+    let top = (view.h * 0.6).min(view.h - view.edge().min(16.0) - 3.0 * bh - 2.0 * gap);
+    let stacked_h = 3.0 * bh + 2.0 * gap;
+    let side = !tall && top < preview_y + arrow / 2.0 + gap;
+    let (bx, top, preview_x, reach) = if side {
+        let bw = bw.min(view.w * 0.42);
+        let bx = view.w - view.edge().min(16.0) - bw;
+        let px = bx / 2.0;
+        let reach = (px - arrow / 2.0 - view.edge().min(14.0)).min(reach);
+        (bx, (view.h - stacked_h) / 2.0 + view.gap(), px, reach)
+    } else {
+        (cx - bw / 2.0, top, cx, reach)
+    };
+    let bw = if side {
+        view.w - view.edge().min(16.0) - bx
+    } else {
+        bw
+    };
+    let preview_y = if side { view.h * 0.55 } else { preview_y };
+    let cx = preview_x;
     TitleLayout {
         preview: vec2(cx, preview_y),
         prev: Rect::new(
@@ -141,9 +168,9 @@ pub fn title_layout(view: &View) -> TitleLayout {
             arrow,
             arrow,
         ),
-        arena: Rect::new(cx - bw / 2.0, view.h * 0.6, bw, bh),
-        survival: Rect::new(cx - bw / 2.0, view.h * 0.6 + bh + 14.0, bw, bh),
-        tower: Rect::new(cx - bw / 2.0, view.h * 0.6 + 2.0 * (bh + 14.0), bw, bh),
+        arena: Rect::new(bx, top, bw, bh),
+        survival: Rect::new(bx, top + bh + gap, bw, bh),
+        tower: Rect::new(bx, top + 2.0 * (bh + gap), bw, bh),
     }
 }
 
@@ -158,10 +185,16 @@ pub struct TitleLayout {
 
 pub fn tower_layout(view: &View) -> TowerLayout {
     let cx = view.w / 2.0;
-    let arrow = 74.0;
-    let reach = (view.w * 0.38).min(250.0);
+    let arrow = view.tap(74.0);
+    let m = view.edge().min(14.0);
+    let reach = (view.w * 0.38)
+        .min(250.0 * view.text_k())
+        .min(view.w / 2.0 - arrow / 2.0 - 20.0 - m);
     let y = view.h * 0.4;
-    let bw = (view.w * 0.7).min(400.0);
+    let bw = (view.w * 0.7)
+        .min(400.0 * view.text_k())
+        .max(view.sheet_w(400.0).min(view.w * 0.8));
+    let ph = view.tap(90.0);
     TowerLayout {
         card: Rect::new(cx - reach + 20.0, y - 150.0, reach * 2.0 - 40.0, 300.0),
         prev: Rect::new(
@@ -176,8 +209,8 @@ pub fn tower_layout(view: &View) -> TowerLayout {
             arrow,
             arrow,
         ),
-        play: Rect::new(cx - bw / 2.0, view.h * 0.72, bw, 90.0),
-        back: menu_back(),
+        play: Rect::new(cx - bw / 2.0, (view.h * 0.72).min(view.h - ph - m), bw, ph),
+        back: menu_back(view),
     }
 }
 
@@ -190,19 +223,21 @@ pub struct TowerLayout {
 }
 
 pub fn over_buttons(view: &View) -> (Rect, Rect) {
+    let d = view.tap(72.0);
     (
         view.rect(),
         Rect::new(
-            20.0,
-            view.h - 92.0 - view.inset.bottom.min(30.0),
-            72.0,
-            72.0,
+            view.edge().min(20.0),
+            view.h - d - 20.0 - view.inset.bottom.min(30.0),
+            d,
+            d,
         ),
     )
 }
 
-pub fn menu_back() -> Rect {
-    Rect::new(14.0, 76.0, 64.0, 64.0)
+pub fn menu_back(view: &View) -> Rect {
+    let d = view.tap(64.0);
+    Rect::new(view.edge().min(14.0), view.hud_top(), d, d)
 }
 
 impl Default for Clash {

@@ -179,39 +179,39 @@ fn star_row(pen: &mut Pen, at: glam::Vec2, size: f32, earned: u8, shown: f32) {
 
 fn draw_win(g: &BallSort, pen: &mut Pen, view: &View, age: f32) {
     let line = format!("Level {} done, score {}", g.level, g.score);
-    pen.results(
+    let next = if g.level >= MAX_LEVEL {
+        "Play again"
+    } else {
+        "Next level"
+    };
+    let labels: Vec<&str> = if g.can_skip() {
+        vec![next, "Skip ahead", "Levels"]
+    } else {
+        vec![next, "Levels"]
+    };
+    let lay = pen.results_actions(
         view,
         &Results {
             game: GAME,
             title: "Sorted!",
             line: &line,
             rank: g.rank,
-            action: if g.level >= MAX_LEVEL {
-                "Play again"
-            } else {
-                "Next level"
-            },
+            action: next,
             format: plain_score,
         },
+        &labels,
         age,
     );
-    let rows = kg_core::profile::board(GAME).len().min(5);
-    let ph = 230.0 + rows as f32 * 46.0 + if rows == 0 { 0.0 } else { 20.0 };
-    let top = view.h / 2.0 + 24.0 - ph / 2.0;
     let s = ease_out_back(age / 0.32).max(0.01);
+    let top = lay.sheet.ribbon.map_or(lay.sheet.panel.y, |r| r.0.y);
+    let size = (84.0 * lay.sheet.k).min(top - 8.0).max(view.touch() * 0.8);
     star_row(
         pen,
-        vec2(view.w / 2.0, (top - 62.0 * s).max(48.0)),
-        84.0 * s,
+        vec2(view.w / 2.0, (top - size * 0.6).max(size * 0.6)),
+        size * s,
         g.stars,
         age,
     );
-    let w = win_layout(view, g.can_skip());
-    let a = ((age - 0.5) / 0.25).clamp(0.0, 1.0);
-    if g.can_skip() {
-        pen.painted_button(w.skip, "Skip ahead", Tone::Orange, 0.0, a);
-    }
-    pen.painted_button(w.levels, "Levels", Tone::Blue, 0.0, a);
 }
 
 fn hidden_marks(g: &BallSort, pen: &mut Pen, view: &View) {

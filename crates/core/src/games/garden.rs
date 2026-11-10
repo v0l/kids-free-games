@@ -383,33 +383,30 @@ pub fn prompt_rect(view: &View) -> Rect {
 
 pub fn beds_button(view: &View) -> Rect {
     let k = ui_scale(view);
-    Rect::new(view.w - 30.0 - 160.0 * k, 78.0, 160.0 * k, 46.0 * k)
+    crate::sizing::corner_button(view, "Beds", 160.0 * k, 46.0 * k, 78.0)
 }
 
 pub fn bed_tiles(view: &View) -> Vec<Rect> {
-    let cols = if tall(view) { 3 } else { 4 };
-    let rows = LEVELS.div_ceil(cols);
-    let gap = 20.0;
-    let top = 150.0;
-    let bottom = view.h - 170.0;
-    let w = ((view.w - 80.0 - gap * (cols as f32 - 1.0)) / cols as f32).min(230.0);
-    let h = ((bottom - top - gap * (rows as f32 - 1.0)) / rows as f32).min(220.0);
-    let left = (view.w - w * cols as f32 - gap * (cols as f32 - 1.0)) / 2.0;
-    let up = top + (bottom - top - h * rows as f32 - gap * (rows as f32 - 1.0)) / 2.0;
-    (0..LEVELS)
-        .map(|i| {
-            Rect::new(
-                left + (i % cols) as f32 * (w + gap),
-                up + (i / cols) as f32 * (h + gap),
-                w,
-                h,
-            )
-        })
-        .collect()
+    let top = 150.0f32.min(view.h * 0.2);
+    let bottom = play_button(view).y - view.gap();
+    let area = Rect::new(
+        40.0f32.min(view.edge() * 2.0),
+        top,
+        view.w - 2.0 * 40.0f32.min(view.edge() * 2.0),
+        bottom - top,
+    );
+    crate::sizing::grid(
+        view,
+        area,
+        LEVELS,
+        if tall(view) { 3 } else { 6 },
+        0.95,
+        230.0 * view.text_k().min(1.4),
+    )
 }
 
 pub fn play_button(view: &View) -> Rect {
-    Rect::new(view.w / 2.0 - 170.0, view.h - 130.0, 340.0, 100.0)
+    crate::sizing::bottom_button(view, "Play", 340.0, 100.0)
 }
 
 pub fn overview_cam(view: &View) -> Cam {

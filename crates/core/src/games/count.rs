@@ -179,9 +179,8 @@ pub fn prompt_y(view: &View) -> f32 {
 
 pub fn levels_button(view: &View) -> Rect {
     let k = ui_scale(view);
-    let w = 170.0 * k;
-    let h = 46.0 * k;
-    Rect::new(view.w - 30.0 - w, goal_row_y(view) - h / 2.0, w, h)
+    let r = crate::sizing::corner_button(view, "Levels", 170.0 * k, 46.0 * k, 0.0);
+    Rect::new(r.x, (goal_row_y(view) - r.h / 2.0).max(8.0), r.w, r.h)
 }
 
 pub fn level_tiles(view: &View) -> Vec<Rect> {
@@ -208,11 +207,11 @@ pub fn level_tiles(view: &View) -> Vec<Rect> {
 }
 
 pub fn play_button(view: &View) -> Rect {
-    Rect::new(view.w / 2.0 - 170.0, view.h - 150.0, 340.0, 100.0)
+    crate::sizing::bottom_button(view, "Play", 340.0, 100.0)
 }
 
 pub fn button_height(view: &View) -> f32 {
-    124.0 * ui_scale(view)
+    view.kid_tap(124.0 * ui_scale(view))
 }
 
 pub fn play_area(view: &View) -> Rect {

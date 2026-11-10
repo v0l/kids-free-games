@@ -653,6 +653,61 @@ impl Pen {
         sheet
     }
 
+    pub fn done_sheet(
+        &mut self,
+        view: &View,
+        d: &kg_core::sizing::Done,
+        title: &str,
+        line: &str,
+        summary: &str,
+        labels: &[&str],
+        age: f32,
+    ) -> (Pop, f32) {
+        let fade = ease_out_cubic(age / 0.2);
+        self.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
+        let s = ease_out_back(age / 0.32).max(0.01);
+        let pop = Pop::new(
+            d.panel().center(),
+            s,
+            (1.0 - ease_out_cubic(age / 0.32)) * 90.0,
+        );
+        self.painted_panel(pop.rect(d.panel()), WHITE);
+        if let Some((rr, _)) = d.sheet.ribbon {
+            self.ribbon_in(view, title, pop.rect(rr), age);
+        }
+        let lr = pop.rect(d.line());
+        let ls = kg_core::sizing::fit_size(line, d.text(32.0).max(view.text(26.0)) * s, lr.w);
+        self.text_center(line, lr.center().x, lr.center().y, ls, BODY);
+        let a = ((age - 0.3) / 0.2).clamp(0.0, 1.0);
+        let sr = pop.rect(d.summary());
+        let ss = kg_core::sizing::fit_size(summary, d.text(24.0).max(view.text(20.0)) * s, sr.w);
+        self.text_center(
+            summary,
+            sr.center().x,
+            sr.center().y,
+            ss,
+            BODY.with_alpha(a),
+        );
+        let pulse = 1.0 + (age * 4.5).sin() * 0.03;
+        let tones = [Tone::Green, Tone::Orange, Tone::Blue];
+        for (j, b) in d.buttons().iter().enumerate() {
+            let br = pop.rect(*b);
+            let br = if j == 0 {
+                br.scaled_about_center(pulse)
+            } else {
+                br
+            };
+            self.painted_button(
+                br,
+                labels.get(j).copied().unwrap_or(""),
+                tones[j % 3],
+                0.0,
+                a,
+            );
+        }
+        (pop, d.sheet.k * s)
+    }
+
     pub fn avatar(&mut self, i: usize, c: Vec2, d: f32) {
         let avatars = kg_core::profile::AVATARS;
         let name = format!("avatar_{}", avatars[i % avatars.len()]);

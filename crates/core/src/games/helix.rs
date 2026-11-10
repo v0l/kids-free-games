@@ -586,10 +586,16 @@ pub fn select_layout(view: &View) -> SelectLayout {
     let cell = (((view.w - 120.0) / GRID_COLS as f32) - gap)
         .min(((view.h - 330.0) / rows as f32) - gap)
         .clamp(50.0, 110.0);
+    let ph = view.tap(76.0);
+    let cell = cell
+        .min(((view.h - 170.0 - 24.0 - ph - view.edge()) / rows as f32) - gap)
+        .max(view.touch());
     let gw = GRID_COLS as f32 * (cell + gap) - gap;
     let gh = rows as f32 * (cell + gap) - gap;
-    let total = gh + 24.0 + 76.0;
-    let top = ((view.h - total) / 2.0 + 50.0).max(170.0);
+    let total = gh + 24.0 + ph;
+    let top = ((view.h - total) / 2.0 + 50.0)
+        .max(170.0)
+        .min(view.h - total - view.edge());
     let left = (view.w - gw) / 2.0;
     let cells = (0..MAX_LEVEL as usize)
         .map(|i| {
@@ -601,15 +607,15 @@ pub fn select_layout(view: &View) -> SelectLayout {
             )
         })
         .collect();
-    let pw = 320.0;
+    let pw = (320.0 * view.text_k()).min(view.w - 2.0 * view.edge());
     SelectLayout {
         cells,
-        play: Rect::new((view.w - pw) / 2.0, top + gh + 24.0, pw, 76.0),
+        play: Rect::new((view.w - pw) / 2.0, top + gh + 24.0, pw, ph),
     }
 }
 
 pub fn levels_button(view: &View) -> Rect {
-    Rect::new(view.w / 2.0 - 95.0, view.h - 70.0, 190.0, 54.0)
+    crate::sizing::bottom_button(view, "Levels", 190.0, 54.0)
 }
 
 pub fn floor_tile(hue: f32) -> &'static str {

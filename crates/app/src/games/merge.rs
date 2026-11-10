@@ -254,31 +254,28 @@ fn draw_buttons(g: &Merge, pen: &mut Pen, view: &View) {
 
 fn draw_complete(g: &Merge, pen: &mut Pen, view: &View) {
     let age = g.screen_t;
-    let (panel, next, levels) = complete_layout(view);
-    let fade = ease_out_cubic(age / 0.2);
-    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
-    let s = ease_out_back(age / 0.32).max(0.01);
-    let c = panel.center();
-    let r = Rect::new(
-        c.x - panel.w * s / 2.0,
-        c.y - panel.h * s / 2.0,
-        panel.w * s,
-        panel.h * s,
-    );
-    pen.painted_panel(r, WHITE);
+    let d = complete_sheet(view);
     let title = if g.level == last_level() {
         "2048!".to_string()
     } else {
         format!("Level {} done!", g.level)
     };
-    pen.ribbon(view, &title, vec2(c.x, r.y + 8.0 * s), age);
+    let label = if g.level == last_level() {
+        "Play again"
+    } else {
+        "Next level"
+    };
+    let line = format!("You made {}!   Score {}", g.target(), g.score);
+    let best = if g.rank == Some(0) { "New best!" } else { "" };
+    let (pop, k) = pen.done_sheet(view, &d, &title, &line, best, &[label, "Levels"], age);
+    let st = pop.rect(d.stars());
     for i in 0..3 {
-        let k = ease_out_back(((age - 0.25 - i as f32 * 0.15) / 0.3).clamp(0.0, 1.0));
+        let kk = ease_out_back(((age - 0.25 - i as f32 * 0.15) / 0.3).clamp(0.0, 1.0));
         let earned = (i as u8) < g.stars_earned;
-        let size = if i == 1 { 130.0 } else { 104.0 };
+        let size = (if i == 1 { 130.0 } else { 104.0 } * k).min(st.h);
         let at = vec2(
-            c.x + (i as f32 - 1.0) * 130.0,
-            r.y + 190.0 * s - (i == 1) as i32 as f32 * 14.0,
+            st.center().x + (i as f32 - 1.0) * 130.0 * k,
+            st.center().y - (i == 1) as i32 as f32 * 14.0 * k,
         );
         let tint = if earned {
             WHITE
@@ -288,10 +285,10 @@ fn draw_complete(g: &Merge, pen: &mut Pen, view: &View) {
         pen.ui(
             "p_star",
             Rect::new(
-                at.x - size * k / 2.0,
-                at.y - size * k / 2.0,
-                size * k,
-                size * k,
+                at.x - size * kk / 2.0,
+                at.y - size * kk / 2.0,
+                size * kk,
+                size * kk,
             ),
             Draw {
                 tint,
@@ -300,33 +297,6 @@ fn draw_complete(g: &Merge, pen: &mut Pen, view: &View) {
             },
         );
     }
-    let line = format!("You made {}!   Score {}", g.target(), g.score);
-    pen.text_center(
-        &line,
-        c.x,
-        r.y + 290.0 * s,
-        34.0 * s,
-        with_alpha(BODY, ((age - 0.4) / 0.2).clamp(0.0, 1.0)),
-    );
-    if g.rank == Some(0) {
-        pen.text_outline(
-            "New best!",
-            c.x,
-            r.y + 340.0 * s,
-            32.0 * s,
-            Color::from_rgba(255, 200, 40, 255),
-            Color::from_rgba(130, 50, 0, 255),
-        );
-    }
-    let a = ((age - 0.5) / 0.2).clamp(0.0, 1.0);
-    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-    let label = if g.level == last_level() {
-        "Play again"
-    } else {
-        "Next level"
-    };
-    pen.painted_button(next.scaled_about_center(pulse), label, Tone::Green, 0.0, a);
-    pen.painted_button(levels, "Levels", Tone::Blue, 0.0, a);
 }
 
 fn draw_select(g: &Merge, pen: &mut Pen, view: &View) {

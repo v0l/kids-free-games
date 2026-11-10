@@ -576,35 +576,27 @@ impl Game for Stack {
 }
 
 pub fn levels_button(view: &View) -> Rect {
-    Rect::new(20.0, view.h - 84.0, 170.0, 64.0)
+    let r = crate::sizing::bottom_button(view, "Levels", 170.0, 64.0);
+    Rect::new(view.edge().min(20.0), r.y, r.w, r.h)
 }
 
 pub fn close_button(view: &View) -> Rect {
-    Rect::new(view.w - 84.0, 12.0, 64.0, 64.0)
+    view.top_right(0)
 }
 
 pub fn picker_layout(view: &View) -> Vec<Rect> {
-    let cols = if view.w >= view.h { 5 } else { 4 };
-    let rows = (MAX_LEVEL as usize).div_ceil(cols);
-    let top = 140.0;
-    let gap = 14.0;
-    let area_w = view.w - 60.0;
-    let area_h = view.h - top - 30.0;
-    let cw = (area_w - gap * (cols as f32 - 1.0)) / cols as f32;
-    let ch = (area_h - gap * (rows as f32 - 1.0)) / rows as f32;
-    let size = cw.min(ch).min(190.0);
-    let ox = (view.w - (size * cols as f32 + gap * (cols as f32 - 1.0))) / 2.0;
-    let oy = top + (area_h - (size * rows as f32 + gap * (rows as f32 - 1.0))) / 2.0;
-    (0..MAX_LEVEL as usize)
-        .map(|i| {
-            Rect::new(
-                ox + (i % cols) as f32 * (size + gap),
-                oy + (i / cols) as f32 * (size + gap),
-                size,
-                size,
-            )
-        })
-        .collect()
+    let top = 140.0f32.min(view.h * 0.19);
+    let m = 30.0f32.min(view.edge() * 2.0);
+    let area = Rect::new(m, top, view.w - 2.0 * m, view.h - top - m);
+    let cols = if view.w >= view.h { 8 } else { 4 };
+    crate::sizing::grid(
+        view,
+        area,
+        MAX_LEVEL as usize,
+        cols,
+        1.0,
+        190.0 * view.text_k().min(1.4),
+    )
 }
 
 impl Stack {

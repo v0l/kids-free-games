@@ -584,32 +584,12 @@ impl Default for MathPop {
     }
 }
 
-pub struct LevelsLayout {
-    pub panel: Rect,
-    pub tiles: Vec<Rect>,
-    pub back: Rect,
-}
+pub type LevelsLayout = crate::sizing::Picker;
+
+pub const LEVELS_TITLE: &str = "Pick a level";
 
 pub fn levels_layout(view: &View) -> LevelsLayout {
-    let gap = 14.0;
-    let pw = (view.w - 40.0).min(780.0);
-    let tw = (pw - 80.0 - gap * 2.0) / 3.0;
-    let th = ((view.h - 60.0 - 270.0 - gap * 3.0) / 3.0).clamp(80.0, tw * 0.95);
-    let ph = 120.0 + 3.0 * (th + gap) + 150.0;
-    let c = view.center() + vec2(0.0, 20.0);
-    let panel = Rect::new(c.x - pw / 2.0, c.y - ph / 2.0, pw, ph);
-    let tiles = (0..LEVEL_NAMES.len())
-        .map(|i| {
-            Rect::new(
-                panel.x + 40.0 + (i % 3) as f32 * (tw + gap),
-                panel.y + 120.0 + (i / 3) as f32 * (th + gap),
-                tw,
-                th,
-            )
-        })
-        .collect();
-    let back = Rect::new(c.x - 150.0, panel.bottom() - 100.0, 300.0, 78.0);
-    LevelsLayout { panel, tiles, back }
+    crate::sizing::picker_layout(view, LEVELS_TITLE, LEVEL_NAMES.len(), 3, 0.95, "Back")
 }
 
 pub struct DoneLayout {
@@ -617,28 +597,26 @@ pub struct DoneLayout {
     pub next: Rect,
     pub again: Rect,
     pub levels: Rect,
+    pub done: crate::sizing::Done,
 }
 
+pub const DONE_TITLE: &str = "Level done!";
+pub const DONE_LABELS: [&str; 3] = ["Next level", "Again", "Levels"];
+
 pub fn done_layout(view: &View) -> DoneLayout {
-    let pw = 580.0f32.min(view.w - 40.0);
-    let ph = 470.0;
-    let c = view.center() + vec2(0.0, 20.0);
-    let panel = Rect::new(c.x - pw / 2.0, c.y - ph / 2.0, pw, ph);
-    let next = Rect::new(c.x - 170.0, panel.y + 285.0, 340.0, 80.0);
-    let again = Rect::new(c.x - 215.0, panel.y + 380.0, 200.0, 60.0);
-    let levels = Rect::new(c.x + 15.0, panel.y + 380.0, 200.0, 60.0);
+    let done = crate::sizing::done_layout(view, DONE_TITLE, &DONE_LABELS);
     DoneLayout {
-        panel,
-        next,
-        again,
-        levels,
+        panel: done.panel(),
+        next: done.button(0),
+        again: done.button(1),
+        levels: done.button(2),
+        done,
     }
 }
 
 pub fn levels_button(view: &View) -> Rect {
     let k = ui_scale(view);
-    let w = 150.0 * k;
-    Rect::new(view.w - 30.0 - w, 18.0, w, 46.0 * k)
+    crate::sizing::corner_button(view, "Levels", 150.0 * k, 46.0 * k, 18.0)
 }
 
 impl Game for MathPop {

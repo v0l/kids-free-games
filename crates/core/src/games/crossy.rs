@@ -470,7 +470,9 @@ impl Crossy {
     }
 
     pub fn checkpoint_button(&self, view: &View) -> Rect {
-        Rect::new(view.w / 2.0 - 170.0, view.h * 0.42, 340.0, 84.0)
+        let (w, h) = crate::sizing::label_button(view, "Start at checkpoint 9", 84.0);
+        let w = w.max(340.0).min(view.w - 2.0 * view.edge());
+        Rect::new(view.w / 2.0 - w / 2.0, view.h * 0.42, w, h)
     }
 
     fn begin_at(&mut self, stage: i32, input: &Input) {

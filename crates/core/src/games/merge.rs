@@ -564,10 +564,12 @@ pub fn chip_x(view: &View) -> f32 {
 }
 
 pub fn bottom_buttons(view: &View) -> (Rect, Rect) {
-    let (w, h) = (150.0, 56.0);
-    let y = view.h - h - 12.0;
-    let x = chip_x(view);
-    (Rect::new(x, y, w, h), Rect::new(view.w - x - w, y, w, h))
+    let r = crate::sizing::bottom_row(view, &["Levels", "Undo 3"], 150.0, 56.0);
+    let x = chip_x(view).min(r[0].x);
+    (
+        Rect::new(x, r[0].y, r[0].w, r[0].h),
+        Rect::new(view.w - x - r[1].w, r[1].y, r[1].w, r[1].h),
+    )
 }
 
 pub fn level_rects(view: &View) -> Vec<Rect> {
@@ -596,16 +598,12 @@ pub fn complete_buttons(view: &View) -> (Rect, Rect) {
 }
 
 pub fn complete_layout(view: &View) -> (Rect, Rect, Rect) {
-    let pw = 640.0f32.min(view.w - 40.0);
-    let ph = 480.0;
-    let c = view.center() + vec2(0.0, 20.0);
-    let panel = Rect::new(c.x - pw / 2.0, c.y - ph / 2.0, pw, ph);
-    let y = panel.y + ph - 112.0;
-    (
-        panel,
-        Rect::new(c.x - 280.0, y, 310.0, 82.0),
-        Rect::new(c.x + 50.0, y, 220.0, 82.0),
-    )
+    let d = complete_sheet(view);
+    (d.panel(), d.button(0), d.button(1))
+}
+
+pub fn complete_sheet(view: &View) -> crate::sizing::Done {
+    crate::sizing::stars_sheet(view, "Level 10 done!", 140.0, &["Next level", "Levels"])
 }
 
 pub fn merge_scale(age: f32) -> f32 {

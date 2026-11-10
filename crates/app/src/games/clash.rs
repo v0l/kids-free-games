@@ -893,7 +893,7 @@ fn draw_title(g: &Clash, pen: &mut Pen, view: &View) {
     pen.ribbon(
         view,
         "Snake Clash",
-        vec2(view.w / 2.0, view.h * 0.12 + bob),
+        vec2(l.preview.x, view.h * 0.12 + bob),
         g.t,
     );
     let skin = SKINS[g.skin];
@@ -939,9 +939,9 @@ fn draw_title(g: &Clash, pen: &mut Pen, view: &View) {
     arrow_button(pen, l.prev, true, true, g.bump.t);
     arrow_button(pen, l.next, false, true, g.bump.t);
     let n = SKINS.len();
-    let dots_y = l.preview.y + 150.0;
+    let dots_y = (l.preview.y + 150.0).min(view.h - 12.0);
     for i in 0..n {
-        let x = view.w / 2.0 + (i as f32 - (n as f32 - 1.0) / 2.0) * 16.0;
+        let x = l.preview.x + (i as f32 - (n as f32 - 1.0) / 2.0) * 16.0;
         let on = i == g.skin;
         let col = if g.skin_open(i) {
             WHITE

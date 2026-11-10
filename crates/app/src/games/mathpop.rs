@@ -4,7 +4,7 @@ use crate::paint::Pen;
 use crate::ui::{Tone, BODY};
 use glam::{vec2, Vec2};
 use kg_core::engine::{Game, Input, View, HUD_LEFT};
-use kg_core::fx::{ease_out_back, ease_out_cubic};
+use kg_core::fx::ease_out_back;
 use kg_core::games::mathpop::*;
 use kg_core::geom::{darker, with_alpha, Color, Rect, WHITE};
 use kg_core::learn::{hud_bottom, ui_scale};
@@ -277,13 +277,10 @@ fn draw_balloons(g: &MathPop, pen: &mut Pen, view: &View) {
 fn draw_levels(g: &MathPop, pen: &mut Pen, view: &View) {
     let l = levels_layout(view);
     pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.55));
-    pen.painted_panel(l.panel, WHITE);
-    pen.ribbon(
-        view,
-        "Pick a level",
-        vec2(view.w / 2.0, l.panel.y + 8.0),
-        g.t,
-    );
+    pen.painted_panel(l.sheet.panel, WHITE);
+    if let Some((rr, _)) = l.sheet.ribbon {
+        pen.ribbon_in(view, LEVELS_TITLE, rr, g.t);
+    }
     let open = profile::unlocked(KEY) as usize;
     for (i, r) in l.tiles.iter().enumerate() {
         let locked = i > open;
@@ -321,47 +318,35 @@ fn draw_levels(g: &MathPop, pen: &mut Pen, view: &View) {
             );
         }
     }
-    pen.text_center(
-        LEVEL_NAMES[g.level],
-        view.w / 2.0,
-        l.back.y - 26.0,
-        30.0,
-        BODY,
-    );
+    let name = LEVEL_NAMES[g.level];
+    let cs = kg_core::sizing::fit_size(name, view.text(30.0).min(l.caption.h * 0.8), l.caption.w);
+    pen.text_center(name, l.caption.center().x, l.caption.center().y, cs, BODY);
     pen.painted_button(l.back, "Back", Tone::Green, 0.0, 1.0);
 }
 
 fn draw_done(g: &MathPop, pen: &mut Pen, view: &View, age: f32) {
     let l = done_layout(view);
-    let fade = ease_out_cubic(age / 0.2);
-    pen.fill_screen(view, Color::new(0.06, 0.04, 0.16, 0.5 * fade));
-    let s = ease_out_back(age / 0.32).max(0.01);
-    let c = l.panel.center();
-    let p = scaled(l.panel, s);
-    pen.painted_panel(p, WHITE);
-    pen.ribbon(view, "Level done!", vec2(c.x, p.y + 8.0 * s), age);
     let name = format!("{}: {}", g.level + 1, LEVEL_NAMES[g.level]);
-    pen.text_center(&name, c.x, p.y + 100.0 * s, 32.0 * s, BODY);
-    let have = g.finished_stars();
-    let pop = |i: u8| ease_out_back(((age - 0.25 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
-    for i in 0..3u8 {
-        let x = c.x + (i as f32 - 1.0) * 100.0 * s;
-        let lit = i < have;
-        let k = if lit { pop(i) } else { 1.0 };
-        star_pair(pen, vec2(x, p.y + 190.0 * s), 46.0 * s * k, lit);
-    }
-    let a = ((age - 0.3) / 0.2).clamp(0.0, 1.0);
-    pen.text_center(
-        &g.session.summary(),
-        c.x,
-        p.y + 262.0 * s,
-        24.0 * s,
-        BODY.with_alpha(a),
+    let summary = g.session.summary();
+    let (pop, k) = pen.done_sheet(
+        view,
+        &l.done,
+        DONE_TITLE,
+        &name,
+        &summary,
+        &DONE_LABELS,
+        age,
     );
-    let pulse = 1.0 + (age * 4.5).sin() * 0.03;
-    pen.painted_button(scaled(l.next, pulse), "Next level", Tone::Green, 0.0, a);
-    pen.painted_button(l.again, "Again", Tone::Orange, 0.0, a);
-    pen.painted_button(l.levels, "Levels", Tone::Blue, 0.0, a);
+    let st = pop.rect(l.done.stars());
+    let have = g.finished_stars();
+    let popk = |i: u8| ease_out_back(((age - 0.25 - i as f32 * 0.18) / 0.3).clamp(0.0, 1.0));
+    let r = (46.0 * k).min(st.h * 0.42);
+    for i in 0..3u8 {
+        let x = st.center().x + (i as f32 - 1.0) * r * 2.2;
+        let lit = i < have;
+        let kk = if lit { popk(i) } else { 1.0 };
+        star_pair(pen, vec2(x, st.center().y), r * kk, lit);
+    }
 }
 
 pub fn draw(g: &MathPop, pen: &mut Pen, view: &View) {

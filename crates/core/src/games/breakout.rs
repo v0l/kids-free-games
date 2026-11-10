@@ -168,31 +168,42 @@ pub fn level_tiles(view: &View) -> Vec<Rect> {
         .collect()
 }
 
+pub fn cleared_sheet(view: &View) -> crate::sizing::Done {
+    crate::sizing::stars_sheet(view, "Level clear!", 130.0, &["Next level", "Levels"])
+}
+
 pub fn panel_rect(view: &View) -> Rect {
-    let c = view.center() + vec2(0.0, 20.0);
-    Rect::new(c.x - 290.0, c.y - 220.0, 580.0, 440.0)
+    cleared_sheet(view).panel()
 }
 
 pub fn next_button(view: &View) -> Rect {
-    let p = panel_rect(view);
-    Rect::new(p.x + p.w / 2.0 - 160.0, p.y + 268.0, 320.0, 78.0)
+    cleared_sheet(view).button(0)
 }
 
 pub fn levels_button(view: &View) -> Rect {
-    let p = panel_rect(view);
-    Rect::new(p.x + p.w / 2.0 - 100.0, p.y + 356.0, 200.0, 64.0)
+    cleared_sheet(view).button(1)
 }
 
 pub fn serve_levels_button(view: &View) -> Rect {
-    Rect::new(view.w / 2.0 - 110.0, view.h * 0.74 - 32.0, 220.0, 64.0)
+    let (w, h) = crate::sizing::label_button(view, "Levels", 64.0);
+    let w = w.max(220.0);
+    Rect::new(view.w / 2.0 - w / 2.0, view.h * 0.74 - h / 2.0, w, h)
 }
 
-pub fn lost_levels_button(view: &View) -> Rect {
-    let rows = profile::board(KEY).len().min(5);
-    let panel_h = 230.0 + rows as f32 * 46.0 + if rows == 0 { 0.0 } else { 20.0 };
-    let y = (view.h / 2.0 + 24.0 + panel_h / 2.0 + 30.0).min(view.h - 68.0);
-    Rect::new(view.w / 2.0 - 100.0, y, 200.0, 58.0)
+pub fn lost_levels_button(view: &View, rank: Option<usize>) -> Rect {
+    crate::sizing::results_for(
+        view,
+        KEY,
+        rank,
+        LOST_TITLE,
+        "Cleared 0 of 0 bricks",
+        &LOST_LABELS,
+    )
+    .buttons()[1]
 }
+
+pub const LOST_TITLE: &str = "Nice try!";
+pub const LOST_LABELS: [&str; 2] = ["Try again", "Levels"];
 
 pub fn career_score() -> i64 {
     (1..=LEVELS as u32)
@@ -698,7 +709,9 @@ impl Game for Breakout {
                 }
             }
             State::Lost => {
-                if input.tapped_in(lost_levels_button(view)) && self.first_win() && self.age >= 0.3
+                if input.tapped_in(lost_levels_button(view, self.rank))
+                    && self.first_win()
+                    && self.age >= 0.3
                 {
                     self.go_select();
                 } else if input.tap() && self.age >= TAP_DELAY {

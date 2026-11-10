@@ -488,16 +488,18 @@ impl Default for Paper {
 }
 
 pub fn play_again_button(view: &View) -> Rect {
-    let w = 340.0f32.min(view.w - 60.0);
-    Rect::new(view.w / 2.0 - w / 2.0, view.h - 150.0, w, 96.0)
+    let r = crate::sizing::bottom_button(view, "Play again", 340.0, 96.0);
+    Rect::new(r.x, r.y - view.edge().max(24.0), r.w, r.h)
 }
 
 pub fn death_panel(view: &View) -> Rect {
-    let w = 560.0f32.min(view.w - 40.0);
-    let h = 400.0f32.min(view.h - 290.0);
+    let b = play_again_button(view);
+    let w = view.sheet_w(560.0);
+    let top = 70.0f32.max(view.hud_top());
+    let h = (400.0 * view.text_k().min(1.6)).min(b.y - view.gap() - top);
     Rect::new(
         view.w / 2.0 - w / 2.0,
-        (view.h - 150.0 - h) / 2.0 + 40.0,
+        top + ((b.y - view.gap() - top) - h) / 2.0,
         w,
         h,
     )

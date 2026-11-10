@@ -666,6 +666,235 @@ pub fn panel_layout(view: &View, title: &str, lines: &[&str]) -> (Sheet, Vec<usi
     (s.layout(), ids)
 }
 
+pub struct Done {
+    pub sheet: Sheet,
+    pub line: usize,
+    pub stars: usize,
+    pub summary: usize,
+    pub actions: usize,
+}
+
+impl Done {
+    pub fn panel(&self) -> Rect {
+        self.sheet.panel
+    }
+
+    pub fn button(&self, i: usize) -> Rect {
+        self.sheet.button(self.actions, i)
+    }
+
+    pub fn buttons(&self) -> Vec<Rect> {
+        self.sheet.parts[self.actions].rects.clone()
+    }
+
+    pub fn line(&self) -> Rect {
+        self.sheet.rect(self.line)
+    }
+
+    pub fn summary(&self) -> Rect {
+        self.sheet.rect(self.summary)
+    }
+
+    pub fn stars(&self) -> Rect {
+        self.sheet.rect(self.stars)
+    }
+
+    pub fn text(&self, design: f32) -> f32 {
+        design * self.sheet.k
+    }
+}
+
+pub fn done_layout(view: &View, title: &str, labels: &[&str]) -> Done {
+    stars_sheet_line_first(view, title, 110.0, labels)
+}
+
+pub fn stars_sheet(view: &View, title: &str, stars_h: f32, labels: &[&str]) -> Done {
+    let mut s = Stack::new(view, 600.0).ribbon(title);
+    let stars = s.block(stars_h);
+    let line = s.block(52.0);
+    let summary = s.block(44.0);
+    let actions = s.buttons(80.0, labels);
+    Done {
+        sheet: s.layout(),
+        line,
+        stars,
+        summary,
+        actions,
+    }
+}
+
+pub fn stars_sheet_line_first(view: &View, title: &str, stars_h: f32, labels: &[&str]) -> Done {
+    let mut s = Stack::new(view, 580.0).ribbon(title);
+    let line = s.block(52.0);
+    let stars = s.block(stars_h);
+    let summary = s.block(44.0);
+    let actions = s.buttons(78.0, labels);
+    Done {
+        sheet: s.layout(),
+        line,
+        stars,
+        summary,
+        actions,
+    }
+}
+
+pub struct Picker {
+    pub sheet: Sheet,
+    pub tiles: Vec<Rect>,
+    pub caption: Rect,
+    pub back: Rect,
+}
+
+pub fn picker_layout(
+    view: &View,
+    title: &str,
+    n: usize,
+    cols: usize,
+    aspect: f32,
+    back: &str,
+) -> Picker {
+    let mut last = None;
+    for c in cols..=n.max(cols) {
+        let p = picker_try(view, title, n, c, aspect, back);
+        if p.sheet.fits {
+            return p;
+        }
+        last = Some(p);
+    }
+    last.unwrap()
+}
+
+fn picker_try(view: &View, title: &str, n: usize, cols: usize, aspect: f32, back: &str) -> Picker {
+    let gap = view.gap();
+    let design_w = 780.0;
+    let w = view.sheet_w(design_w);
+    let inner = w - 2.0 * (34.0 * (w / design_w)).max(gap);
+    let cols = cols
+        .min(((inner + gap) / (view.touch() + gap)).floor().max(1.0) as usize)
+        .max(1);
+    let rows = n.div_ceil(cols);
+    let tw = (inner - gap * (cols as f32 - 1.0)) / cols as f32;
+    let build = |th: f32| {
+        let grid_h = rows as f32 * th + (rows as f32 - 1.0) * gap;
+        let mut s = Stack::new(view, design_w).ribbon(title);
+        let g = s.block_min(0.0, grid_h);
+        let c = s.block(40.0);
+        let b = s.button(78.0, back);
+        (s.layout(), g, c, b)
+    };
+    let mut th = (tw * aspect).max(view.touch());
+    let (mut sheet, mut g, mut c, mut b) = build(th);
+    while !sheet.fits && th > view.touch() {
+        th = (th * 0.92).max(view.touch());
+        (sheet, g, c, b) = build(th);
+    }
+    let g = sheet.rect(g);
+    let tw = tw.min((g.w - gap * (cols as f32 - 1.0)) / cols as f32);
+    let gw = cols as f32 * tw + (cols as f32 - 1.0) * gap;
+    let x0 = g.x + (g.w - gw) / 2.0;
+    let tiles = (0..n)
+        .map(|i| {
+            Rect::new(
+                x0 + (i % cols) as f32 * (tw + gap),
+                g.y + (i / cols) as f32 * (th + gap),
+                tw,
+                th,
+            )
+        })
+        .collect();
+    Picker {
+        back: sheet.button(b, 0),
+        caption: sheet.rect(c),
+        sheet,
+        tiles,
+    }
+}
+
+pub fn grid(
+    view: &View,
+    area: Rect,
+    n: usize,
+    max_cols: usize,
+    aspect: f32,
+    max_w: f32,
+) -> Vec<Rect> {
+    let gap = view.gap();
+    let fit = |cols: usize| {
+        let rows = n.div_ceil(cols) as f32;
+        let w = (area.w - gap * (cols as f32 - 1.0)) / cols as f32;
+        let h = (area.h - gap * (rows - 1.0)) / rows;
+        w.min(h / aspect).min(max_w)
+    };
+    let cols = (1..=max_cols.max(1))
+        .filter(|c| *c == 1 || (area.w - gap * (*c as f32 - 1.0)) / *c as f32 >= view.touch())
+        .max_by(|a, b| fit(*a).total_cmp(&fit(*b)))
+        .unwrap_or(1);
+    let w = fit(cols).max(view.touch()).max(view.touch() / aspect);
+    let h = w * aspect;
+    let rows = n.div_ceil(cols);
+    let gh = rows as f32 * h + (rows as f32 - 1.0) * gap;
+    let top = area.y + ((area.h - gh) / 2.0).max(0.0);
+    (0..n)
+        .map(|i| {
+            let r = i / cols;
+            let in_row = (n - r * cols).min(cols);
+            let rw = in_row as f32 * w + (in_row as f32 - 1.0) * gap;
+            let left = area.x + (area.w - rw) / 2.0;
+            Rect::new(
+                left + (i % cols) as f32 * (w + gap),
+                top + r as f32 * (h + gap),
+                w,
+                h,
+            )
+        })
+        .collect()
+}
+
+pub fn bottom_button(view: &View, label: &str, design_w: f32, design_h: f32) -> Rect {
+    let h = view.tap(design_h);
+    let (lw, _) = label_button(view, label, design_h);
+    let w = (design_w * view.text_k())
+        .max(lw)
+        .min(view.w - 2.0 * view.edge());
+    Rect::new(
+        view.w / 2.0 - w / 2.0,
+        view.h - h - view.edge().max(16.0),
+        w,
+        h,
+    )
+}
+
+pub fn bottom_row(view: &View, labels: &[&str], design_w: f32, design_h: f32) -> Vec<Rect> {
+    let gap = view.gap();
+    let h = view.tap(design_h);
+    let room = view.w - 2.0 * view.edge();
+    let n = labels.len().max(1) as f32;
+    let w = (design_w * view.text_k())
+        .max(
+            labels
+                .iter()
+                .map(|l| label_button(view, l, design_h).0)
+                .fold(0.0, f32::max),
+        )
+        .min((room - gap * (n - 1.0)) / n);
+    let total = n * w + (n - 1.0) * gap;
+    let x = view.w / 2.0 - total / 2.0;
+    let y = view.h - h - view.edge().max(16.0);
+    (0..labels.len())
+        .map(|i| Rect::new(x + i as f32 * (w + gap), y, w, h))
+        .collect()
+}
+
+pub fn corner_button(view: &View, label: &str, design_w: f32, design_h: f32, y: f32) -> Rect {
+    let h = view.tap(design_h);
+    let (lw, _) = label_button(view, label, design_h);
+    let w = (design_w * view.text_k().min(1.4))
+        .max(lw.min(view.w * 0.4))
+        .max(view.touch());
+    let x = view.w - view.edge().min(30.0) - w;
+    Rect::new(x, y, w, h)
+}
+
 pub struct Keys {
     pub keys: Vec<Rect>,
     pub cols: usize,

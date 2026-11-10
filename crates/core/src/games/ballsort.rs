@@ -1028,7 +1028,7 @@ impl Game for BallSort {
                     }
                 }
                 if self.end_t > WIN_DELAY + 0.7 && input.pressed {
-                    let w = win_layout(view, self.can_skip());
+                    let w = win_layout(view, self.can_skip(), self.rank);
                     if w.levels.contains(input.pos) {
                         sfx::play(Sfx::Tap);
                         self.open_select();
@@ -1053,18 +1053,12 @@ pub struct Buttons {
 }
 
 pub fn buttons(view: &View) -> Buttons {
-    let w = 190.0;
-    let h = 62.0;
-    let gap = 16.0;
-    let total = w * 4.0 + gap * 3.0;
-    let x = (view.w - total) / 2.0;
-    let y = view.h - h - 18.0;
-    let at = |i: f32| Rect::new(x + i * (w + gap), y, w, h);
+    let r = crate::sizing::bottom_row(view, &["Undo", "Restart", "Hint", "Levels"], 190.0, 62.0);
     Buttons {
-        undo: at(0.0),
-        restart: at(1.0),
-        hint: at(2.0),
-        levels: at(3.0),
+        undo: r[0],
+        restart: r[1],
+        hint: r[2],
+        levels: r[3],
     }
 }
 
@@ -1073,18 +1067,27 @@ pub struct WinLayout {
     pub levels: Rect,
 }
 
-pub fn win_layout(view: &View, skip: bool) -> WinLayout {
-    let y = (view.h / 2.0 + 272.0).min(view.h - 66.0);
-    let (w, gap) = (250.0, 16.0);
-    let x = (view.w - w * 2.0 - gap) / 2.0;
+pub fn win_layout(view: &View, skip: bool, rank: Option<usize>) -> WinLayout {
+    let labels: &[&str] = if skip { &WIN_SKIP_LABELS } else { &WIN_LABELS };
+    let b = win_results(view, labels, rank).buttons();
     WinLayout {
-        skip: Rect::new(x, y, w, 62.0),
-        levels: if skip {
-            Rect::new(x + w + gap, y, w, 62.0)
-        } else {
-            Rect::new((view.w - w) / 2.0, y, w, 62.0)
-        },
+        skip: b[1],
+        levels: *b.last().unwrap(),
     }
+}
+
+pub const WIN_LABELS: [&str; 2] = ["Next level", "Levels"];
+pub const WIN_SKIP_LABELS: [&str; 3] = ["Next level", "Skip ahead", "Levels"];
+
+pub fn win_results(view: &View, labels: &[&str], rank: Option<usize>) -> crate::sizing::Results {
+    crate::sizing::results_for(
+        view,
+        GAME,
+        rank,
+        "Sorted!",
+        "Level 10 done, score 100",
+        labels,
+    )
 }
 
 pub struct SelectLayout {
@@ -1098,10 +1101,16 @@ pub fn select_layout(view: &View) -> SelectLayout {
     let cell = (((view.w - 120.0) / GRID_COLS as f32) - gap)
         .min(((view.h - 330.0) / rows as f32) - gap)
         .clamp(50.0, 110.0);
+    let ph = view.tap(76.0);
+    let cell = cell
+        .min(((view.h - 170.0 - 24.0 - ph - view.edge()) / rows as f32) - gap)
+        .max(view.touch());
     let gw = GRID_COLS as f32 * (cell + gap) - gap;
     let gh = rows as f32 * (cell + gap) - gap;
-    let total = gh + 24.0 + 76.0;
-    let top = ((view.h - total) / 2.0 + 50.0).max(170.0);
+    let total = gh + 24.0 + ph;
+    let top = ((view.h - total) / 2.0 + 50.0)
+        .max(170.0)
+        .min(view.h - total - view.edge());
     let left = (view.w - gw) / 2.0;
     let cells = (0..MAX_LEVEL as usize)
         .map(|i| {
@@ -1113,10 +1122,10 @@ pub fn select_layout(view: &View) -> SelectLayout {
             )
         })
         .collect();
-    let pw = 320.0;
+    let pw = (320.0 * view.text_k()).min(view.w - 2.0 * view.edge());
     SelectLayout {
         cells,
-        play: Rect::new((view.w - pw) / 2.0, top + gh + 24.0, pw, 76.0),
+        play: Rect::new((view.w - pw) / 2.0, top + gh + 24.0, pw, ph),
     }
 }
 
