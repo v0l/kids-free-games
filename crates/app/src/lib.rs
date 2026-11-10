@@ -108,9 +108,10 @@ fn frame(
         .safe
         .get(px_size, platform::insets_px)
         .scaled(1.0 / dpi);
-    let per_mm = *state
-        .per_mm
-        .get_or_insert_with(|| platform::units_per_mm_px().map(|px| px / dpi));
+    let per_mm = units_per_mm(
+        *state.per_mm.get_or_insert_with(platform::units_per_mm_px),
+        dpi,
+    );
     let view = match per_mm {
         Some(d) => View::fit_safe(lw, lh, inset).with_density(d),
         None => View::fit_safe(lw, lh, inset),
@@ -280,6 +281,10 @@ pub fn main() {
     run();
 }
 
+fn units_per_mm(px_per_mm: Option<f32>, dpi: f32) -> Option<f32> {
+    px_per_mm.map(|px| px / dpi.max(0.01))
+}
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
@@ -294,5 +299,29 @@ mod asset_tests {
     #[test]
     fn never_requests_meta_files_because_the_web_host_answers_them_with_html() {
         assert!(matches!(asset_plugin().meta_check, AssetMetaCheck::Never));
+    }
+
+    #[test]
+    fn a_pixel_keeps_twelve_mm_buttons_after_the_window_changes_scale() {
+        let px = Some(420.0 / 25.4);
+        let mut cached = None;
+        for (lw, lh, dpi) in [(1024.0, 768.0, 1.0), (411.42856, 914.2857, 2.625)] {
+            let per_mm = units_per_mm(*cached.get_or_insert(px), dpi);
+            let v = View::fit(lw, lh).with_density(per_mm.unwrap());
+            if dpi > 1.0 {
+                let mm_wide = v.to_mm(v.w);
+                assert!(
+                    (mm_wide - 1080.0 / (420.0 / 25.4)).abs() < 0.5,
+                    "{mm_wide} mm"
+                );
+                assert!(v.to_mm(v.touch()) >= 12.0 - 0.01);
+                assert!(
+                    v.touch() < v.w / 4.0,
+                    "a 12 mm button is {} of {} units",
+                    v.touch(),
+                    v.w
+                );
+            }
+        }
     }
 }
