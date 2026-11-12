@@ -6,6 +6,22 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-11-12
+
+### Added
+
+- You can link another device straight from the welcome screen, before making a profile.
+- Snake has a spoken swipe intro, a smoother tube-shaped snake with a face, and a new board.
+- Clash, Paper Land and Happy Hotel share one floating stick that appears where you touch.
+
+### Changed
+
+- Snake turns instantly, fast swipes inside a single frame now count, and a tap on the left or right half turns the snake.
+- Runner swipes chain together, side taps change lane, and lane changes feel snappier.
+- Menus, sheets, results, profile and link screens, game pickers and the top bars of the learning games are sized in real millimetres, so they look the same on phones and tablets.
+- The Clash heading arrow is bigger.
+- The screen rescales correctly when the window moves to a display with a different density.
+
 ## [0.1.2] - 2026-11-09
 
 ### Added
