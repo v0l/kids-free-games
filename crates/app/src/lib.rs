@@ -114,7 +114,7 @@ fn frame(
     );
     let view = match per_mm {
         Some(d) => View::fit_safe(lw, lh, inset).with_density(d),
-        None => View::fit_safe(lw, lh, inset),
+        None => View::fit_safe(lw, lh, inset).with_density(guessed_units_per_mm(lw, lh, dpi)),
     };
     let raw = state
         .gather
@@ -285,6 +285,11 @@ fn units_per_mm(px_per_mm: Option<f32>, dpi: f32) -> Option<f32> {
     px_per_mm.map(|px| px / dpi.max(0.01))
 }
 
+fn guessed_units_per_mm(lw: f32, lh: f32, dpi: f32) -> f32 {
+    let dpi = dpi.max(0.01);
+    kg_core::input::guess_units_per_mm(lw * dpi, lh * dpi) / dpi
+}
+
 #[cfg(target_arch = "wasm32")]
 #[wasm_bindgen::prelude::wasm_bindgen(start)]
 pub fn start() {
@@ -299,6 +304,14 @@ mod asset_tests {
     #[test]
     fn never_requests_meta_files_because_the_web_host_answers_them_with_html() {
         assert!(matches!(asset_plugin().meta_check, AssetMetaCheck::Never));
+    }
+
+    #[test]
+    fn a_hidpi_web_canvas_keeps_phone_sized_buttons_without_a_device_density() {
+        let (lw, lh, dpi) = (207.0, 448.0, 2.0);
+        let v = View::fit(lw, lh).with_density(guessed_units_per_mm(lw, lh, dpi));
+        assert!(v.to_mm(v.touch()) >= 12.0 - 0.01);
+        assert!(v.touch() < v.w / 4.0, "touch {} of {}", v.touch(), v.w);
     }
 
     #[test]
