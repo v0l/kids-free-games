@@ -165,6 +165,27 @@ pub fn chip_rect(view: &View, side: Side, label: &str, value: &str) -> Rect {
     kg_core::fx::chip_rect(view, side, label, value)
 }
 
+pub struct RowText {
+    pub name: String,
+    pub name_rect: Rect,
+    pub score_rect: Rect,
+}
+
+impl RowText {
+    pub fn new(row: Rect, rk: f32, txt: f32, name: &str, score_w: f32, hit: Option<Rect>) -> Self {
+        let score_x = row.x + row.w - 18.0 * rk - score_w;
+        let right = hit.map_or(score_x, |h| h.x.min(score_x)) - 8.0 * rk;
+        let left = row.x + 104.0 * rk;
+        let name = kg_core::sizing::truncate(name, txt, (right - left).max(0.0));
+        let nw = measure(&name, txt);
+        Self {
+            name,
+            name_rect: Rect::new(left, row.y, nw, row.h),
+            score_rect: Rect::new(score_x, row.y, score_w, row.h),
+        }
+    }
+}
+
 pub struct Pop {
     c: Vec2,
     s: f32,
@@ -604,19 +625,19 @@ impl Pen {
                 self.crown(vec2(row.x + 26.0 * rk, cy - row.h * 0.55), txt);
             }
             self.avatar(e.avatar, vec2(row.x + 72.0 * rk, cy), row.h * 0.95);
-            let nw = measure(&e.name, txt);
+            let sc = (r.format)(e.score);
+            let st = (30.0 * rk).min(row.h * 0.7);
+            let sw = measure(&sc, st);
+            let hit = (!e.player.is_empty()).then(|| lay.report_hit(lay.row(i), sw / s));
+            let parts = RowText::new(row, rk, txt, &e.name, sw, hit.map(|h| pop.rect(h)));
             self.text_center(
-                &e.name,
-                row.x + 104.0 * rk + nw / 2.0,
+                &parts.name,
+                parts.name_rect.center().x,
                 cy,
                 txt,
                 BODY.with_alpha(la),
             );
-            let sc = (r.format)(e.score);
-            let st = (30.0 * rk).min(row.h * 0.7);
-            let sw = measure(&sc, st);
-            if !e.player.is_empty() {
-                let hit = lay.report_hit(lay.row(i), sw / s);
+            if let Some(hit) = hit {
                 let ic = (26.0 * rk).min(hit.w * 0.6);
                 let hc = pop.point(hit.center());
                 self.ui(
@@ -635,7 +656,7 @@ impl Pen {
             }
             self.text_outline(
                 &sc,
-                row.x + row.w - 18.0 * rk - sw / 2.0,
+                parts.score_rect.center().x,
                 cy,
                 st,
                 WHITE.with_alpha(la),
@@ -894,6 +915,30 @@ mod tests {
             avatar: 0,
             score: 10,
             mine,
+        }
+    }
+
+    #[test]
+    fn names_never_run_under_the_score_or_report_icon_on_any_view() {
+        for (name, v) in kg_core::sizing::test_views() {
+            let lay = kg_core::sizing::results_layout(&v, "Ouch!", "x", &["Again"], 5, true);
+            let s = 1.0;
+            let rk = lay.row_h / 46.0 * s;
+            let txt = (26.0 * rk).min(lay.row_h * 0.62);
+            let st = (30.0 * rk).min(lay.row_h * 0.7);
+            for n in ["Kiera", "Mob", "Deucalion the Great", "Parmesan Pete"] {
+                let row = lay.row(0);
+                let sw = measure("52", st);
+                let hit = lay.report_hit(row, sw / s);
+                let p = RowText::new(row, rk, txt, n, sw, Some(hit));
+                assert!(
+                    p.name_rect.x + p.name_rect.w <= p.score_rect.x + 0.01
+                        && p.name_rect.x + p.name_rect.w <= hit.x + 0.01,
+                    "{name}: {n} {:?} overlaps score {:?} hit {hit:?}",
+                    p.name_rect,
+                    p.score_rect
+                );
+            }
         }
     }
 

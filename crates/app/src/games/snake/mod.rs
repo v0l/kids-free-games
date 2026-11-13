@@ -105,10 +105,12 @@ pub fn draw(g: &Snake, pen: &mut Pen, view: &View) {
     pen.particles(&g.particles);
     pen.popups(&g.popups);
     pen.offset = Vec2::ZERO;
-    pen.chip(view, Side::Left, "APPLES", &g.score.to_string(), g.bump.t);
-    let right = pen.chip(view, Side::Right, "BEST", &g.best.0.to_string(), 1.0);
-    let left = chip_rect(view, Side::Left, "APPLES", &g.score.to_string());
-    draw_progress(pen, g, left.x + left.w + 12.0, right.x - 12.0);
+    if !g.shows_results() {
+        pen.chip(view, Side::Left, "APPLES", &g.score.to_string(), g.bump.t);
+        let right = pen.chip(view, Side::Right, "BEST", &g.best.0.to_string(), 1.0);
+        let left = chip_rect(view, Side::Left, "APPLES", &g.score.to_string());
+        draw_progress(pen, g, left.x + left.w + 12.0, right.x - 12.0);
+    }
     match g.state {
         State::Ready => {
             let best = format!("Best stage {}", g.best_stage);
