@@ -20,6 +20,10 @@ pub const GRAVITY: f32 = 26.0;
 pub const JUMP_V: f32 = 9.6;
 pub const SLIDE_TIME: f32 = 0.75;
 pub const HURDLE_H: f32 = 0.6;
+pub const BARRIER_H: f32 = 1.1;
+pub const PLAYER_REACH: f32 = 0.3;
+pub const PLAYER_H: f32 = 1.8;
+pub const SLIDE_H: f32 = 0.7;
 pub const TRAIN_LEN: f32 = 9.0;
 pub const ROW_LEN: f32 = 0.8;
 pub const HIT_REACH: f32 = 0.95;
@@ -395,6 +399,14 @@ pub fn row_signature(rows: &[Row]) -> Vec<[u8; 3]> {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub struct HitBox {
+    pub min: Vec3,
+    pub max: Vec3,
+    pub player: bool,
+    pub live: bool,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct Cam {
     pub eye: Vec3,
     pub target: Vec3,
@@ -762,10 +774,44 @@ impl Runner {
 
     fn collides(&self, kind: Kind) -> bool {
         match kind {
-            Kind::Barrier | Kind::Train => true,
+            Kind::Barrier => self.y < BARRIER_H,
+            Kind::Train => true,
             Kind::Hurdle => self.y < HURDLE_H,
             Kind::Overhead => !self.sliding(),
         }
+    }
+
+    pub fn hit_boxes(&self) -> Vec<HitBox> {
+        let mut out = vec![HitBox {
+            min: vec3(self.x - PLAYER_REACH, self.y, -self.dist - PLAYER_REACH),
+            max: vec3(
+                self.x + PLAYER_REACH,
+                self.y + if self.sliding() { SLIDE_H } else { PLAYER_H },
+                -self.dist + PLAYER_REACH,
+            ),
+            player: true,
+            live: true,
+        }];
+        for r in self.rows.iter().filter(|r| !r.hit) {
+            for (k, kind) in r.lanes.iter().enumerate() {
+                let Some(kind) = kind else { continue };
+                let cx = lane_x(k as i32 - 1);
+                let reach = HIT_REACH - PLAYER_REACH;
+                let (y0, y1) = match kind {
+                    Kind::Barrier => (0.0, BARRIER_H),
+                    Kind::Hurdle => (0.0, HURDLE_H),
+                    Kind::Overhead => (SLIDE_H, 2.5),
+                    Kind::Train => (0.0, 1.9),
+                };
+                out.push(HitBox {
+                    min: vec3(cx - reach, y0, -(r.at + kind.len())),
+                    max: vec3(cx + reach, y1, -r.at),
+                    player: false,
+                    live: self.collides(*kind),
+                });
+            }
+        }
+        out
     }
 
     fn check_rows(&mut self, view: &View) {
@@ -1672,6 +1718,59 @@ mod tests {
             g.update(&Input::default(), &view, 0.05);
         }
         assert_eq!(crate::profile::board(GAME).len(), 1);
+    }
+
+    #[test]
+    fn jumping_clear_over_a_barrier_does_not_hit_it() {
+        setup();
+        let view = View::ipad_landscape();
+        let mut g = Runner::with_level(1);
+        g.state = State::Playing;
+        g.speed = 10.0;
+        g.run_t = 10.0;
+        g.rows[0].lanes = [None, Some(Kind::Barrier), None];
+        g.dist = g.rows[0].at - 2.6;
+        g.update(&Input::key(Dir::Up), &view, 1.0 / 60.0);
+        for _ in 0..60 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+        }
+        assert_eq!(g.hits, 0);
+        let mut g = Runner::with_level(1);
+        g.state = State::Playing;
+        g.speed = 10.0;
+        g.rows[0].lanes = [None, Some(Kind::Barrier), None];
+        g.dist = g.rows[0].at - 2.6;
+        for _ in 0..60 {
+            g.update(&Input::default(), &view, 1.0 / 60.0);
+        }
+        assert_eq!(g.hits, 1);
+    }
+
+    #[test]
+    fn hit_boxes_match_what_collides() {
+        setup();
+        let mut g = Runner::with_level(3);
+        g.state = State::Playing;
+        g.rows[0].lanes = [None, Some(Kind::Hurdle), None];
+        g.y = 1.0;
+        let boxes = g.hit_boxes();
+        assert!(boxes[0].player);
+        assert!(boxes.iter().skip(1).any(|b| !b.live));
+        g.y = 0.0;
+        assert!(g.hit_boxes().iter().skip(1).any(|b| b.live));
+    }
+
+    #[test]
+    fn the_runner_fills_a_tall_phone_screen_as_much_as_it_can() {
+        setup();
+        let view = crate::sizing::phone_portrait();
+        let mut g = Runner::with_level(1);
+        g.state = State::Playing;
+        let cam = Cam::new(&g, &view);
+        let feet = cam.project(&view, g.player_world()).unwrap();
+        let head = cam.project(&view, g.player_world() + Vec3::Y * 1.4).unwrap();
+        let share = (feet.y - head.y) / view.full().h;
+        assert!(share > 0.075, "runner is {share} of the screen height");
     }
 
     #[test]

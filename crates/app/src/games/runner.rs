@@ -292,10 +292,59 @@ fn draw_progress(g: &Runner, pen: &mut Pen, view: &View) {
     pen.text_shadow(&goal, view.w / 2.0, 72.0, 24.0, WHITE);
 }
 
+fn hitboxes_on() -> bool {
+    use std::sync::OnceLock;
+    static ON: OnceLock<bool> = OnceLock::new();
+    *ON.get_or_init(|| crate::web::query("hitboxes").is_some())
+}
+
+fn draw_hitboxes(g: &Runner, pen: &mut Pen, view: &View) {
+    let cam = Cam::new(g, view);
+    let edges = [
+        (0, 1),
+        (1, 3),
+        (3, 2),
+        (2, 0),
+        (4, 5),
+        (5, 7),
+        (7, 6),
+        (6, 4),
+        (0, 4),
+        (1, 5),
+        (2, 6),
+        (3, 7),
+    ];
+    for b in g.hit_boxes() {
+        let col = if b.player {
+            Color::new(0.2, 1.0, 0.3, 1.0)
+        } else if b.live {
+            Color::new(1.0, 0.2, 0.2, 1.0)
+        } else {
+            Color::new(1.0, 0.9, 0.2, 1.0)
+        };
+        let corner = |i: usize| {
+            glam::vec3(
+                if i & 1 == 0 { b.min.x } else { b.max.x },
+                if i & 2 == 0 { b.min.y } else { b.max.y },
+                if i & 4 == 0 { b.min.z } else { b.max.z },
+            )
+        };
+        for (a, c) in edges {
+            if let (Some(p), Some(q)) = (cam.project(view, corner(a)), cam.project(view, corner(c)))
+            {
+                pen.line(p, q, 3.0, col);
+            }
+        }
+    }
+}
+
 pub fn draw(g: &Runner, pen: &mut Pen, view: &View, results_age: f32, loaded: bool) {
     if g.state == State::Select {
         draw_select(g, pen, view);
         return;
+    }
+    if hitboxes_on() {
+        draw_hitboxes(g, pen, view);
     }
     if g.flash_hit > 0.0 {
         pen.fill_screen(view, Color::new(1.0, 0.25, 0.2, 0.22 * g.flash_hit));
