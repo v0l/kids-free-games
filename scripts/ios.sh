@@ -52,8 +52,10 @@ if [ "$TARGET" = aarch64-apple-ios ]; then
     plutil -replace application-identifier -string "$team.$BUNDLE_ID" target/ios/entitlements.plist
     PROFILE_PLIST=target/ios/entitlements.plist
   fi
-  codesign --force --timestamp --sign "${SIGN_IDENTITY:?set SIGN_IDENTITY for a device build}" \
-    ${KEYCHAIN:+--keychain "$KEYCHAIN"} ${PROFILE_PLIST:+--entitlements "$PROFILE_PLIST"} "$APP"
+  if [ -z "${UNSIGNED:-}" ]; then
+    codesign --force --timestamp --sign "${SIGN_IDENTITY:?set SIGN_IDENTITY for a device build}" \
+      ${KEYCHAIN:+--keychain "$KEYCHAIN"} ${PROFILE_PLIST:+--entitlements "$PROFILE_PLIST"} "$APP"
+  fi
 else
   codesign --force --sign - "$APP"
 fi

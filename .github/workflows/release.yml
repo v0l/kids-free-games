@@ -239,8 +239,39 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  ios:
+    needs: check
+    name: ios-unsigned
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: aarch64-apple-ios
+
+      - name: Build unsigned IPA
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          sed -i '' "/<key>CFBundleShortVersionString<\/key>/{n;s|<string>.*</string>|<string>$version</string>|;}" ios/Info.plist
+          TARGET=aarch64-apple-ios UNSIGNED=1 PROFILE=small scripts/ios.sh
+          mkdir -p ipa/Payload dist
+          cp -R target/ios/KidsGames.app ipa/Payload/
+          (cd ipa && zip -qry "../dist/kids_games-${TAG}-ios-unsigned.ipa" Payload)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-unsigned
+          path: dist/*
+          if-no-files-found: error
+
   release:
-    needs: [desktop, web, android]
+    needs: [desktop, web, android, ios]
     if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
@@ -256,7 +287,7 @@ jobs:
           awk -v v="${TAG#v}" '/^## \[/{p=index($0,"[" v "]")>0;next} /^\[[^]]*\]: /{p=0} p' CHANGELOG.md > notes.md
           {
             echo
-            echo "iOS and the Mac App Store package are built on a Mac with scripts/release-apple.sh and are not part of this release unless attached by hand."
+            echo "The iOS IPA here is unsigned. The signed App Store IPA and the Mac App Store package are built on a Mac with scripts/release-apple.sh and attached by hand."
           } >> notes.md
           cd dist
           sha256sum * > SHA256SUMS
