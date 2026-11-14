@@ -6,6 +6,18 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
+## [0.1.4] - 2026-11-13
+
+### Added
+
+- Open the Lane Runner with `?hitboxes` on the web (or `--hitboxes`) to draw the player and obstacle hit boxes.
+
+### Fixed
+
+- Snake and other results boards no longer put scores over player names, and the snake HUD chips hide under the results panel.
+- The web build sizes buttons and text for phones on high density screens instead of drawing them about twice too big.
+- Jumping over a barrier in Lane Runner now clears it.
+
 ## [0.1.3] - 2026-11-12
 
 ### Added
