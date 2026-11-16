@@ -201,7 +201,9 @@ mod imp {
     }
 
     pub fn units_per_mm_px() -> Option<f32> {
-        None
+        crate::web::query("mm")
+            .and_then(|v| v.parse::<f32>().ok())
+            .filter(|v| *v > 1.0)
     }
 
     pub fn save_dir() -> Option<std::path::PathBuf> {
