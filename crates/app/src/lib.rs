@@ -96,6 +96,9 @@ fn frame(
     let Ok(win) = window.single() else { return };
     let dpi = win.scale_factor();
     let (lw, lh) = (win.width(), win.height());
+    if std::env::var_os("KG_LOG_VIEW").is_some() {
+        eprintln!("view logical {lw}x{lh} dpi {dpi}");
+    }
     if lw < 2.0 || lh < 2.0 {
         return;
     }
@@ -180,13 +183,32 @@ fn asset_root() -> String {
     "assets".into()
 }
 
+pub fn window_flags() -> (f32, f32, Option<f32>) {
+    let (w, h) = web::query("size")
+        .and_then(|s| {
+            let (w, h) = s.split_once('x')?;
+            Some((w.parse().ok()?, h.parse().ok()?))
+        })
+        .unwrap_or((1024.0, 768.0));
+    let dpi = web::query("dpi")
+        .and_then(|s| s.parse::<f32>().ok())
+        .filter(|d| *d > 0.0);
+    (w, h, dpi)
+}
+
 pub fn window() -> Window {
+    let (w, h, dpi) = window_flags();
+    let k = dpi.unwrap_or(1.0);
+    let mut resolution = WindowResolution::new((w * k) as u32, (h * k) as u32);
+    if let Some(d) = dpi {
+        resolution = resolution.with_scale_factor_override(d);
+    }
     Window {
         title: "Learn and Play Kids Games".into(),
         canvas: Some("#bevy".into()),
         fit_canvas_to_parent: true,
         prevent_default_event_handling: true,
-        resolution: WindowResolution::new(1024, 768),
+        resolution,
         mode: if cfg!(any(target_os = "android", target_os = "ios")) {
             bevy::window::WindowMode::BorderlessFullscreen(bevy::window::MonitorSelection::Primary)
         } else {

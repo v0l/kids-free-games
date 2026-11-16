@@ -188,7 +188,16 @@ pub fn setup(n: u32, view: &View) -> Stage {
             }
         }
         36 => {
-            board(&[("Leo", 5, 23), ("Ava", 9, 14), ("Sam", 3, 6)]);
+            if crate::web::query("names").is_some_and(|v| v == "long") {
+                board(&[
+                    ("Parmesan Pete", 5, 52),
+                    ("Deucalion the Great", 9, 37),
+                    ("Kiera", 3, 33),
+                    ("Camilla Rose", 4, 20),
+                ]);
+            } else {
+                board(&[("Leo", 5, 23), ("Ava", 9, 14), ("Sam", 3, 6)]);
+            }
             p = SnakePlay::new();
             start(&mut p, view);
             until_score(&mut p, view, 8);
