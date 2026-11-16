@@ -119,15 +119,14 @@ fn draw_stars(g: &Breakout, pen: &mut Pen, view: &View) {
 
 fn draw_cleared(g: &Breakout, pen: &mut Pen, view: &View) {
     let age = g.age;
-    let d = cleared_sheet(view);
     let last = g.level >= LEVELS as u32;
-    let label = if last { "All levels" } else { "Next level" };
+    let d = cleared_sheet_for(view, last);
     let line = if g.rank == Some(0) {
         format!("New best! Score {}", g.score)
     } else {
         format!("Score {}", g.score)
     };
-    let labels: &[&str] = if last { &[label] } else { &[label, "Levels"] };
+    let labels = cleared_labels(last);
     let (pop, k) = pen.done_sheet(view, &d, "Level clear!", &line, "", labels, age);
     let st = pop.rect(d.stars());
     let earned = stars_for(g.misses);

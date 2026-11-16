@@ -169,7 +169,19 @@ pub fn level_tiles(view: &View) -> Vec<Rect> {
 }
 
 pub fn cleared_sheet(view: &View) -> crate::sizing::Done {
-    crate::sizing::stars_sheet(view, "Level clear!", 130.0, &["Next level", "Levels"])
+    cleared_sheet_for(view, false)
+}
+
+pub fn cleared_labels(last: bool) -> &'static [&'static str] {
+    if last {
+        &["All levels"]
+    } else {
+        &["Next level", "Levels"]
+    }
+}
+
+pub fn cleared_sheet_for(view: &View, last: bool) -> crate::sizing::Done {
+    crate::sizing::stars_sheet(view, "Level clear!", 130.0, cleared_labels(last))
 }
 
 pub fn panel_rect(view: &View) -> Rect {
@@ -751,6 +763,20 @@ impl Game for Breakout {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_last_level_sheet_has_one_button_per_label() {
+        for (name, v) in crate::sizing::test_views() {
+            for last in [false, true] {
+                let d = cleared_sheet_for(&v, last);
+                assert_eq!(
+                    d.buttons().len(),
+                    cleared_labels(last).len(),
+                    "{name} last={last}"
+                );
+            }
+        }
+    }
+
     use super::*;
 
     fn index() -> crate::art::Index {

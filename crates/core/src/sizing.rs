@@ -96,6 +96,11 @@ impl View {
         Rect::new(self.edge().min(14.0), 8.0, d, d)
     }
 
+    pub fn below_home(&self, gap: f32) -> f32 {
+        let h = self.home();
+        h.y + h.h + gap
+    }
+
     pub fn top_right(&self, i: usize) -> Rect {
         let d = self.tap(56.0);
         let gap = self.gap().min(16.0);

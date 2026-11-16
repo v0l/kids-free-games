@@ -24,6 +24,11 @@ pub const STAGES: [(u32, &str); 3] = [
     (800, "Sky high!"),
 ];
 
+pub fn steer_hint_pos(view: &View) -> Vec2 {
+    let half = 32.0 * view.text_k() * 1.05;
+    vec2(view.w / 2.0, 150.0f32.max(view.below_home(8.0) + half))
+}
+
 pub fn gap_for(score: u32, assist: u32) -> f32 {
     ((80.0 + score as f32 * 0.12).min(185.0) - assist as f32 * 8.0).max(68.0)
 }
@@ -720,6 +725,19 @@ impl Game for Jumper {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_steer_hint_clears_the_home_button_on_every_view() {
+        for (name, v) in crate::sizing::test_views() {
+            let at = steer_hint_pos(&v);
+            let half = 32.0 * v.text_k() * 1.05;
+            assert!(
+                at.y - half >= v.home().y + v.home().h,
+                "{name}: hint at {at:?} under home {:?}",
+                v.home()
+            );
+        }
+    }
 
     fn on_platform(kind: Kind) -> (Jumper, View) {
         let v = View::ipad_landscape();

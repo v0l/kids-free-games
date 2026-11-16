@@ -277,7 +277,7 @@ pub fn draw(g: &Jumper, pen: &mut Pen, view: &View, age: f32) {
                 let pulse = 1.0 + (g.t * 4.0).sin() * 0.04;
                 pen.hint(
                     "Touch left or right to steer",
-                    vec2(view.w / 2.0, 150.0),
+                    steer_hint_pos(view),
                     pulse,
                 );
             }
