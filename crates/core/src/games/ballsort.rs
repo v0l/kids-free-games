@@ -1080,13 +1080,15 @@ pub const WIN_LABELS: [&str; 2] = ["Next level", "Levels"];
 pub const WIN_SKIP_LABELS: [&str; 3] = ["Next level", "Skip ahead", "Levels"];
 
 pub fn win_results(view: &View, labels: &[&str], rank: Option<usize>) -> crate::sizing::Results {
-    crate::sizing::results_for(
+    let (rows, reportable) = crate::sizing::board_shape(GAME, rank);
+    crate::sizing::results_layout_ex(
         view,
-        GAME,
-        rank,
         "Sorted!",
         "Level 10 done, score 100",
         labels,
+        rows,
+        reportable,
+        true,
     )
 }
 

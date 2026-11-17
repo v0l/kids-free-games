@@ -189,6 +189,17 @@ mod imp {
     use super::Insets;
 
     pub fn insets_px() -> Insets {
+        if let Some(v) = crate::web::query("insets") {
+            let p: Vec<f32> = v.split(',').filter_map(|s| s.parse().ok()).collect();
+            if p.len() == 4 {
+                return Insets {
+                    left: p[0],
+                    top: p[1],
+                    right: p[2],
+                    bottom: p[3],
+                };
+            }
+        }
         let k = std::env::var("KG_INSET")
             .ok()
             .and_then(|v| v.parse::<f32>().ok())

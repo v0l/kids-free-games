@@ -6,6 +6,11 @@ OUT=${OUT:-/tmp/kgdpi}
 WAIT=${WAIT:-8}
 SIZES=${SIZES:-"1024x768 1280x720 844x390 390x844"}
 DPIS=${DPIS:-"1 1.25 1.5 2 3"}
+if [ -n "${PHONE:-}" ]; then
+  SIZES=448x997
+  DPIS=2.25
+  EXTRA="--mm 14.33 --insets 0,153,0,63 ${EXTRA:-}"
+fi
 SCENES=${ONLY:-$(grep -oE '^    \(([0-9]+), "' crates/app/src/shots.rs | grep -oE '[0-9]+')}
 mkdir -p "$OUT"
 rt=$(mktemp -d /tmp/agent-wl.XXXX)

@@ -515,6 +515,28 @@ impl Pen {
         self.results_with(view, r, age, board)
     }
 
+    pub fn results_actions_stars(
+        &mut self,
+        view: &View,
+        r: &Results,
+        actions: &[&str],
+        age: f32,
+    ) -> kg_core::sizing::Results {
+        let board = shown_rows(r.game, r.rank);
+        let reportable = board.iter().any(|e| !e.player.is_empty());
+        let lay = kg_core::sizing::results_layout_ex(
+            view,
+            r.title,
+            r.line,
+            actions,
+            board.len(),
+            reportable,
+            true,
+        );
+        self.results_layout(view, r, age, &board, &lay);
+        lay
+    }
+
     pub fn results_actions(
         &mut self,
         view: &View,
@@ -587,18 +609,25 @@ impl Pen {
             if kk > 0.0 {
                 let wob = (age * 6.0).sin() * 0.06;
                 let best = pop.rect(sheet.rect(lay.best));
-                self.trophy(vec2(p.x + 46.0 * k, p.y + 70.0 * k), 92.0 * kk * sheet.k);
-                let st = 70.0 * kk * sheet.k;
+                let tr = pop.rect(lay.trophy_rect());
+                self.trophy(tr.center(), tr.h * 1.15 * kk);
+                let sr = pop.rect(lay.best_star_rect());
+                let st = sr.h * 0.9 * kk;
                 self.ui(
                     "p_star",
-                    Rect::new(p.x + p.w - 90.0 * k, p.y + 30.0 * k, st, st),
+                    Rect::new(
+                        sr.center().x - st / 2.0,
+                        sr.center().y - st / 2.0,
+                        st,
+                        st,
+                    ),
                     Draw::rot(wob),
                 );
                 self.text_outline(
                     "New best!",
                     best.center().x,
                     best.center().y,
-                    30.0 * k * (1.0 + wob * 0.5),
+                    (30.0 * k).min(best.h * 0.75) * (1.0 + wob * 0.5),
                     GOLD_TEXT,
                     Color::from_rgba(130, 50, 0, 255),
                 );
@@ -873,6 +902,49 @@ impl Pen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_win_sheet_parts_never_overlap_each_other_or_home_on_any_view() {
+        for (name, v) in kg_core::sizing::test_views() {
+            for rows in [1usize, 5] {
+                for labels in [&["Next level", "Levels"][..], &["Next level", "Skip ahead", "Levels"][..]] {
+                    let lay = kg_core::sizing::results_layout_ex(
+                        &v, "Sorted!", "Level 7 done, score 540", labels, rows, true, true,
+                    );
+                    let ribbon = lay.sheet.ribbon.unwrap().0;
+                    let stars = lay.stars_rect().unwrap();
+                    let line = lay.sheet.rect(lay.line);
+                    let best = lay.sheet.rect(lay.best);
+                    let parts = [
+                        ("stars", stars),
+                        ("line", line),
+                        ("trophy", lay.trophy_rect()),
+                        ("best star", lay.best_star_rect()),
+                    ];
+                    for (a, ra) in parts {
+                        assert!(
+                            ra.y >= ribbon.y + ribbon.h * 0.55 - 0.5,
+                            "{name}: {a} {ra:?} under ribbon {ribbon:?}"
+                        );
+                        assert!(
+                            !ra.overlaps(&v.home()) || ra.y > v.home().y + v.home().h,
+                            "{name}: {a} {ra:?} under home {:?}",
+                            v.home()
+                        );
+                    }
+                    assert!(
+                        stars.y + stars.h <= line.y + 0.5 && line.y + line.h <= best.y + 0.5,
+                        "{name}: stars {stars:?} line {line:?} best {best:?} out of order"
+                    );
+                    assert!(
+                        lay.trophy_rect().x + lay.trophy_rect().w <= lay.best_star_rect().x,
+                        "{name}: trophy and star collide"
+                    );
+                    assert!(lay.sheet.fits, "{name}: win sheet does not fit with {rows} rows");
+                }
+            }
+        }
+    }
 
     #[test]
     fn results_show_the_top_five_and_your_row_if_lower() {

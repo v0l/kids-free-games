@@ -189,7 +189,7 @@ fn draw_win(g: &BallSort, pen: &mut Pen, view: &View, age: f32) {
     } else {
         vec![next, "Levels"]
     };
-    let lay = pen.results_actions(
+    let lay = pen.results_actions_stars(
         view,
         &Results {
             game: GAME,
@@ -202,16 +202,11 @@ fn draw_win(g: &BallSort, pen: &mut Pen, view: &View, age: f32) {
         &labels,
         age,
     );
-    let s = ease_out_back(age / 0.32).max(0.01);
-    let top = lay.sheet.ribbon.map_or(lay.sheet.panel.y, |r| r.0.y);
-    let size = (84.0 * lay.sheet.k).min(top - 8.0).max(view.touch() * 0.8);
-    star_row(
-        pen,
-        vec2(view.w / 2.0, (top - size * 0.6).max(size * 0.6)),
-        size * s,
-        g.stars,
-        age,
-    );
+    if let Some(area) = lay.stars_rect() {
+        let s = ease_out_back(age / 0.32).max(0.01);
+        let size = (area.h * 0.9).min(area.w / 3.6);
+        star_row(pen, area.center(), size * s, g.stars, age);
+    }
 }
 
 fn hidden_marks(g: &BallSort, pen: &mut Pen, view: &View) {

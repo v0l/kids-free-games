@@ -601,6 +601,7 @@ pub fn results_for(
 
 pub struct Results {
     pub sheet: Sheet,
+    pub stars: Option<usize>,
     pub line: usize,
     pub best: usize,
     pub board: usize,
@@ -629,6 +630,22 @@ impl Results {
     pub fn buttons(&self) -> Vec<Rect> {
         self.sheet.parts[self.action].rects.clone()
     }
+
+    pub fn stars_rect(&self) -> Option<Rect> {
+        self.stars.map(|i| self.sheet.rect(i))
+    }
+
+    pub fn trophy_rect(&self) -> Rect {
+        let b = self.sheet.rect(self.best);
+        let d = b.h;
+        Rect::new(b.x, b.y, d, d)
+    }
+
+    pub fn best_star_rect(&self) -> Rect {
+        let b = self.sheet.rect(self.best);
+        let d = b.h;
+        Rect::new(b.x + b.w - d, b.y, d, d)
+    }
 }
 
 pub fn results_layout(
@@ -639,11 +656,24 @@ pub fn results_layout(
     rows: usize,
     reportable: bool,
 ) -> Results {
+    results_layout_ex(view, title, line, actions, rows, reportable, false)
+}
+
+pub fn results_layout_ex(
+    view: &View,
+    title: &str,
+    line: &str,
+    actions: &[&str],
+    rows: usize,
+    reportable: bool,
+    stars: bool,
+) -> Results {
     let mut n = rows;
     loop {
         let mut s = Stack::new(view, 580.0).ribbon(title);
+        let stars_i = stars.then(|| s.block(84.0));
         let line_i = s.text(34.0, line);
-        let best = s.block(40.0);
+        let best = s.block(56.0);
         let k_guess = view.sheet_w(580.0) / 580.0;
         let min_row = if reportable { view.touch() + 4.0 } else { 0.0 };
         let row_h = (46.0 * k_guess.max(view.text_k()).min(2.4)).max(min_row);
@@ -658,6 +688,7 @@ pub fn results_layout(
             };
             return Results {
                 sheet,
+                stars: stars_i,
                 line: line_i,
                 best,
                 board,
@@ -1096,6 +1127,20 @@ pub fn phone_portrait() -> View {
     )
 }
 
+pub fn pixel_9_pro_xl() -> View {
+    View::device(
+        448.0,
+        997.3,
+        2.25,
+        364.0,
+        Insets {
+            top: 153.0 / 2.25,
+            bottom: 63.0 / 2.25,
+            ..Default::default()
+        },
+    )
+}
+
 pub fn phone_landscape() -> View {
     View::device(
         844.0,
@@ -1143,8 +1188,9 @@ pub fn desktop() -> View {
     View::device(1920.0, 1080.0, 1.0, 96.0, Insets::default())
 }
 
-pub fn test_views() -> [(&'static str, View); 5] {
+pub fn test_views() -> [(&'static str, View); 6] {
     [
+        ("pixel 9 pro xl", pixel_9_pro_xl()),
         ("phone portrait", phone_portrait()),
         ("phone landscape", phone_landscape()),
         ("tablet portrait", tablet_portrait()),
@@ -1292,6 +1338,7 @@ pub fn check_sheet_text(view: &View, dpr: f32, what: &str, sheet: &Sheet) -> Res
 pub fn dpr_of(name: &str) -> f32 {
     match name {
         "phone portrait" | "phone landscape" => 3.0,
+        "pixel 9 pro xl" => 2.25,
         "tablet portrait" | "tablet landscape" => 2.0,
         _ => 1.0,
     }
