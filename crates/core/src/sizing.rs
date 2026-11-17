@@ -1323,6 +1323,15 @@ pub fn check_sheet_text(view: &View, dpr: f32, what: &str, sheet: &Sheet) -> Res
     for p in &sheet.parts {
         if p.rects.is_empty() {
             check_text(view, dpr, what, p.size)?;
+            for l in &p.lines {
+                let w = measure(l, p.size);
+                if w > p.rect.w + 0.5 {
+                    return Err(format!(
+                        "{what}: line {l:?} is {w:.0} wide at {:.0}, room {:.0}",
+                        p.size, p.rect.w
+                    ));
+                }
+            }
         } else {
             for (r, l) in p.rects.iter().zip(&p.lines) {
                 check_text(view, dpr, what, label_size(l, *r))?;
@@ -1429,6 +1438,26 @@ mod tests {
             let (p, _) = panel_layout(&v, "Sky Jumper", &["Tap to jump", "", "Tap to start"]);
             check_sheet(&v, name, &p).unwrap();
             check_sheet_text(&v, dpr_of(name), name, &p).unwrap();
+        }
+    }
+
+    #[test]
+    fn long_result_lines_fit_inside_the_panel_on_every_view() {
+        let lines = [
+            "Score 3400 Lines 12 Level 3",
+            "Squashed by a car! Score 8",
+            "Level 7 done, score 540",
+            "Cleared 40 of 52 bricks",
+            "Reached 6 of 9 blocks",
+            "Level 12, 10 coins",
+            "10 pairs, 13 moves, 3 stars",
+        ];
+        for (name, v) in test_views() {
+            for line in lines {
+                let r = results_layout(&v, "Nice try!", line, &["Try again", "Levels"], 5, true);
+                let what = format!("{name} {line:?}");
+                check_sheet_text(&v, dpr_of(name), &what, &r.sheet).unwrap();
+            }
         }
     }
 

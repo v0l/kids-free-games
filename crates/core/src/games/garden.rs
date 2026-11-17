@@ -347,7 +347,7 @@ pub fn flower_color(level: usize, i: usize, j: usize) -> usize {
 }
 
 pub fn play_region(view: &View) -> Rect {
-    let top = hud_bottom(view) + 130.0 * ui_scale(view);
+    let top = content_top(view) + 130.0 * ui_scale(view);
     let bottom = seed_rects(view)[0].y - 24.0;
     let f = view.full();
     Rect::new(f.x + 40.0, top, f.w - 80.0, (bottom - top).max(120.0))
@@ -369,7 +369,7 @@ pub fn seed_rects(view: &View) -> Vec<Rect> {
 }
 
 pub fn prompt_pos(view: &View) -> Vec2 {
-    vec2(view.w / 2.0, hud_bottom(view) + 34.0 * ui_scale(view))
+    vec2(view.w / 2.0, content_top(view) + 34.0 * ui_scale(view))
 }
 
 pub fn prompt_size(view: &View) -> f32 {
@@ -383,7 +383,13 @@ pub fn prompt_rect(view: &View) -> Rect {
 
 pub fn beds_button(view: &View) -> Rect {
     let k = ui_scale(view);
-    crate::sizing::corner_button(view, "Beds", 160.0 * k, 46.0 * k, 78.0)
+    let y = crate::fx::CHIP_Y + crate::fx::CHIP_H + view.gap().min(10.0);
+    crate::sizing::corner_button(view, "Beds", 160.0 * k, 46.0 * k, y)
+}
+
+pub fn content_top(view: &View) -> f32 {
+    let b = beds_button(view);
+    hud_bottom(view).max(b.y + b.h + view.gap().min(10.0))
 }
 
 pub fn bed_tiles(view: &View) -> Vec<Rect> {

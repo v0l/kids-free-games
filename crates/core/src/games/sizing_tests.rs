@@ -353,6 +353,24 @@ fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
 }
 
 #[test]
+fn garden_question_clears_the_beds_button_and_home_on_every_view() {
+    use super::garden;
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        let b = garden::beds_button(&v);
+        let p = garden::prompt_rect(&v);
+        if p.overlaps(&b) || p.y < v.home().y + v.home().h {
+            bad.push(format!("{name}: prompt {p:?} under beds {b:?} or home"));
+        }
+        let region = garden::play_region(&v);
+        if region.y < b.y + b.h {
+            bad.push(format!("{name}: play region {region:?} under beds {b:?}"));
+        }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
 fn every_game_menu_and_modal_is_twelve_mm_and_fits() {
     crate::save::reset_for_test();
     crate::profile::create("Mia", 0);

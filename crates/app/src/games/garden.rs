@@ -10,7 +10,7 @@ use kg_core::engine::{Game, Input, View};
 use kg_core::fx::{ease_out_back, Side};
 use kg_core::games::garden::*;
 use kg_core::geom::{darker, with_alpha, Color, Rect, WHITE};
-use kg_core::learn::{hud_bottom, ui_scale};
+use kg_core::learn::ui_scale;
 
 pub const KEY: &str = GAME;
 pub const SHEET: &str = "garden";
@@ -75,7 +75,7 @@ fn draw_pips(g: &Garden, pen: &mut Pen, view: &View) {
     let have = if g.stage == 2 { g.run } else { g.stage_run } as usize;
     let r = 11.0 * k;
     let gap = r * 2.7;
-    let y = hud_bottom(view) + 92.0 * k;
+    let y = content_top(view) + 92.0 * k;
     let x0 = view.w / 2.0 - gap * (n as f32 - 1.0) / 2.0;
     for i in 0..n {
         let c = vec2(x0 + i as f32 * gap, y);

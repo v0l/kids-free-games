@@ -153,7 +153,7 @@ pub fn tall(view: &View) -> bool {
 }
 
 pub fn hud_bottom(view: &View) -> f32 {
-    30.0 + 64.0 * ui_scale(view)
+    (30.0 + 64.0 * ui_scale(view)).max(view.hud_top())
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
