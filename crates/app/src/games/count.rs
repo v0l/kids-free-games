@@ -388,10 +388,9 @@ pub fn draw(g: &Count, pen: &mut Pen, view: &View) {
     draw_buttons(g, pen, view);
     if g.first_time && g.mode == Mode::Play {
         let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
-        let y = button_rects(view, g.question.options.len())[0].y - 36.0;
         pen.hint(
             "Tap each one to count, then pick the number",
-            vec2(view.w / 2.0, y),
+            kg_core::games::count::hint_pos(view, g.question.options.len()),
             pulse,
         );
     }

@@ -322,7 +322,8 @@ fn draw_won_stars(g: &Stack, pen: &mut Pen, view: &View, age: f32) {
 
 fn draw_picker(g: &Stack, pen: &mut Pen, view: &View) {
     let open = kg_core::profile::unlocked(KEY).max(1);
-    pen.ribbon(view, "Pick a level", vec2(view.w / 2.0, 72.0), g.time);
+    let (at, k) = kg_core::games::helix::select_ribbon(view);
+    pen.ribbon_k(view, "Pick a level", at, g.time, k);
     let total = kg_core::profile::total_stars(KEY);
     pen.chip(
         view,

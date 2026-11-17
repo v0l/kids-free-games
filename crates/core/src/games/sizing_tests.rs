@@ -317,7 +317,7 @@ fn every_learning_top_bar_fits_between_home_and_levels() {
 
 #[test]
 fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
-    use super::{helix, jumper, merge};
+    use super::{count, helix, jumper, merge};
     let pill = |v: &View, at: glam::Vec2| {
         let half = 32.0 * v.text_k() * 1.05;
         Rect::new(at.x - 160.0, at.y - half, 320.0, half * 2.0)
@@ -331,6 +331,11 @@ fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
                 "helix ready hint",
                 pill(&v, helix::ready_hint_pos(&v)),
                 vec![helix::levels_button(&v)],
+            ),
+            (
+                "count hint",
+                pill(&v, count::hint_pos(&v, 3)),
+                count::button_rects(&v, 3),
             ),
             (
                 "merge hint",
@@ -366,6 +371,51 @@ fn garden_question_clears_the_beds_button_and_home_on_every_view() {
         if region.y < b.y + b.h {
             bad.push(format!("{name}: play region {region:?} under beds {b:?}"));
         }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
+fn the_2048_board_clears_the_hint_and_buttons_on_every_view() {
+    use super::merge;
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        let l = merge::Layout::new(&v, 4);
+        let board = Rect::new(l.origin.x, l.origin.y, l.size, l.size);
+        let (a, b) = merge::bottom_buttons(&v);
+        let hint = merge::hint_pos(&v);
+        let half = 32.0 * v.text_k() * 1.05;
+        if board.y + board.h > hint.y - half {
+            bad.push(format!("{name}: board {board:?} under hint at {hint:?}"));
+        }
+        if board.overlaps(&a) || board.overlaps(&b) {
+            bad.push(format!("{name}: board {board:?} under buttons"));
+        }
+        if board.y < v.home().y + v.home().h {
+            bad.push(format!("{name}: board {board:?} under home"));
+        }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
+fn level_pickers_start_below_their_ribbon_on_every_view() {
+    use super::{ballsort, garden, helix, memory, stack};
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        let h = helix::select_ribbon_bottom(&v);
+        let mut check = |what: &str, top: f32, floor: f32| {
+            if top < floor - 6.0 {
+                bad.push(format!("{name}: {what} starts at {top:.0}, ribbon ends at {floor:.0}"));
+            }
+        };
+        let top_of = |cells: &[Rect]| cells.iter().map(|r| r.y).fold(f32::MAX, f32::min);
+        let hl = helix::select_layout(&v);
+        check("helix picker", top_of(&hl.cells), h);
+        check("ballsort picker", top_of(&ballsort::select_layout(&v).cells), h);
+        check("stack picker", top_of(&stack::picker_layout(&v)), h);
+        check("memory picker", top_of(&memory::Memory::tiles(&v)), memory::Memory::title_bottom(&v));
+        check("garden picker", top_of(&garden::bed_tiles(&v)), garden::beds_ribbon_bottom(&v));
     }
     assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
 }

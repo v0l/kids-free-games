@@ -77,7 +77,8 @@ fn levels_pill(pen: &mut Pen, view: &View) {
 }
 
 fn draw_select(g: &Helix, pen: &mut Pen, view: &View) {
-    pen.ribbon(view, "Pick a level", vec2(view.w / 2.0, 84.0), g.t);
+    let (at, k) = kg_core::games::helix::select_ribbon(view);
+    pen.ribbon_k(view, "Pick a level", at, g.t, k);
     pen.chip(
         view,
         Side::Right,

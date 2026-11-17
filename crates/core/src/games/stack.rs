@@ -585,7 +585,9 @@ pub fn close_button(view: &View) -> Rect {
 }
 
 pub fn picker_layout(view: &View) -> Vec<Rect> {
-    let top = 140.0f32.min(view.h * 0.19);
+    let top = 140.0f32
+        .min(view.h * 0.19)
+        .max(super::helix::select_ribbon_bottom(view));
     let m = 30.0f32.min(view.edge() * 2.0);
     let area = Rect::new(m, top, view.w - 2.0 * m, view.h - top - m);
     let cols = if view.w >= view.h { 8 } else { 4 };

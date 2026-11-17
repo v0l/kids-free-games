@@ -355,6 +355,11 @@ impl Memory {
         crate::sizing::corner_button(view, "Levels", 140.0, 48.0, 12.0)
     }
 
+    pub fn title_bottom(view: &View) -> f32 {
+        let h = crate::sizing::ribbon_h(view, "Memory Match", 1.0);
+        view.hud_top() + h
+    }
+
     pub fn tiles(view: &View) -> Vec<Rect> {
         let wide = view.w >= view.h;
         let cols = if wide { 5 } else { 3 };
@@ -362,7 +367,8 @@ impl Memory {
         let w = ((view.w - 60.0 - gap * (cols as f32 - 1.0)) / cols as f32).min(200.0);
         let h = w * 1.3;
         let rows = LEVELS.len().div_ceil(cols);
-        let top = view.h / 2.0 - (rows as f32 * h + (rows as f32 - 1.0) * gap) / 2.0 + 20.0;
+        let top = (view.h / 2.0 - (rows as f32 * h + (rows as f32 - 1.0) * gap) / 2.0 + 20.0)
+            .max(Self::title_bottom(view) + 20.0);
         (0..LEVELS.len())
             .map(|i| {
                 let row = i / cols;

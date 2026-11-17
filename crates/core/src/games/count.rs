@@ -234,6 +234,12 @@ pub fn play_area(view: &View) -> Rect {
     Rect::new(50.0, top, view.w - 100.0, bottom - top)
 }
 
+pub fn hint_pos(view: &View, n: usize) -> Vec2 {
+    let top = button_rects(view, n)[0].y;
+    let half = 32.0 * view.text_k() * 1.05;
+    vec2(view.w / 2.0, top - view.gap() - half)
+}
+
 pub fn button_rects(view: &View, n: usize) -> Vec<Rect> {
     let gap = 24.0;
     let h = button_height(view);

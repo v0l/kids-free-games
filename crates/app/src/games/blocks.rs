@@ -296,7 +296,8 @@ pub fn draw(g: &Blocks, pen: &mut Pen, view: &View, ready_age: f32, results_age:
     let bar = if side {
         Rect::new(panel_x, panel_y + 486.0, 190.0, 28.0)
     } else {
-        Rect::new(o.x, 34.0, bw * 0.32, 26.0)
+        let x = o.x.max(kg_core::fx::hud_left(view));
+        Rect::new(x, 34.0, (o.x + bw * 0.32 - x).max(bw * 0.2), 26.0)
     };
     draw_progress(g, pen, bar);
     pen.particles(&g.fx);

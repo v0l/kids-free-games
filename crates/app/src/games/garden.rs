@@ -177,7 +177,7 @@ fn draw_seeds(g: &Garden, pen: &mut Pen, view: &View) {
 }
 
 fn draw_beds(g: &Garden, pen: &mut Pen, view: &View) {
-    pen.ribbon(view, "Pick a flower bed", vec2(view.w / 2.0, 90.0), g.t);
+    pen.ribbon(view, "Pick a flower bed", beds_ribbon_pos(view), g.t);
     let open = unlocked_level();
     for (i, r) in bed_tiles(view).iter().enumerate() {
         let can = i <= open;

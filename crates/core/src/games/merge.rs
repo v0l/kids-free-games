@@ -533,8 +533,11 @@ pub struct Layout {
 
 impl Layout {
     pub fn new(view: &View, n: usize) -> Self {
-        let top = 160.0;
-        let avail = (view.h - top - 70.0).max(100.0);
+        let top = 160.0f32.max(view.hud_top() + 90.0);
+        let (a, b) = bottom_buttons(view);
+        let hint_room = 32.0 * view.text_k() * 2.1 + view.gap();
+        let bottom_reserved = view.h - a.y.min(b.y) + hint_room;
+        let avail = (view.h - top - bottom_reserved.max(70.0)).max(100.0);
         let size = (avail / 1.15).min(view.w - 140.0);
         let origin = vec2((view.w - size) / 2.0, top + (avail - size) / 2.0);
         let gap = size * if n <= 3 { 0.04 } else { 0.03 };

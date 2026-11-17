@@ -392,8 +392,18 @@ pub fn content_top(view: &View) -> f32 {
     hud_bottom(view).max(b.y + b.h + view.gap().min(10.0))
 }
 
+pub fn beds_ribbon_pos(view: &View) -> Vec2 {
+    crate::sizing::ribbon_clear_of_home(view, "Pick a flower bed", vec2(view.w / 2.0, 90.0))
+}
+
+pub fn beds_ribbon_bottom(view: &View) -> f32 {
+    let c = beds_ribbon_pos(view);
+    let h = crate::sizing::ribbon_h(view, "Pick a flower bed", 1.0);
+    c.y + h / 2.0 + view.gap().min(8.0)
+}
+
 pub fn bed_tiles(view: &View) -> Vec<Rect> {
-    let top = 150.0f32.min(view.h * 0.2);
+    let top = 150.0f32.min(view.h * 0.2).max(beds_ribbon_bottom(view));
     let bottom = play_button(view).y - view.gap();
     let area = Rect::new(
         40.0f32.min(view.edge() * 2.0),

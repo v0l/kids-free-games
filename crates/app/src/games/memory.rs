@@ -240,7 +240,10 @@ fn draw_select(g: &Memory, pen: &mut Pen, view: &View) {
     pen.ribbon(
         view,
         "Memory Match",
-        vec2(view.w / 2.0, tiles[0].y - 70.0),
+        vec2(
+            view.w / 2.0,
+            (tiles[0].y - 70.0).max(Memory::title_bottom(view) - 20.0),
+        ),
         g.t,
     );
     pen.chip(

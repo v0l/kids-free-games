@@ -1099,9 +1099,9 @@ pub struct SelectLayout {
 
 pub fn select_layout(view: &View) -> SelectLayout {
     let stacked = select_try(view, false);
-    let fits =
-        stacked.cells.iter().all(|c| c.y >= 0.0) && stacked.play.y + stacked.play.h <= view.h;
-    if fits || view.portrait() {
+    let fits = stacked.cells.iter().all(|c| c.y >= super::helix::select_ribbon_bottom(view))
+        && stacked.play.y + stacked.play.h <= view.h;
+    if fits {
         stacked
     } else {
         select_try(view, true)
@@ -1110,25 +1110,25 @@ pub fn select_layout(view: &View) -> SelectLayout {
 
 fn select_try(view: &View, tucked: bool) -> SelectLayout {
     let n = MAX_LEVEL as usize;
-    let gap = 10.0f32.max(view.key_gap());
+    let gap = 10.0f32.max(view.from_mm(0.6));
     let ph = view.tap(76.0);
-    let m = view.edge().max(16.0);
+    let m = view.edge().clamp(8.0, 16.0);
     let pw0 = (320.0 * view.text_k()).min(view.w - 2.0 * view.edge());
     let grid_w = view.w - 2.0 * m;
     let below = if tucked { 0.0 } else { 24.0 + ph };
+    let ribbon_bottom = super::helix::select_ribbon_bottom(view);
     let head = if tucked {
-        view.hud_top()
+        ribbon_bottom
     } else {
-        170.0f32.min(view.h * 0.2).max(view.hud_top())
+        170.0f32.min(view.h * 0.2).max(ribbon_bottom)
     };
-    let fit_cols = (((grid_w + gap) / (view.touch() + gap)).floor() as usize).max(1);
-    let fit_rows =
-        (((view.h - head - below - m + gap) / (view.touch() + gap)).floor() as usize).max(1);
+    let min_cell = view.touch();
+    let fit_cols = (((grid_w + gap) / (min_cell + gap)).floor() as usize).max(1);
+    let fit_rows = (((view.h - head - below - m + gap) / (min_cell + gap)).floor() as usize).max(1);
     let spare = |cols: usize| if tucked { 2usize.min(cols) } else { 0 };
-    let cols = (GRID_COLS..=fit_cols.max(GRID_COLS))
+    let cols = (GRID_COLS.min(fit_cols)..=fit_cols)
         .find(|c| (n + spare(*c)).div_ceil(*c) <= fit_rows)
-        .unwrap_or(fit_cols)
-        .min(fit_cols);
+        .unwrap_or(fit_cols);
     let rows = (n + spare(cols)).div_ceil(cols);
     let cell = ((grid_w / cols as f32) - gap)
         .min(((view.h - head - below - m) / rows as f32) - gap)
@@ -1138,7 +1138,7 @@ fn select_try(view: &View, tucked: bool) -> SelectLayout {
     let gh = rows as f32 * (cell + gap) - gap;
     let total = gh + below;
     let top = ((view.h - total) / 2.0 + if tucked { 0.0 } else { 50.0 })
-        .max(head.min(view.h - total - m))
+        .max(head)
         .min(view.h - total - m);
     let left = (view.w - gw) / 2.0;
     let cells = (0..n)
