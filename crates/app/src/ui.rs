@@ -165,6 +165,10 @@ pub fn chip_rect(view: &View, side: Side, label: &str, value: &str) -> Rect {
     kg_core::fx::chip_rect(view, side, label, value)
 }
 
+pub fn row_k(row: Rect, row_h: f32, s: f32) -> f32 {
+    (row_h / 46.0 * s).min(row.w / 540.0)
+}
+
 pub struct RowText {
     pub name: String,
     pub name_rect: Rect,
@@ -599,10 +603,10 @@ impl Pen {
                 );
             }
         }
-        let rk = lay.row_h / 46.0 * s;
         for (i, e) in board.iter().take(lay.rows).enumerate() {
             let la = a(0.2 + i as f32 * 0.05);
             let row = pop.rect(lay.row(i));
+            let rk = row_k(row, lay.row_h, s);
             if e.mine {
                 self.round_rect(
                     row,
@@ -624,7 +628,11 @@ impl Pen {
             if e.place == 1 {
                 self.crown(vec2(row.x + 26.0 * rk, cy - row.h * 0.55), txt);
             }
-            self.avatar(e.avatar, vec2(row.x + 72.0 * rk, cy), row.h * 0.95);
+            self.avatar(
+                e.avatar,
+                vec2(row.x + 72.0 * rk, cy),
+                (row.h * 0.95).min(46.0 * rk),
+            );
             let sc = (r.format)(e.score);
             let st = (30.0 * rk).min(row.h * 0.7);
             let sw = measure(&sc, st);
@@ -919,11 +927,28 @@ mod tests {
     }
 
     #[test]
+    fn short_names_stay_readable_next_to_score_and_report_icon_on_every_view() {
+        for (name, v) in kg_core::sizing::test_views() {
+            let lay = kg_core::sizing::results_layout(&v, "Munched!", "x", &["Again"], 5, true);
+            let rk = row_k(lay.row(0), lay.row_h, 1.0);
+            let txt = (26.0 * rk).min(lay.row_h * 0.62);
+            let st = (30.0 * rk).min(lay.row_h * 0.7);
+            for n in ["Kiera", "Camilla", "Mia"] {
+                let row = lay.row(0);
+                let sw = measure("52", st);
+                let hit = lay.report_hit(row, sw);
+                let p = RowText::new(row, rk, txt, n, sw, Some(hit));
+                assert_eq!(p.name, n, "{name}: {n} truncated, row {row:?} hit {hit:?}");
+            }
+        }
+    }
+
+    #[test]
     fn names_never_run_under_the_score_or_report_icon_on_any_view() {
         for (name, v) in kg_core::sizing::test_views() {
             let lay = kg_core::sizing::results_layout(&v, "Ouch!", "x", &["Again"], 5, true);
             let s = 1.0;
-            let rk = lay.row_h / 46.0 * s;
+            let rk = row_k(lay.row(0), lay.row_h, s);
             let txt = (26.0 * rk).min(lay.row_h * 0.62);
             let st = (30.0 * rk).min(lay.row_h * 0.7);
             for n in ["Kiera", "Mob", "Deucalion the Great", "Parmesan Pete"] {

@@ -594,6 +594,7 @@ pub struct Results {
     pub action: usize,
     pub rows: usize,
     pub row_h: f32,
+    pub touch: f32,
 }
 
 impl Results {
@@ -603,7 +604,7 @@ impl Results {
     }
 
     pub fn report_hit(&self, row: Rect, score_w: f32) -> Rect {
-        let d = row.h.max(48.0 * self.sheet.k);
+        let d = self.touch;
         Rect::new(
             row.x + row.w - score_w - d - 18.0 * self.sheet.k,
             row.y,
@@ -650,6 +651,7 @@ pub fn results_layout(
                 action,
                 rows: n,
                 row_h,
+                touch: view.touch(),
             };
         }
         n -= 1;

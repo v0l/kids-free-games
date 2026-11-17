@@ -223,13 +223,13 @@ pub struct TowerLayout {
 }
 
 pub fn over_buttons(view: &View) -> (Rect, Rect) {
-    let d = view.tap(72.0);
+    let (w, d) = crate::sizing::label_button(view, "Modes", 72.0);
     (
         view.rect(),
         Rect::new(
             view.edge().min(20.0),
             view.h - d - 20.0 - view.inset.bottom.min(30.0),
-            d,
+            w,
             d,
         ),
     )

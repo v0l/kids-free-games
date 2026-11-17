@@ -1108,7 +1108,7 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
             PLUM,
         );
     }
-    pen.painted_round(menu, "icon_home", 0.0);
+    pen.painted_button(menu, "Modes", Tone::Blue, 0.0, 1.0);
 }
 
 fn rank_line(o: &kg_core::games::clash::Outcome) -> String {
