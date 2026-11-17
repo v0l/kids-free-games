@@ -335,7 +335,8 @@ impl Pen {
     }
 
     pub fn ribbon(&mut self, view: &View, title: &str, c: Vec2, t: f32) {
-        self.ribbon_k(view, title, c, t, 1.0);
+        let at = kg_core::sizing::ribbon_clear_of_home(view, title, c);
+        self.ribbon_k(view, title, at, t, 1.0);
     }
 
     pub fn ribbon_k(&mut self, view: &View, title: &str, c: Vec2, t: f32, k: f32) {

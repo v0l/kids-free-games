@@ -105,6 +105,12 @@ fn all_problems(v: &View) -> Vec<String> {
     let tw = clash::tower_layout(v);
     t("clash tower", &[tw.prev, tw.next, tw.play, tw.back]);
     t("clash over", &[clash::over_buttons(v).1]);
+    t("clash tower modes", &[clash::modes_button(v)]);
+    t(
+        "runner dead levels",
+        &[runner::dead_levels_button(v, runner::GAME, "Oh no!", None)],
+    );
+    t("runner win levels", &[runner::win_levels_button(v)]);
     t("count levels", &count::level_tiles(v));
     t("count play", &[count::play_button(v)]);
     t("count levels button", &[count::levels_button(v)]);
@@ -307,6 +313,43 @@ fn every_learning_top_bar_fits_between_home_and_levels() {
         bad.len(),
         bad.join("\n")
     );
+}
+
+#[test]
+fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
+    use super::{helix, jumper, merge};
+    let pill = |v: &View, at: glam::Vec2| {
+        let half = 32.0 * v.text_k() * 1.05;
+        Rect::new(at.x - 160.0, at.y - half, 320.0, half * 2.0)
+    };
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        let home = v.home();
+        let cases = [
+            ("jumper steer hint", pill(&v, jumper::steer_hint_pos(&v)), vec![home]),
+            (
+                "helix ready hint",
+                pill(&v, helix::ready_hint_pos(&v)),
+                vec![helix::levels_button(&v)],
+            ),
+            (
+                "merge hint",
+                pill(&v, merge::hint_pos(&v)),
+                {
+                    let (a, b) = merge::bottom_buttons(&v);
+                    vec![a, b]
+                },
+            ),
+        ];
+        for (what, p, others) in cases {
+            for o in others {
+                if p.overlaps(&o) {
+                    bad.push(format!("{name}: {what} {p:?} overlaps {o:?}"));
+                }
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
 }
 
 #[test]

@@ -238,7 +238,7 @@ fn draw_hint(g: &Merge, pen: &mut Pen, view: &View) {
         return;
     };
     let pulse = 0.85 + (g.t * 5.0).sin() * 0.03;
-    pen.hint(&label, vec2(view.w / 2.0, view.h - 40.0), pulse);
+    pen.hint(&label, kg_core::games::merge::hint_pos(view), pulse);
 }
 
 fn draw_buttons(g: &Merge, pen: &mut Pen, view: &View) {

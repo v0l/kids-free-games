@@ -553,7 +553,12 @@ impl Game for Helix {
                     }
                 }
                 if self.end_t > 0.7 && input.pressed {
-                    if levels_button(view).contains(input.pos) {
+                    let levels = if self.state == State::Won {
+                        win_levels_button(view)
+                    } else {
+                        dead_levels_button(view, GAME, "Splat!", self.rank)
+                    };
+                    if levels.contains(input.pos) {
                         sfx::play(Sfx::Tap);
                         self.open_select();
                     } else if self.state == State::Won {
@@ -581,7 +586,19 @@ pub struct SelectLayout {
 }
 
 pub fn win_sheet(view: &View) -> crate::sizing::Done {
-    crate::sizing::done_layout(view, "Hooray!", &["Next level"])
+    crate::sizing::done_layout(view, "Hooray!", &WIN_LABELS)
+}
+
+pub const WIN_LABELS: [&str; 2] = ["Next level", "Levels"];
+pub const DEAD_LABELS: [&str; 2] = ["Try again", "Levels"];
+
+pub fn win_levels_button(view: &View) -> Rect {
+    win_sheet(view).button(1)
+}
+
+pub fn dead_levels_button(view: &View, game: &str, title: &str, rank: Option<usize>) -> Rect {
+    crate::sizing::results_for(view, game, rank, title, "Level 1, score 0", &DEAD_LABELS)
+        .buttons()[1]
 }
 
 pub fn select_layout(view: &View) -> SelectLayout {
@@ -649,6 +666,12 @@ fn select_try(view: &View, tucked: bool) -> SelectLayout {
 
 pub fn levels_button(view: &View) -> Rect {
     crate::sizing::bottom_button(view, "Levels", 190.0, 54.0)
+}
+
+pub fn ready_hint_pos(view: &View) -> Vec2 {
+    let half = 32.0 * view.text_k() * 1.05;
+    let above = levels_button(view).y - view.gap() - half;
+    vec2(view.w / 2.0, (view.h * 0.8).min(above))
 }
 
 pub fn floor_tile(hue: f32) -> &'static str {

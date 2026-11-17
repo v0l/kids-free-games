@@ -7,7 +7,8 @@ use crate::game3d::World3d;
 use crate::paint::Pen;
 use crate::ui::{Tone, BODY, GOLD_TEXT, INK};
 use glam::{vec2, vec3, Vec2};
-use kg_core::engine::{Game, Input, View, HUD_LEFT};
+use kg_core::engine::{Game, Input, View};
+use kg_core::fx::hud_left;
 use kg_core::fx::{ease_out_back, ease_out_cubic, popup_scale, Particle};
 use kg_core::games::paper::arena::{clock_label, score, score_label};
 use kg_core::games::paper::camera;
@@ -155,10 +156,10 @@ fn skull(pen: &mut Pen, c: Vec2, r: f32, col: Color) {
     }
 }
 
-fn draw_share(g: &Paper, pen: &mut Pen) {
+fn draw_share(g: &Paper, pen: &mut Pen, view: &View) {
     let pct = g.share(0) * 100.0;
     let k = g.bump.scale(0.12);
-    let r = Rect::new(HUD_LEFT, 12.0, 250.0, 46.0);
+    let r = Rect::new(hud_left(view), 12.0, 250.0, 46.0);
     pill(pen, r, navy());
     let fill = (g.share(0) / 0.5).clamp(0.0, 1.0);
     let w = (r.w * fill).max(r.h * 0.9).min(r.w);
@@ -178,7 +179,7 @@ fn draw_share(g: &Paper, pen: &mut Pen) {
         format!("{pct:.1} %")
     };
     pen.text_outline(&label, r.x + r.w / 2.0, r.center().y, 30.0 * k, WHITE, INK);
-    let kills = Rect::new(HUD_LEFT, r.y + r.h + 10.0, 118.0, 40.0);
+    let kills = Rect::new(hud_left(view), r.y + r.h + 10.0, 118.0, 40.0);
     pill(pen, kills, Color::new(1.0, 1.0, 1.0, 0.92));
     skull(pen, vec2(kills.x + 24.0, kills.center().y), 14.0, navy());
     pen.text_left(
@@ -188,7 +189,7 @@ fn draw_share(g: &Paper, pen: &mut Pen) {
         28.0,
         navy(),
     );
-    let left = Rect::new(HUD_LEFT, kills.y + kills.h + 10.0, 196.0, 36.0);
+    let left = Rect::new(hud_left(view), kills.y + kills.h + 10.0, 196.0, 36.0);
     pill(pen, left, Color::new(0.08, 0.1, 0.2, 0.55));
     let n = g.rivals_left();
     let label = if n == 1 {
@@ -485,7 +486,7 @@ pub fn draw(g: &Paper, pen: &mut Pen, view: &View) {
         State::Playing => {
             draw_arrows(g, pen, view);
             crate::stick::draw_stick(pen, &g.stick);
-            draw_share(g, pen);
+            draw_share(g, pen, view);
             draw_board(g, pen, view);
             draw_minimap(g, pen, view);
             draw_feed(g, pen, view);

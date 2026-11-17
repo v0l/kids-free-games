@@ -3,7 +3,7 @@ use crate::draw::{Draw, PLUM};
 use crate::paint::Pen;
 use crate::ui::{plain_score, Results};
 use glam::{vec2, Vec2};
-use kg_core::engine::{Game, Input, View, HUD_LEFT};
+use kg_core::engine::{Game, Input, View};
 use kg_core::fx::ease_out_back;
 use kg_core::games::fruit::*;
 use kg_core::geom::{Color, Rect, WHITE};
@@ -220,7 +220,7 @@ fn draw_hud(g: &Fruit, pen: &mut Pen, view: &View) {
     draw_level_bar(g, pen, view);
     pen.text_outline(
         &g.score.to_string(),
-        HUD_LEFT + 50.0,
+        kg_core::fx::hud_left(view) + 50.0,
         50.0,
         60.0 * g.score_bump.scale(0.35),
         GOLD,

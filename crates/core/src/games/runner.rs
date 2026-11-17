@@ -7,7 +7,10 @@ use crate::input::clear_swipe;
 use crate::sfx::{self, Sfx};
 use glam::{vec2, vec3, Vec2, Vec3};
 
-pub use super::helix::{levels_button, select_layout, win_sheet, SelectLayout};
+pub use super::helix::{
+    dead_levels_button, levels_button, ready_hint_pos, select_layout, win_levels_button, win_sheet,
+    SelectLayout, DEAD_LABELS, WIN_LABELS,
+};
 
 pub const GAME: &str = "runner";
 pub const MAX_LEVEL: u32 = 30;
@@ -1084,7 +1087,12 @@ impl Game for Runner {
                 }
                 let go = self.end_t > 0.8 && (input.pressed || input.action);
                 if go {
-                    if input.pressed && levels_button(view).contains(input.pos) {
+                    let levels = if self.state == State::Won {
+                        win_levels_button(view)
+                    } else {
+                        dead_levels_button(view, GAME, "Oh no!", self.rank)
+                    };
+                    if input.pressed && levels.contains(input.pos) {
                         sfx::play(Sfx::Tap);
                         self.open_select();
                     } else if self.state == State::Won {

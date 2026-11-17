@@ -168,7 +168,7 @@ fn draw_win(g: &Helix, pen: &mut Pen, view: &View) {
     };
     let line = format!("Level {} done!", g.level);
     let score = format!("Score {}   Best {}", g.score, g.best.0);
-    let (pop, k) = pen.done_sheet(view, &d, "Hooray!", &line, &score, &[label], age);
+    let (pop, k) = pen.done_sheet(view, &d, "Hooray!", &line, &score, &[label, "Levels"], age);
     let a = |t: f32| ((age - t) / 0.2).clamp(0.0, 1.0);
     let pops = [0usize, 1, 2].map(|i| {
         if i < g.stars as usize {
@@ -241,16 +241,17 @@ pub fn draw(g: &Helix, pen: &mut Pen, view: &View, results_age: f32) {
     pen.chip(view, Side::Left, "LEVEL", &g.level.to_string(), 1.0);
     pen.chip(view, Side::Right, "BEST", &g.best.0.to_string(), 1.0);
     let pulse = 1.0 + (g.t * 3.0).sin() * 0.03;
-    let at = vec2(view.w / 2.0, view.h * 0.8);
+    let at = ready_hint_pos(view);
+    let at_play = vec2(view.w / 2.0, view.h * 0.8);
     match g.state {
         State::Ready => {
             pen.hint("Tap, then drag sideways to spin the tower", at, pulse);
             levels_pill(pen, view);
         }
-        State::Playing if !g.taught => pen.hint("Line up the hole to drop through!", at, pulse),
+        State::Playing if !g.taught => pen.hint("Line up the hole to drop through!", at_play, pulse),
         State::Dead if g.end_t > 0.5 => {
             let line = format!("Level {}, score {}", g.level, g.score);
-            pen.results(
+            pen.results_actions(
                 view,
                 &Results {
                     game: GAME,
@@ -260,13 +261,12 @@ pub fn draw(g: &Helix, pen: &mut Pen, view: &View, results_age: f32) {
                     action: "Try again",
                     format: plain_score,
                 },
+                &DEAD_LABELS,
                 results_age,
             );
-            levels_pill(pen, view);
         }
         State::Won if g.end_t > WIN_DELAY => {
             draw_win(g, pen, view);
-            levels_pill(pen, view);
         }
         _ => {}
     }

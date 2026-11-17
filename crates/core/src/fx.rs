@@ -299,10 +299,15 @@ const CHIP_VALUE: f32 = 34.0;
 const CHIP_PAD: f32 = 16.0;
 pub const INK: Color = Color::new(0.16, 0.12, 0.24, 1.0);
 
+pub fn hud_left(view: &View) -> f32 {
+    let h = view.home();
+    HUD_LEFT.max(h.x + h.w + 8.0)
+}
+
 pub fn chip_rect(view: &View, side: Side, label: &str, value: &str) -> Rect {
     let w = chip_width(label, value);
     let x = match side {
-        Side::Left => HUD_LEFT,
+        Side::Left => hud_left(view),
         Side::Right => view.w - 14.0 - w,
     };
     Rect::new(x, CHIP_Y, w, CHIP_H)

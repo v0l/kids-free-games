@@ -673,7 +673,7 @@ fn draw_hud(g: &Clash, pen: &mut Pen, view: &View) {
     let p = g.world.player();
     pen.chip(view, Side::Left, "LV", &p.level().to_string(), g.bump.t);
     let w = 220.0f32.min(view.w * 0.34);
-    let bar = Rect::new(90.0, 70.0, w, 16.0);
+    let bar = Rect::new(kg_core::fx::hud_left(view), 70.0, w, 16.0);
     pen.round_rect(bar, 8.0, Color::new(0.1, 0.06, 0.25, 0.55));
     let fill = level_progress(p.xp).max(0.04);
     pen.round_rect(
@@ -1058,7 +1058,7 @@ fn draw_tower(g: &Clash, pen: &mut Pen, view: &View) {
         pen.circle(vec2(x, y), if on { 9.0 } else { 6.0 }, col);
     }
     pen.painted_button(l.play, "Play", Tone::Green, 0.0, 1.0);
-    pen.painted_round(l.back, "icon_home", 0.0);
+    pen.painted_button(l.back, "Modes", Tone::Blue, 0.0, 1.0);
 }
 
 fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
@@ -1079,7 +1079,7 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
         ),
         (Mode::Arena, _) => ("Munched!", format!("Level {}", o.level), "Play again"),
     };
-    pen.results(
+    let lay = pen.results(
         view,
         &Results {
             game: GAME,
@@ -1093,9 +1093,17 @@ fn draw_over(g: &Clash, pen: &mut Pen, view: &View, age: f32) {
     );
     if !o.new_skins.is_empty() {
         let k = ease_out_back(((age - 0.5) / 0.4).clamp(0.0, 1.0));
-        let y = 64.0 + (1.0 - k) * -40.0;
-        let w = 280.0 * k;
-        let r = Rect::new(view.w / 2.0 - w / 2.0, y, w, 130.0 * k);
+        let panel = lay.sheet.panel;
+        let ribbon_top = lay.sheet.ribbon.map_or(panel.y, |(r, _)| r.y);
+        let w = 280.0f32.min(view.w - 24.0) * k;
+        let h = 130.0 * k;
+        let above = ribbon_top - h - 8.0;
+        let y = if above >= view.hud_top() {
+            above
+        } else {
+            panel.y + panel.h + 8.0
+        };
+        let r = Rect::new(view.w / 2.0 - w / 2.0, y, w, h);
         pen.painted_panel(r, WHITE);
         let s = SKINS[o.new_skins[0]];
         draw_skin_preview(pen, s, r.center() + vec2(0.0, 6.0), 0.3 * k, g.t);

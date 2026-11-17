@@ -560,7 +560,13 @@ impl Layout {
 }
 
 pub fn chip_x(view: &View) -> f32 {
-    (view.w / 2.0 - 360.0).max(HUD_LEFT)
+    (view.w / 2.0 - 360.0).max(crate::fx::hud_left(view))
+}
+
+pub fn hint_pos(view: &View) -> Vec2 {
+    let (a, b) = bottom_buttons(view);
+    let half = 32.0 * view.text_k() * 1.05;
+    vec2(view.w / 2.0, a.y.min(b.y) - view.gap() - half)
 }
 
 pub fn bottom_buttons(view: &View) -> (Rect, Rect) {

@@ -2,6 +2,7 @@ use crate::engine::View;
 use crate::font::measure;
 use crate::geom::Rect;
 use crate::safe::Insets;
+use glam::Vec2;
 
 pub const TOUCH_MM: f32 = 12.0;
 pub const KEY_W_MM: f32 = 7.6;
@@ -165,6 +166,18 @@ pub fn ribbon_rect(view: &View, title: &str, cx: f32, cy: f32, k: f32) -> (Rect,
     let h = w * RIBBON_ASPECT;
     let font = size.min(w * 0.7 / tw.max(1.0) * size);
     (Rect::new(cx - w / 2.0, cy - h / 2.0, w, h), font)
+}
+
+pub fn ribbon_clear_of_home(view: &View, title: &str, c: Vec2) -> Vec2 {
+    let (r, _) = ribbon_rect(view, title, c.x, c.y, 1.0);
+    let home = view.home();
+    let over = r.x < home.x + home.w && r.x + r.w > home.x;
+    let low = c.y - r.h / 2.0 < home.y + home.h;
+    if over && low {
+        Vec2::new(c.x, home.y + home.h + view.gap().min(8.0) + r.h / 2.0)
+    } else {
+        c
+    }
 }
 
 pub fn ribbon_h(view: &View, title: &str, k: f32) -> f32 {

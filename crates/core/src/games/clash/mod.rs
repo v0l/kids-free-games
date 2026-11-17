@@ -210,8 +210,18 @@ pub fn tower_layout(view: &View) -> TowerLayout {
             arrow,
         ),
         play: Rect::new(cx - bw / 2.0, (view.h * 0.72).min(view.h - ph - m), bw, ph),
-        back: menu_back(view),
+        back: modes_button(view),
     }
+}
+
+pub fn modes_button(view: &View) -> Rect {
+    let (w, d) = crate::sizing::label_button(view, "Modes", 72.0);
+    Rect::new(
+        view.edge().min(20.0),
+        view.h - d - 20.0 - view.inset.bottom.min(30.0),
+        w,
+        d,
+    )
 }
 
 pub struct TowerLayout {
@@ -223,16 +233,7 @@ pub struct TowerLayout {
 }
 
 pub fn over_buttons(view: &View) -> (Rect, Rect) {
-    let (w, d) = crate::sizing::label_button(view, "Modes", 72.0);
-    (
-        view.rect(),
-        Rect::new(
-            view.edge().min(20.0),
-            view.h - d - 20.0 - view.inset.bottom.min(30.0),
-            w,
-            d,
-        ),
-    )
+    (view.rect(), modes_button(view))
 }
 
 pub fn menu_back(view: &View) -> Rect {

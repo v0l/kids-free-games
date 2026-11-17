@@ -169,7 +169,7 @@ fn draw_win(g: &Runner, pen: &mut Pen, view: &View) {
     };
     let line = format!("Level {} done!", g.level);
     let score = format!("Score {}   Best {}", g.score, g.best.0);
-    let (pop, k) = pen.done_sheet(view, &d, "Hooray!", &line, &score, &[label], age);
+    let (pop, k) = pen.done_sheet(view, &d, "Hooray!", &line, &score, &[label, "Levels"], age);
     let a = |t: f32| ((age - t) / 0.2).clamp(0.0, 1.0);
     let pops = [0usize, 1, 2].map(|i| {
         if i < g.stars as usize {
@@ -369,20 +369,16 @@ pub fn draw(g: &Runner, pen: &mut Pen, view: &View, results_age: f32, loaded: bo
     let pulse = 1.0 + (g.t * 3.0).sin() * 0.03;
     match g.state {
         State::Ready if !loaded => {
-            pen.hint("Getting ready...", vec2(view.w / 2.0, view.h * 0.8), pulse);
+            pen.hint("Getting ready...", ready_hint_pos(view), pulse);
         }
         State::Ready => {
-            pen.hint(
-                "Tap to run! Swipe to dodge",
-                vec2(view.w / 2.0, view.h * 0.8),
-                pulse,
-            );
+            pen.hint("Tap to run! Swipe to dodge", ready_hint_pos(view), pulse);
             levels_pill(pen, view);
         }
         State::Playing => draw_coach(g, pen, view),
         State::Dead if g.shows_results() => {
             let line = format!("Level {}, {} coins", g.level, g.coins);
-            pen.results(
+            pen.results_actions(
                 view,
                 &Results {
                     game: GAME,
@@ -392,13 +388,12 @@ pub fn draw(g: &Runner, pen: &mut Pen, view: &View, results_age: f32, loaded: bo
                     action: "Try again",
                     format: plain_score,
                 },
+                &DEAD_LABELS,
                 results_age,
             );
-            levels_pill(pen, view);
         }
         State::Won if g.shows_results() => {
             draw_win(g, pen, view);
-            levels_pill(pen, view);
         }
         _ => {}
     }
