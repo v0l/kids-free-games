@@ -6,6 +6,23 @@ All notable changes to Learn and Play Kids Games are listed here. The format fol
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-11-17
+
+### Added
+
+- `--size`, `--dpi`, `--mm` and `--insets` flags and `scripts/dpi-shots.sh` render any screen at a phone's size, density and cutout on Linux.
+
+### Fixed
+
+- Results boards no longer squeeze player names to nothing on tall phones, and the report button is a 12 mm target.
+- Ball Sort's win sheet lays out its stars, trophy and best row inside the panel.
+- Level pickers in Runner, Helix, Ball Sort, Stack, Memory and Garden sit below their title ribbon.
+- Snake Clash's results and tower screens have a Modes button instead of a second home button, and the new skin popup no longer covers the title.
+- Runner and Helix have a Levels button on their results and win sheets.
+- HUD chips in Paper Land, Fruit, Merge, Clash and Block Drop start to the right of the home button.
+- Hints in Sky Jumper, 2048, Helix and Count no longer cover buttons, and the 2048 board clears them.
+- Garden's Beds button no longer sits on the question, and Breakout's last level sheet has no empty button.
+
 ## [0.1.4] - 2026-11-13
 
 ### Added
