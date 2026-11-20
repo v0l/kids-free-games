@@ -230,3 +230,29 @@ pub fn build(spec: Spec, dev: &Device) -> Result<(VarMap, Net)> {
     }
     Ok((vm, net))
 }
+
+pub fn import_actor(vm: &VarMap, p: &Policy, dev: &Device) -> Result<()> {
+    let data = vm.data().lock().unwrap();
+    let mut set = |name: String, v: &[f32]| -> Result<()> {
+        let var = data.get(&name).ok_or_else(|| candle_core::Error::Msg(format!("no {name}")))?;
+        let t = Tensor::from_slice(v, var.shape(), dev)?;
+        var.set(&t)
+    };
+    let mut conv = 0;
+    for l in &p.trunk {
+        if let Layer::Conv { w, b, .. } = l {
+            set(format!("conv{conv}.weight"), w)?;
+            set(format!("conv{conv}.bias"), b)?;
+            conv += 1;
+        }
+    }
+    let mut dense = 1;
+    for l in &p.head {
+        if let Layer::Dense { w, b, .. } = l {
+            set(format!("a{dense}.weight"), w)?;
+            set(format!("a{dense}.bias"), b)?;
+            dense += 1;
+        }
+    }
+    Ok(())
+}

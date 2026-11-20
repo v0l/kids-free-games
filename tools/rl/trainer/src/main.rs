@@ -492,7 +492,11 @@ impl<G: Game> Member<G> {
         if a.bf16 {
             net.dtype = candle_core::DType::BF16;
         }
-        if !a.resume.is_empty() {
+        if a.resume.ends_with(".kgb") {
+            let p = kg_core::brain::conv::Policy::from_bytes(&std::fs::read(&a.resume).unwrap())
+                .expect("valid kgb");
+            net::import_actor(&vm, &p, &dev)?;
+        } else if !a.resume.is_empty() {
             vm.load(&a.resume)?;
         }
         let opt = adam(&vm, lr)?;
