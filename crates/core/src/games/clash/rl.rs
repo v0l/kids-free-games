@@ -163,7 +163,7 @@ impl BrainState for World {
             }
             let ol = o.level();
             let open = o.shield <= 0.0;
-            let (body, head) = if ol > lvl && open {
+            let (body, head) = if ol > lvl {
                 (BIGGER, BIGGER_HEAD)
             } else if ol < lvl && open {
                 (SMALLER, SMALLER_HEAD)

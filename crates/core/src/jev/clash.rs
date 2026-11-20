@@ -58,7 +58,7 @@ pub fn describe(w: &World, k: usize) -> String {
             continue;
         }
         let l = s.level();
-        if l > lvl && s.shield <= 0.0 {
+        if l > lvl {
             if danger.is_none_or(|x| near < x.0) {
                 danger = Some((near, l));
             }

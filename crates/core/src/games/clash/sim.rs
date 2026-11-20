@@ -799,7 +799,7 @@ impl World {
                     continue;
                 };
                 let ((la, sa), (lb, sb)) = (frame[a], frame[b]);
-                let shielded = sa || sb;
+                let shielded = if la > lb { sb } else { sa };
                 let outcome = if la == lb || shielded || (la < lb && seg >= NECK) {
                     Outcome::Bounce
                 } else if la > lb && seg >= NECK {
@@ -1445,6 +1445,26 @@ mod tests {
     }
 
     #[test]
+    fn a_shielded_bigger_snake_still_cuts_an_open_smaller_one() {
+        let mut w = tail_duel(12, 6, 10);
+        w.snakes[0].shield = 2.0;
+        w.snakes[1].shield = 0.0;
+        w.step(1.0 / 60.0, None);
+        assert!(w.events.iter().any(|e| matches!(e, Event::Cut { .. })));
+        assert!(!w.events.iter().any(|e| matches!(e, Event::Bump { .. })));
+    }
+
+    #[test]
+    fn a_shielded_bigger_snake_still_eats_an_open_smaller_head() {
+        let mut w = tail_duel(12, 6, 0);
+        w.snakes[0].shield = 2.0;
+        w.snakes[1].shield = 0.0;
+        w.step(1.0 / 60.0, None);
+        assert!(w.events.iter().any(|e| matches!(e, Event::Eaten { .. })));
+        assert!(w.by_id(2).is_none());
+    }
+
+    #[test]
     fn a_shielded_small_snake_ramming_a_big_head_survives() {
         let mut w = duel(3, 12);
         w.snakes[0].shield = 2.0;
@@ -1478,7 +1498,7 @@ mod tests {
                         Outcome::Bounce => {
                             assert!(
                                 h.shielded || h.biter <= h.bitten,
-                                "seed {seed}: a bigger snake bounced off an open smaller one: {h:?}"
+                                "seed {seed}: a bigger snake bounced off an open smaller victim: {h:?}"
                             );
                         }
                     }
