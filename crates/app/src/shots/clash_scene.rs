@@ -75,6 +75,17 @@ pub fn setup(n: u32, view: &View) -> Stage {
             }
             play(&mut p, view, 60 * 6);
         }
+        233 => {
+            p.g.start(Mode::Arena, 1);
+            grow(&mut p, 12);
+            play(&mut p, view, 30);
+            p.g.world.snakes[0].shield = 1e9;
+            let head = p.g.world.player().head();
+            let dir = p.g.world.player().dir();
+            let prey = p.g.world.add_snake(head + dir * 160.0, 5, "Prey".into(), 2);
+            p.g.world.snakes[prey].shield = 0.0;
+            play(&mut p, view, 20);
+        }
         232 => {
             p.g.start(Mode::Arena, 1);
             grow(&mut p, 9);
