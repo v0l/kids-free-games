@@ -13,11 +13,15 @@ fn show(name: &str, r: &Report) {
 fn main() {
     let path = std::env::args().nth(1).expect("kgb path");
     let p = Policy::from_bytes(&std::fs::read(path).unwrap()).expect("valid kgb");
-    show("hand bot", &evaluate(&Pilot::Bot, 64, GAME_CAP));
+    let games: u64 = std::env::args()
+        .nth(2)
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(64);
+    show("hand bot", &evaluate(&Pilot::Bot, games, GAME_CAP));
     for e in [1.0, 0.5, 0.0] {
         show(
             &format!("model effort {e}"),
-            &evaluate(&Pilot::Policy(&p, Effort::new(e)), 64, GAME_CAP),
+            &evaluate(&Pilot::Policy(&p, Effort::new(e)), games, GAME_CAP),
         );
     }
 }
