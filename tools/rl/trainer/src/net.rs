@@ -3,14 +3,14 @@ use candle_nn::{conv2d, linear, Conv2d, Conv2dConfig, Linear, VarBuilder, VarMap
 use kg_core::brain::conv::{Layer, Policy};
 use kg_core::brain::learn::Spec;
 
-struct Unfold {
-    index: Tensor,
-    side_out: usize,
-    k: usize,
+pub struct Unfold {
+    pub index: Tensor,
+    pub side_out: usize,
+    pub k: usize,
 }
 
 impl Unfold {
-    fn new(side_in: usize, k: usize, stride: usize, pad: usize, dev: &Device) -> Result<Self> {
+    pub fn new(side_in: usize, k: usize, stride: usize, pad: usize, dev: &Device) -> Result<Self> {
         let side_out = (side_in + 2 * pad - k) / stride + 1;
         let zero = (side_in * side_in) as u32;
         let mut idx = Vec::with_capacity(side_out * side_out * k * k);

@@ -1235,6 +1235,7 @@ version = "0.1.0"
 dependencies = [
  "candle-core",
  "candle-nn",
+ "half",
  "kg_core",
 ]
 
