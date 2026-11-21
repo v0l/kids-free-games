@@ -17,6 +17,8 @@ A warm start from an older net saves hours: the first one came from a PyTorch PP
 
 Copy the champion to `assets/brains/paper_rl.kgb`. In the game every bot runs it at `arena::rl_effort(skill)`, with blunders and the rule that leaves a beginner alone kept in code.
 
+Two tests pin the shipped brain's behaviour and a survival-trained champion can miss them even when it outlives it by a mile: `at_full_effort_the_rl_brain_outlives_the_hand_written_bot` needs the brain to also steal at least as much land as the hand-written bot (`stolen >= 0.032` on 20 seeds), and `a_strong_player_with_big_loops_climbs_past_the_bots` needs a strong player to still reach the top three in 3 of 4 runs, so the bots must not be so good they box a good player out. Training that only maximises outlived tends to camp and to steal less, and fails both. Reward `steal` hard (the score already weights `stolen` at 800) and check the guard tests before promoting a champion. A 2026-11 run that resumed from such a survivor for two extra hours (steal gene raised) never cleared the steal bar; the champion that shipped came from the earlier plain run and was checked against both guards.
+
 ## Candle trainer (`tools/rl/trainer`)
 
 Population-based PPO on the GPU, no Python:
