@@ -433,16 +433,17 @@ mod phases {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Instant;
 
-    pub const NAMES: [&str; 6] = [
-        "seat-obs", "wait-reply", "step", "srv-idle", "srv-gather", "srv-forward",
+    pub const NAMES: [&str; 7] = [
+        "seat-obs", "wait-reply", "step", "srv-idle", "lg-gather", "lg-forward", "lg-readback",
     ];
     pub const SEAT_OBS: usize = 0;
     pub const WAIT_REPLY: usize = 1;
     pub const STEP: usize = 2;
     pub const SRV_IDLE: usize = 3;
-    pub const SRV_GATHER: usize = 4;
-    pub const SRV_FORWARD: usize = 5;
-    static TOTALS: [AtomicU64; 6] = [const { AtomicU64::new(0) }; 6];
+    pub const LG_GATHER: usize = 4;
+    pub const LG_FORWARD: usize = 5;
+    pub const LG_READBACK: usize = 6;
+    static TOTALS: [AtomicU64; 7] = [const { AtomicU64::new(0) }; 7];
 
     pub fn add(phase: usize, since: Instant) {
         TOTALS[phase].fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
@@ -582,13 +583,19 @@ fn league_launch<G: Game>(league: &LeagueNet, obs: &[&SeatObs], dev: &Device) ->
         return Ok(None);
     }
     let dt = league.net.dtype;
+    let t_gather = Instant::now();
     let gt = gather(obs, l, widest, gsize, dev, dt, |o| &o.0)?;
     let st = gather(obs, l, widest, ns, dev, dt, |o| &o.1)?;
+    phases::add(phases::LG_GATHER, t_gather);
+    let t_forward = Instant::now();
     let (logits, _) = league.net.forward(&league.weights, &gt, &st)?;
-    Ok(Some(candle_nn::ops::softmax(&logits, D::Minus1)?))
+    let out = candle_nn::ops::softmax(&logits, D::Minus1)?;
+    phases::add(phases::LG_FORWARD, t_forward);
+    Ok(Some(out))
 }
 
 fn league_split<G: Game>(league: &LeagueNet, obs: &[&SeatObs], probs: Option<&Tensor>) -> Result<Vec<Vec<Vec<f32>>>> {
+    let t_read = Instant::now();
     let na = G::spec().actions;
     let l = league.count;
     let mut replies: Vec<Vec<Vec<f32>>> = obs.iter().map(|_| vec![vec![]; l]).collect();
@@ -604,6 +611,7 @@ fn league_split<G: Game>(league: &LeagueNet, obs: &[&SeatObs], probs: Option<&Te
             }
         }
     }
+    phases::add(phases::LG_READBACK, t_read);
     Ok(replies)
 }
 
@@ -630,13 +638,9 @@ fn league_server<G: Game>(
             batch
         };
         phases::add(phases::SRV_IDLE, idle);
-        let work = Instant::now();
         let obs: Vec<&SeatObs> = batch.iter().map(|j| &j.obs).collect();
         let probs = league_launch::<G>(league, &obs, dev)?;
-        phases::add(phases::SRV_GATHER, work);
-        let fwd = Instant::now();
         let replies = league_split::<G>(league, &obs, probs.as_ref())?;
-        phases::add(phases::SRV_FORWARD, fwd);
         for (j, r) in batch.into_iter().zip(replies) {
             let _ = j.reply.send(r);
         }
@@ -975,9 +979,7 @@ fn update_population<G: Game>(
                 let refs: Vec<&SeatObs> = requests.iter().map(|r| &r.1).collect();
                 let queued = league_launch::<G>(lg, &refs, &tr.dev)?;
                 let probs = policy_forward(tr, &weights, &g, &s, true)?;
-                let t_wait = Instant::now();
                 let replies = league_split::<G>(lg, &refs, queued.as_ref())?;
-                phases::add(phases::WAIT_REPLY, t_wait);
                 let ready: Vec<Option<(Vec<Vec<(usize, usize)>>, Vec<Vec<f32>>)>> = requests
                     .into_iter()
                     .zip(replies)
