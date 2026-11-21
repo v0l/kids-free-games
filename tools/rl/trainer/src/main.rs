@@ -1738,6 +1738,36 @@ mod tests {
     }
 
     #[test]
+    fn staged_gather_is_faster_than_a_fresh_single_thread_convert() {
+        let rows = 480usize;
+        let width = 22 * 32 * 32;
+        let obs: SeatObs = vec![(vec![0.37f32; rows * width], vec![0.5f32; rows * 19], rows)];
+        let refs = vec![&obs];
+        let dev = Device::Cpu;
+        let old = || {
+            let t = Instant::now();
+            let mut h = vec![half::bf16::ZERO; rows * width];
+            for (d, s) in h.iter_mut().zip(&obs[0].0) {
+                *d = half::bf16::from_f32(*s);
+            }
+            let _ = Tensor::from_vec(h, (1, rows, width), &dev).unwrap();
+            t.elapsed().as_secs_f64()
+        };
+        let new = || {
+            let t = Instant::now();
+            let _ = gather(&refs, 1, rows, width, &dev, DType::BF16, |o| &o.0).unwrap();
+            t.elapsed().as_secs_f64()
+        };
+        let (mut o, mut n) = (f64::MAX, f64::MAX);
+        for _ in 0..5 {
+            o = o.min(old());
+            n = n.min(new());
+        }
+        println!("gather old {o:.4}s new {n:.4}s");
+        assert!(n < o, "staged gather {n} not faster than {o}");
+    }
+
+    #[test]
     fn league_gather_matches_the_three_pass_buffer() {
         let batch = vec![job(0.5, &[3, 1]), job(-1.25, &[2, 4])];
         let refs: Vec<&SeatObs> = batch.iter().map(|j| &j.obs).collect();
