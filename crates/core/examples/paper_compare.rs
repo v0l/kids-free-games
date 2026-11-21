@@ -20,6 +20,7 @@ fn run(p: &Policy, games: u64, in_game: bool) -> Vec<Report> {
                         if seed >= games {
                             return out;
                         }
+                        let seed = seed + 900_000;
                         let skill = skill_of(seed);
                         let e = if in_game { rl_effort(skill) } else { 1.0 };
                         out.push((seed, play_seed(&Pilot::Policy(p, Effort::new(e)), seed, skill)));
