@@ -584,6 +584,10 @@ pub fn evaluate_against(
     }
 }
 
+pub fn play_seed(pilot: &Pilot, seed: u64, skill: f32) -> Report {
+    play_one(pilot, 77_000 + seed, skill, None, 0.0)
+}
+
 fn play_one(
     pilot: &Pilot,
     seed: u64,
