@@ -216,6 +216,7 @@ pub struct Popup {
     pub age: f32,
     pub life: f32,
     pub size: f32,
+    pub rise: f32,
 }
 
 #[derive(Default)]
@@ -232,13 +233,21 @@ impl Popups {
             age: 0.0,
             life: 1.0,
             size,
+            rise: 70.0,
         });
+    }
+
+    pub fn add_still(&mut self, pos: Vec2, text: impl Into<String>, color: Color, size: f32) {
+        self.add(pos, text, color, size);
+        if let Some(p) = self.list.last_mut() {
+            p.rise = 0.0;
+        }
     }
 
     pub fn update(&mut self, dt: f32) {
         for p in &mut self.list {
             p.age += dt;
-            p.pos.y -= 70.0 * dt * (1.0 - p.age / p.life).max(0.0);
+            p.pos.y -= p.rise * dt * (1.0 - p.age / p.life).max(0.0);
         }
         self.list.retain(|p| p.age < p.life);
     }
