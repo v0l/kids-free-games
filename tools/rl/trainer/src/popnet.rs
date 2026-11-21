@@ -483,6 +483,65 @@ mod tests {
         assert!(d < 1e-6, "{d}");
     }
 
+    fn reference_step(net: &net::Net, vm: &VarMap, opt: &mut candle_nn::AdamW, r: &Rollout, ent_coef: f32, pg_scale: f32) {
+        use candle_nn::Optimizer;
+        let (logits, v) = net.forward(&r.obs_g, &r.obs_s).unwrap();
+        let lsm = candle_nn::ops::log_softmax(&logits, D::Minus1).unwrap();
+        let a_ = r.acts.unsqueeze(1).unwrap();
+        let new_lp = lsm.gather(&a_, 1).unwrap().squeeze(1).unwrap();
+        let ratio = (new_lp - &r.logp).unwrap().exp().unwrap();
+        let s1 = (&ratio * &r.adv).unwrap();
+        let s2 = (ratio.clamp(0.8f32, 1.2f32).unwrap() * &r.adv).unwrap();
+        let pg = s1.minimum(&s2).unwrap().mean_all().unwrap().neg().unwrap();
+        let vl = (v - &r.ret).unwrap().sqr().unwrap().mean_all().unwrap();
+        let ent = (lsm.exp().unwrap() * &lsm).unwrap().sum(D::Minus1).unwrap().mean_all().unwrap().neg().unwrap();
+        let loss = (((&pg * pg_scale as f64).unwrap() + (&vl * 0.5).unwrap()).unwrap()
+            - (&ent * ent_coef as f64).unwrap())
+        .unwrap();
+        let _ = vm;
+        opt.backward_step(&loss).unwrap();
+    }
+
+    #[test]
+    fn one_learning_step_matches_the_per_member_path() {
+        let (members, pop, flat) = population(2);
+        let dev = Device::Cpu;
+        let start: Vec<f32> = flat.flatten_all().unwrap().to_vec1().unwrap();
+        let mut tr = Trainer::new(pop, start, 2, dev.clone()).unwrap();
+        let total = 24;
+        let make = |k: u32| Rollout {
+            obs_g: Tensor::from_vec(data(total * 192, k), (total, 192), &dev).unwrap(),
+            obs_s: Tensor::from_vec(data(total * 4, k + 1), (total, 4), &dev).unwrap(),
+            acts: Tensor::from_vec((0..total as u32).map(|i| (i + k) % 5).collect::<Vec<_>>(), total, &dev).unwrap(),
+            logp: Tensor::from_vec(data(total, k + 4).iter().map(|x| x - 1.5).collect::<Vec<_>>(), total, &dev).unwrap(),
+            adv: Tensor::from_vec(data(total, k + 2), total, &dev).unwrap(),
+            ret: Tensor::from_vec(data(total, k + 3), total, &dev).unwrap(),
+        };
+        let rolls = vec![make(0), make(1)];
+        let reference = vec![make(0), make(1)];
+        let lrs = [1e-3f64, 3e-4];
+        let ents = [0.01f32, 0.03];
+        let knobs: Vec<Knobs> = (0..2).map(|k| Knobs { lr: lrs[k], ent: ents[k], pg: 1.0 }).collect();
+        let mut order = |_: usize| (0..total as u32).collect::<Vec<_>>();
+        tr.learn(rolls, &knobs, total, &mut order).unwrap();
+        let after = tr.rows().unwrap();
+        let per = after.len() / 2;
+        for (k, (vm, net)) in members.iter().enumerate() {
+            let mut opt = <candle_nn::AdamW as candle_nn::Optimizer>::new(
+                vm.all_vars(),
+                candle_nn::ParamsAdamW { lr: lrs[k], weight_decay: 0.0, eps: 1e-5, ..Default::default() },
+            )
+            .unwrap();
+            for _ in 0..3 {
+                reference_step(net, vm, &mut opt, &reference[k], ents[k], 1.0);
+            }
+            let want = tr.layout().pack(vm).unwrap();
+            let got = &after[k * per..(k + 1) * per];
+            let worst = want.iter().zip(got).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
+            assert!(worst < 2e-5, "member {k}: weights differ by {worst}");
+        }
+    }
+
     #[test]
     fn learning_moves_every_member_and_stays_finite() {
         let (_, pop, flat) = population(2);
