@@ -92,6 +92,7 @@ jobs:
             cp "${bin_dir}/kids_games" "dist/${name}/"
           fi
           cp README.md LICENSE "dist/${name}/"
+          cp -R assets "dist/${name}/assets"
           cd dist
           if [ "${{ matrix.archive }}" = "zip" ]; then
             7z a "${name}.zip" "${name}"

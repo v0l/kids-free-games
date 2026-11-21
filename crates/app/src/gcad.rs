@@ -240,7 +240,7 @@ impl Plugin for ModelsPlugin {
 }
 
 #[derive(Resource)]
-struct Warming {
+pub(crate) struct Warming {
     started: Instant,
     pending: Vec<(String, Handle<WorldAsset>)>,
 }
