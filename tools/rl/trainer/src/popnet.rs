@@ -403,3 +403,115 @@ impl Trainer {
         Ok(ent.into_iter().zip(vl).collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::net;
+
+    fn spec() -> Spec {
+        Spec {
+            channels: 3,
+            side: 8,
+            scalars: 4,
+            actions: 5,
+        }
+    }
+
+    fn data(len: usize, salt: u32) -> Vec<f32> {
+        (0..len)
+            .map(|i| {
+                (((i as u32).wrapping_mul(2654435761).wrapping_add(salt.wrapping_mul(40503)) >> 8) % 1000)
+                    as f32
+                    / 1000.0
+                    - 0.3
+            })
+            .collect()
+    }
+
+    fn population(pop: usize) -> (Vec<(VarMap, net::Net)>, PopNet, Tensor) {
+        let dev = Device::Cpu;
+        let mut members = vec![];
+        let mut rows = vec![];
+        for k in 0..pop {
+            let (vm, n) = net::build(spec(), &dev).unwrap();
+            for (i, (_, v)) in vm.data().lock().unwrap().iter().enumerate() {
+                let w = v.as_tensor();
+                let noise = Tensor::from_vec(data(w.elem_count(), (k * 31 + i) as u32), w.shape(), &dev).unwrap();
+                v.set(&(w + (noise * 0.2).unwrap()).unwrap()).unwrap();
+            }
+            members.push((vm, n));
+        }
+        let layout = Layout::of(&members[0].0);
+        for (vm, _) in &members {
+            rows.extend(layout.pack(vm).unwrap());
+        }
+        let flat = Tensor::from_vec(rows, (pop, layout.total), &dev).unwrap();
+        (members, PopNet::new(spec(), layout, DType::F32, &dev).unwrap(), flat)
+    }
+
+    fn max_diff(a: Tensor, b: Tensor) -> f32 {
+        (a - b).unwrap().abs().unwrap().max_all().unwrap().to_scalar::<f32>().unwrap()
+    }
+
+    #[test]
+    fn batched_forward_matches_each_member() {
+        let (members, pop, flat) = population(3);
+        let n = 6;
+        let dev = Device::Cpu;
+        let g = Tensor::from_vec(data(3 * n * 192, 7), (3, n, 192), &dev).unwrap();
+        let s = Tensor::from_vec(data(3 * n * 4, 9), (3, n, 4), &dev).unwrap();
+        let w = pop.weights(&flat).unwrap();
+        let (logits, value) = pop.forward(&w, &g, &s).unwrap();
+        for (k, (_, net)) in members.iter().enumerate() {
+            let (l, v) = net.forward(&g.get(k).unwrap(), &s.get(k).unwrap()).unwrap();
+            let dl = max_diff(logits.get(k).unwrap(), l);
+            let dv = max_diff(value.get(k).unwrap(), v);
+            assert!(dl < 1e-4 && dv < 1e-4, "member {k}: logits {dl} value {dv}");
+        }
+    }
+
+    #[test]
+    fn pack_and_unpack_round_trip() {
+        let (members, pop, flat) = population(2);
+        let (vm, net) = net::build(spec(), &Device::Cpu).unwrap();
+        let row: Vec<f32> = flat.get(1).unwrap().to_vec1().unwrap();
+        pop.layout.unpack(&row, &vm, &Device::Cpu).unwrap();
+        let g = Tensor::from_vec(data(4 * 192, 3), (4, 192), &Device::Cpu).unwrap();
+        let s = Tensor::from_vec(data(16, 5), (4, 4), &Device::Cpu).unwrap();
+        let d = max_diff(net.forward(&g, &s).unwrap().0, members[1].1.forward(&g, &s).unwrap().0);
+        assert!(d < 1e-6, "{d}");
+    }
+
+    #[test]
+    fn learning_moves_every_member_and_stays_finite() {
+        let (_, pop, flat) = population(2);
+        let dev = Device::Cpu;
+        let before: Vec<f32> = flat.flatten_all().unwrap().to_vec1().unwrap();
+        let mut tr = Trainer::new(pop, before.clone(), 2, dev.clone()).unwrap();
+        let total = 32;
+        let rolls: Vec<Rollout> = (0..2)
+            .map(|k| Rollout {
+                obs_g: Tensor::from_vec(data(total * 192, k), (total, 192), &dev).unwrap(),
+                obs_s: Tensor::from_vec(data(total * 4, k + 1), (total, 4), &dev).unwrap(),
+                acts: Tensor::from_vec((0..total as u32).map(|i| i % 5).collect::<Vec<_>>(), total, &dev).unwrap(),
+                logp: Tensor::from_vec(vec![-1.6f32; total], total, &dev).unwrap(),
+                adv: Tensor::from_vec(data(total, k + 2), total, &dev).unwrap(),
+                ret: Tensor::from_vec(data(total, k + 3), total, &dev).unwrap(),
+            })
+            .collect();
+        let knobs = vec![
+            Knobs { lr: 1e-3, ent: 0.01, pg: 1.0 },
+            Knobs { lr: 1e-3, ent: 0.01, pg: 1.0 },
+        ];
+        let mut order = |_: usize| (0..total as u32).collect::<Vec<_>>();
+        let stats = tr.learn(rolls, &knobs, 16, &mut order).unwrap();
+        assert!(stats.iter().all(|(e, v)| e.is_finite() && v.is_finite()));
+        let after = tr.rows().unwrap();
+        let per = after.len() / 2;
+        for k in 0..2 {
+            assert!(after[k * per..(k + 1) * per].iter().all(|x| x.is_finite()));
+            assert!(after[k * per..(k + 1) * per] != before[k * per..(k + 1) * per]);
+        }
+    }
+}
