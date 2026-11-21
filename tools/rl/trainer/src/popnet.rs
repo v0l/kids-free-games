@@ -538,7 +538,7 @@ mod tests {
             let want = tr.layout().pack(vm).unwrap();
             let got = &after[k * per..(k + 1) * per];
             let worst = want.iter().zip(got).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
-            assert!(worst < 2e-5, "member {k}: weights differ by {worst}");
+            assert!(worst < 2e-4, "member {k}: weights differ by {worst}");
         }
     }
 

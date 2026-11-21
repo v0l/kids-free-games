@@ -493,6 +493,25 @@ fn upload(data: &[f32], shape: (usize, usize), dev: &Device, dt: candle_core::DT
     }
 }
 
+thread_local! {
+    static STAGE_BF16: std::cell::RefCell<Vec<half::bf16>> = const { std::cell::RefCell::new(Vec::new()) };
+    static STAGE_F32: std::cell::RefCell<Vec<f32>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn convert_into(dst: &mut [half::bf16], src: &[f32]) {
+    let lanes = if src.len() < 1 << 16 { 1 } else { 8 };
+    let chunk = src.len().div_ceil(lanes).max(1);
+    std::thread::scope(|sc| {
+        for (d, s) in dst.chunks_mut(chunk).zip(src.chunks(chunk)) {
+            sc.spawn(move || {
+                for (x, y) in d.iter_mut().zip(s) {
+                    *x = half::bf16::from_f32(*y);
+                }
+            });
+        }
+    });
+}
+
 fn gather(
     batch: &[&SeatObs],
     l: usize,
@@ -502,32 +521,57 @@ fn gather(
     dt: candle_core::DType,
     part: impl Fn(&(Vec<f32>, Vec<f32>, usize)) -> &Vec<f32>,
 ) -> Result<Tensor> {
-    let bf = dt == candle_core::DType::BF16;
-    let mut f = Vec::<f32>::new();
-    let mut h = Vec::<half::bf16>::new();
-    if bf {
-        h.resize(l * widest * width, half::bf16::ZERO);
-    } else {
-        f.resize(l * widest * width, 0.0);
-    }
-    for p in 0..l {
-        let mut at = p * widest * width;
-        for j in batch {
-            let src = part(&j[p]);
-            if bf {
-                for (d, s) in h[at..at + src.len()].iter_mut().zip(src) {
-                    *d = half::bf16::from_f32(*s);
-                }
-            } else {
-                f[at..at + src.len()].copy_from_slice(src);
+    let len = l * widest * width;
+    let layout = |fill: &mut dyn FnMut(usize, &[f32])| {
+        for p in 0..l {
+            let start = p * widest * width;
+            let mut at = start;
+            for j in batch {
+                let src = part(&j[p]);
+                fill(at, src);
+                at += src.len();
             }
-            at += src.len();
+            fill(at, &[]);
+            let _ = start;
         }
-    }
-    if bf {
-        Tensor::from_vec(h, (l, widest, width), dev)
+    };
+    if dt == candle_core::DType::BF16 {
+        STAGE_BF16.with(|cell| {
+            let mut buf = cell.borrow_mut();
+            if buf.len() < len {
+                buf.resize(len, half::bf16::ZERO);
+            }
+            for p in 0..l {
+                let start = p * widest * width;
+                let mut at = start;
+                for j in batch {
+                    let src = part(&j[p]);
+                    convert_into(&mut buf[at..at + src.len()], src);
+                    at += src.len();
+                }
+                buf[at..start + widest * width].fill(half::bf16::ZERO);
+            }
+            Tensor::from_slice(&buf[..len], (l, widest, width), dev)
+        })
     } else {
-        Tensor::from_vec(f, (l, widest, width), dev)
+        STAGE_F32.with(|cell| {
+            let mut buf = cell.borrow_mut();
+            if buf.len() < len {
+                buf.resize(len, 0.0);
+            }
+            layout(&mut |at, src| {
+                if src.is_empty() {
+                    return;
+                }
+                buf[at..at + src.len()].copy_from_slice(src);
+            });
+            for p in 0..l {
+                let start = p * widest * width;
+                let used: usize = batch.iter().map(|j| part(&j[p]).len()).sum();
+                buf[start + used..start + widest * width].fill(0.0);
+            }
+            Tensor::from_slice(&buf[..len], (l, widest, width), dev)
+        })
     }
 }
 
