@@ -34,6 +34,7 @@ struct Args {
     minibatch: usize,
     bf16: bool,
     league_servers: usize,
+    combined: bool,
     groups: usize,
     device: String,
     demos: String,
@@ -67,6 +68,7 @@ fn args() -> Args {
         minibatch: 4096,
         bf16: false,
         league_servers: 4,
+        combined: false,
         groups: 1,
         device: devices::best().into(),
         demos: String::new(),
@@ -111,6 +113,7 @@ fn args() -> Args {
             "--holdout-top" => a.holdout_top = x.parse().unwrap(),
             "--demos" => a.demos = x,
             "--bc-epochs" => a.bc_epochs = x.parse().unwrap(),
+            "--league-mode" => a.combined = x == "combined",
             "--groups" => a.groups = x.parse().unwrap(),
             "--league-servers" => a.league_servers = x.parse().unwrap(),
             other => panic!("unknown flag {other}"),
@@ -463,8 +466,14 @@ mod phases {
     }
 }
 
+enum Seating<'a> {
+    Off,
+    Server(&'a Sender<SeatJob>),
+    Ready(Vec<Vec<(usize, usize)>>, Vec<Vec<f32>>),
+}
+
 struct SeatJob {
-    obs: Vec<(Vec<f32>, Vec<f32>, usize)>,
+    obs: SeatObs,
     reply: Sender<Vec<Vec<f32>>>,
 }
 
@@ -484,7 +493,7 @@ fn upload(data: &[f32], shape: (usize, usize), dev: &Device, dt: candle_core::DT
 }
 
 fn gather(
-    batch: &[SeatJob],
+    batch: &[&SeatObs],
     l: usize,
     widest: usize,
     width: usize,
@@ -503,7 +512,7 @@ fn gather(
     for p in 0..l {
         let mut at = p * widest * width;
         for j in batch {
-            let src = part(&j.obs[p]);
+            let src = part(&j[p]);
             if bf {
                 for (d, s) in h[at..at + src.len()].iter_mut().zip(src) {
                     *d = half::bf16::from_f32(*s);
@@ -529,8 +538,12 @@ fn league_nets<G: Game>(weights: &[Vec<u8>], bf16: bool, dev: &Device) -> Result
     let mut layout = None;
     for (k, bytes) in weights.iter().enumerate() {
         let (mut vm, _) = net::build(G::spec(), dev)?;
-        let path =
-            std::env::temp_dir().join(format!("kg-league-{}-{k}.safetensors", std::process::id()));
+        static LOADS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let load = LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "kg-league-{}-{load}-{k}.safetensors",
+            std::process::id()
+        ));
         std::fs::write(&path, bytes).unwrap();
         vm.load(&path)?;
         let _ = std::fs::remove_file(&path);
@@ -555,16 +568,51 @@ fn league_nets<G: Game>(weights: &[Vec<u8>], bf16: bool, dev: &Device) -> Result
     }))
 }
 
+type SeatObs = Vec<(Vec<f32>, Vec<f32>, usize)>;
+
+fn league_launch<G: Game>(league: &LeagueNet, obs: &[&SeatObs], dev: &Device) -> Result<Option<Tensor>> {
+    let spec = G::spec();
+    let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+    let l = league.count;
+    let widest = (0..l)
+        .map(|p| obs.iter().map(|o| o[p].2).sum::<usize>())
+        .max()
+        .unwrap_or(0);
+    if widest == 0 {
+        return Ok(None);
+    }
+    let dt = league.net.dtype;
+    let gt = gather(obs, l, widest, gsize, dev, dt, |o| &o.0)?;
+    let st = gather(obs, l, widest, ns, dev, dt, |o| &o.1)?;
+    let (logits, _) = league.net.forward(&league.weights, &gt, &st)?;
+    Ok(Some(candle_nn::ops::softmax(&logits, D::Minus1)?))
+}
+
+fn league_split<G: Game>(league: &LeagueNet, obs: &[&SeatObs], probs: Option<&Tensor>) -> Result<Vec<Vec<Vec<f32>>>> {
+    let na = G::spec().actions;
+    let l = league.count;
+    let mut replies: Vec<Vec<Vec<f32>>> = obs.iter().map(|_| vec![vec![]; l]).collect();
+    if let Some(t) = probs {
+        let widest = t.dim(1)?;
+        let flat: Vec<f32> = t.flatten_all()?.to_vec1()?;
+        for p in 0..l {
+            let mut at = p * widest * na;
+            for (o, r) in obs.iter().zip(replies.iter_mut()) {
+                let n = o[p].2 * na;
+                r[p] = flat[at..at + n].to_vec();
+                at += n;
+            }
+        }
+    }
+    Ok(replies)
+}
+
 fn league_server<G: Game>(
     jobs: &std::sync::Mutex<Receiver<SeatJob>>,
     league: &LeagueNet,
     dev: &Device,
     members: usize,
 ) -> Result<()> {
-    let spec = G::spec();
-    let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
-    let na = spec.actions;
-    let l = league.count;
     loop {
         let idle = Instant::now();
         let batch = {
@@ -583,31 +631,12 @@ fn league_server<G: Game>(
         };
         phases::add(phases::SRV_IDLE, idle);
         let work = Instant::now();
-        let rows: Vec<usize> = (0..l)
-            .map(|p| batch.iter().map(|j| j.obs[p].2).sum())
-            .collect();
-        let widest = rows.iter().copied().max().unwrap_or(0);
-        let mut replies: Vec<Vec<Vec<f32>>> = batch.iter().map(|_| vec![vec![]; l]).collect();
-        if widest > 0 {
-            let dt = league.net.dtype;
-            let gt = gather(&batch, l, widest, gsize, dev, dt, |o| &o.0)?;
-            let st = gather(&batch, l, widest, ns, dev, dt, |o| &o.1)?;
-            phases::add(phases::SRV_GATHER, work);
-            let fwd = Instant::now();
-            let (logits, _) = league.net.forward(&league.weights, &gt, &st)?;
-            let probs: Vec<f32> = candle_nn::ops::softmax(&logits, D::Minus1)?
-                .flatten_all()?
-                .to_vec1()?;
-            for p in 0..l {
-                let mut at = p * widest * na;
-                for (j, r) in batch.iter().zip(replies.iter_mut()) {
-                    let n = j.obs[p].2 * na;
-                    r[p] = probs[at..at + n].to_vec();
-                    at += n;
-                }
-            }
-            phases::add(phases::SRV_FORWARD, fwd);
-        }
+        let obs: Vec<&SeatObs> = batch.iter().map(|j| &j.obs).collect();
+        let probs = league_launch::<G>(league, &obs, dev)?;
+        phases::add(phases::SRV_GATHER, work);
+        let fwd = Instant::now();
+        let replies = league_split::<G>(league, &obs, probs.as_ref())?;
+        phases::add(phases::SRV_FORWARD, fwd);
         for (j, r) in batch.into_iter().zip(replies) {
             let _ = j.reply.send(r);
         }
@@ -683,7 +712,7 @@ impl<G: Game> Member<G> {
         t: usize,
         probs: &[f32],
         explore: f32,
-        league: Option<&Sender<SeatJob>>,
+        league: Seating,
     ) -> Result<f64> {
         let spec = G::spec();
         let (gsize, ns, na) = (
@@ -773,13 +802,9 @@ impl<G: Game> Member<G> {
         })
     }
 
-    fn drive_seats(&mut self, league: Option<&Sender<SeatJob>>, rng: &mut Rng) -> Result<()> {
-        let Some(league) = league else {
-            return Ok(());
-        };
-        let na = G::spec().actions;
-        let by = self.batch.seated(self.league_size);
+    fn seat_request(&self) -> (Vec<Vec<(usize, usize)>>, SeatObs) {
         let t_obs = Instant::now();
+        let by = self.batch.seated(self.league_size);
         let mut obs = vec![];
         for list in &by {
             let (mut g, mut sc) = (vec![], vec![]);
@@ -787,18 +812,18 @@ impl<G: Game> Member<G> {
             obs.push((g, sc, list.len()));
         }
         phases::add(phases::SEAT_OBS, t_obs);
-        let t_wait = Instant::now();
-        let (reply, back) = std::sync::mpsc::channel();
-        league.send(SeatJob { obs, reply }).unwrap();
-        let probs: Vec<Vec<f32>> = back.recv().unwrap();
-        phases::add(phases::WAIT_REPLY, t_wait);
+        (by, obs)
+    }
+
+    fn apply_seats(&mut self, by: &[Vec<(usize, usize)>], probs: &[Vec<f32>], rng: &mut Rng) {
+        let na = G::spec().actions;
         let mut picks: Vec<Vec<usize>> = self
             .batch
             .envs
             .iter()
             .map(|e| vec![0; e.seats().len()])
             .collect();
-        for (list, probs) in by.iter().zip(&probs) {
+        for (list, probs) in by.iter().zip(probs) {
             for (k, &(e, seat)) in list.iter().enumerate() {
                 let p = &probs[k * na..(k + 1) * na];
                 let mut r = rng.uniform();
@@ -814,6 +839,22 @@ impl<G: Game> Member<G> {
             }
         }
         self.batch.give_seat_actions(&picks);
+    }
+
+    fn drive_seats(&mut self, seating: Seating, rng: &mut Rng) -> Result<()> {
+        match seating {
+            Seating::Off => {}
+            Seating::Server(league) => {
+                let (by, obs) = self.seat_request();
+                let t_wait = Instant::now();
+                let (reply, back) = std::sync::mpsc::channel();
+                league.send(SeatJob { obs, reply }).unwrap();
+                let probs: Vec<Vec<f32>> = back.recv().unwrap();
+                phases::add(phases::WAIT_REPLY, t_wait);
+                self.apply_seats(&by, &probs, rng);
+            }
+            Seating::Ready(by, probs) => self.apply_seats(&by, &probs, rng),
+        }
         Ok(())
     }
 
@@ -902,6 +943,7 @@ fn update_population<G: Game>(
     explore: f32,
     ent_boost: f32,
     league: &Sender<SeatJob>,
+    combined: Option<&LeagueNet>,
 ) -> Result<Vec<f32>> {
     let spec = G::spec();
     let (gsize, ns, na) = (
@@ -921,18 +963,49 @@ fn update_population<G: Game>(
     for t in 0..a.steps {
         let t0 = Instant::now();
         let (g, s) = observations(members, &tr.dev, tr.net.dtype, (n, gsize, ns))?;
-        let probs = policy_forward(tr, &weights, &g, &s, true)?;
+        let (probs, mut ready) = match combined.filter(|_| members[0].league_size > 0) {
+            Some(lg) => {
+                let requests: Vec<_> = std::thread::scope(|sc| {
+                    let hs: Vec<_> = members
+                        .iter()
+                        .map(|m| sc.spawn(move || m.seat_request()))
+                        .collect();
+                    hs.into_iter().map(|h| h.join().unwrap()).collect()
+                });
+                let refs: Vec<&SeatObs> = requests.iter().map(|r| &r.1).collect();
+                let queued = league_launch::<G>(lg, &refs, &tr.dev)?;
+                let probs = policy_forward(tr, &weights, &g, &s, true)?;
+                let t_wait = Instant::now();
+                let replies = league_split::<G>(lg, &refs, queued.as_ref())?;
+                phases::add(phases::WAIT_REPLY, t_wait);
+                let ready: Vec<Option<(Vec<Vec<(usize, usize)>>, Vec<Vec<f32>>)>> = requests
+                    .into_iter()
+                    .zip(replies)
+                    .map(|((by, _), r)| Some((by, r)))
+                    .collect();
+                (probs, ready)
+            }
+            None => (
+                policy_forward(tr, &weights, &g, &s, true)?,
+                members.iter().map(|_| None).collect(),
+            ),
+        };
         act += t0.elapsed().as_secs_f64();
         let t0 = Instant::now();
         let probs = &probs;
         let rv: Vec<Result<f64>> = std::thread::scope(|sc| {
             let hs: Vec<_> = members
                 .iter_mut()
+                .zip(ready.iter_mut())
                 .enumerate()
-                .map(|(k, m)| {
-                    let tx = (m.league_size > 0).then_some(league);
+                .map(|(k, (m, rd))| {
+                    let seating = match rd.take() {
+                        Some((by, p)) => Seating::Ready(by, p),
+                        None if m.league_size > 0 => Seating::Server(league),
+                        None => Seating::Off,
+                    };
                     sc.spawn(move || {
-                        m.act_and_step(t, &probs[k * n * row..(k + 1) * n * row], explore, tx)
+                        m.act_and_step(t, &probs[k * n * row..(k + 1) * n * row], explore, seating)
                     })
                 })
                 .collect();
@@ -1102,10 +1175,16 @@ fn population<G: Game>(a: &Args) -> Result<()> {
             m.league_size = league.len();
         }
         let mut servers = vec![];
-        for _ in 0..a.league_servers {
+        for _ in 0..(if a.combined { 0 } else { a.league_servers }) {
             let dev = devices::open(&a.device, true)?;
             let nets = league_nets::<G>(&league_weights, a.bf16, &dev)?;
             servers.push((dev, nets));
+        }
+        let mut combined: Vec<Option<LeagueNet>> = vec![];
+        if a.combined {
+            for tr in &trainers {
+                combined.push(league_nets::<G>(&league_weights, a.bf16, &tr.dev)?);
+            }
         }
         sync_views(&views, &trainers, &dev)?;
         save(&views[leader].net.export()?, &live);
@@ -1146,9 +1225,11 @@ fn population<G: Game>(a: &Args) -> Result<()> {
                 let hs: Vec<_> = members
                     .chunks_mut(per_group)
                     .zip(trainers.iter_mut())
-                    .map(|(ms, tr)| {
+                    .enumerate()
+                    .map(|(g, (ms, tr))| {
                         let tx = jobs.clone();
-                        sc.spawn(move || update_population(ms, tr, a, explore, ent_boost, &tx))
+                        let lg = combined.get(g).and_then(|c| c.as_ref());
+                        sc.spawn(move || update_population(ms, tr, a, explore, ent_boost, &tx, lg))
                     })
                     .collect();
                 let mut out = Ok(vec![]);
@@ -1538,11 +1619,85 @@ mod tests {
     }
 
     #[test]
+    fn combined_league_path_matches_the_server_path() {
+        type G = kg_core::games::clash::rl::Arena;
+        let spec = G::spec();
+        let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+        let dev = Device::Cpu;
+        let mut weights = vec![];
+        for k in 0..2u32 {
+            let (vm, _) = net::build(G::spec(), &dev).unwrap();
+            for (i, (_, v)) in vm.data().lock().unwrap().iter().enumerate() {
+                let w = v.as_tensor();
+                let noise: Vec<f32> = (0..w.elem_count())
+                    .map(|x| ((x as u32 * 2654435761 + k * 53 + i as u32) >> 9) as f32 % 100.0 / 500.0 - 0.1)
+                    .collect();
+                v.set(&(w + Tensor::from_vec(noise, w.shape(), &dev).unwrap()).unwrap()).unwrap();
+            }
+            let path = std::env::temp_dir().join(format!("kg-test-combined-{k}.safetensors"));
+            vm.save(&path).unwrap();
+            weights.push(std::fs::read(&path).unwrap());
+            let _ = std::fs::remove_file(&path);
+        }
+        let league = league_nets::<G>(&weights, false, &dev).unwrap().unwrap();
+        let obs_for = |seed: usize| -> SeatObs {
+            [3 + seed % 2, 2 + seed % 3]
+                .iter()
+                .enumerate()
+                .map(|(p, n)| {
+                    (
+                        (0..n * gsize).map(|i| ((i * 5 + seed * 29 + p) % 19) as f32 / 19.0).collect(),
+                        (0..n * ns).map(|i| ((i * 7 + seed) % 13) as f32 / 13.0).collect(),
+                        *n,
+                    )
+                })
+                .collect()
+        };
+        let seeds = [4usize, 5, 6, 7];
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut backs = vec![];
+        for &seed in &seeds {
+            let (reply, back) = std::sync::mpsc::channel();
+            tx.send(SeatJob { obs: obs_for(seed), reply }).unwrap();
+            backs.push(back);
+        }
+        drop(tx);
+        league_server::<G>(&std::sync::Mutex::new(rx), &league, &dev, seeds.len()).unwrap();
+        let served: Vec<Vec<Vec<f32>>> = backs.iter().map(|b| b.recv().unwrap()).collect();
+        let all: Vec<SeatObs> = seeds.iter().map(|s| obs_for(*s)).collect();
+        let refs: Vec<&SeatObs> = all.iter().collect();
+        let queued = league_launch::<G>(&league, &refs, &dev).unwrap();
+        let combined = league_split::<G>(&league, &refs, queued.as_ref()).unwrap();
+        let na = spec.actions;
+        let pick = |p: &[f32], mut r: f32| -> usize {
+            for (j, q) in p.iter().enumerate() {
+                if r < *q {
+                    return j;
+                }
+                r -= q;
+            }
+            na - 1
+        };
+        for (m, (a, b)) in served.iter().zip(&combined).enumerate() {
+            for (p, (x, y)) in a.iter().zip(b).enumerate() {
+                assert_eq!(x.len(), y.len(), "member {m} policy {p}");
+                let worst = x.iter().zip(y).map(|(u, v)| (u - v).abs()).fold(0.0f32, f32::max);
+                assert!(worst < 1e-4, "member {m} policy {p}: {worst}");
+                for (row, (u, v)) in x.chunks(na).zip(y.chunks(na)).enumerate() {
+                    let r = (row as f32 * 0.137 + m as f32 * 0.31) % 1.0;
+                    assert_eq!(pick(u, r), pick(v, r), "member {m} policy {p} row {row}");
+                }
+            }
+        }
+    }
+
+    #[test]
     fn league_gather_matches_the_three_pass_buffer() {
         let batch = vec![job(0.5, &[3, 1]), job(-1.25, &[2, 4])];
+        let refs: Vec<&SeatObs> = batch.iter().map(|j| &j.obs).collect();
         for dt in [DType::BF16, DType::F32] {
-            let g = gather(&batch, 2, 6, 6, &Device::Cpu, dt, |o| &o.0).unwrap();
-            let s = gather(&batch, 2, 6, 2, &Device::Cpu, dt, |o| &o.1).unwrap();
+            let g = gather(&refs, 2, 6, 6, &Device::Cpu, dt, |o| &o.0).unwrap();
+            let s = gather(&refs, 2, 6, 2, &Device::Cpu, dt, |o| &o.1).unwrap();
             let wg = three_pass(&batch, 2, 6, 6, dt, 0);
             let ws = three_pass(&batch, 2, 6, 2, dt, 1);
             assert_eq!(g.dtype(), dt);

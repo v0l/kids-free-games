@@ -15,6 +15,5 @@ run() {
   grep -E "^=== generation|sps [0-9]+|phases" "/tmp/kgrl/b951/$label.log" | sed -E 's/^(round [0-9]+ upd +[0-9]+).*(sps [0-9]+).*/\1 \2/'
 }
 run old-4srv "$old" --league-servers 4
-run new-4srv "$new" --league-servers 4
-run new-2srv "$new" --league-servers 2
-run new-1srv "$new" --league-servers 1
+run new-server "$new" --league-servers 4 --league-mode server
+run new-combined "$new" --league-mode combined
