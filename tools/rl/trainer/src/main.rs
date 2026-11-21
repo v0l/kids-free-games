@@ -426,6 +426,43 @@ struct Buf {
     dones: Vec<f32>,
 }
 
+mod phases {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Instant;
+
+    pub const NAMES: [&str; 6] = [
+        "seat-obs", "wait-reply", "step", "srv-idle", "srv-gather", "srv-forward",
+    ];
+    pub const SEAT_OBS: usize = 0;
+    pub const WAIT_REPLY: usize = 1;
+    pub const STEP: usize = 2;
+    pub const SRV_IDLE: usize = 3;
+    pub const SRV_GATHER: usize = 4;
+    pub const SRV_FORWARD: usize = 5;
+    static TOTALS: [AtomicU64; 6] = [const { AtomicU64::new(0) }; 6];
+
+    pub fn add(phase: usize, since: Instant) {
+        TOTALS[phase].fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    pub fn take() -> Vec<f64> {
+        TOTALS
+            .iter()
+            .map(|t| t.swap(0, Ordering::Relaxed) as f64 / 1e9)
+            .collect()
+    }
+
+    pub fn report() -> String {
+        let t = take();
+        NAMES
+            .iter()
+            .zip(&t)
+            .map(|(n, v)| format!("{n} {v:.1}s"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
 struct SeatJob {
     obs: Vec<(Vec<f32>, Vec<f32>, usize)>,
     reply: Sender<Vec<Vec<f32>>>,
@@ -529,6 +566,7 @@ fn league_server<G: Game>(
     let na = spec.actions;
     let l = league.count;
     loop {
+        let idle = Instant::now();
         let batch = {
             let jobs = jobs.lock().unwrap();
             let Ok(first) = jobs.recv() else {
@@ -543,6 +581,8 @@ fn league_server<G: Game>(
             }
             batch
         };
+        phases::add(phases::SRV_IDLE, idle);
+        let work = Instant::now();
         let rows: Vec<usize> = (0..l)
             .map(|p| batch.iter().map(|j| j.obs[p].2).sum())
             .collect();
@@ -552,6 +592,8 @@ fn league_server<G: Game>(
             let dt = league.net.dtype;
             let gt = gather(&batch, l, widest, gsize, dev, dt, |o| &o.0)?;
             let st = gather(&batch, l, widest, ns, dev, dt, |o| &o.1)?;
+            phases::add(phases::SRV_GATHER, work);
+            let fwd = Instant::now();
             let (logits, _) = league.net.forward(&league.weights, &gt, &st)?;
             let probs: Vec<f32> = candle_nn::ops::softmax(&logits, D::Minus1)?
                 .flatten_all()?
@@ -564,6 +606,7 @@ fn league_server<G: Game>(
                     at += n;
                 }
             }
+            phases::add(phases::SRV_FORWARD, fwd);
         }
         for (j, r) in batch.into_iter().zip(replies) {
             let _ = j.reply.send(r);
@@ -675,7 +718,9 @@ impl<G: Game> Member<G> {
         let t0 = Instant::now();
         self.drive_seats(league, rng)?;
         let rivals = t0.elapsed().as_secs_f64();
+        let t_step = Instant::now();
         self.batch.step(&chosen, &mut self.ticks);
+        phases::add(phases::STEP, t_step);
         for k in 0..n {
             self.buf.rews[t * n + k] = self.ticks[k].reward;
             self.buf.dones[t * n + k] = if self.ticks[k].done { 1.0 } else { 0.0 };
@@ -734,15 +779,19 @@ impl<G: Game> Member<G> {
         };
         let na = G::spec().actions;
         let by = self.batch.seated(self.league_size);
+        let t_obs = Instant::now();
         let mut obs = vec![];
         for list in &by {
             let (mut g, mut sc) = (vec![], vec![]);
             self.batch.seat_obs(list, &mut g, &mut sc);
             obs.push((g, sc, list.len()));
         }
+        phases::add(phases::SEAT_OBS, t_obs);
+        let t_wait = Instant::now();
         let (reply, back) = std::sync::mpsc::channel();
         league.send(SeatJob { obs, reply }).unwrap();
         let probs: Vec<Vec<f32>> = back.recv().unwrap();
+        phases::add(phases::WAIT_REPLY, t_wait);
         let mut picks: Vec<Vec<usize>> = self
             .batch
             .envs
@@ -1144,6 +1193,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
                     m.timing = (0.0, 0.0, 0.0, 0.0, 0.0);
                 }
                 let all = (t.0 + t.1 + t.2 + t.3 + t.4).max(1e-9);
+                println!("  phases (thread-seconds): {}", phases::report());
                 println!(
                     "{line} | sps {sps:.0} | time: sim {:.0}% observe {:.0}% act {:.0}% rivals {:.0}% learn {:.0}%",
                     100.0 * t.0 / all,
