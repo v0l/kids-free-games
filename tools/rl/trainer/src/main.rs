@@ -1393,3 +1393,54 @@ fn main() -> Result<()> {
         g => panic!("unknown game {g}"),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candle_core::DType;
+
+    fn job(seed: f32, rows: &[usize]) -> SeatJob {
+        let (reply, _) = std::sync::mpsc::channel();
+        SeatJob {
+            obs: rows
+                .iter()
+                .map(|n| {
+                    (
+                        (0..n * 6).map(|i| seed + i as f32 * 0.37).collect(),
+                        (0..n * 2).map(|i| seed - i as f32 * 0.11).collect(),
+                        *n,
+                    )
+                })
+                .collect(),
+            reply,
+        }
+    }
+
+    fn three_pass(batch: &[SeatJob], l: usize, widest: usize, width: usize, dt: DType, pick: usize) -> Tensor {
+        let mut flat = vec![0.0f32; l * widest * width];
+        for p in 0..l {
+            let mut at = p * widest * width;
+            for j in batch {
+                let src = if pick == 0 { &j.obs[p].0 } else { &j.obs[p].1 };
+                flat[at..at + src.len()].copy_from_slice(src);
+                at += src.len();
+            }
+        }
+        upload(&flat, (l * widest, width), &Device::Cpu, dt).unwrap().reshape((l, widest, width)).unwrap()
+    }
+
+    #[test]
+    fn league_gather_matches_the_three_pass_buffer() {
+        let batch = vec![job(0.5, &[3, 1]), job(-1.25, &[2, 4])];
+        for dt in [DType::BF16, DType::F32] {
+            let g = gather(&batch, 2, 6, 6, &Device::Cpu, dt, |o| &o.0).unwrap();
+            let s = gather(&batch, 2, 6, 2, &Device::Cpu, dt, |o| &o.1).unwrap();
+            let wg = three_pass(&batch, 2, 6, 6, dt, 0);
+            let ws = three_pass(&batch, 2, 6, 2, dt, 1);
+            assert_eq!(g.dtype(), dt);
+            let bits = |t: Tensor| t.to_dtype(DType::F32).unwrap().flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+            assert_eq!(bits(g), bits(wg));
+            assert_eq!(bits(s), bits(ws));
+        }
+    }
+}
