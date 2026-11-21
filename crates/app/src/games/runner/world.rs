@@ -876,6 +876,45 @@ mod tests {
         assert_eq!(model.clips, HERO_CLIPS);
     }
 
+    #[test]
+    fn every_bundled_model_loads_through_the_asset_server() {
+        let mut app = loading_app();
+        let started = std::time::Instant::now();
+        loop {
+            app.update();
+            if app.world().get_resource::<crate::gcad::Warming>().is_none() {
+                break;
+            }
+            assert!(started.elapsed().as_secs() < 120, "models did not load");
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let server = app.world().resource::<AssetServer>();
+        let library = app.world().resource::<crate::gcad::Library>();
+        let names: Vec<&str> = crate::gcad::game_models().collect();
+        assert!(names.len() > 30, "{names:?}");
+        for name in names {
+            let h = library.handle(name).expect(name);
+            assert!(
+                server.is_loaded_with_dependencies(h),
+                "{name}: {:?}",
+                server.load_state(h)
+            );
+        }
+    }
+
+    #[test]
+    fn the_linux_and_windows_archives_carry_the_assets_folder() {
+        let yml = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../.github/workflows/release.yml"
+        ))
+        .unwrap();
+        assert!(
+            yml.contains("cp -R assets \"dist/${name}/assets\""),
+            "release archives ship without assets/"
+        );
+    }
+
     fn assets_root() -> std::path::PathBuf {
         kg_core::assets::dirs()
             .into_iter()
