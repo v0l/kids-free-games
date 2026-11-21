@@ -435,10 +435,14 @@ mod tests {
         let mut rows = vec![];
         for k in 0..pop {
             let (vm, n) = net::build(spec(), &dev).unwrap();
-            for (i, (_, v)) in vm.data().lock().unwrap().iter().enumerate() {
+            let mut names: Vec<String> = vm.data().lock().unwrap().keys().cloned().collect();
+            names.sort();
+            for (i, name) in names.iter().enumerate() {
+                let data_map = vm.data().lock().unwrap();
+                let v = &data_map[name];
                 let w = v.as_tensor();
                 let noise = Tensor::from_vec(data(w.elem_count(), (k * 31 + i) as u32), w.shape(), &dev).unwrap();
-                v.set(&(w + (noise * 0.2).unwrap()).unwrap()).unwrap();
+                v.set(&(noise * 0.2).unwrap()).unwrap();
             }
             members.push((vm, n));
         }
@@ -538,7 +542,7 @@ mod tests {
             let want = tr.layout().pack(vm).unwrap();
             let got = &after[k * per..(k + 1) * per];
             let worst = want.iter().zip(got).map(|(a, b)| (a - b).abs()).fold(0.0f32, f32::max);
-            assert!(worst < 2e-4, "member {k}: weights differ by {worst}");
+            assert!(worst < 2e-5, "member {k}: weights differ by {worst}");
         }
     }
 
