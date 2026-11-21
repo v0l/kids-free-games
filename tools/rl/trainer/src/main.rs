@@ -1480,6 +1480,64 @@ mod tests {
     }
 
     #[test]
+    fn lockstep_server_returns_the_same_probabilities_as_serving_members_alone() {
+        type G = kg_core::games::clash::rl::Arena;
+        let spec = G::spec();
+        let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+        let dev = Device::Cpu;
+        let mut weights = vec![];
+        for k in 0..2u32 {
+            let (vm, _) = net::build(G::spec(), &dev).unwrap();
+            for (i, (_, v)) in vm.data().lock().unwrap().iter().enumerate() {
+                let w = v.as_tensor();
+                let noise: Vec<f32> = (0..w.elem_count())
+                    .map(|x| ((x as u32 * 2654435761 + k * 97 + i as u32) >> 9) as f32 % 100.0 / 500.0 - 0.1)
+                    .collect();
+                v.set(&(w + Tensor::from_vec(noise, w.shape(), &dev).unwrap()).unwrap()).unwrap();
+            }
+            let path = std::env::temp_dir().join(format!("kg-test-league-{k}.safetensors"));
+            vm.save(&path).unwrap();
+            weights.push(std::fs::read(&path).unwrap());
+            let _ = std::fs::remove_file(&path);
+        }
+        let league = league_nets::<G>(&weights, false, &dev).unwrap().unwrap();
+        let obs_for = |seed: usize, rows: [usize; 2]| -> Vec<(Vec<f32>, Vec<f32>, usize)> {
+            rows.iter()
+                .enumerate()
+                .map(|(p, n)| {
+                    (
+                        (0..n * gsize).map(|i| ((i * 7 + seed * 13 + p) % 17) as f32 / 17.0).collect(),
+                        (0..n * ns).map(|i| ((i * 3 + seed) % 11) as f32 / 11.0).collect(),
+                        *n,
+                    )
+                })
+                .collect()
+        };
+        let serve = |members: usize, seeds: &[usize]| -> Vec<Vec<Vec<f32>>> {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut backs = vec![];
+            for &seed in seeds {
+                let (reply, back) = std::sync::mpsc::channel();
+                tx.send(SeatJob { obs: obs_for(seed, [2 + seed % 2, 1 + seed % 3]), reply }).unwrap();
+                backs.push(back);
+            }
+            drop(tx);
+            let rx = std::sync::Mutex::new(rx);
+            league_server::<G>(&rx, &league, &dev, members).unwrap();
+            backs.iter().map(|b| b.recv().unwrap()).collect()
+        };
+        let together = serve(3, &[1, 2, 3]);
+        for (k, seed) in [1usize, 2, 3].iter().enumerate() {
+            let alone = serve(1, &[*seed]).remove(0);
+            for (p, (a, b)) in alone.iter().zip(&together[k]).enumerate() {
+                assert_eq!(a.len(), b.len(), "member {k} policy {p}");
+                let worst = a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0f32, f32::max);
+                assert!(worst < 1e-4, "member {k} policy {p}: {worst}");
+            }
+        }
+    }
+
+    #[test]
     fn league_gather_matches_the_three_pass_buffer() {
         let batch = vec![job(0.5, &[3, 1]), job(-1.25, &[2, 4])];
         for dt in [DType::BF16, DType::F32] {
