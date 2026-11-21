@@ -446,6 +446,44 @@ fn upload(data: &[f32], shape: (usize, usize), dev: &Device, dt: candle_core::DT
     }
 }
 
+fn gather(
+    batch: &[SeatJob],
+    l: usize,
+    widest: usize,
+    width: usize,
+    dev: &Device,
+    dt: candle_core::DType,
+    part: impl Fn(&(Vec<f32>, Vec<f32>, usize)) -> &Vec<f32>,
+) -> Result<Tensor> {
+    let bf = dt == candle_core::DType::BF16;
+    let mut f = Vec::<f32>::new();
+    let mut h = Vec::<half::bf16>::new();
+    if bf {
+        h.resize(l * widest * width, half::bf16::ZERO);
+    } else {
+        f.resize(l * widest * width, 0.0);
+    }
+    for p in 0..l {
+        let mut at = p * widest * width;
+        for j in batch {
+            let src = part(&j.obs[p]);
+            if bf {
+                for (d, s) in h[at..at + src.len()].iter_mut().zip(src) {
+                    *d = half::bf16::from_f32(*s);
+                }
+            } else {
+                f[at..at + src.len()].copy_from_slice(src);
+            }
+            at += src.len();
+        }
+    }
+    if bf {
+        Tensor::from_vec(h, (l, widest, width), dev)
+    } else {
+        Tensor::from_vec(f, (l, widest, width), dev)
+    }
+}
+
 fn league_nets<G: Game>(weights: &[Vec<u8>], bf16: bool, dev: &Device) -> Result<Option<LeagueNet>> {
     if weights.is_empty() {
         return Ok(None);
@@ -511,20 +549,9 @@ fn league_server<G: Game>(
         let widest = rows.iter().copied().max().unwrap_or(0);
         let mut replies: Vec<Vec<Vec<f32>>> = batch.iter().map(|_| vec![vec![]; l]).collect();
         if widest > 0 {
-            let mut g = vec![0.0f32; l * widest * gsize];
-            let mut sc = vec![0.0f32; l * widest * ns];
-            for p in 0..l {
-                let (mut go, mut so) = (p * widest * gsize, p * widest * ns);
-                for j in &batch {
-                    g[go..go + j.obs[p].0.len()].copy_from_slice(&j.obs[p].0);
-                    sc[so..so + j.obs[p].1.len()].copy_from_slice(&j.obs[p].1);
-                    go += j.obs[p].0.len();
-                    so += j.obs[p].1.len();
-                }
-            }
             let dt = league.net.dtype;
-            let gt = upload(&g, (l * widest, gsize), dev, dt)?.reshape((l, widest, gsize))?;
-            let st = upload(&sc, (l * widest, ns), dev, dt)?.reshape((l, widest, ns))?;
+            let gt = gather(&batch, l, widest, gsize, dev, dt, |o| &o.0)?;
+            let st = gather(&batch, l, widest, ns, dev, dt, |o| &o.1)?;
             let (logits, _) = league.net.forward(&league.weights, &gt, &st)?;
             let probs: Vec<f32> = candle_nn::ops::softmax(&logits, D::Minus1)?
                 .flatten_all()?
