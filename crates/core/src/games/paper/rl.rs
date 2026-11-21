@@ -276,6 +276,15 @@ fn seat_rivals(w: &mut World, share: f32) -> Vec<usize> {
 
 static SEATS: std::sync::Mutex<(usize, f32)> = std::sync::Mutex::new((0, 0.0));
 static EVAL_THREADS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static EVAL_OFFSET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn set_eval_offset(n: u64) {
+    EVAL_OFFSET.store(n, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn eval_offset() -> u64 {
+    EVAL_OFFSET.load(std::sync::atomic::Ordering::Relaxed)
+}
 
 pub fn set_eval_threads(n: usize) {
     EVAL_THREADS.store(n, std::sync::atomic::Ordering::Relaxed);
@@ -533,6 +542,7 @@ pub fn evaluate_against(
 ) -> Report {
     let pool: Vec<Arc<Policy>> = rivals.iter().cloned().map(Arc::new).collect();
     let next = std::sync::atomic::AtomicU64::new(0);
+    let base = 77_000 + eval_offset();
     let runs: Vec<Report> = std::thread::scope(|s| {
         let hs: Vec<_> = (0..eval_threads().min(seeds as usize).max(1))
             .map(|_| {
@@ -547,7 +557,7 @@ pub fn evaluate_against(
                         let rival =
                             (!pool.is_empty()).then(|| pool[seed as usize % pool.len()].clone());
                         let skill = skill.unwrap_or(skill_of(seed));
-                        out.push(play_one(pilot, 77_000 + seed, skill, rival, share));
+                        out.push(play_one(pilot, base + seed, skill, rival, share));
                     }
                 })
             })

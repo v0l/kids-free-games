@@ -37,6 +37,36 @@ champion goes to `<out>`, `<out>.safetensors` and `<out>.roundN`. `<out>.live` h
 target/release/kids_games --brain clash --watch /tmp/kgrl/clash_pop.kgb.live --speed 2
 ```
 
+### Picking the champion
+
+The ranking pass scores every member on one fixed seed set, so its winner is the luckiest of eight
+on those games, not the best net. Promotion therefore re-plays the top `--holdout-top` members (three
+by default) plus the defending champion on a fresh seed block (`set_eval_offset`, a new block each
+generation) and only accepts a challenger that beats the champion by `--min-gain` there. `--holdout 0`
+restores the old same-games comparison. Without the held-out check a run promotes on noise: at 16
+games one score is worth about +-12 points, which is wider than any real gain between neighbouring
+generations.
+
+Evaluation threads are pooled (`set_eval_threads`), so `--eval-seeds 64` costs little more wall time
+than 16. Prefer more games over more generations: the per-member score noise falls as 1/sqrt(n).
+
+The printed `score` is only comparable inside one generation: the league the members play against
+changes whenever a champion is promoted, so a round 20 score next to a round 4 score says nothing.
+
+### Speed
+
+The trainer is launch-bound, not compute-bound: at pop 8 and 128 envs the policy net is 94k weights
+and every forward is 24 small kernels, so pop, envs, steps, threads, minibatch size and bf16 barely
+move the step rate (20k-22k steps/s on a desktop RTX PRO 6000 either way). Measured dead ends:
+candle's cuDNN conv path gives wrong logits here (parity error 0.98 against `conv.rs`) and is slower;
+candle's native im2col conv also fails the parity check in f32 and is slower than the hand-written
+`Unfold` gather. Bigger `--envs` needs GPU memory for the rollout buffers: 128 envs is about 28 GB
+with 8 members, 512 runs out of memory on a 96 GB card when the display is using it.
+
+Practical config on the desktop: `THREADS=40 POP=8 ENVS=128 MINIBATCH=16384 EVAL_SEEDS=64`,
+`CUDA_VISIBLE_DEVICES` set to the free card, `nice`. A generation is about 40 s of training plus 15 s
+of selection.
+
 ## Game state for training
 
 A game exposes what a model sees through `kg_core::brain::state::BrainState`: named layers drawn

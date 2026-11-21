@@ -37,6 +37,8 @@ struct Args {
     bc_epochs: usize,
     gene_set: Vec<(String, f32)>,
     critic_rounds: usize,
+    holdout: bool,
+    holdout_top: usize,
 }
 
 fn args() -> Args {
@@ -67,6 +69,8 @@ fn args() -> Args {
         bc_epochs: 4,
         gene_set: vec![],
         critic_rounds: 0,
+        holdout: true,
+        holdout_top: 3,
     };
     let v: Vec<String> = std::env::args().collect();
     let mut i = 1;
@@ -99,6 +103,8 @@ fn args() -> Args {
                 a.gene_set.push((k.to_string(), v.parse().unwrap()));
             }
             "--critic-rounds" => a.critic_rounds = x.parse().unwrap(),
+            "--holdout" => a.holdout = x != "0",
+            "--holdout-top" => a.holdout_top = x.parse().unwrap(),
             "--demos" => a.demos = x,
             "--bc-epochs" => a.bc_epochs = x.parse().unwrap(),
             "--league-servers" => a.league_servers = x.parse().unwrap(),
@@ -181,6 +187,7 @@ trait Game: Learner + Sized {
     fn eval(policy: &Policy, rivals: &[Policy], seeds: u64) -> (f32, String);
     fn set_seats(_: usize) {}
     fn set_eval_threads(_: usize) {}
+    fn set_eval_offset(_: u64) {}
 }
 
 mod clash {
@@ -264,6 +271,14 @@ mod clash {
 
         fn set_seats(n: usize) {
             kg_core::games::clash::rl::set_seats(n, 0.25);
+        }
+
+        fn set_eval_threads(n: usize) {
+            kg_core::games::clash::rl::set_eval_threads(n);
+        }
+
+        fn set_eval_offset(n: u64) {
+            kg_core::games::clash::rl::set_eval_offset(n);
         }
     }
 }
@@ -365,6 +380,10 @@ mod paper {
 
         fn set_eval_threads(n: usize) {
             kg_core::games::paper::rl::set_eval_threads(n);
+        }
+
+        fn set_eval_offset(n: u64) {
+            kg_core::games::paper::rl::set_eval_offset(n);
         }
     }
 }
@@ -987,8 +1006,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
             );
         }
         leader = order[0];
-        let best = &members[leader];
-        let defending = match league.last() {
+        let mut defending = match league.last() {
             Some(p) if !league.is_empty() => {
                 let bots = G::eval(p, &[], seeds).0;
                 let vs = G::eval(p, &league, seeds).0;
@@ -999,8 +1017,34 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         if league.len() > 0 {
             println!("  champion replayed on the same games: score {defending:.2}");
         }
+        let mut challenge = members[leader].score;
+        if a.holdout {
+            G::set_eval_offset(1_000_000 + round as u64 * 10_000);
+            let mut best_fresh = f32::MIN;
+            let mut picked = leader;
+            for &k in order.iter().take(a.holdout_top.max(1)) {
+                let p = members[k].net.export()?;
+                let bots = G::eval(&p, &[], seeds).0;
+                let vs = (!league.is_empty()).then(|| G::eval(&p, &league, seeds).0);
+                let s = (bots + vs.unwrap_or(bots)) / 2.0;
+                if s > best_fresh {
+                    best_fresh = s;
+                    picked = k;
+                }
+            }
+            if let Some(p) = league.last() {
+                let bots = G::eval(p, &[], seeds).0;
+                let vs = G::eval(p, &league, seeds).0;
+                defending = (bots + vs) / 2.0;
+            }
+            println!("  held-out seeds: m{picked} {best_fresh:.2} vs champion {defending:.2}");
+            leader = picked;
+            challenge = best_fresh;
+            G::set_eval_offset(0);
+        }
+        let best = &members[leader];
         let champion = defending;
-        if best.score > champion + a.min_gain {
+        if challenge > champion + a.min_gain {
             stale = 0;
             let policy = best.net.export()?;
             save(&policy, &a.out);

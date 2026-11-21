@@ -475,6 +475,28 @@ pub fn evaluate(pilot: &Pilot, seeds: u64, secs: f32) -> Report {
     evaluate_against(pilot, seeds, secs, &[], 0.0)
 }
 
+static EVAL_THREADS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static EVAL_OFFSET: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn set_eval_threads(n: usize) {
+    EVAL_THREADS.store(n, std::sync::atomic::Ordering::Relaxed);
+}
+
+pub fn set_eval_offset(n: u64) {
+    EVAL_OFFSET.store(n, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn eval_offset() -> u64 {
+    EVAL_OFFSET.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn eval_threads() -> usize {
+    match EVAL_THREADS.load(std::sync::atomic::Ordering::Relaxed) {
+        0 => std::thread::available_parallelism().map_or(8, |n| n.get()),
+        n => n,
+    }
+}
+
 pub fn evaluate_against(
     pilot: &Pilot,
     seeds: u64,
@@ -483,14 +505,27 @@ pub fn evaluate_against(
     share: f32,
 ) -> Report {
     let pool: Vec<_> = rivals.iter().cloned().map(std::sync::Arc::new).collect();
+    let next = std::sync::atomic::AtomicU64::new(0);
+    let base = 77_000 + eval_offset();
     let runs: Vec<[f32; 7]> = std::thread::scope(|s| {
-        let hs: Vec<_> = (0..seeds)
-            .map(|seed| {
-                let rival = (!pool.is_empty()).then(|| pool[seed as usize % pool.len()].clone());
-                s.spawn(move || play_one(pilot, 77_000 + seed, secs, rival, share))
+        let hs: Vec<_> = (0..eval_threads().min(seeds as usize).max(1))
+            .map(|_| {
+                let (next, pool) = (&next, &pool);
+                s.spawn(move || {
+                    let mut out = vec![];
+                    loop {
+                        let seed = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if seed >= seeds {
+                            return out;
+                        }
+                        let rival =
+                            (!pool.is_empty()).then(|| pool[seed as usize % pool.len()].clone());
+                        out.push(play_one(pilot, base + seed, secs, rival, share));
+                    }
+                })
             })
             .collect();
-        hs.into_iter().map(|h| h.join().unwrap()).collect()
+        hs.into_iter().flat_map(|h| h.join().unwrap()).collect()
     });
     let n = seeds.max(1) as f32;
     let avg = |k: usize| runs.iter().map(|r| r[k]).sum::<f32>() / n;
@@ -864,6 +899,26 @@ mod tests {
         let r = a.step(2).reward;
         let rw = Rewards::default();
         assert!(r >= need as f32 * rw.xp + rw.level - 0.1, "reward {r}");
+    }
+
+    #[test]
+    fn the_eval_offset_moves_which_games_are_played() {
+        set_eval_threads(1);
+        set_eval_offset(0);
+        let a = evaluate(&Pilot::Bot, 4, 30.0);
+        set_eval_offset(1_000_000);
+        let b = evaluate(&Pilot::Bot, 4, 30.0);
+        set_eval_offset(0);
+        assert!(
+            a.level != b.level || a.kills != b.kills || a.secs != b.secs,
+            "the held-out offset has to pick different games: {} {} {} vs {} {} {}",
+            a.level,
+            a.kills,
+            a.secs,
+            b.level,
+            b.kills,
+            b.secs
+        );
     }
 
     #[test]

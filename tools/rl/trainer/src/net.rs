@@ -233,7 +233,7 @@ pub fn build(spec: Spec, dev: &Device) -> Result<(VarMap, Net)> {
 
 pub fn import_actor(vm: &VarMap, p: &Policy, dev: &Device) -> Result<()> {
     let data = vm.data().lock().unwrap();
-    let mut set = |name: String, v: &[f32]| -> Result<()> {
+    let set = |name: String, v: &[f32]| -> Result<()> {
         let var = data.get(&name).ok_or_else(|| candle_core::Error::Msg(format!("no {name}")))?;
         let t = Tensor::from_slice(v, var.shape(), dev)?;
         var.set(&t)
