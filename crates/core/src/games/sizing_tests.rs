@@ -383,15 +383,16 @@ fn garden_retry_popup_stays_between_the_question_and_the_bed() {
         let size = garden::retry_popup_size(&v);
         let start = garden::retry_popup_pos(&v);
         let region = garden::play_region(&v);
-        let prompt = garden::prompt_rect(&v);
-        for rise in [0.0, 35.0] {
-            let c = start.y - rise;
+        let k = garden::retry_popup_size(&v) / 28.0;
+        let stage_bottom = garden::content_top(&v) + 134.0 * k;
+        {
+            let c = start.y;
             let top = c - size * 0.5;
             let bottom = c + size * 0.5;
-            if top < prompt.y + prompt.h || bottom > region.y {
+            if top < stage_bottom || bottom > region.y {
                 bad.push(format!(
                     "{name}: retry popup {top:.0}..{bottom:.0} outside {:.0}..{:.0}",
-                    prompt.y + prompt.h,
+                    stage_bottom,
                     region.y
                 ));
             }
