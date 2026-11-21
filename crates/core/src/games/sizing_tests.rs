@@ -376,6 +376,51 @@ fn garden_question_clears_the_beds_button_and_home_on_every_view() {
 }
 
 #[test]
+fn garden_retry_popup_stays_between_the_question_and_the_bed() {
+    use super::garden;
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        let size = garden::retry_popup_size(&v);
+        let start = garden::retry_popup_pos(&v);
+        let region = garden::play_region(&v);
+        let prompt = garden::prompt_rect(&v);
+        for rise in [0.0, 35.0] {
+            let c = start.y - rise;
+            let top = c - size * 0.5;
+            let bottom = c + size * 0.5;
+            if top < prompt.y + prompt.h || bottom > region.y {
+                bad.push(format!(
+                    "{name}: retry popup {top:.0}..{bottom:.0} outside {:.0}..{:.0}",
+                    prompt.y + prompt.h,
+                    region.y
+                ));
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
+fn long_results_lines_fit_the_sheet_on_every_view() {
+    use crate::sizing::{check_sheet_text, dpr_of, results_layout};
+    let lines = [
+        "Score 3400 Lines 12 Level 3",
+        "Squashed by a car! Score 8",
+        "Level 7 done, score 540",
+    ];
+    let mut bad = vec![];
+    for (name, v) in test_views() {
+        for line in lines {
+            let r = results_layout(&v, "Nice try!", line, &["Try again", "Levels"], 5, true);
+            if let Err(e) = check_sheet_text(&v, dpr_of(name), &format!("{name} {line:?}"), &r.sheet) {
+                bad.push(e);
+            }
+        }
+    }
+    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+}
+
+#[test]
 fn the_2048_board_clears_the_hint_and_buttons_on_every_view() {
     use super::merge;
     let mut bad = vec![];

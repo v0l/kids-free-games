@@ -347,7 +347,7 @@ pub fn flower_color(level: usize, i: usize, j: usize) -> usize {
 }
 
 pub fn play_region(view: &View) -> Rect {
-    let top = content_top(view) + 130.0 * ui_scale(view);
+    let top = content_top(view) + 156.0 * ui_scale(view);
     let bottom = seed_rects(view)[0].y - 24.0;
     let f = view.full();
     Rect::new(f.x + 40.0, top, f.w - 80.0, (bottom - top).max(120.0))
@@ -374,6 +374,15 @@ pub fn prompt_pos(view: &View) -> Vec2 {
 
 pub fn prompt_size(view: &View) -> f32 {
     74.0 * ui_scale(view)
+}
+
+pub fn retry_popup_size(view: &View) -> f32 {
+    32.0 * ui_scale(view)
+}
+
+pub fn retry_popup_pos(view: &View) -> Vec2 {
+    let k = ui_scale(view);
+    vec2(view.w / 2.0, content_top(view) + 135.0 * k)
 }
 
 pub fn prompt_rect(view: &View) -> Rect {
@@ -935,7 +944,7 @@ impl Garden {
                 sfx::play(Sfx::Wrong);
                 self.shake.add(0.22);
                 self.popups
-                    .add(at - vec2(0.0, 150.0), "Count and try again", orange, 40.0);
+                    .add(retry_popup_pos(view), "Count and try again", orange, retry_popup_size(view));
                 if self.slips + 1 >= SLIPS_DOWN || self.wrong >= 2 {
                     sfx::say(Say::Steady);
                 }
