@@ -35,7 +35,7 @@ fi
 
 rsync -az --delete --exclude target --exclude .git --exclude assets/music --exclude docs/shots --exclude dist ./ mac:git/kids-free-games/
 remote='export PATH=$HOME/.cargo/bin:/opt/homebrew/bin:$PATH; cd ~/git/kids-free-games'
-ssh mac "$remote && BUILD=$build scripts/ios-appstore.sh"
+ssh mac "$remote && BUILD=$build IOS_VERSION=${IOS_VERSION:-} scripts/ios-appstore.sh"
 ssh mac "$remote && BUILD=$build scripts/macos-pkg.sh"
 
 mkdir -p dist
@@ -46,8 +46,8 @@ scp -q mac:git/kids-free-games/target/macos/KidsGames.pkg "$pkg"
 
 ipa_version=$(unzip -p "$ipa" 'Payload/KidsGames.app/Info.plist' | python3 -c 'import plistlib,sys; p=plistlib.loads(sys.stdin.buffer.read()); print(p["CFBundleShortVersionString"], p["CFBundleVersion"])')
 read -r ipa_short ipa_build <<< "$ipa_version"
-if [ "$ipa_short" != "$version" ]; then
-  echo "IPA CFBundleShortVersionString is $ipa_short, Cargo version is $version" >&2
+if [ "$ipa_short" != "${IOS_VERSION:-$version}" ]; then
+  echo "IPA CFBundleShortVersionString is $ipa_short, expected ${IOS_VERSION:-$version}" >&2
   exit 1
 fi
 if [ "$ipa_build" != "$build" ]; then
