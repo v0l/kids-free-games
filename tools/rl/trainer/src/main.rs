@@ -1,8 +1,10 @@
 mod net;
+mod popnet;
 
 mod devices;
 use candle_core::{Device, Result, Tensor, D};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarMap};
+use popnet::{Knobs, PopNet, Rollout, Trainer};
 use kg_core::brain::conv::{Obs, Policy};
 use kg_core::brain::learn::{Batch, Learner, Tick};
 use kg_core::brain::Effort;
@@ -32,6 +34,8 @@ struct Args {
     minibatch: usize,
     bf16: bool,
     league_servers: usize,
+    combined: bool,
+    groups: usize,
     device: String,
     demos: String,
     bc_epochs: usize,
@@ -64,6 +68,8 @@ fn args() -> Args {
         minibatch: 4096,
         bf16: false,
         league_servers: 4,
+        combined: false,
+        groups: 1,
         device: devices::best().into(),
         demos: String::new(),
         bc_epochs: 4,
@@ -107,6 +113,8 @@ fn args() -> Args {
             "--holdout-top" => a.holdout_top = x.parse().unwrap(),
             "--demos" => a.demos = x,
             "--bc-epochs" => a.bc_epochs = x.parse().unwrap(),
+            "--league-mode" => a.combined = x == "combined",
+            "--groups" => a.groups = x.parse().unwrap(),
             "--league-servers" => a.league_servers = x.parse().unwrap(),
             other => panic!("unknown flag {other}"),
         }
@@ -390,11 +398,8 @@ mod paper {
 
 struct Member<G: Game> {
     id: usize,
-    dev: Device,
     rng: Rng,
-    vm: VarMap,
-    net: net::Net,
-    opt: AdamW,
+    buf: Buf,
     batch: Batch<G>,
     genes: Vec<f32>,
     lr: f64,
@@ -413,38 +418,255 @@ struct Member<G: Game> {
     pg_scale: f32,
 }
 
+#[derive(Default)]
+struct Buf {
+    obs_g: Vec<f32>,
+    obs_s: Vec<f32>,
+    acts: Vec<u32>,
+    logp: Vec<f32>,
+    vals: Vec<f32>,
+    rews: Vec<f32>,
+    dones: Vec<f32>,
+}
+
+mod phases {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Instant;
+
+    pub const NAMES: [&str; 7] = [
+        "seat-obs", "wait-reply", "step", "srv-idle", "lg-gather", "lg-forward", "lg-readback",
+    ];
+    pub const SEAT_OBS: usize = 0;
+    pub const WAIT_REPLY: usize = 1;
+    pub const STEP: usize = 2;
+    pub const SRV_IDLE: usize = 3;
+    pub const LG_GATHER: usize = 4;
+    pub const LG_FORWARD: usize = 5;
+    pub const LG_READBACK: usize = 6;
+    static TOTALS: [AtomicU64; 7] = [const { AtomicU64::new(0) }; 7];
+
+    pub fn add(phase: usize, since: Instant) {
+        TOTALS[phase].fetch_add(since.elapsed().as_nanos() as u64, Ordering::Relaxed);
+    }
+
+    pub fn take() -> Vec<f64> {
+        TOTALS
+            .iter()
+            .map(|t| t.swap(0, Ordering::Relaxed) as f64 / 1e9)
+            .collect()
+    }
+
+    pub fn report() -> String {
+        let t = take();
+        NAMES
+            .iter()
+            .zip(&t)
+            .map(|(n, v)| format!("{n} {v:.1}s"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
+}
+
+enum Seating<'a> {
+    Off,
+    Server(&'a Sender<SeatJob>),
+    Ready(Vec<Vec<(usize, usize)>>, Vec<Vec<f32>>),
+}
+
 struct SeatJob {
-    obs: Vec<(Vec<f32>, Vec<f32>, usize)>,
+    obs: SeatObs,
     reply: Sender<Vec<Vec<f32>>>,
 }
 
-fn league_nets<G: Game>(weights: &[Vec<u8>], bf16: bool, dev: &Device) -> Result<Vec<net::Net>> {
-    let mut out = vec![];
-    for (k, bytes) in weights.iter().enumerate() {
-        let (mut vm, mut net) = net::build(G::spec(), dev)?;
-        if bf16 {
-            net.dtype = candle_core::DType::BF16;
+struct LeagueNet {
+    net: PopNet,
+    weights: popnet::Weights,
+    count: usize,
+}
+
+fn upload(data: &[f32], shape: (usize, usize), dev: &Device, dt: candle_core::DType) -> Result<Tensor> {
+    if dt == candle_core::DType::BF16 {
+        let v: Vec<half::bf16> = data.iter().map(|x| half::bf16::from_f32(*x)).collect();
+        Tensor::from_vec(v, shape, dev)
+    } else {
+        Tensor::from_slice(data, shape, dev)
+    }
+}
+
+thread_local! {
+    static STAGE_BF16: std::cell::RefCell<Vec<half::bf16>> = const { std::cell::RefCell::new(Vec::new()) };
+    static STAGE_F32: std::cell::RefCell<Vec<f32>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+fn convert_into(dst: &mut [half::bf16], src: &[f32]) {
+    let lanes = if src.len() < 1 << 16 { 1 } else { 8 };
+    let chunk = src.len().div_ceil(lanes).max(1);
+    std::thread::scope(|sc| {
+        for (d, s) in dst.chunks_mut(chunk).zip(src.chunks(chunk)) {
+            sc.spawn(move || {
+                for (x, y) in d.iter_mut().zip(s) {
+                    *x = half::bf16::from_f32(*y);
+                }
+            });
         }
-        let path =
-            std::env::temp_dir().join(format!("kg-league-{}-{k}.safetensors", std::process::id()));
+    });
+}
+
+fn gather(
+    batch: &[&SeatObs],
+    l: usize,
+    widest: usize,
+    width: usize,
+    dev: &Device,
+    dt: candle_core::DType,
+    part: impl Fn(&(Vec<f32>, Vec<f32>, usize)) -> &Vec<f32>,
+) -> Result<Tensor> {
+    let len = l * widest * width;
+    let layout = |fill: &mut dyn FnMut(usize, &[f32])| {
+        for p in 0..l {
+            let start = p * widest * width;
+            let mut at = start;
+            for j in batch {
+                let src = part(&j[p]);
+                fill(at, src);
+                at += src.len();
+            }
+            fill(at, &[]);
+            let _ = start;
+        }
+    };
+    if dt == candle_core::DType::BF16 {
+        STAGE_BF16.with(|cell| {
+            let mut buf = cell.borrow_mut();
+            if buf.len() < len {
+                buf.resize(len, half::bf16::ZERO);
+            }
+            for p in 0..l {
+                let start = p * widest * width;
+                let mut at = start;
+                for j in batch {
+                    let src = part(&j[p]);
+                    convert_into(&mut buf[at..at + src.len()], src);
+                    at += src.len();
+                }
+                buf[at..start + widest * width].fill(half::bf16::ZERO);
+            }
+            Tensor::from_slice(&buf[..len], (l, widest, width), dev)
+        })
+    } else {
+        STAGE_F32.with(|cell| {
+            let mut buf = cell.borrow_mut();
+            if buf.len() < len {
+                buf.resize(len, 0.0);
+            }
+            layout(&mut |at, src| {
+                if src.is_empty() {
+                    return;
+                }
+                buf[at..at + src.len()].copy_from_slice(src);
+            });
+            for p in 0..l {
+                let start = p * widest * width;
+                let used: usize = batch.iter().map(|j| part(&j[p]).len()).sum();
+                buf[start + used..start + widest * width].fill(0.0);
+            }
+            Tensor::from_slice(&buf[..len], (l, widest, width), dev)
+        })
+    }
+}
+
+fn league_nets<G: Game>(weights: &[Vec<u8>], bf16: bool, dev: &Device) -> Result<Option<LeagueNet>> {
+    if weights.is_empty() {
+        return Ok(None);
+    }
+    let mut rows = vec![];
+    let mut layout = None;
+    for (k, bytes) in weights.iter().enumerate() {
+        let (mut vm, _) = net::build(G::spec(), dev)?;
+        static LOADS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let load = LOADS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "kg-league-{}-{load}-{k}.safetensors",
+            std::process::id()
+        ));
         std::fs::write(&path, bytes).unwrap();
         vm.load(&path)?;
         let _ = std::fs::remove_file(&path);
-        out.push(net.frozen());
+        let lay = popnet::Layout::of(&vm);
+        rows.extend(lay.pack(&vm)?);
+        layout = Some(lay);
     }
-    Ok(out)
+    let layout = layout.expect("a league model");
+    let total = layout.total;
+    let dtype = if bf16 {
+        candle_core::DType::BF16
+    } else {
+        candle_core::DType::F32
+    };
+    let net = PopNet::new(G::spec(), layout, dtype, dev)?;
+    let flat = Tensor::from_vec(rows, (weights.len(), total), dev)?;
+    let weights = net.weights(&flat)?;
+    Ok(Some(LeagueNet {
+        net,
+        weights,
+        count: flat.dim(0)?,
+    }))
+}
+
+type SeatObs = Vec<(Vec<f32>, Vec<f32>, usize)>;
+
+fn league_launch<G: Game>(league: &LeagueNet, obs: &[&SeatObs], dev: &Device) -> Result<Option<Tensor>> {
+    let spec = G::spec();
+    let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+    let l = league.count;
+    let widest = (0..l)
+        .map(|p| obs.iter().map(|o| o[p].2).sum::<usize>())
+        .max()
+        .unwrap_or(0);
+    if widest == 0 {
+        return Ok(None);
+    }
+    let dt = league.net.dtype;
+    let t_gather = Instant::now();
+    let gt = gather(obs, l, widest, gsize, dev, dt, |o| &o.0)?;
+    let st = gather(obs, l, widest, ns, dev, dt, |o| &o.1)?;
+    phases::add(phases::LG_GATHER, t_gather);
+    let t_forward = Instant::now();
+    let (logits, _) = league.net.forward(&league.weights, &gt, &st)?;
+    let out = candle_nn::ops::softmax(&logits, D::Minus1)?;
+    phases::add(phases::LG_FORWARD, t_forward);
+    Ok(Some(out))
+}
+
+fn league_split<G: Game>(league: &LeagueNet, obs: &[&SeatObs], probs: Option<&Tensor>) -> Result<Vec<Vec<Vec<f32>>>> {
+    let t_read = Instant::now();
+    let na = G::spec().actions;
+    let l = league.count;
+    let mut replies: Vec<Vec<Vec<f32>>> = obs.iter().map(|_| vec![vec![]; l]).collect();
+    if let Some(t) = probs {
+        let widest = t.dim(1)?;
+        let flat: Vec<f32> = t.flatten_all()?.to_vec1()?;
+        for p in 0..l {
+            let mut at = p * widest * na;
+            for (o, r) in obs.iter().zip(replies.iter_mut()) {
+                let n = o[p].2 * na;
+                r[p] = flat[at..at + n].to_vec();
+                at += n;
+            }
+        }
+    }
+    phases::add(phases::LG_READBACK, t_read);
+    Ok(replies)
 }
 
 fn league_server<G: Game>(
     jobs: &std::sync::Mutex<Receiver<SeatJob>>,
-    nets: &[net::Net],
+    league: &LeagueNet,
     dev: &Device,
     members: usize,
 ) -> Result<()> {
-    let spec = G::spec();
-    let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
-    let na = spec.actions;
     loop {
+        let idle = Instant::now();
         let batch = {
             let jobs = jobs.lock().unwrap();
             let Ok(first) = jobs.recv() else {
@@ -452,40 +674,17 @@ fn league_server<G: Game>(
             };
             let mut batch = vec![first];
             while batch.len() < members {
-                match jobs.try_recv() {
+                match jobs.recv() {
                     Ok(j) => batch.push(j),
                     Err(_) => break,
                 }
             }
             batch
         };
-        let mut replies: Vec<Vec<Vec<f32>>> = batch.iter().map(|_| vec![]).collect();
-        for (p, net) in nets.iter().enumerate() {
-            let rows: usize = batch.iter().map(|j| j.obs[p].2).sum();
-            if rows == 0 {
-                for r in replies.iter_mut() {
-                    r.push(vec![]);
-                }
-                continue;
-            }
-            let mut g = Vec::with_capacity(rows * gsize);
-            let mut sc = Vec::with_capacity(rows * ns);
-            for j in &batch {
-                g.extend_from_slice(&j.obs[p].0);
-                sc.extend_from_slice(&j.obs[p].1);
-            }
-            let gt = Tensor::from_slice(&g, (rows, gsize), dev)?;
-            let st = Tensor::from_slice(&sc, (rows, ns), dev)?;
-            let probs: Vec<f32> = candle_nn::ops::softmax(&net.act(&gt, &st)?, D::Minus1)?
-                .flatten_all()?
-                .to_vec1()?;
-            let mut at = 0;
-            for (j, r) in batch.iter().zip(replies.iter_mut()) {
-                let n = j.obs[p].2 * na;
-                r.push(probs[at..at + n].to_vec());
-                at += n;
-            }
-        }
+        phases::add(phases::SRV_IDLE, idle);
+        let obs: Vec<&SeatObs> = batch.iter().map(|j| &j.obs).collect();
+        let probs = league_launch::<G>(league, &obs, dev)?;
+        let replies = league_split::<G>(league, &obs, probs.as_ref())?;
         for (j, r) in batch.into_iter().zip(replies) {
             let _ = j.reply.send(r);
         }
@@ -506,19 +705,6 @@ fn adam(vm: &VarMap, lr: f64) -> Result<AdamW> {
 
 impl<G: Game> Member<G> {
     fn new(id: usize, a: &Args, genes: Vec<f32>, lr: f64, ent: f32) -> Result<Self> {
-        let dev = devices::open(&a.device, true)?;
-        let (mut vm, mut net) = net::build(G::spec(), &dev)?;
-        if a.bf16 {
-            net.dtype = candle_core::DType::BF16;
-        }
-        if a.resume.ends_with(".kgb") {
-            let p = kg_core::brain::conv::Policy::from_bytes(&std::fs::read(&a.resume).unwrap())
-                .expect("valid kgb");
-            net::import_actor(&vm, &p, &dev)?;
-        } else if !a.resume.is_empty() {
-            vm.load(&a.resume)?;
-        }
-        let opt = adam(&vm, lr)?;
         let envs: Vec<G> = (0..a.envs)
             .map(|i| G::make(1000 + (id * a.envs + i) as u64 * 7919, a.secs, &genes))
             .collect();
@@ -527,11 +713,8 @@ impl<G: Game> Member<G> {
         let s = G::spec();
         let mut m = Self {
             id,
-            dev,
             rng: Rng(0x9e3779b97f4a7c15 ^ ((id as u64 + 1) * 0x2545f4914f6cdd1d)),
-            vm,
-            net,
-            opt,
+            buf: Buf::default(),
             batch,
             genes,
             lr,
@@ -558,29 +741,27 @@ impl<G: Game> Member<G> {
         Ok(m)
     }
 
-    fn update(
-        &mut self,
-        a: &Args,
-        explore: f32,
-        ent_boost: f32,
-        league: Option<&Sender<SeatJob>>,
-    ) -> Result<(f32, f32)> {
-        let dev = &self.dev.clone();
-        let rng = &mut Rng(self.rng.0);
-        let out = self.rollout_and_learn(a, dev, rng, explore, ent_boost, league);
-        self.rng = Rng(rng.0);
-        out
+    fn begin(&mut self, steps: usize) {
+        let spec = G::spec();
+        let n = self.batch.agents();
+        let total = steps * n;
+        let b = &mut self.buf;
+        b.obs_g = vec![0.0; total * spec.channels * spec.side * spec.side];
+        b.obs_s = vec![0.0; total * spec.scalars];
+        b.acts = vec![0; total];
+        b.logp = vec![0.0; total];
+        b.vals = vec![0.0; total];
+        b.rews = vec![0.0; total];
+        b.dones = vec![0.0; total];
     }
 
-    fn rollout_and_learn(
+    fn act_and_step(
         &mut self,
-        a: &Args,
-        dev: &Device,
-        rng: &mut Rng,
+        t: usize,
+        probs: &[f32],
         explore: f32,
-        ent_boost: f32,
-        league: Option<&Sender<SeatJob>>,
-    ) -> Result<(f32, f32)> {
+        league: Seating,
+    ) -> Result<f64> {
         let spec = G::spec();
         let (gsize, ns, na) = (
             spec.channels * spec.side * spec.side,
@@ -588,140 +769,68 @@ impl<G: Game> Member<G> {
             spec.actions,
         );
         let n = self.batch.agents();
-        let t_steps = a.steps;
-        let (gamma, lam) = (0.995f32, 0.95f32);
-        let total = t_steps * n;
-        let mut obs_g = vec![0.0f32; total * gsize];
-        let mut obs_s = vec![0.0f32; total * ns];
-        let mut acts = vec![0u32; total];
-        let mut logp = vec![0.0f32; total];
-        let mut vals = vec![0.0f32; total];
-        let mut rews = vec![0.0f32; total];
-        let mut dones = vec![0.0f32; total];
-        let clock = Instant::now();
-        let mut sim = 0.0f64;
-        let mut look = 0.0f64;
-        let mut rivals = 0.0f64;
-        let actor = self.net.frozen();
-        for t in 0..t_steps {
-            let g = Tensor::from_slice(&self.grid, (n, gsize), dev)?;
-            let s = Tensor::from_slice(&self.scal, (n, ns), dev)?;
-            let (logits, v) = actor.forward(&g, &s)?;
-            let both: Vec<f32> = Tensor::cat(
-                &[
-                    &candle_nn::ops::softmax(&logits, D::Minus1)?,
-                    &v.unsqueeze(1)?,
-                ],
-                1,
-            )?
-            .flatten_all()?
-            .to_vec1()?;
-            let row = na + 1;
-            let v: Vec<f32> = (0..n).map(|k| both[k * row + na]).collect();
-            let mut chosen = vec![0usize; n];
-            for k in 0..n {
-                let p = &both[k * row..k * row + na];
-                let mut r = rng.uniform();
-                let mut pick = na - 1;
-                for (j, q) in p.iter().enumerate() {
-                    if r < *q {
-                        pick = j;
-                        break;
-                    }
-                    r -= q;
+        let rng = &mut Rng(self.rng.0);
+        let row = na + 1;
+        let mut chosen = vec![0usize; n];
+        for k in 0..n {
+            let p = &probs[k * row..k * row + na];
+            let mut r = rng.uniform();
+            let mut pick = na - 1;
+            for (j, q) in p.iter().enumerate() {
+                if r < *q {
+                    pick = j;
+                    break;
                 }
-                let pick = self.commit[k].pick(pick, explore, na, rng);
-                chosen[k] = pick;
-                let o = t * n + k;
-                acts[o] = pick as u32;
-                logp[o] = p[pick].max(1e-8).ln();
-                vals[o] = v[k];
+                r -= q;
             }
-            obs_g[t * n * gsize..(t + 1) * n * gsize].copy_from_slice(&self.grid);
-            obs_s[t * n * ns..(t + 1) * n * ns].copy_from_slice(&self.scal);
-            let t0 = Instant::now();
-            self.drive_seats(league, rng)?;
-            rivals += t0.elapsed().as_secs_f64();
-            let t0 = Instant::now();
-            self.batch.step(&chosen, &mut self.ticks);
-            sim += t0.elapsed().as_secs_f64();
-            for k in 0..n {
-                rews[t * n + k] = self.ticks[k].reward;
-                dones[t * n + k] = if self.ticks[k].done { 1.0 } else { 0.0 };
-                if self.ticks[k].done {
-                    self.commit[k] = Commit::default();
-                }
-            }
-            let t0 = Instant::now();
-            self.batch.write_obs(&mut self.grid, &mut self.scal);
-            look += t0.elapsed().as_secs_f64();
+            let pick = self.commit[k].pick(pick, explore, na, rng);
+            chosen[k] = pick;
+            let o = t * n + k;
+            self.buf.acts[o] = pick as u32;
+            self.buf.logp[o] = p[pick].max(1e-8).ln();
+            self.buf.vals[o] = probs[k * row + na];
         }
-        let rollout = clock.elapsed().as_secs_f64();
-        let g = Tensor::from_slice(&self.grid, (n, gsize), dev)?;
-        let s = Tensor::from_slice(&self.scal, (n, ns), dev)?;
-        let next_v: Vec<f32> = actor.forward(&g, &s)?.1.to_vec1()?;
+        self.buf.obs_g[t * n * gsize..(t + 1) * n * gsize].copy_from_slice(&self.grid);
+        self.buf.obs_s[t * n * ns..(t + 1) * n * ns].copy_from_slice(&self.scal);
+        let t0 = Instant::now();
+        self.drive_seats(league, rng)?;
+        let rivals = t0.elapsed().as_secs_f64();
+        let t_step = Instant::now();
+        self.batch.step(&chosen, &mut self.ticks);
+        phases::add(phases::STEP, t_step);
+        for k in 0..n {
+            self.buf.rews[t * n + k] = self.ticks[k].reward;
+            self.buf.dones[t * n + k] = if self.ticks[k].done { 1.0 } else { 0.0 };
+            if self.ticks[k].done {
+                self.commit[k] = Commit::default();
+            }
+        }
+        self.batch.write_obs(&mut self.grid, &mut self.scal);
+        self.rng = Rng(rng.0);
+        Ok(rivals)
+    }
+
+    fn finish(&mut self, next_v: &[f32], steps: usize, dev: &Device, dt: candle_core::DType) -> Result<Rollout> {
+        let n = self.batch.agents();
+        let total = steps * n;
+        let (gamma, lam) = (0.995f32, 0.95f32);
+        let b = std::mem::take(&mut self.buf);
         let mut adv = vec![0.0f32; total];
         let mut last = vec![0.0f32; n];
-        for t in (0..t_steps).rev() {
+        for t in (0..steps).rev() {
             for k in 0..n {
                 let o = t * n + k;
-                let nxt = if t == t_steps - 1 {
-                    next_v[k]
-                } else {
-                    vals[o + n]
-                };
-                let alive = 1.0 - dones[o];
-                let delta = rews[o] + gamma * nxt * alive - vals[o];
+                let nxt = if t == steps - 1 { next_v[k] } else { b.vals[o + n] };
+                let alive = 1.0 - b.dones[o];
+                let delta = b.rews[o] + gamma * nxt * alive - b.vals[o];
                 last[k] = delta + gamma * lam * alive * last[k];
                 adv[o] = last[k];
             }
         }
-        let ret: Vec<f32> = adv.iter().zip(&vals).map(|(a, v)| a + v).collect();
+        let ret: Vec<f32> = adv.iter().zip(&b.vals).map(|(a, v)| a + v).collect();
         let mean = adv.iter().sum::<f32>() / adv.len() as f32;
         let sd = (adv.iter().map(|x| (x - mean).powi(2)).sum::<f32>() / adv.len() as f32).sqrt();
-        let nadv: Vec<f32> = adv.iter().map(|x| (x - mean) / (sd + 1e-8)).collect();
-        let bg = Tensor::from_slice(&obs_g, (total, gsize), dev)?;
-        let bs = Tensor::from_slice(&obs_s, (total, ns), dev)?;
-        let ba = Tensor::from_slice(&acts, total, dev)?;
-        let blp = Tensor::from_slice(&logp, total, dev)?;
-        let badv = Tensor::from_slice(&nadv, total, dev)?;
-        let bret = Tensor::from_slice(&ret, total, dev)?;
-        let mb = a.minibatch.min(total);
-        let mut stats = (0.0f32, 0.0f32);
-        let learn_from = Instant::now();
-        self.opt.set_learning_rate(self.lr);
-        for _ in 0..3 {
-            let mut order: Vec<u32> = (0..total as u32).collect();
-            for i in (1..order.len()).rev() {
-                order.swap(i, rng.below(i + 1));
-            }
-            for chunk in order.chunks(mb) {
-                let idx = Tensor::from_slice(chunk, chunk.len(), dev)?;
-                let (logits, v) = self
-                    .net
-                    .forward(&bg.index_select(&idx, 0)?, &bs.index_select(&idx, 0)?)?;
-                let lsm = candle_nn::ops::log_softmax(&logits, D::Minus1)?;
-                let a_ = ba.index_select(&idx, 0)?;
-                let new_lp = lsm.gather(&a_.unsqueeze(1)?, 1)?.squeeze(1)?;
-                let ratio = (new_lp - blp.index_select(&idx, 0)?)?.exp()?;
-                let ad = badv.index_select(&idx, 0)?;
-                let s1 = (&ratio * &ad)?;
-                let s2 = (ratio.clamp(0.8f32, 1.2f32)? * &ad)?;
-                let pg = s1.minimum(&s2)?.mean_all()?.neg()?;
-                let vl = (v - bret.index_select(&idx, 0)?)?.sqr()?.mean_all()?;
-                let ent = (lsm.exp()? * &lsm)?.sum(D::Minus1)?.mean_all()?.neg()?;
-                let loss = (((&pg * self.pg_scale as f64)? + (&vl * 0.5)?)? - (&ent * (self.ent * ent_boost) as f64)?)?;
-                self.opt.backward_step(&loss)?;
-                stats = (ent.to_scalar::<f32>()?, vl.to_scalar::<f32>()?);
-            }
-        }
-        let learn = learn_from.elapsed().as_secs_f64();
-        let t = &mut self.timing;
-        t.0 += sim;
-        t.1 += look;
-        t.2 += rollout - sim - look - rivals;
-        t.4 += rivals;
-        t.3 += learn;
+        let adv: Vec<f32> = adv.iter().map(|x| (x - mean) / (sd + 1e-8)).collect();
         let eps = self.batch.drain_episodes();
         let (r, m, c) = &mut self.episodes;
         for e in eps {
@@ -729,34 +838,40 @@ impl<G: Game> Member<G> {
             *m += e.1;
             *c += 1;
         }
-        Ok(stats)
+        let spec = G::spec();
+        let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+        Ok(Rollout {
+            obs_g: upload(&b.obs_g, (total, gsize), dev, dt)?,
+            obs_s: upload(&b.obs_s, (total, ns), dev, dt)?,
+            acts: Tensor::from_vec(b.acts, total, dev)?,
+            logp: Tensor::from_vec(b.logp, total, dev)?,
+            adv: Tensor::from_vec(adv, total, dev)?,
+            ret: Tensor::from_vec(ret, total, dev)?,
+        })
     }
 
-    fn drive_seats(&mut self, league: Option<&Sender<SeatJob>>, rng: &mut Rng) -> Result<()> {
-        let Some(league) = league else {
-            return Ok(());
-        };
-        let na = G::spec().actions;
+    fn seat_request(&self) -> (Vec<Vec<(usize, usize)>>, SeatObs) {
+        let t_obs = Instant::now();
         let by = self.batch.seated(self.league_size);
-        if by.iter().all(|l| l.is_empty()) {
-            return Ok(());
-        }
         let mut obs = vec![];
         for list in &by {
             let (mut g, mut sc) = (vec![], vec![]);
             self.batch.seat_obs(list, &mut g, &mut sc);
             obs.push((g, sc, list.len()));
         }
-        let (reply, back) = std::sync::mpsc::channel();
-        league.send(SeatJob { obs, reply }).unwrap();
-        let probs: Vec<Vec<f32>> = back.recv().unwrap();
+        phases::add(phases::SEAT_OBS, t_obs);
+        (by, obs)
+    }
+
+    fn apply_seats(&mut self, by: &[Vec<(usize, usize)>], probs: &[Vec<f32>], rng: &mut Rng) {
+        let na = G::spec().actions;
         let mut picks: Vec<Vec<usize>> = self
             .batch
             .envs
             .iter()
             .map(|e| vec![0; e.seats().len()])
             .collect();
-        for (list, probs) in by.iter().zip(&probs) {
+        for (list, probs) in by.iter().zip(probs) {
             for (k, &(e, seat)) in list.iter().enumerate() {
                 let p = &probs[k * na..(k + 1) * na];
                 let mut r = rng.uniform();
@@ -772,6 +887,22 @@ impl<G: Game> Member<G> {
             }
         }
         self.batch.give_seat_actions(&picks);
+    }
+
+    fn drive_seats(&mut self, seating: Seating, rng: &mut Rng) -> Result<()> {
+        match seating {
+            Seating::Off => {}
+            Seating::Server(league) => {
+                let (by, obs) = self.seat_request();
+                let t_wait = Instant::now();
+                let (reply, back) = std::sync::mpsc::channel();
+                league.send(SeatJob { obs, reply }).unwrap();
+                let probs: Vec<Vec<f32>> = back.recv().unwrap();
+                phases::add(phases::WAIT_REPLY, t_wait);
+                self.apply_seats(&by, &probs, rng);
+            }
+            Seating::Ready(by, probs) => self.apply_seats(&by, &probs, rng),
+        }
         Ok(())
     }
 
@@ -780,17 +911,10 @@ impl<G: Game> Member<G> {
         (c > 0).then(|| (r / c as f32, m / c as f32, c))
     }
 
-    fn copy_from(&mut self, other: &Member<G>) -> Result<()> {
-        let src = other.vm.data().lock().unwrap();
-        for (k, v) in self.vm.data().lock().unwrap().iter() {
-            v.set(src[k].as_tensor())?;
-        }
-        drop(src);
-        self.opt = adam(&self.vm, other.lr)?;
+    fn copy_from(&mut self, other: &Member<G>) {
         self.genes = other.genes.clone();
         self.lr = other.lr;
         self.ent = other.ent;
-        Ok(())
     }
 
     fn mutate(&mut self, rng: &mut Rng) {
@@ -815,6 +939,204 @@ impl<G: Game> Member<G> {
     }
 }
 
+fn observations<G: Game>(
+    members: &[Member<G>],
+    dev: &Device,
+    dt: candle_core::DType,
+    (n, gsize, ns): (usize, usize, usize),
+) -> Result<(Tensor, Tensor)> {
+    let parts: Vec<Result<(Tensor, Tensor)>> = std::thread::scope(|sc| {
+        let hs: Vec<_> = members
+            .iter()
+            .map(|m| {
+                sc.spawn(move || {
+                    Ok((
+                        upload(&m.grid, (n, gsize), dev, dt)?,
+                        upload(&m.scal, (n, ns), dev, dt)?,
+                    ))
+                })
+            })
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let parts = parts.into_iter().collect::<Result<Vec<_>>>()?;
+    let g: Vec<&Tensor> = parts.iter().map(|p| &p.0).collect();
+    let s: Vec<&Tensor> = parts.iter().map(|p| &p.1).collect();
+    Ok((Tensor::stack(&g, 0)?, Tensor::stack(&s, 0)?))
+}
+
+fn policy_forward(
+    tr: &Trainer,
+    w: &popnet::Weights,
+    g: &Tensor,
+    s: &Tensor,
+    with_probs: bool,
+) -> Result<Vec<f32>> {
+    let (logits, v) = tr.net.forward(w, g, s)?;
+    let out = if with_probs {
+        Tensor::cat(
+            &[&candle_nn::ops::softmax(&logits, D::Minus1)?, &v.unsqueeze(2)?],
+            2,
+        )?
+    } else {
+        v
+    };
+    out.flatten_all()?.to_vec1()
+}
+
+fn update_population<G: Game>(
+    members: &mut [Member<G>],
+    tr: &mut Trainer,
+    a: &Args,
+    explore: f32,
+    ent_boost: f32,
+    league: &Sender<SeatJob>,
+    combined: Option<&LeagueNet>,
+) -> Result<Vec<f32>> {
+    let spec = G::spec();
+    let (gsize, ns, na) = (
+        spec.channels * spec.side * spec.side,
+        spec.scalars,
+        spec.actions,
+    );
+    let n = members[0].batch.agents();
+    let row = na + 1;
+    let weights = tr.acting()?;
+    for m in members.iter_mut() {
+        m.begin(a.steps);
+    }
+    let mut act = 0.0;
+    let mut sim = 0.0;
+    let mut rivals = 0.0;
+    for t in 0..a.steps {
+        let t0 = Instant::now();
+        let (g, s) = observations(members, &tr.dev, tr.net.dtype, (n, gsize, ns))?;
+        let (probs, mut ready) = match combined.filter(|_| members[0].league_size > 0) {
+            Some(lg) => {
+                let requests: Vec<_> = std::thread::scope(|sc| {
+                    let hs: Vec<_> = members
+                        .iter()
+                        .map(|m| sc.spawn(move || m.seat_request()))
+                        .collect();
+                    hs.into_iter().map(|h| h.join().unwrap()).collect()
+                });
+                let refs: Vec<&SeatObs> = requests.iter().map(|r| &r.1).collect();
+                let queued = league_launch::<G>(lg, &refs, &tr.dev)?;
+                let probs = policy_forward(tr, &weights, &g, &s, true)?;
+                let replies = league_split::<G>(lg, &refs, queued.as_ref())?;
+                let ready: Vec<Option<(Vec<Vec<(usize, usize)>>, Vec<Vec<f32>>)>> = requests
+                    .into_iter()
+                    .zip(replies)
+                    .map(|((by, _), r)| Some((by, r)))
+                    .collect();
+                (probs, ready)
+            }
+            None => (
+                policy_forward(tr, &weights, &g, &s, true)?,
+                members.iter().map(|_| None).collect(),
+            ),
+        };
+        act += t0.elapsed().as_secs_f64();
+        let t0 = Instant::now();
+        let probs = &probs;
+        let rv: Vec<Result<f64>> = std::thread::scope(|sc| {
+            let hs: Vec<_> = members
+                .iter_mut()
+                .zip(ready.iter_mut())
+                .enumerate()
+                .map(|(k, (m, rd))| {
+                    let seating = match rd.take() {
+                        Some((by, p)) => Seating::Ready(by, p),
+                        None if m.league_size > 0 => Seating::Server(league),
+                        None => Seating::Off,
+                    };
+                    sc.spawn(move || {
+                        m.act_and_step(t, &probs[k * n * row..(k + 1) * n * row], explore, seating)
+                    })
+                })
+                .collect();
+            hs.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        let mut worst = 0.0f64;
+        for r in rv {
+            worst = worst.max(r?);
+        }
+        let wall = t0.elapsed().as_secs_f64();
+        rivals += worst;
+        sim += wall - worst;
+    }
+    let t0 = Instant::now();
+    let (g, s) = observations(members, &tr.dev, tr.net.dtype, (n, gsize, ns))?;
+    let next_v = policy_forward(tr, &weights, &g, &s, false)?;
+    act += t0.elapsed().as_secs_f64();
+    let steps = a.steps;
+    let next_v = &next_v;
+    let dev = &tr.dev;
+    let dt = tr.net.dtype;
+    let rolls: Vec<Result<Rollout>> = std::thread::scope(|sc| {
+        let hs: Vec<_> = members
+            .iter_mut()
+            .enumerate()
+            .map(|(k, m)| sc.spawn(move || m.finish(&next_v[k * n..(k + 1) * n], steps, dev, dt)))
+            .collect();
+        hs.into_iter().map(|h| h.join().unwrap()).collect()
+    });
+    let rolls = rolls.into_iter().collect::<Result<Vec<_>>>()?;
+    let knobs: Vec<Knobs> = members
+        .iter()
+        .map(|m| Knobs {
+            lr: m.lr,
+            ent: m.ent * ent_boost,
+            pg: m.pg_scale,
+        })
+        .collect();
+    let t0 = Instant::now();
+    let mut rngs: Vec<Rng> = members.iter().map(|m| Rng(m.rng.0)).collect();
+    let total = a.steps * n;
+    let stats = tr.learn(rolls, &knobs, a.minibatch, &mut |k| {
+        let rng = &mut rngs[k];
+        let mut order: Vec<u32> = (0..total as u32).collect();
+        for i in (1..order.len()).rev() {
+            order.swap(i, rng.below(i + 1));
+        }
+        order
+    })?;
+    let learn = t0.elapsed().as_secs_f64();
+    for (m, r) in members.iter_mut().zip(rngs) {
+        m.rng = r;
+    }
+    let t = &mut members[0].timing;
+    t.0 += sim;
+    t.2 += act;
+    t.3 += learn;
+    t.4 += rivals;
+    Ok(stats.into_iter().map(|x| x.0).collect())
+}
+
+struct View {
+    vm: VarMap,
+    net: net::Net,
+}
+
+fn all_rows(trainers: &[Trainer]) -> Result<Vec<f32>> {
+    let mut rows = vec![];
+    for t in trainers {
+        rows.extend(t.rows()?);
+    }
+    Ok(rows)
+}
+
+fn sync_views(views: &[View], trainers: &[Trainer], dev: &Device) -> Result<()> {
+    let tr = &trainers[0];
+    let total = tr.layout().total;
+    let rows = all_rows(trainers)?;
+    for (k, v) in views.iter().enumerate() {
+        tr.layout()
+            .unpack(&rows[k * total..(k + 1) * total], &v.vm, dev)?;
+    }
+    Ok(())
+}
+
 fn population<G: Game>(a: &Args) -> Result<()> {
     let dev = devices::open(&a.device, false)?;
     let mut rng = Rng(0x9e3779b97f4a7c15);
@@ -835,8 +1157,47 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         };
         members.push(Member::new(id, a, genes, lr, ent)?);
     }
+    let mut views: Vec<View> = vec![];
+    for _ in 0..a.pop {
+        let (mut vm, mut net) = net::build(G::spec(), &dev)?;
+        if a.bf16 {
+            net.dtype = candle_core::DType::BF16;
+        }
+        if a.resume.ends_with(".kgb") {
+            let p = kg_core::brain::conv::Policy::from_bytes(&std::fs::read(&a.resume).unwrap())
+                .expect("valid kgb");
+            net::import_actor(&vm, &p, &dev)?;
+        } else if !a.resume.is_empty() {
+            vm.load(&a.resume)?;
+        }
+        views.push(View { vm, net });
+    }
+    let layout = popnet::Layout::of(&views[0].vm);
+    let mut rows = vec![];
+    for v in &views {
+        rows.extend(layout.pack(&v.vm)?);
+    }
+    let dtype = if a.bf16 {
+        candle_core::DType::BF16
+    } else {
+        candle_core::DType::F32
+    };
+    let groups = a.groups.clamp(1, a.pop);
+    let per_group = a.pop.div_ceil(groups);
+    let total = layout.total;
+    let mut trainers: Vec<Trainer> = vec![];
+    for chunk in rows.chunks(per_group * total) {
+        let gdev = devices::open(&a.device, true)?;
+        let lay = popnet::Layout::of(&views[0].vm);
+        trainers.push(Trainer::new(
+            PopNet::new(G::spec(), lay, dtype, &gdev)?,
+            chunk.to_vec(),
+            chunk.len() / total,
+            gdev,
+        )?);
+    }
     G::set_eval_threads((a.threads / (2 * a.pop.max(1))).max(1));
-    let params = members[0].net.export()?.param_count();
+    let params = views[0].net.export()?.param_count();
     let (base, base_text) = G::baseline(a.eval_seeds);
     println!(
         "game {} on {dev:?}: population {} x {} agents, policy {params} weights; hand-written bot: {base_text} (score {base:.2})",
@@ -860,12 +1221,19 @@ fn population<G: Game>(a: &Args) -> Result<()> {
             m.league_size = league.len();
         }
         let mut servers = vec![];
-        for _ in 0..a.league_servers {
+        for _ in 0..(if a.combined { 0 } else { a.league_servers }) {
             let dev = devices::open(&a.device, true)?;
             let nets = league_nets::<G>(&league_weights, a.bf16, &dev)?;
             servers.push((dev, nets));
         }
-        save(&members[leader].net.export()?, &live);
+        let mut combined: Vec<Option<LeagueNet>> = vec![];
+        if a.combined {
+            for tr in &trainers {
+                combined.push(league_nets::<G>(&league_weights, a.bf16, &tr.dev)?);
+            }
+        }
+        sync_views(&views, &trainers, &dev)?;
+        save(&views[leader].net.export()?, &live);
         std::fs::write(format!("{live}.round"), round.to_string()).unwrap();
         println!(
             "=== generation {round}: opponents are hand-written bots{}",
@@ -888,36 +1256,44 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         for u in 1..=a.gen_updates {
             let mut line = format!("round {round} upd {u:3}");
             let pop = members.len();
-            let results: Vec<Result<(f32, f32)>> = std::thread::scope(|sc| {
+            let per_server = pop.div_ceil(a.league_servers.max(1));
+            let results: Result<Vec<f32>> = std::thread::scope(|sc| {
                 let (jobs, inbox) = std::sync::mpsc::channel::<SeatJob>();
                 let inbox = std::sync::Arc::new(std::sync::Mutex::new(inbox));
                 let running: Vec<_> = servers
                     .iter()
-                    .filter(|(_, nets)| !nets.is_empty())
+                    .filter_map(|(dev, nets)| nets.as_ref().map(|n| (dev, n)))
                     .map(|(dev, nets)| {
                         let inbox = inbox.clone();
-                        sc.spawn(move || league_server::<G>(&inbox, nets, dev, pop))
+                        sc.spawn(move || league_server::<G>(&inbox, nets, dev, per_server))
                     })
                     .collect();
                 let hs: Vec<_> = members
-                    .iter_mut()
-                    .map(|m| {
+                    .chunks_mut(per_group)
+                    .zip(trainers.iter_mut())
+                    .enumerate()
+                    .map(|(g, (ms, tr))| {
                         let tx = jobs.clone();
-                        sc.spawn(move || {
-                            let league = (m.league_size > 0).then_some(&tx);
-                            m.update(a, explore, ent_boost, league)
-                        })
+                        let lg = combined.get(g).and_then(|c| c.as_ref());
+                        sc.spawn(move || update_population(ms, tr, a, explore, ent_boost, &tx, lg))
                     })
                     .collect();
+                let mut out = Ok(vec![]);
+                for h in hs {
+                    match (h.join().unwrap(), &mut out) {
+                        (Ok(v), Ok(all)) => all.extend(v),
+                        (Err(e), o) => *o = Err(e),
+                        _ => {}
+                    }
+                }
                 drop(jobs);
-                let out = hs.into_iter().map(|h| h.join().unwrap()).collect();
                 for s in running {
                     s.join().unwrap().unwrap();
                 }
                 out
             });
-            for (m, r) in members.iter_mut().zip(results) {
-                let (ent, _) = r?;
+            let results = results?;
+            for (m, ent) in members.iter_mut().zip(results) {
                 steps += a.steps * m.batch.agents();
                 if u % 10 == 0 {
                     match m.take_episodes() {
@@ -929,7 +1305,8 @@ fn population<G: Game>(a: &Args) -> Result<()> {
                 }
             }
             if u % 5 == 0 {
-                save(&members[leader].net.export()?, &live);
+                sync_views(&views, &trainers, &dev)?;
+                save(&views[leader].net.export()?, &live);
             }
             if u % 10 == 0 {
                 let sps = steps as f64 / start.elapsed().as_secs_f64();
@@ -943,6 +1320,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
                     m.timing = (0.0, 0.0, 0.0, 0.0, 0.0);
                 }
                 let all = (t.0 + t.1 + t.2 + t.3 + t.4).max(1e-9);
+                println!("  phases (thread-seconds): {}", phases::report());
                 println!(
                     "{line} | sps {sps:.0} | time: sim {:.0}% observe {:.0}% act {:.0}% rivals {:.0}% learn {:.0}%",
                     100.0 * t.0 / all,
@@ -954,10 +1332,11 @@ fn population<G: Game>(a: &Args) -> Result<()> {
             }
         }
         let eval_from = Instant::now();
+        sync_views(&views, &trainers, &dev)?;
         let mut policies = vec![];
-        for m in members.iter() {
-            let policy = m.net.export()?;
-            let err = parity(&m.net, &policy, m.batch.envs[0].obs(0), &m.dev)?;
+        for (m, v) in members.iter().zip(&views) {
+            let policy = v.net.export()?;
+            let err = parity(&v.net, &policy, m.batch.envs[0].obs(0), &dev)?;
             let limit = if a.bf16 { 0.15 } else { 1e-4 };
             if err > limit {
                 panic!("candle and the game's inference disagree: {err}");
@@ -1023,7 +1402,7 @@ fn population<G: Game>(a: &Args) -> Result<()> {
             let mut best_fresh = f32::MIN;
             let mut picked = leader;
             for &k in order.iter().take(a.holdout_top.max(1)) {
-                let p = members[k].net.export()?;
+                let p = views[k].net.export()?;
                 let bots = G::eval(&p, &[], seeds).0;
                 let vs = (!league.is_empty()).then(|| G::eval(&p, &league, seeds).0);
                 let s = (bots + vs.unwrap_or(bots)) / 2.0;
@@ -1046,9 +1425,9 @@ fn population<G: Game>(a: &Args) -> Result<()> {
         let champion = defending;
         if challenge > champion + a.min_gain {
             stale = 0;
-            let policy = best.net.export()?;
+            let policy = views[leader].net.export()?;
             save(&policy, &a.out);
-            best.vm.save(format!("{}.safetensors", a.out))?;
+            views[leader].vm.save(format!("{}.safetensors", a.out))?;
             save(&policy, &format!("{}.round{round}", a.out));
             league.push(policy);
             league_weights.push(std::fs::read(format!("{}.safetensors", a.out)).unwrap());
@@ -1089,7 +1468,14 @@ fn population<G: Game>(a: &Args) -> Result<()> {
                 let (lo, hi) = members.split_at_mut(loser);
                 (&mut hi[0], &lo[donor])
             };
-            l.copy_from(d)?;
+            let from = {
+                let t = &trainers[d.id / per_group];
+                let rows = t.rows()?;
+                let k = d.id % per_group;
+                rows[k * total..(k + 1) * total].to_vec()
+            };
+            trainers[l.id / per_group].set_row(l.id % per_group, &from)?;
+            l.copy_from(d);
             l.mutate(&mut rng);
             println!(
                 "  m{} copies m{} and mutates: {}",
@@ -1182,5 +1568,218 @@ fn main() -> Result<()> {
         "clash" => population::<kg_core::games::clash::rl::Arena>(&a),
         "paper" => population::<kg_core::games::paper::rl::Arena>(&a),
         g => panic!("unknown game {g}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use candle_core::DType;
+
+    fn job(seed: f32, rows: &[usize]) -> SeatJob {
+        let (reply, _) = std::sync::mpsc::channel();
+        SeatJob {
+            obs: rows
+                .iter()
+                .map(|n| {
+                    (
+                        (0..n * 6).map(|i| seed + i as f32 * 0.37).collect(),
+                        (0..n * 2).map(|i| seed - i as f32 * 0.11).collect(),
+                        *n,
+                    )
+                })
+                .collect(),
+            reply,
+        }
+    }
+
+    fn three_pass(batch: &[SeatJob], l: usize, widest: usize, width: usize, dt: DType, pick: usize) -> Tensor {
+        let mut flat = vec![0.0f32; l * widest * width];
+        for p in 0..l {
+            let mut at = p * widest * width;
+            for j in batch {
+                let src = if pick == 0 { &j.obs[p].0 } else { &j.obs[p].1 };
+                flat[at..at + src.len()].copy_from_slice(src);
+                at += src.len();
+            }
+        }
+        upload(&flat, (l * widest, width), &Device::Cpu, dt).unwrap().reshape((l, widest, width)).unwrap()
+    }
+
+    #[test]
+    fn lockstep_server_returns_the_same_probabilities_as_serving_members_alone() {
+        type G = kg_core::games::clash::rl::Arena;
+        let spec = G::spec();
+        let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+        let dev = Device::Cpu;
+        let mut weights = vec![];
+        for k in 0..2u32 {
+            let (vm, _) = net::build(G::spec(), &dev).unwrap();
+            for (i, (_, v)) in vm.data().lock().unwrap().iter().enumerate() {
+                let w = v.as_tensor();
+                let noise: Vec<f32> = (0..w.elem_count())
+                    .map(|x| ((x as u32 * 2654435761 + k * 97 + i as u32) >> 9) as f32 % 100.0 / 500.0 - 0.1)
+                    .collect();
+                v.set(&(w + Tensor::from_vec(noise, w.shape(), &dev).unwrap()).unwrap()).unwrap();
+            }
+            let path = std::env::temp_dir().join(format!("kg-test-league-{k}.safetensors"));
+            vm.save(&path).unwrap();
+            weights.push(std::fs::read(&path).unwrap());
+            let _ = std::fs::remove_file(&path);
+        }
+        let league = league_nets::<G>(&weights, false, &dev).unwrap().unwrap();
+        let obs_for = |seed: usize, rows: [usize; 2]| -> Vec<(Vec<f32>, Vec<f32>, usize)> {
+            rows.iter()
+                .enumerate()
+                .map(|(p, n)| {
+                    (
+                        (0..n * gsize).map(|i| ((i * 7 + seed * 13 + p) % 17) as f32 / 17.0).collect(),
+                        (0..n * ns).map(|i| ((i * 3 + seed) % 11) as f32 / 11.0).collect(),
+                        *n,
+                    )
+                })
+                .collect()
+        };
+        let serve = |members: usize, seeds: &[usize]| -> Vec<Vec<Vec<f32>>> {
+            let (tx, rx) = std::sync::mpsc::channel();
+            let mut backs = vec![];
+            for &seed in seeds {
+                let (reply, back) = std::sync::mpsc::channel();
+                tx.send(SeatJob { obs: obs_for(seed, [2 + seed % 2, 1 + seed % 3]), reply }).unwrap();
+                backs.push(back);
+            }
+            drop(tx);
+            let rx = std::sync::Mutex::new(rx);
+            league_server::<G>(&rx, &league, &dev, members).unwrap();
+            backs.iter().map(|b| b.recv().unwrap()).collect()
+        };
+        let together = serve(3, &[1, 2, 3]);
+        for (k, seed) in [1usize, 2, 3].iter().enumerate() {
+            let alone = serve(1, &[*seed]).remove(0);
+            for (p, (a, b)) in alone.iter().zip(&together[k]).enumerate() {
+                assert_eq!(a.len(), b.len(), "member {k} policy {p}");
+                let worst = a.iter().zip(b).map(|(x, y)| (x - y).abs()).fold(0.0f32, f32::max);
+                assert!(worst < 1e-4, "member {k} policy {p}: {worst}");
+            }
+        }
+    }
+
+    #[test]
+    fn combined_league_path_matches_the_server_path() {
+        type G = kg_core::games::clash::rl::Arena;
+        let spec = G::spec();
+        let (gsize, ns) = (spec.channels * spec.side * spec.side, spec.scalars);
+        let dev = Device::Cpu;
+        let mut weights = vec![];
+        for k in 0..2u32 {
+            let (vm, _) = net::build(G::spec(), &dev).unwrap();
+            for (i, (_, v)) in vm.data().lock().unwrap().iter().enumerate() {
+                let w = v.as_tensor();
+                let noise: Vec<f32> = (0..w.elem_count())
+                    .map(|x| ((x as u32 * 2654435761 + k * 53 + i as u32) >> 9) as f32 % 100.0 / 500.0 - 0.1)
+                    .collect();
+                v.set(&(w + Tensor::from_vec(noise, w.shape(), &dev).unwrap()).unwrap()).unwrap();
+            }
+            let path = std::env::temp_dir().join(format!("kg-test-combined-{k}.safetensors"));
+            vm.save(&path).unwrap();
+            weights.push(std::fs::read(&path).unwrap());
+            let _ = std::fs::remove_file(&path);
+        }
+        let league = league_nets::<G>(&weights, false, &dev).unwrap().unwrap();
+        let obs_for = |seed: usize| -> SeatObs {
+            [3 + seed % 2, 2 + seed % 3]
+                .iter()
+                .enumerate()
+                .map(|(p, n)| {
+                    (
+                        (0..n * gsize).map(|i| ((i * 5 + seed * 29 + p) % 19) as f32 / 19.0).collect(),
+                        (0..n * ns).map(|i| ((i * 7 + seed) % 13) as f32 / 13.0).collect(),
+                        *n,
+                    )
+                })
+                .collect()
+        };
+        let seeds = [4usize, 5, 6, 7];
+        let (tx, rx) = std::sync::mpsc::channel();
+        let mut backs = vec![];
+        for &seed in &seeds {
+            let (reply, back) = std::sync::mpsc::channel();
+            tx.send(SeatJob { obs: obs_for(seed), reply }).unwrap();
+            backs.push(back);
+        }
+        drop(tx);
+        league_server::<G>(&std::sync::Mutex::new(rx), &league, &dev, seeds.len()).unwrap();
+        let served: Vec<Vec<Vec<f32>>> = backs.iter().map(|b| b.recv().unwrap()).collect();
+        let all: Vec<SeatObs> = seeds.iter().map(|s| obs_for(*s)).collect();
+        let refs: Vec<&SeatObs> = all.iter().collect();
+        let queued = league_launch::<G>(&league, &refs, &dev).unwrap();
+        let combined = league_split::<G>(&league, &refs, queued.as_ref()).unwrap();
+        let na = spec.actions;
+        let pick = |p: &[f32], mut r: f32| -> usize {
+            for (j, q) in p.iter().enumerate() {
+                if r < *q {
+                    return j;
+                }
+                r -= q;
+            }
+            na - 1
+        };
+        for (m, (a, b)) in served.iter().zip(&combined).enumerate() {
+            for (p, (x, y)) in a.iter().zip(b).enumerate() {
+                assert_eq!(x.len(), y.len(), "member {m} policy {p}");
+                let worst = x.iter().zip(y).map(|(u, v)| (u - v).abs()).fold(0.0f32, f32::max);
+                assert!(worst < 1e-4, "member {m} policy {p}: {worst}");
+                for (row, (u, v)) in x.chunks(na).zip(y.chunks(na)).enumerate() {
+                    let r = (row as f32 * 0.137 + m as f32 * 0.31) % 1.0;
+                    assert_eq!(pick(u, r), pick(v, r), "member {m} policy {p} row {row}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn staged_gather_is_faster_than_a_fresh_single_thread_convert() {
+        let rows = 480usize;
+        let width = 22 * 32 * 32;
+        let obs: SeatObs = vec![(vec![0.37f32; rows * width], vec![0.5f32; rows * 19], rows)];
+        let refs = vec![&obs];
+        let dev = Device::Cpu;
+        let old = || {
+            let t = Instant::now();
+            let mut h = vec![half::bf16::ZERO; rows * width];
+            for (d, s) in h.iter_mut().zip(&obs[0].0) {
+                *d = half::bf16::from_f32(*s);
+            }
+            let _ = Tensor::from_vec(h, (1, rows, width), &dev).unwrap();
+            t.elapsed().as_secs_f64()
+        };
+        let new = || {
+            let t = Instant::now();
+            let _ = gather(&refs, 1, rows, width, &dev, DType::BF16, |o| &o.0).unwrap();
+            t.elapsed().as_secs_f64()
+        };
+        let (mut o, mut n) = (f64::MAX, f64::MAX);
+        for _ in 0..5 {
+            o = o.min(old());
+            n = n.min(new());
+        }
+        println!("gather old {o:.4}s new {n:.4}s");
+        assert!(n < o, "staged gather {n} not faster than {o}");
+    }
+
+    #[test]
+    fn league_gather_matches_the_three_pass_buffer() {
+        let batch = vec![job(0.5, &[3, 1]), job(-1.25, &[2, 4])];
+        let refs: Vec<&SeatObs> = batch.iter().map(|j| &j.obs).collect();
+        for dt in [DType::BF16, DType::F32] {
+            let g = gather(&refs, 2, 6, 6, &Device::Cpu, dt, |o| &o.0).unwrap();
+            let s = gather(&refs, 2, 6, 2, &Device::Cpu, dt, |o| &o.1).unwrap();
+            let wg = three_pass(&batch, 2, 6, 6, dt, 0);
+            let ws = three_pass(&batch, 2, 6, 2, dt, 1);
+            assert_eq!(g.dtype(), dt);
+            let bits = |t: Tensor| t.to_dtype(DType::F32).unwrap().flatten_all().unwrap().to_vec1::<f32>().unwrap().iter().map(|x| x.to_bits()).collect::<Vec<_>>();
+            assert_eq!(bits(g), bits(wg));
+            assert_eq!(bits(s), bits(ws));
+        }
     }
 }

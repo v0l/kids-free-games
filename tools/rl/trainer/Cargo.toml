@@ -8,6 +8,7 @@ publish = false
 kg_core = { path = "../../../crates/core" }
 candle-core = "0.11"
 candle-nn = "0.11"
+half = "2"
 
 [features]
 default = ["cuda"]
