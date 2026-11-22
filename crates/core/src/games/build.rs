@@ -301,7 +301,7 @@ pub fn layout(view: &View, letters: usize, tiles: usize) -> Layout {
     let tiles_h = rows as f32 * tile + (rows as f32 - 1.0) * gap;
     let tiles_top = view.h - view.edge() - tiles_h;
     let slots_top = tiles_top - 36.0 * k - slot;
-    let band = (slots_top - 64.0 * k - top).max(80.0);
+    let band = (slots_top - 80.0 * k - top).max(80.0);
     let side = band.min(view.w - 80.0).max(80.0);
     let picture = Rect::new((view.w - side) / 2.0, top + (band - side) / 2.0, side, side);
     let row = |count: usize, size: f32, y: f32| -> Vec<Rect> {
