@@ -401,10 +401,12 @@ pub enum Line {
     Aboard,
     Choo,
     Tap,
+    Makes,
 }
 
 impl Line {
-    pub const ALL: [Line; 6] = [
+    pub const ALL: [Line; 7] = [
+        Line::Makes,
         Line::TakeAway,
         Line::Left,
         Line::Missing,
@@ -421,6 +423,7 @@ impl Line {
             Line::Aboard => "say_tr_aboard",
             Line::Choo => "say_tr_choo",
             Line::Tap => "say_tr_tap",
+            Line::Makes => "say_bd_makes",
         }
     }
 }
@@ -429,7 +432,7 @@ pub fn number(n: i32) -> Say {
     if (1..=10).contains(&n) {
         Say::Number(n as u8)
     } else {
-        Say::Big(n.clamp(0, 99) as u8)
+        Say::Big(n.clamp(0, 100) as u8)
     }
 }
 
@@ -449,7 +452,7 @@ impl Say {
             Say::Land => "say_land".into(),
             Say::Oops => "say_oops".into(),
             Say::Number(n) => format!("say_{}", n.clamp(1, 10)),
-            Say::Big(n) => format!("say_n{}", n.min(99)),
+            Say::Big(n) => format!("say_n{}", n.min(100)),
             Say::Line(l) => l.key().into(),
             Say::Word(w) => format!("word_{w}"),
             Say::Times(line, a, b) => {
@@ -728,7 +731,7 @@ mod tests {
             Say::Best,
         ];
         lines.extend((1..=10).map(Say::Number));
-        lines.extend((1..=99).map(number));
+        lines.extend((1..=100).map(number));
         lines.extend(Line::ALL.iter().map(|l| Say::Line(*l)));
         lines.extend([Say::GardenIntro, Say::Bloom, Say::Steady, Say::SnakeIntro]);
         for v in lines {

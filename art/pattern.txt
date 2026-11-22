@@ -1,0 +1,12 @@
+# Painted with FLUX.1-dev (art/gen/prompts/pattern.json)
+bg            | gen:pattern_bg.png | solo jpg max=1024 keep
+stone_red     | gen:pat_stone_red_cut.png | max=256
+stone_blue    | gen:pat_stone_blue_cut.png | max=256
+stone_yellow  | gen:pat_stone_yellow_cut.png | max=256
+stone_green   | gen:pat_stone_green_cut.png | max=256
+stone_purple  | gen:pat_stone_purple_cut.png | max=256
+shape_star    | gen:pat_shape_star_cut.png | max=256
+shape_heart   | gen:pat_shape_heart_cut.png | max=256
+shape_moon    | gen:pat_shape_moon_cut.png | max=256
+shape_diamond | gen:pat_shape_diamond_cut.png | max=256
+frog          | gen:pat_frog_cut.png | max=256

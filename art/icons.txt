@@ -19,3 +19,5 @@ icon_runner | gen:iconr_runner.png | max=256
 icon_trains | gen:iconr_trains.png | max=256
 icon_ballsort | gen:iconr_ballsort_round.png | max=256
 icon_garden | gen:iconr_garden.png | max=256
+icon_pattern | gen:iconr_pattern.png | max=256
+icon_bonds | gen:iconr_bonds.png | max=256

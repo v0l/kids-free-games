@@ -1,4 +1,5 @@
 pub mod ballsort;
+pub mod bonds;
 pub mod blocks;
 pub mod breakout;
 pub mod build;
@@ -15,6 +16,7 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod pattern;
 pub mod runner;
 pub mod share;
 pub mod snake;
@@ -65,7 +67,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 23] = [
+pub const CATALOG: [Info; 25] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -213,6 +215,20 @@ pub const CATALOG: [Info; 23] = [
         Kind::Learn,
         "Division games for kids",
         (240, 160, 70),
+    ),
+    info(
+        "pattern",
+        "Pattern Path",
+        Kind::Learn,
+        "Pattern and sequence games for kids",
+        (60, 170, 230),
+    ),
+    info(
+        "bonds",
+        "Number Bonds",
+        Kind::Learn,
+        "Addition games for kids",
+        (70, 150, 230),
     ),
     info(
         "build",

@@ -1,0 +1,10 @@
+# Painted with FLUX.1-dev (art/gen/prompts/bonds.json)
+bg       | gen:bonds_bg.png | solo jpg max=1344 keep
+stand    | gen:bonds_stand_cut.png | max=512
+beam     | gen:bonds_beam_cut.png | max=512
+pan      | gen:bonds_pan_cut.png | max=384
+w_red    | gen:bonds_w_red_cut.png | max=256
+w_blue   | gen:bonds_w_blue_cut.png | max=256
+w_green  | gen:bonds_w_green_cut.png | max=256
+w_orange | gen:bonds_w_orange_cut.png | max=256
+ball     | gen:bonds_ball_cut.png | max=128

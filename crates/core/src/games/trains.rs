@@ -185,13 +185,13 @@ impl Memory {
         }
     }
 
-    fn pack(self) -> i64 {
+    pub fn pack(self) -> i64 {
         ((self.rung as i64) << 56)
             | ((self.due as i64 & 0x0FFF_FFFF) << 28)
             | (self.at as i64 & 0x0FFF_FFFF)
     }
 
-    fn unpack(v: i64) -> Memory {
+    pub fn unpack(v: i64) -> Memory {
         Memory {
             at: (v & 0x0FFF_FFFF) as u32,
             due: ((v >> 28) & 0x0FFF_FFFF) as u32,

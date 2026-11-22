@@ -14,6 +14,7 @@ use kg_core::profile;
 pub const IDLE: u32 = 1000;
 
 mod ballsort_scene;
+mod bonds_scene;
 mod blocks_scene;
 mod breakout_scene;
 mod clash_scene;
@@ -27,6 +28,7 @@ mod mathpop_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
+mod pattern_scene;
 mod runner_scene;
 mod build_scene;
 mod share_scene;
@@ -221,6 +223,24 @@ pub const SCENES: &[(u32, &str)] = &[
     (267, "garden every bed in bloom, board"),
     (268, "garden bed bloom"),
     (269, "garden round report"),
+    (290, "bonds first scale with the hint"),
+    (291, "bonds beads to ten"),
+    (292, "bonds wrong weight tips the scale"),
+    (293, "bonds right weight balances"),
+    (294, "bonds make 20 with weights"),
+    (295, "bonds tens to 100"),
+    (296, "bonds level picker"),
+    (297, "bonds level report"),
+    (298, "bonds finished with the board"),
+    (270, "pattern first launch with the hint"),
+    (271, "pattern right answer, frog hopping"),
+    (272, "pattern shapes"),
+    (273, "pattern counting on"),
+    (274, "pattern shape and colour"),
+    (275, "pattern first wrong stone"),
+    (276, "pattern level picker"),
+    (277, "pattern level done report"),
+    (278, "pattern cleared with the board"),
     (280, "share first launch with the hint"),
     (281, "share cookies on plates"),
     (282, "share fifteen between five, asking"),
@@ -230,12 +250,12 @@ pub const SCENES: &[(u32, &str)] = &[
     (286, "share level picker"),
     (287, "share finished with the board"),
     (288, "share full plate refuses a cookie"),
-    (290, "build first launch with the hint"),
-    (291, "build last letter"),
-    (292, "build two gaps, one filled"),
-    (293, "build level picker"),
-    (294, "build finished with the board"),
-    (295, "build stuck, answer glowing"),
+    (300, "build first launch with the hint"),
+    (301, "build last letter"),
+    (302, "build two gaps, one filled"),
+    (303, "build level picker"),
+    (304, "build finished with the board"),
+    (305, "build stuck, answer glowing"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -527,8 +547,10 @@ fn setup(n: u32, view: &View) -> Stage {
         200..=219 => runner_scene::setup(n, view),
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
+        270..=278 => pattern_scene::setup(n, view),
+        290..=299 => bonds_scene::setup(n, view),
         280..=289 => share_scene::setup(n, view),
-        290..=299 => build_scene::setup(n, view),
+        300..=309 => build_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -806,8 +828,18 @@ mod tests {
     }
 
     #[test]
+    fn bonds_scenes_land_in_the_state_they_are_named_for() {
+        bonds_scene::check();
+    }
+
+    #[test]
     fn garden_scenes_land_in_the_state_they_are_named_for() {
         garden_scene::check();
+    }
+
+    #[test]
+    fn pattern_scenes_land_in_the_state_they_are_named_for() {
+        pattern_scene::check();
     }
 
     #[test]

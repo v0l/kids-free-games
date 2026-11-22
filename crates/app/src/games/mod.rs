@@ -3,6 +3,7 @@ use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
 pub mod ballsort;
+pub mod bonds;
 pub mod blocks;
 pub mod breakout;
 pub mod build;
@@ -19,6 +20,7 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod pattern;
 pub mod runner;
 pub mod share;
 pub mod snake;
@@ -92,6 +94,8 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         build::KEY => Some(|| Box::new(build::BuildPlay::new())),
         share::KEY => Some(|| Box::new(share::SharePlay::new())),
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
+        pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
+        bonds::KEY => Some(|| Box::new(bonds::BondsPlay::new())),
         _ => None,
     }
 }

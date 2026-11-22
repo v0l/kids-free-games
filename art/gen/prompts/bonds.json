@@ -1,0 +1,82 @@
+[
+ {
+  "name": "bonds_bg",
+  "w": 768,
+  "h": 1344,
+  "seed": 2201,
+  "cut": false,
+  "prompt": "Mobile game portrait background: a cheerful sunny toy shop shelf scene with soft pastel wallpaper, a warm wooden floor at the bottom, blurred colourful toys far away, empty centre, no characters, no text. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_stand",
+  "w": 768,
+  "h": 1024,
+  "seed": 2202,
+  "cut": true,
+  "prompt": "A tall chunky cartoon balance scale stand: a round wooden base and a thick vertical post with a round brass pivot knob at the top, no beam, no pans, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_beam",
+  "w": 1024,
+  "h": 512,
+  "seed": 2203,
+  "cut": true,
+  "prompt": "A perfectly horizontal chunky wooden balance scale beam bar with a brass round knob in the exact centre and a small brass hook at each end, seen straight from the front, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_pan",
+  "w": 1024,
+  "h": 768,
+  "seed": 2204,
+  "cut": true,
+  "prompt": "A shiny brass balance scale pan: a shallow round dish seen from the front with three thin chains meeting above at one ring, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_w_red",
+  "w": 768,
+  "h": 768,
+  "seed": 2205,
+  "cut": true,
+  "prompt": "A chunky glossy red round cartoon weight with a flat bottom, a rounded top handle ring and a big blank smooth flat face, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_w_blue",
+  "w": 768,
+  "h": 768,
+  "seed": 2205,
+  "cut": true,
+  "prompt": "A chunky glossy blue round cartoon weight with a flat bottom, a rounded top handle ring and a big blank smooth flat face, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_w_green",
+  "w": 768,
+  "h": 768,
+  "seed": 2205,
+  "cut": true,
+  "prompt": "A chunky glossy green round cartoon weight with a flat bottom, a rounded top handle ring and a big blank smooth flat face, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_w_orange",
+  "w": 768,
+  "h": 768,
+  "seed": 2205,
+  "cut": true,
+  "prompt": "A chunky glossy orange round cartoon weight with a flat bottom, a rounded top handle ring and a big blank smooth flat face, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "bonds_ball",
+  "w": 512,
+  "h": 512,
+  "seed": 2206,
+  "cut": true,
+  "prompt": "A single glossy round golden cartoon bead ball, single object centred and fully visible, isolated on a plain flat pure white background, no shadow, no ground. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "iconr_bonds",
+  "w": 1024,
+  "h": 1024,
+  "seed": 2207,
+  "cut": false,
+  "prompt": "Square mobile game app icon: a cheerful wooden balance scale with two brass pans holding colourful round weights, perfectly balanced, soft pastel toy shop background, fills the whole square edge to edge, sharp focus. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]
