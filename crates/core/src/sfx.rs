@@ -773,13 +773,96 @@ mod tests {
 
     #[test]
     fn decoding_the_whole_pack_is_quick() {
-        let t = std::time::Instant::now();
+        let cpu = decode_pack_cpu(|| {});
+        eprintln!("decoded pack in {cpu:?} cpu");
+        assert!(cpu.as_secs_f32() < pack_limit(), "took {cpu:?} cpu");
+    }
+
+    #[test]
+    #[should_panic(expected = "cpu")]
+    fn a_slower_decoder_fails_the_pack_timing() {
+        let n = pack().len() as f32;
+        let extra = std::time::Duration::from_secs_f32(pack_limit() / n * 1.2);
+        let cpu = decode_pack_cpu(|| burn_cpu(extra));
+        assert!(cpu.as_secs_f32() < pack_limit(), "took {cpu:?} cpu");
+    }
+
+    #[test]
+    fn thread_cpu_time_tracks_a_busy_loop() {
+        let a = thread_cpu_time();
+        burn_cpu(std::time::Duration::from_millis(200));
+        let b = thread_cpu_time();
+        assert!(b >= a);
+        let spent = (b - a).as_secs_f32();
+        assert!((0.2..0.4).contains(&spent), "spent {spent}");
+    }
+
+    fn pack_limit() -> f32 {
+        if cfg!(debug_assertions) {
+            20.0
+        } else {
+            1.5
+        }
+    }
+
+    fn decode_pack_cpu(mut after_each: impl FnMut()) -> std::time::Duration {
+        let t = thread_cpu_time();
         for (_, d) in pack() {
             decode(d).unwrap();
+            after_each();
         }
-        eprintln!("decoded pack in {:?}", t.elapsed());
-        let limit = if cfg!(debug_assertions) { 20.0 } else { 1.5 };
-        assert!(t.elapsed().as_secs_f32() < limit, "took {:?}", t.elapsed());
+        thread_cpu_time() - t
+    }
+
+    fn burn_cpu(d: std::time::Duration) {
+        let end = thread_cpu_time() + d;
+        while thread_cpu_time() < end {}
+    }
+
+    #[cfg(unix)]
+    fn thread_cpu_time() -> std::time::Duration {
+        #[repr(C)]
+        struct Timespec {
+            sec: i64,
+            nsec: i64,
+        }
+        extern "C" {
+            fn clock_gettime(clock: i32, ts: *mut Timespec) -> i32;
+        }
+        #[cfg(target_os = "macos")]
+        const THREAD_CPU_CLOCK: i32 = 16;
+        #[cfg(not(target_os = "macos"))]
+        const THREAD_CPU_CLOCK: i32 = 3;
+        let mut ts = Timespec { sec: 0, nsec: 0 };
+        assert_eq!(unsafe { clock_gettime(THREAD_CPU_CLOCK, &mut ts) }, 0);
+        std::time::Duration::new(ts.sec as u64, ts.nsec as u32)
+    }
+
+    #[cfg(windows)]
+    fn thread_cpu_time() -> std::time::Duration {
+        #[repr(C)]
+        #[derive(Default)]
+        struct FileTime {
+            low: u32,
+            high: u32,
+        }
+        extern "system" {
+            fn GetCurrentThread() -> isize;
+            fn GetThreadTimes(
+                thread: isize,
+                creation: *mut FileTime,
+                exit: *mut FileTime,
+                kernel: *mut FileTime,
+                user: *mut FileTime,
+            ) -> i32;
+        }
+        let ticks = |f: &FileTime| ((f.high as u64) << 32) | f.low as u64;
+        let (mut c, mut e, mut k, mut u) = Default::default();
+        assert_ne!(
+            unsafe { GetThreadTimes(GetCurrentThread(), &mut c, &mut e, &mut k, &mut u) },
+            0
+        );
+        std::time::Duration::from_nanos((ticks(&k) + ticks(&u)) * 100)
     }
 
     #[test]

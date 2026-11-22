@@ -1099,7 +1099,10 @@ pub struct SelectLayout {
 
 pub fn select_layout(view: &View) -> SelectLayout {
     let stacked = select_try(view, false);
-    let fits = stacked.cells.iter().all(|c| c.y >= super::helix::select_ribbon_bottom(view))
+    let fits = stacked
+        .cells
+        .iter()
+        .all(|c| c.y >= super::helix::select_ribbon_bottom(view))
         && stacked.play.y + stacked.play.h <= view.h;
     if fits {
         stacked

@@ -23,7 +23,10 @@ fn run(p: &Policy, games: u64, in_game: bool) -> Vec<Report> {
                         let seed = seed + 900_000;
                         let skill = skill_of(seed);
                         let e = if in_game { rl_effort(skill) } else { 1.0 };
-                        out.push((seed, play_seed(&Pilot::Policy(p, Effort::new(e)), seed, skill)));
+                        out.push((
+                            seed,
+                            play_seed(&Pilot::Policy(p, Effort::new(e)), seed, skill),
+                        ));
                     }
                 })
             })
@@ -39,7 +42,11 @@ fn ci(a: &[f32], b: &[f32]) -> (f32, f32, f32) {
     let d: Vec<f32> = a.iter().zip(b).map(|(x, y)| x - y).collect();
     let m = d.iter().sum::<f32>() / n;
     let v = d.iter().map(|x| (x - m).powi(2)).sum::<f32>() / (n - 1.0);
-    (a.iter().sum::<f32>() / n, b.iter().sum::<f32>() / n, 1.96 * (v / n).sqrt())
+    (
+        a.iter().sum::<f32>() / n,
+        b.iter().sum::<f32>() / n,
+        1.96 * (v / n).sqrt(),
+    )
 }
 
 fn main() {

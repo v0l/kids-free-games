@@ -1,0 +1,10 @@
+# Painted with FLUX.1-dev (art/gen/prompts/share.json)
+bg     | gen:share_bg.png | solo jpg max=1344 keep
+cookie | gen:share_cookie_cut.png | max=192
+plate  | gen:share_plate_cut.png | max=256
+bunny  | gen:share_bunny_cut.png | max=320
+bear   | gen:share_bear_cut.png | max=320
+fox    | gen:share_fox_cut.png | max=320
+panda  | gen:share_panda_cut.png | max=320
+frog   | gen:share_frog_cut.png | max=320
+icon_share | gen:iconr_share.png | max=256

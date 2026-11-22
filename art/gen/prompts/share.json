@@ -1,0 +1,74 @@
+[
+ {
+  "name": "share_bg",
+  "w": 768,
+  "h": 1344,
+  "seed": 2101,
+  "cut": false,
+  "prompt": "Mobile game portrait background: a sunny cosy picnic meadow with a red and white checked picnic blanket at the bottom, green grass, a few flowers, soft blurred trees and blue sky above, empty middle, no characters. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "share_cookie",
+  "w": 512,
+  "h": 512,
+  "seed": 2102,
+  "cut": true,
+  "prompt": "One single round chocolate chip cookie, top three quarter view, golden brown with chunky chocolate chips, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "share_plate",
+  "w": 768,
+  "h": 512,
+  "seed": 2103,
+  "cut": true,
+  "prompt": "One single round pastel blue ceramic plate with a white rim seen from slightly above, empty, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "iconr_share",
+  "w": 1024,
+  "h": 1024,
+  "seed": 2104,
+  "cut": false,
+  "prompt": "Square mobile game app icon: a happy cartoon bunny and a happy bear sitting at a table each with a plate holding chocolate chip cookies, sunny picnic meadow behind, rounded chunky shapes, fills the whole square edge to edge. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, sharp focus"
+ },
+ {
+  "name": "share_bunny",
+  "w": 768,
+  "h": 768,
+  "seed": 2110,
+  "cut": true,
+  "prompt": "A cute fluffy white bunny with long ears sitting happily facing the viewer with a big smile, full body, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "share_bear",
+  "w": 768,
+  "h": 768,
+  "seed": 2111,
+  "cut": true,
+  "prompt": "A cute chubby brown bear cub sitting happily facing the viewer with a big smile, full body, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "share_fox",
+  "w": 768,
+  "h": 768,
+  "seed": 2112,
+  "cut": true,
+  "prompt": "A cute orange fox with a white tipped tail sitting happily facing the viewer with a big smile, full body, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "share_panda",
+  "w": 768,
+  "h": 768,
+  "seed": 2113,
+  "cut": true,
+  "prompt": "A cute round panda sitting happily facing the viewer with a big smile, full body, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ },
+ {
+  "name": "share_frog",
+  "w": 768,
+  "h": 768,
+  "seed": 2114,
+  "cut": true,
+  "prompt": "A cute green frog sitting happily facing the viewer with a big smile, full body, isolated on a plain white background. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]
