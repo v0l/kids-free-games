@@ -275,11 +275,7 @@ pub fn draw(g: &Jumper, pen: &mut Pen, view: &View, age: f32) {
         State::Playing => {
             if g.shows_steer_hint() {
                 let pulse = 1.0 + (g.t * 4.0).sin() * 0.04;
-                pen.hint(
-                    "Touch left or right to steer",
-                    steer_hint_pos(view),
-                    pulse,
-                );
+                pen.hint("Touch left or right to steer", steer_hint_pos(view), pulse);
             }
         }
     }
