@@ -691,14 +691,26 @@ pub fn buttons(view: &View) -> Buttons {
     }
 }
 
+pub fn hint_gap(view: &View) -> f32 {
+    if view.portrait() {
+        80.0 * view.text_k()
+    } else {
+        60.0
+    }
+}
+
 pub fn hint_pos(view: &View) -> Vec2 {
     let b = buttons(view);
-    vec2(view.w / 2.0, b.restart.y - 36.0)
+    if view.portrait() {
+        vec2(view.w / 2.0, b.restart.y - hint_gap(view) / 2.0 - 4.0 * view.text_k())
+    } else {
+        vec2(view.w / 2.0, b.restart.y - 36.0)
+    }
 }
 
 pub fn board_rect(view: &View) -> Rect {
     let b = buttons(view);
-    let bottom = b.restart.y - 60.0;
+    let bottom = b.restart.y - hint_gap(view) - if view.portrait() { 16.0 } else { 0.0 };
     let avail_h = (bottom - HUD_TOP).max(120.0);
     let avail_w = view.w - 2.0 * view.edge();
     let s = (avail_w.min(avail_h) - 2.0 * PAD).max(100.0);
@@ -1133,6 +1145,21 @@ mod tests {
                     );
                 }
             }
+        }
+    }
+
+    #[test]
+    fn the_hint_pill_sits_between_the_board_and_the_buttons_on_every_screen() {
+        for (name, v) in crate::sizing::test_views() {
+            if !v.portrait() {
+                continue;
+            }
+            let b = buttons(&v);
+            let at = hint_pos(&v);
+            let half = 32.0 * v.text_k() * 1.05;
+            let board = board_rect(&v);
+            assert!(at.y + half <= b.restart.y, "{name}: pill reaches the buttons");
+            assert!(at.y - half >= board.bottom() + 10.0, "{name}: pill over the board frame");
         }
     }
 
