@@ -402,11 +402,13 @@ pub enum Line {
     Choo,
     Tap,
     Makes,
+    PatternNext,
 }
 
 impl Line {
-    pub const ALL: [Line; 7] = [
+    pub const ALL: [Line; 8] = [
         Line::Makes,
+        Line::PatternNext,
         Line::TakeAway,
         Line::Left,
         Line::Missing,
@@ -424,6 +426,7 @@ impl Line {
             Line::Choo => "say_tr_choo",
             Line::Tap => "say_tr_tap",
             Line::Makes => "say_bd_makes",
+            Line::PatternNext => "say_pattern_next",
         }
     }
 }
