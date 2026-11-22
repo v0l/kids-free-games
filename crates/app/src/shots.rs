@@ -32,6 +32,7 @@ mod paper_scene;
 mod jigsaw_scene;
 mod pattern_scene;
 mod runner_scene;
+mod build_scene;
 mod share_scene;
 mod snake_scene;
 mod spell_scene;
@@ -266,6 +267,12 @@ pub const SCENES: &[(u32, &str)] = &[
     (286, "share level picker"),
     (287, "share finished with the board"),
     (288, "share full plate refuses a cookie"),
+    (300, "build first launch with the hint"),
+    (301, "build last letter"),
+    (302, "build two gaps, one filled"),
+    (303, "build level picker"),
+    (304, "build finished with the board"),
+    (305, "build stuck, answer glowing"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -561,6 +568,7 @@ fn setup(n: u32, view: &View) -> Stage {
         270..=278 => pattern_scene::setup(n, view),
         290..=299 => bonds_scene::setup(n, view),
         280..=289 => share_scene::setup(n, view),
+        300..=309 => build_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         310..=319 => phonics_scene::setup(n, view),
@@ -861,6 +869,11 @@ mod tests {
     #[test]
     fn pattern_scenes_land_in_the_state_they_are_named_for() {
         pattern_scene::check();
+    }
+
+    #[test]
+    fn build_scenes_land_in_the_state_they_are_named_for() {
+        build_scene::check();
     }
 
     #[test]

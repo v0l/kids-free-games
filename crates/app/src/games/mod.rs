@@ -6,6 +6,7 @@ pub mod ballsort;
 pub mod bonds;
 pub mod blocks;
 pub mod breakout;
+pub mod build;
 pub mod clash;
 pub mod count;
 pub mod crossy;
@@ -92,6 +93,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
         trains::KEY => Some(|| Box::new(trains::TrainsPlay::new())),
+        build::KEY => Some(|| Box::new(build::BuildPlay::new())),
         share::KEY => Some(|| Box::new(share::SharePlay::new())),
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
         phonics::KEY => Some(|| Box::new(phonics::PhonicsPlay::new())),

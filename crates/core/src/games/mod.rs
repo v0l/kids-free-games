@@ -2,6 +2,7 @@ pub mod ballsort;
 pub mod bonds;
 pub mod blocks;
 pub mod breakout;
+pub mod build;
 pub mod clash;
 pub mod count;
 pub mod crossy;
@@ -68,7 +69,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 26] = [
+pub const CATALOG: [Info; 27] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -244,6 +245,13 @@ pub const CATALOG: [Info; 26] = [
         Kind::Learn,
         "Letter sounds games for kids",
         (80, 170, 240),
+    ),
+    info(
+        "build",
+        "Word Builder",
+        Kind::Learn,
+        "Reading games for kids",
+        (70, 160, 230),
     ),
 ];
 
