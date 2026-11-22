@@ -15,6 +15,7 @@ pub mod fruit;
 pub mod garden;
 pub mod helix;
 pub mod hotel;
+pub mod jigsaw;
 pub mod jumper;
 pub mod mathpop;
 pub mod phonics;
@@ -97,6 +98,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
         phonics::KEY => Some(|| Box::new(phonics::PhonicsPlay::new())),
         pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
+        jigsaw::KEY => Some(|| Box::new(jigsaw::JigsawPlay::new())),
         bonds::KEY => Some(|| Box::new(bonds::BondsPlay::new())),
         _ => None,
     }

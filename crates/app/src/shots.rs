@@ -29,6 +29,7 @@ mod phonics_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
+mod jigsaw_scene;
 mod pattern_scene;
 mod runner_scene;
 mod build_scene;
@@ -241,6 +242,13 @@ pub const SCENES: &[(u32, &str)] = &[
     (296, "bonds level picker"),
     (297, "bonds level report"),
     (298, "bonds finished with the board"),
+    (320, "jigsaw first launch with the hint"),
+    (321, "jigsaw three pieces placed"),
+    (322, "jigsaw level picker"),
+    (323, "jigsaw sixteen pieces, no ghost"),
+    (324, "jigsaw thirty-six pieces"),
+    (325, "jigsaw level done report"),
+    (326, "jigsaw cleared with the board"),
     (270, "pattern first launch with the hint"),
     (271, "pattern right answer, frog hopping"),
     (272, "pattern shapes"),
@@ -556,6 +564,7 @@ fn setup(n: u32, view: &View) -> Stage {
         200..=219 => runner_scene::setup(n, view),
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
+        320..=326 => jigsaw_scene::setup(n, view),
         270..=278 => pattern_scene::setup(n, view),
         290..=299 => bonds_scene::setup(n, view),
         280..=289 => share_scene::setup(n, view),
@@ -850,6 +859,11 @@ mod tests {
     #[test]
     fn garden_scenes_land_in_the_state_they_are_named_for() {
         garden_scene::check();
+    }
+
+    #[test]
+    fn jigsaw_scenes_land_in_the_state_they_are_named_for() {
+        jigsaw_scene::check();
     }
 
     #[test]
