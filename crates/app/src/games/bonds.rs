@@ -101,7 +101,13 @@ fn draw_weight(pen: &mut Pen, name: &str, c: Vec2, size: f32, label: &str) {
 }
 
 fn draw_pan(pen: &mut Pen, end: Vec2, pan_w: f32) {
-    pen.sprite_w(SHEET, "pan", end + vec2(0.0, pan_w * 0.72), pan_w, Draw::default());
+    pen.sprite_w(
+        SHEET,
+        "pan",
+        end + vec2(0.0, pan_w * 0.72),
+        pan_w,
+        Draw::default(),
+    );
 }
 
 fn draw_scale(g: &Bonds, pen: &mut Pen, view: &View) {
@@ -115,13 +121,7 @@ fn draw_scale(g: &Bonds, pen: &mut Pen, view: &View) {
         stand_h,
         Draw::default(),
     );
-    pen.sprite_w(
-        SHEET,
-        "beam",
-        geo.pivot,
-        geo.arm * 2.1,
-        Draw::rot(-g.tilt),
-    );
+    pen.sprite_w(SHEET, "beam", geo.pivot, geo.arm * 2.1, Draw::rot(-g.tilt));
     for end in [geo.left_end, geo.right_end] {
         draw_pan(pen, end, geo.pan_w);
     }
@@ -139,13 +139,23 @@ fn draw_scale(g: &Bonds, pen: &mut Pen, view: &View) {
         }
     } else {
         let s = geo.pan_w * 0.5;
-        draw_weight(pen, weight_sprite(q.a), left - vec2(0.0, s * 0.45), s, &q.a.to_string());
+        draw_weight(
+            pen,
+            weight_sprite(q.a),
+            left - vec2(0.0, s * 0.45),
+            s,
+            &q.a.to_string(),
+        );
         if let Some(v) = g.on_pan {
-            draw_weight(pen, weight_sprite(v), right - vec2(0.0, s * 0.45), s, &v.to_string());
+            draw_weight(
+                pen,
+                weight_sprite(v),
+                right - vec2(0.0, s * 0.45),
+                s,
+                &v.to_string(),
+            );
         }
     }
-    let target = geo.pivot - vec2(0.0, geo.arm * 0.35);
-    pen.text_outline(&q.target.to_string(), target.x, target.y, geo.arm * 0.34, WHITE, BLUE_INK);
 }
 
 fn draw_buttons(g: &Bonds, pen: &mut Pen, view: &View) {
@@ -156,11 +166,21 @@ fn draw_buttons(g: &Bonds, pen: &mut Pen, view: &View) {
         let pop = g.press[i].scale(0.12);
         let wob = (g.wobble[i] * 36.0).sin() * 12.0 * g.wobble[i];
         let c = r.center() + vec2(wob, 0.0);
-        let rr = Rect::new(c.x - r.w * pop / 2.0, c.y - r.h * pop / 2.0, r.w * pop, r.h * pop);
+        let rr = Rect::new(
+            c.x - r.w * pop / 2.0,
+            c.y - r.h * pop / 2.0,
+            r.w * pop,
+            r.h * pop,
+        );
         if glow_slot == Some(i) {
             let glow = 10.0 + 4.0 * (g.t * 6.0).sin();
             pen.round_rect(
-                Rect::new(rr.x - glow, rr.y - glow, rr.w + glow * 2.0, rr.h + glow * 2.0),
+                Rect::new(
+                    rr.x - glow,
+                    rr.y - glow,
+                    rr.w + glow * 2.0,
+                    rr.h + glow * 2.0,
+                ),
                 24.0,
                 Color::new(1.0, 0.95, 0.4, 0.7),
             );
@@ -205,7 +225,10 @@ fn draw_levels(g: &Bonds, pen: &mut Pen, view: &View) {
             pen.text_outline(ex, r.center().x, r.y + r.h * 0.46, size, WHITE, BLUE_INK);
             let earned = kg_core::profile::stars(GAME, i as u32);
             for j in 0..3u8 {
-                let c = vec2(r.center().x + (j as f32 - 1.0) * r.h * 0.24, r.y + r.h * 0.76);
+                let c = vec2(
+                    r.center().x + (j as f32 - 1.0) * r.h * 0.24,
+                    r.y + r.h * 0.76,
+                );
                 let fill = if j < earned {
                     STAR_GOLD
                 } else {

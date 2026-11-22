@@ -290,8 +290,23 @@ pub fn button_height(view: &View) -> f32 {
     view.kid_tap(124.0 * ui_scale(view))
 }
 
+pub fn side_layout(view: &View) -> bool {
+    view.w > view.h * 1.7
+}
+
 pub fn button_rects(view: &View) -> Vec<Rect> {
     let n = OPTIONS;
+    let gap = 16.0;
+    if side_layout(view) {
+        let top = hud(view).bottom + 8.0;
+        let avail = view.h - top - 16.0;
+        let h = ((avail - gap * (n as f32 - 1.0)) / n as f32).clamp(60.0, 110.0);
+        let w = (view.w * 0.2).clamp(110.0, 200.0);
+        let x = view.w - w - 24.0;
+        return (0..n)
+            .map(|i| Rect::new(x, top + i as f32 * (h + gap), w, h))
+            .collect();
+    }
     let gap = 24.0;
     let h = button_height(view);
     let w = ((view.w - 80.0 - gap * (n as f32 - 1.0)) / n as f32).min(240.0 * ui_scale(view));
@@ -308,15 +323,26 @@ pub fn hint_pos(view: &View) -> Vec2 {
 }
 
 pub fn hint_room(view: &View) -> bool {
+    if side_layout(view) {
+        return false;
+    }
     let top = prompt_y(view) + prompt_size(view) * 0.7;
     hint_pos(view).y - 32.0 * view.text_k() * 1.1 - top >= 150.0
 }
 
 pub fn scale_area(view: &View) -> Rect {
     let top = prompt_y(view) + prompt_size(view) * 0.7;
+    if side_layout(view) {
+        let right = button_rects(view)[0].x - 16.0;
+        return Rect::new(20.0, top, right - 20.0, (view.h - 12.0 - top).max(60.0));
+    }
     let hint_top = hint_pos(view).y - 32.0 * view.text_k() * 1.1;
     let buttons_top = button_rects(view)[0].y - 8.0;
-    let bottom = if hint_room(view) { hint_top } else { buttons_top };
+    let bottom = if hint_room(view) {
+        hint_top
+    } else {
+        buttons_top
+    };
     Rect::new(30.0, top, view.w - 60.0, (bottom - top).max(60.0))
 }
 
@@ -565,7 +591,11 @@ impl Bonds {
         if self.celebrate.is_some() || self.attempt.solved {
             return None;
         }
-        let wait = if self.first_time { 2.0 } else { HINT_AFTER * 2.0 };
+        let wait = if self.first_time {
+            2.0
+        } else {
+            HINT_AFTER * 2.0
+        };
         if self.attempt.revealed() || self.idle >= wait && self.first_time {
             Some(self.question.slot_of_answer())
         } else {
@@ -762,7 +792,10 @@ impl Bonds {
         }
         if levels_button(view).contains(input.pos) && !self.first_time {
             self.mode = Mode::Levels;
-        } else if let Some(slot) = button_rects(view).iter().position(|r| r.contains(input.pos)) {
+        } else if let Some(slot) = button_rects(view)
+            .iter()
+            .position(|r| r.contains(input.pos))
+        {
             let tap = self.pick(slot);
             self.react(view, slot, tap);
         } else if input.pos.y < scale_area(view).y {
@@ -1150,14 +1183,19 @@ mod tests {
         for v in views() {
             let rects = button_rects(&v);
             for (i, r) in rects.iter().enumerate() {
-                assert!(r.w >= 90.0 && r.h >= 90.0, "{r:?}");
+                assert!(r.w >= 90.0 && r.h >= 60.0, "{r:?}");
                 assert!(r.x >= 0.0 && r.x + r.w <= v.w && r.y + r.h <= v.h);
-                if i > 0 {
+                if i > 0 && side_layout(&v) {
+                    assert!(r.y >= rects[i - 1].y + rects[i - 1].h);
+                } else if i > 0 {
                     assert!(r.x >= rects[i - 1].x + rects[i - 1].w);
                 }
             }
             let a = scale_area(&v);
-            assert!(rects[0].y >= a.y + a.h);
+            assert!(side_layout(&v) || rects[0].y >= a.y + a.h);
+            if side_layout(&v) {
+                assert!(rects.iter().all(|r| r.x >= a.x + a.w));
+            }
             assert!(!hint_room(&v) || hint_pos(&v).y > a.y + a.h - 1.0);
         }
     }
@@ -1199,7 +1237,11 @@ mod tests {
         let v = View::ipad_landscape();
         let mut g = fresh();
         g.speech.clear();
-        g.update(&Input::press_at(vec2(v.w / 2.0, scale_area(&v).y - 10.0)), &v, DT);
+        g.update(
+            &Input::press_at(vec2(v.w / 2.0, scale_area(&v).y - 10.0)),
+            &v,
+            DT,
+        );
         assert!(!g.speech.is_empty());
     }
 }
