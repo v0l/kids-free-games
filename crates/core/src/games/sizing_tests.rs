@@ -99,6 +99,21 @@ fn all_problems(v: &View) -> Vec<String> {
     let mut cells = bsl.cells.clone();
     cells.push(bsl.play);
     t("ballsort select", &cells);
+    let sb = slide::buttons(v);
+    t("slide buttons", &[sb.restart, sb.hint, sb.peek, sb.levels]);
+    for skip in [false, true] {
+        let w = slide::win_layout(v, skip, Some(0));
+        let r: Vec<Rect> = if skip {
+            vec![w.skip, w.levels]
+        } else {
+            vec![w.levels]
+        };
+        t("slide win", &r);
+    }
+    let sl = slide::select_layout(v);
+    let mut cells = sl.cells.clone();
+    cells.push(sl.play);
+    t("slide select", &cells);
     let hs = helix::select_layout(v);
     let mut cells = hs.cells.clone();
     cells.push(hs.play);
@@ -179,6 +194,12 @@ fn all_problems(v: &View) -> Vec<String> {
     s("spell done sheet", &spell::done_layout(v).done.sheet);
     s("memory done sheet", &memory::Memory::done_layout(v).sheet);
     s("mathpop levels sheet", &mathpop::levels_layout(v).sheet);
+    for skip in [&slide::WIN_LABELS[..], &slide::WIN_SKIP_LABELS[..]] {
+        s(
+            "slide win sheet",
+            &slide::win_results(v, skip, Some(0)).sheet,
+        );
+    }
     for skip in [&ballsort::WIN_LABELS[..], &ballsort::WIN_SKIP_LABELS[..]] {
         s(
             "ballsort win sheet",
@@ -513,6 +534,11 @@ fn level_pickers_start_below_their_ribbon_on_every_view() {
         check(
             "ballsort picker",
             top_of(&ballsort::select_layout(&v).cells),
+            h,
+        );
+        check(
+            "slide picker",
+            top_of(&super::slide::select_layout(&v).cells),
             h,
         );
         check("stack picker", top_of(&stack::picker_layout(&v)), h);

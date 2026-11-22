@@ -1098,7 +1098,11 @@ pub struct SelectLayout {
 }
 
 pub fn select_layout(view: &View) -> SelectLayout {
-    let stacked = select_try(view, false);
+    select_layout_n(view, MAX_LEVEL as usize)
+}
+
+pub fn select_layout_n(view: &View, n: usize) -> SelectLayout {
+    let stacked = select_try(view, false, n);
     let fits = stacked
         .cells
         .iter()
@@ -1107,12 +1111,11 @@ pub fn select_layout(view: &View) -> SelectLayout {
     if fits {
         stacked
     } else {
-        select_try(view, true)
+        select_try(view, true, n)
     }
 }
 
-fn select_try(view: &View, tucked: bool) -> SelectLayout {
-    let n = MAX_LEVEL as usize;
+fn select_try(view: &View, tucked: bool, n: usize) -> SelectLayout {
     let gap = 10.0f32.max(view.from_mm(0.6));
     let ph = view.tap(76.0);
     let m = view.edge().clamp(8.0, 16.0);

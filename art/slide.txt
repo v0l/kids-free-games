@@ -1,0 +1,8 @@
+# Composed from existing painted art by art/gen/compose_sliding.py
+lion    | gen:slide_lion.png | max=512 keep
+panda   | gen:slide_panda.png | max=512 keep
+penguin | gen:slide_penguin.png | max=512 keep
+whale   | gen:slide_whale.png | max=512 keep
+rocket  | gen:slide_rocket.png | max=512 keep
+frog    | gen:slide_frog.png | max=512 keep
+icon_slide | gen:slide_icon.png | max=256

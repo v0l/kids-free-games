@@ -17,6 +17,7 @@ pub mod merge;
 pub mod paper;
 pub mod phonics;
 pub mod pattern;
+pub mod slide;
 pub mod runner;
 pub mod share;
 pub mod snake;
@@ -67,7 +68,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 25] = [
+pub const CATALOG: [Info; 26] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -229,6 +230,13 @@ pub const CATALOG: [Info; 25] = [
         Kind::Learn,
         "Addition games for kids",
         (70, 150, 230),
+    ),
+    info(
+        "slide",
+        "Sliding Tiles",
+        Kind::Arcade,
+        "Sliding tile puzzles",
+        (255, 150, 60),
     ),
     info(
         "phonics",

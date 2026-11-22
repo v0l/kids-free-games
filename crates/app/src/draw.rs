@@ -319,6 +319,40 @@ impl Pen {
         );
     }
 
+    pub fn sprite_part(
+        &mut self,
+        sheet: &'static str,
+        name: &str,
+        part: Rect,
+        dest: Rect,
+        d: Draw,
+    ) {
+        if !crate::art::ready(sheet) {
+            return;
+        }
+        let Some(f) = crate::art::frame(sheet, name) else {
+            self.rect(dest, kg_core::geom::MAGENTA);
+            return;
+        };
+        let (pw, ph) = crate::art::page_size(sheet, f.page);
+        let inset = 0.5;
+        let u0 = (f.src.x + f.src.w * part.x + inset) / pw;
+        let v0 = (f.src.y + f.src.h * part.y + inset) / ph;
+        let u1 = (f.src.x + f.src.w * (part.x + part.w) - inset) / pw;
+        let v1 = (f.src.y + f.src.h * (part.y + part.h) - inset) / ph;
+        self.quad(
+            Tex::Page(sheet, f.page as u16),
+            [
+                vec2(dest.x, dest.y),
+                vec2(dest.x + dest.w, dest.y),
+                vec2(dest.x + dest.w, dest.y + dest.h),
+                vec2(dest.x, dest.y + dest.h),
+            ],
+            [vec2(u0, v0), vec2(u1, v0), vec2(u1, v1), vec2(u0, v1)],
+            d.tint,
+        );
+    }
+
     pub fn sprite_at(
         &mut self,
         sheet: &'static str,

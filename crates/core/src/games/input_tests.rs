@@ -212,6 +212,20 @@ fn ballsort_selects_the_tube_under_a_scripted_tap() {
 }
 
 #[test]
+fn slide_slides_the_piece_under_a_scripted_tap() {
+    use super::slide::*;
+    fresh();
+    let v = view();
+    let mut g = Slide::with_level(3);
+    let near = neighbours(g.n, g.blank_at())[0];
+    let before = g.tiles.clone();
+    let r = cell_rect(&v, g.n, g.cell_pos(near));
+    tap_rect(&mut g, r);
+    assert_ne!(g.tiles, before);
+    assert_eq!(g.moves, 1);
+}
+
+#[test]
 fn garden_opens_a_bed_from_a_scripted_tap() {
     use super::garden::*;
     fresh();
