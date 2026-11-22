@@ -5,7 +5,7 @@ pub const CONFIDENT_AFTER: i64 = 8;
 pub const MASTERED: f32 = 0.85;
 pub const MAX_SAMPLE_SECS: f32 = 30.0;
 pub const TIERS: [f32; 3] = [0.5, 0.7, MASTERED];
-pub const LEARN_GAMES: [(&str, usize); 8] = [
+pub const LEARN_GAMES: [(&str, usize); 9] = [
     ("mathpop", 9),
     ("count", 6),
     ("spell", 9),
@@ -13,6 +13,7 @@ pub const LEARN_GAMES: [(&str, usize); 8] = [
     ("garden", 12),
     ("share", 6),
     ("pattern", 8),
+    ("bonds", 7),
     ("phonics", 8),
 ];
 

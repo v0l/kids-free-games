@@ -3,6 +3,7 @@ use kg_core::engine::{Input, View};
 use kg_core::games::{Info, CATALOG};
 
 pub mod ballsort;
+pub mod bonds;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -94,6 +95,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
         phonics::KEY => Some(|| Box::new(phonics::PhonicsPlay::new())),
         pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
+        bonds::KEY => Some(|| Box::new(bonds::BondsPlay::new())),
         _ => None,
     }
 }

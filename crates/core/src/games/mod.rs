@@ -1,4 +1,5 @@
 pub mod ballsort;
+pub mod bonds;
 pub mod blocks;
 pub mod breakout;
 pub mod clash;
@@ -66,7 +67,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 24] = [
+pub const CATALOG: [Info; 25] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -221,6 +222,13 @@ pub const CATALOG: [Info; 24] = [
         Kind::Learn,
         "Pattern and sequence games for kids",
         (60, 170, 230),
+    ),
+    info(
+        "bonds",
+        "Number Bonds",
+        Kind::Learn,
+        "Addition games for kids",
+        (70, 150, 230),
     ),
     info(
         "phonics",

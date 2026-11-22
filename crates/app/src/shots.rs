@@ -14,6 +14,7 @@ use kg_core::profile;
 pub const IDLE: u32 = 1000;
 
 mod ballsort_scene;
+mod bonds_scene;
 mod blocks_scene;
 mod breakout_scene;
 mod clash_scene;
@@ -222,14 +223,23 @@ pub const SCENES: &[(u32, &str)] = &[
     (267, "garden every bed in bloom, board"),
     (268, "garden bed bloom"),
     (269, "garden round report"),
-    (300, "phonics first launch with the hint"),
-    (301, "phonics wrong balloon"),
-    (302, "phonics answer revealed"),
-    (303, "phonics right pop"),
-    (304, "phonics sound pairs"),
-    (305, "phonics level picker"),
-    (306, "phonics level done"),
-    (308, "phonics final screen with the board"),
+    (310, "phonics first launch with the hint"),
+    (311, "phonics wrong balloon"),
+    (312, "phonics answer revealed"),
+    (313, "phonics right pop"),
+    (314, "phonics sound pairs"),
+    (315, "phonics level picker"),
+    (316, "phonics level done"),
+    (318, "phonics final screen with the board"),
+    (290, "bonds first scale with the hint"),
+    (291, "bonds beads to ten"),
+    (292, "bonds wrong weight tips the scale"),
+    (293, "bonds right weight balances"),
+    (294, "bonds make 20 with weights"),
+    (295, "bonds tens to 100"),
+    (296, "bonds level picker"),
+    (297, "bonds level report"),
+    (298, "bonds finished with the board"),
     (270, "pattern first launch with the hint"),
     (271, "pattern right answer, frog hopping"),
     (272, "pattern shapes"),
@@ -540,10 +550,11 @@ fn setup(n: u32, view: &View) -> Stage {
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
         270..=278 => pattern_scene::setup(n, view),
+        290..=299 => bonds_scene::setup(n, view),
         280..=289 => share_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
-        300..=309 => phonics_scene::setup(n, view),
+        310..=319 => phonics_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
         150..=159 => paper_scene::setup(n, view),
         90..=99 => memory_scene::setup(n, view),
@@ -821,6 +832,11 @@ mod tests {
     #[test]
     fn ballsort_scenes_land_in_the_state_they_are_named_for() {
         ballsort_scene::check();
+    }
+
+    #[test]
+    fn bonds_scenes_land_in_the_state_they_are_named_for() {
+        bonds_scene::check();
     }
 
     #[test]
