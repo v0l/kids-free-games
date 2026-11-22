@@ -2,7 +2,7 @@ use crate::engine::*;
 use crate::feel::{self, Impact};
 use crate::fx::*;
 use crate::games::garden;
-use crate::games::spell::{Memory, GAPS};
+use crate::games::spell::Memory;
 use crate::geom::*;
 use crate::learn::*;
 use crate::mastery;
@@ -938,6 +938,7 @@ impl Game for Share {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::games::spell::GAPS;
 
     const DT: f32 = 1.0 / 60.0;
 

@@ -875,12 +875,7 @@ fn draw_tile(pen: &mut Pen, r: Rect, e: &Entry, shine: Option<f32>) {
     } else {
         Color::new(0.75, 0.72, 0.8, 1.0)
     };
-    pen.sprite(
-        "icons",
-        &format!("icon_{}", e.info.key),
-        ir,
-        Draw::tint(tint),
-    );
+    pen.game_icon(e.info.key, ir, Draw::tint(tint));
     if let Some(t) = shine {
         pen.shine_sweep(ir, t);
     }
