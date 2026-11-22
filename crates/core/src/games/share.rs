@@ -314,16 +314,30 @@ pub fn button_rects(view: &View) -> Vec<Rect> {
         .collect()
 }
 
+pub fn wide(view: &View) -> bool {
+    view.w > view.h * 1.2
+}
+
 pub fn pile_rect(view: &View) -> Rect {
-    let h = view.kid_tap(80.0 * ui_scale(view));
     let e = view.edge();
+    if wide(view) {
+        let top = prompt_rect(view).bottom() + view.gap();
+        let bottom = view.h - e;
+        return Rect::new(e, top, (view.w * 0.2).max(160.0), (bottom - top).max(40.0));
+    }
+    let h = view.kid_tap(80.0 * ui_scale(view));
     Rect::new(e, view.h - h - e, view.w - 2.0 * e, h)
 }
 
 pub fn field(view: &View) -> Rect {
     let top = prompt_rect(view).bottom() + view.gap();
-    let bottom = pile_rect(view).y - view.gap();
     let e = view.edge();
+    if wide(view) {
+        let p = pile_rect(view);
+        let x = p.right() + view.gap();
+        return Rect::new(x, top, view.w - e - x, p.h);
+    }
+    let bottom = pile_rect(view).y - view.gap();
     Rect::new(e, top, view.w - 2.0 * e, (bottom - top).max(40.0))
 }
 
@@ -356,7 +370,7 @@ pub fn animal_height(cell: Rect) -> f32 {
 pub fn pile_slots(pile: Rect, count: usize) -> (Vec<Vec2>, f32) {
     let n = count.max(1);
     let mut best = (1usize, 0.0f32);
-    for rows in 1..=4usize {
+    for rows in 1..=8usize {
         let cols = n.div_ceil(rows);
         let c = (pile.w / cols as f32).min(pile.h / rows as f32);
         if c > best.1 {

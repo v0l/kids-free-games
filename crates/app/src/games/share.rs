@@ -315,7 +315,11 @@ pub fn draw(g: &Share, pen: &mut Pen, view: &View) {
     draw_buttons(g, pen, view);
     if g.first_time && g.mode == Mode::Play && g.phase == Phase::Drag && !g.held {
         let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
-        let y = pile_rect(view).y - view.gap() - 24.0;
+        let y = if wide(view) {
+            kg_core::games::share::prompt_rect(view).bottom() + view.gap() + 24.0
+        } else {
+            pile_rect(view).y - view.gap() - 24.0
+        };
         pen.hint(
             "Drag a cookie onto a plate, or tap a plate",
             vec2(view.w / 2.0, y),
