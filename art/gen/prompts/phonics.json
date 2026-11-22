@@ -1,0 +1,18 @@
+[
+ {
+  "name": "phonics_bg",
+  "w": 1024,
+  "h": 1024,
+  "seed": 27,
+  "cut": false,
+  "prompt": "Mobile game background: bright cheerful sunrise sky with a soft rainbow and big fluffy white clouds, rolling green hills with a few colourful wildflowers at the bottom, wide open sky in the middle. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters, no characters, no people, no animals, fills the whole frame"
+ },
+ {
+  "name": "iconr_phonics",
+  "w": 1024,
+  "h": 1024,
+  "seed": 2027,
+  "cut": false,
+  "prompt": "Square mobile game app icon: three big glossy party balloons in red, yellow and blue floating in a bright sky, one balloon bursting into confetti and sparkles, a cute smiling cartoon mouth with sound waves beside them, fills the whole square edge to edge, sharp focus. 3D rendered cartoon style like Supercell, King or Rovio mobile games, vibrant saturated colours, soft studio lighting, glossy, polished AAA mobile game art, no text, no letters"
+ }
+]

@@ -1,4 +1,4 @@
-use super::{count, mathpop, spell, trains};
+use super::{count, mathpop, phonics, spell, trains};
 use crate::engine::View;
 use crate::geom::Rect;
 use crate::sizing::*;
@@ -62,6 +62,13 @@ fn all_problems(v: &View) -> Vec<String> {
     let d = mathpop::done_layout(v);
     t("mathpop done", &[d.next, d.again, d.levels]);
     t("mathpop levels button", &[mathpop::levels_button(v)]);
+    let ph = phonics::levels_layout(v);
+    let mut pr = ph.tiles.clone();
+    pr.push(ph.back);
+    t("phonics levels", &pr);
+    let pd = phonics::done_layout(v);
+    t("phonics done", &[pd.next, pd.again, pd.levels]);
+    t("phonics levels button", &[phonics::levels_button(v)]);
     let s = spell::levels_layout(v);
     let mut sr = s.tiles.clone();
     sr.push(s.back);
@@ -236,6 +243,17 @@ fn every_learning_top_bar_fits_between_home_and_levels() {
                 goal: "",
             };
             bad.extend(hud_problems(&v, &format!("{name} mathpop"), &spec, &[]));
+        }
+        for (i, n) in phonics::LEVEL_NAMES.iter().enumerate() {
+            let title = format!("Level {}: {}", i + 1, n);
+            let spec = HudSpec {
+                title: &title,
+                levels: LevelsAt::Top,
+                stars: 0,
+                progress: 18.0,
+                goal: "",
+            };
+            bad.extend(hud_problems(&v, &format!("{name} phonics"), &spec, &[]));
         }
         let spec = HudSpec {
             title: "Level 10",

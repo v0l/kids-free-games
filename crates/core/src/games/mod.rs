@@ -14,6 +14,7 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod phonics;
 pub mod runner;
 pub mod snake;
 pub mod spell;
@@ -63,7 +64,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 21] = [
+pub const CATALOG: [Info; 22] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -204,6 +205,13 @@ pub const CATALOG: [Info; 21] = [
         Kind::Learn,
         "Multiplication games for kids",
         (90, 190, 90),
+    ),
+    info(
+        "phonics",
+        "Phonics Pop",
+        Kind::Learn,
+        "Letter sounds games for kids",
+        (80, 170, 240),
     ),
 ];
 
