@@ -17,6 +17,7 @@ pub mod helix;
 pub mod hotel;
 pub mod jumper;
 pub mod mathpop;
+pub mod phonics;
 pub mod memory;
 pub mod merge;
 pub mod paper;
@@ -94,6 +95,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         build::KEY => Some(|| Box::new(build::BuildPlay::new())),
         share::KEY => Some(|| Box::new(share::SharePlay::new())),
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
+        phonics::KEY => Some(|| Box::new(phonics::PhonicsPlay::new())),
         pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
         bonds::KEY => Some(|| Box::new(bonds::BondsPlay::new())),
         _ => None,

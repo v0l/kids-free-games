@@ -323,6 +323,13 @@ pub fn draw(g: &Build, pen: &mut Pen, view: &View) {
         let x = l.slots[0].x + (l.slots.last().map_or(0.0, |r| r.right()) - l.slots[0].x) / 2.0;
         pen.hint("Drag the missing letter in, or tap it", vec2(x, y), pulse);
     }
+    if g.first_time && wide && g.mode == Mode::Play && g.celebrate.is_none() && g.held.is_none() {
+        let gap_top = l.slots[0].y;
+        let y = gap_top - 20.0;
+        let size = 24.0;
+        let x = l.slots[0].x + (l.slots.last().map_or(0.0, |r| r.right()) - l.slots[0].x) / 2.0;
+        pen.text_outline("Drag the missing letter in", x, y, size, WHITE, BLUE_INK);
+    }
     pen.offset = Vec2::ZERO;
     pen.particles(&g.particles);
     pen.popups(&g.popups);

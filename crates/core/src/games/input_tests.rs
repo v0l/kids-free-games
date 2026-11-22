@@ -246,6 +246,19 @@ fn count_opens_a_level_from_a_scripted_tap() {
 }
 
 #[test]
+fn phonics_pops_the_balloon_under_a_scripted_tap() {
+    use super::phonics::*;
+    fresh();
+    let v = view();
+    let mut g = Phonics::new();
+    g.asked = 5.0;
+    let slot = g.question.slot_of_answer();
+    let at = g.center(&v, slot);
+    tap_at(&mut g, at);
+    assert!(g.solved);
+}
+
+#[test]
 fn pattern_opens_a_level_from_a_scripted_tap() {
     use super::pattern::*;
     fresh();

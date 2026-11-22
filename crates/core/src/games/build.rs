@@ -341,8 +341,8 @@ fn wide_layout(view: &View, letters: usize, tiles: usize) -> Layout {
     };
     let tile = fit(tiles).max(1.0);
     let slot = fit(letters).min(tile);
-    let total = slot + gap * 2.0 + tile;
-    let y0 = top + (bottom - top - total).max(0.0) / 2.0;
+    let total = slot + gap + tile;
+    let y0 = (top + 30.0).max(top + (bottom - top - total).max(0.0) / 2.0);
     let row = |count: usize, size: f32, y: f32| -> Vec<Rect> {
         let w = count as f32 * size + (count as f32 - 1.0) * gap;
         let x0 = left + (width - w) / 2.0;
@@ -353,7 +353,7 @@ fn wide_layout(view: &View, letters: usize, tiles: usize) -> Layout {
     Layout {
         picture,
         slots: row(letters, slot, y0),
-        tiles: row(tiles, tile, y0 + slot + gap * 2.0),
+        tiles: row(tiles, tile, y0 + slot + gap),
     }
 }
 
@@ -1080,6 +1080,10 @@ mod tests {
                     assert!(l.picture.y >= h.bottom - 0.5, "{name} picture under hud");
                     if v.w > v.h * 1.6 {
                         assert!(l.picture.right() <= l.slots[0].x + 0.5, "{name}");
+                        assert!(
+                            l.tiles[0].bottom() <= v.h - v.edge() + 0.5,
+                            "{name} {tiles}"
+                        );
                     } else {
                         assert!(
                             l.picture.bottom() <= l.slots[0].y + 0.5,

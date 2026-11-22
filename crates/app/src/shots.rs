@@ -25,6 +25,7 @@ mod helix_scene;
 mod hotel_scene;
 mod jumper_scene;
 mod mathpop_scene;
+mod phonics_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
@@ -223,6 +224,14 @@ pub const SCENES: &[(u32, &str)] = &[
     (267, "garden every bed in bloom, board"),
     (268, "garden bed bloom"),
     (269, "garden round report"),
+    (310, "phonics first launch with the hint"),
+    (311, "phonics wrong balloon"),
+    (312, "phonics answer revealed"),
+    (313, "phonics right pop"),
+    (314, "phonics sound pairs"),
+    (315, "phonics level picker"),
+    (316, "phonics level done"),
+    (318, "phonics final screen with the board"),
     (290, "bonds first scale with the hint"),
     (291, "bonds beads to ten"),
     (292, "bonds wrong weight tips the scale"),
@@ -553,6 +562,7 @@ fn setup(n: u32, view: &View) -> Stage {
         300..=309 => build_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
+        310..=319 => phonics_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
         150..=159 => paper_scene::setup(n, view),
         90..=99 => memory_scene::setup(n, view),
@@ -780,6 +790,11 @@ mod tests {
     #[test]
     fn blocks_scenes_land_in_the_state_they_are_named_for() {
         blocks_scene::check();
+    }
+
+    #[test]
+    fn phonics_scenes_land_in_the_state_they_are_named_for() {
+        phonics_scene::check();
     }
 
     #[test]
