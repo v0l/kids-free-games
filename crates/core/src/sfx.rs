@@ -770,13 +770,43 @@ mod tests {
 
     #[test]
     fn decoding_the_whole_pack_is_quick() {
-        let t = std::time::Instant::now();
+        let t = thread_cpu_time();
         for (_, d) in pack() {
             decode(d).unwrap();
+            decode_slowdown();
         }
-        eprintln!("decoded pack in {:?}", t.elapsed());
+        let cpu = thread_cpu_time() - t;
+        eprintln!("decoded pack in {cpu:?} cpu");
         let limit = if cfg!(debug_assertions) { 20.0 } else { 1.5 };
-        assert!(t.elapsed().as_secs_f32() < limit, "took {:?}", t.elapsed());
+        assert!(cpu.as_secs_f32() < limit, "took {cpu:?} cpu");
+    }
+
+    fn decode_slowdown() {
+        if let Ok(ms) = std::env::var("KG_TEST_SLOWDOWN_MS") {
+            let end = thread_cpu_time() + std::time::Duration::from_millis(ms.parse().unwrap());
+            while thread_cpu_time() < end {}
+        }
+    }
+
+    #[repr(C)]
+    struct Timespec {
+        sec: i64,
+        nsec: i64,
+    }
+
+    extern "C" {
+        fn clock_gettime(clock: i32, ts: *mut Timespec) -> i32;
+    }
+
+    #[cfg(target_os = "macos")]
+    const THREAD_CPU_CLOCK: i32 = 16;
+    #[cfg(not(target_os = "macos"))]
+    const THREAD_CPU_CLOCK: i32 = 3;
+
+    fn thread_cpu_time() -> std::time::Duration {
+        let mut ts = Timespec { sec: 0, nsec: 0 };
+        assert_eq!(unsafe { clock_gettime(THREAD_CPU_CLOCK, &mut ts) }, 0);
+        std::time::Duration::new(ts.sec as u64, ts.nsec as u32)
     }
 
     #[test]
