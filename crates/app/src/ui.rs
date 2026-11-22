@@ -63,6 +63,7 @@ impl Tone {
 fn game_sheet(game: &str) -> &'static str {
     match game {
         "share" => "share",
+        "build" => "build",
         _ => "icons",
     }
 }
