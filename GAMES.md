@@ -55,7 +55,7 @@ Math Pop stays as the mixed warm-up. Each operation also gets a game of its own,
 | Game | Purpose | How it plays | Levels |
 |---|---|---|---|
 | **Jigsaw** | Shape matching, patience, fine motor control | A painted picture splits into pieces scattered round the edge. Drag a piece near its spot and it snaps in. A faint ghost of the picture sits behind the board on early levels. Finished pictures go into a sticker book | Piece counts 4, 6, 9, 12, 16, 25, 36, 49. Early levels use square pieces with a ghost image. Later levels use classic tab-and-blank shapes, no ghost, and pieces that start rotated (tap to turn). Packs: animals, vehicles, space, ocean, dinosaurs, fairy tales; each pack unlocks after the previous one has 3 stars |
-| **Sliding Tiles** | Planning moves ahead | The classic 8-puzzle with painted pictures | 2x2, then 3x3, 4x4 and 5x5. Stars for moves under par |
+| **Sliding Tiles** (done) | Planning moves ahead | Painted animal pictures cut into pieces: tap a piece to slide it (or tap down a row to shift several) into the gap. Peek shows the finished picture, Hint points at the next move | 12 levels: 2x2, 3x3, 4x4 and 5x5, each size getting more scrambled. Stars for moves close to par (exact par on 2x2 and 3x3) |
 | **Ball Sort** | Sorting and planning (Color Bump / ball-sort apps) | Tap a tube, tap another to pour the top ball. Sort so each tube holds one colour | 3 colours and 5 tubes, growing to 10 colours. Then hidden balls that reveal when they reach the top. Stars for no undo |
 | **Pattern Path** | Sequences and patterns | A path of stepping stones in a pattern (red, blue, red, ?); pick the next stone to cross the river | AB, then AAB, ABC, growing numbers (2, 4, 6), shapes plus colours |
 
