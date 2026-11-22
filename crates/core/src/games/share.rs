@@ -17,6 +17,14 @@ pub const OPTIONS: usize = 3;
 pub const RECENT: usize = 6;
 pub const CELEBRATE: f32 = 1.5;
 pub const SPEECH_GAP: f32 = 0.9;
+
+fn gap_after(say: sfx::Say) -> f32 {
+    match say {
+        sfx::Say::ShareIntro => 3.6,
+        sfx::Say::ShareEach | sfx::Say::ShareDrag => 2.6,
+        _ => SPEECH_GAP,
+    }
+}
 pub const MAX_SPOKEN: i32 = 99;
 pub const ANIMALS: [&str; 5] = ["bunny", "bear", "fox", "panda", "frog"];
 pub const HUD_TITLE: &str = "Level 6";
@@ -605,21 +613,39 @@ impl Share {
 
     fn lines_for_question(&self) -> Vec<sfx::Say> {
         let q = &self.question;
-        if q.asks_friends() {
-            vec![sfx::number(q.total), sfx::number(q.each())]
-        } else {
-            vec![sfx::number(q.total), sfx::number(q.friends)]
+        let mut lines = vec![];
+        if self.first_time {
+            lines.push(sfx::Say::ShareIntro);
         }
+        if q.asks_friends() {
+            lines.extend([sfx::number(q.total), sfx::number(q.each())]);
+        } else {
+            lines.extend([sfx::number(q.total), sfx::number(q.friends)]);
+        }
+        if self.phase == Phase::Drag && self.first_time {
+            lines.push(sfx::Say::ShareDrag);
+        } else if self.phase == Phase::Choose && !q.asks_friends() {
+            lines.push(sfx::Say::ShareEach);
+        }
+        lines
+    }
+
+    fn spaced(lines: Vec<sfx::Say>, scale: f32) -> Vec<(f32, sfx::Say)> {
+        let mut t = 0.0;
+        lines
+            .into_iter()
+            .map(|l| {
+                let item = (t, l);
+                t += gap_after(l) * scale;
+                item
+            })
+            .collect()
     }
 
     pub fn speak_question(&mut self) {
         let lines = self.lines_for_question();
         sfx::prefetch_say(&lines);
-        self.speech = lines
-            .into_iter()
-            .enumerate()
-            .map(|(i, l)| (i as f32 * SPEECH_GAP, l))
-            .collect();
+        self.speech = Self::spaced(lines, 1.0);
     }
 
     fn update_speech(&mut self, dt: f32) {
@@ -678,17 +704,13 @@ impl Share {
         let q = &self.question;
         let mut said = vec![sfx::number(q.answer())];
         if q.left() > 0 && !q.asks_friends() {
-            said = vec![sfx::number(q.each()), sfx::number(q.left())];
+            said = vec![
+                sfx::number(q.each()),
+                sfx::number(q.left()),
+                sfx::Say::ShareLeft,
+            ];
         }
-        let mut t = 0.0;
-        self.speech = said
-            .into_iter()
-            .map(|l| {
-                let item = (t, l);
-                t += SPEECH_GAP * 0.8;
-                item
-            })
-            .collect();
+        self.speech = Self::spaced(said, 0.8);
         let word = if self.attempt.wrong == 0 && self.bounces == 0 {
             PRAISE[rand::gen_range(0, PRAISE.len())]
         } else {
@@ -1239,10 +1261,14 @@ mod tests {
         assert_eq!(
             said,
             vec![
+                sfx::Say::ShareIntro,
                 sfx::number(g.question.total),
-                sfx::number(g.question.friends)
+                sfx::number(g.question.friends),
+                sfx::Say::ShareDrag,
             ]
         );
+        let times: Vec<f32> = g.speech.iter().map(|s| s.0).collect();
+        assert!(times.windows(2).all(|w| w[1] - w[0] >= SPEECH_GAP));
     }
 
     #[test]

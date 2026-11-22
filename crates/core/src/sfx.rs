@@ -384,6 +384,10 @@ pub enum Say {
     Bloom,
     Steady,
     SnakeIntro,
+    ShareIntro,
+    ShareDrag,
+    ShareEach,
+    ShareLeft,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -467,6 +471,10 @@ impl Say {
             Say::Bloom => "say_garden_bloom".into(),
             Say::Steady => "say_garden_steady".into(),
             Say::SnakeIntro => "say_snake_intro".into(),
+            Say::ShareIntro => "say_share_intro".into(),
+            Say::ShareDrag => "say_share_drag".into(),
+            Say::ShareEach => "say_share_each".into(),
+            Say::ShareLeft => "say_share_left".into(),
         }
     }
 }
@@ -734,6 +742,12 @@ mod tests {
         lines.extend((1..=100).map(number));
         lines.extend(Line::ALL.iter().map(|l| Say::Line(*l)));
         lines.extend([Say::GardenIntro, Say::Bloom, Say::Steady, Say::SnakeIntro]);
+        lines.extend([
+            Say::ShareIntro,
+            Say::ShareDrag,
+            Say::ShareEach,
+            Say::ShareLeft,
+        ]);
         for v in lines {
             let takes: Vec<_> = p.iter().filter(|(k, _)| voice_line(k) == v.key()).collect();
             assert!(!takes.is_empty(), "{v:?} missing");
