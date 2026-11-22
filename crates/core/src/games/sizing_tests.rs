@@ -135,6 +135,12 @@ fn all_problems(v: &View) -> Vec<String> {
     }
     t("trains answers", &trains::button_rects(v));
     t("garden seeds", &garden::seed_rects(v));
+    t("pattern levels", &super::pattern::level_tiles(v));
+    t("pattern play", &[super::pattern::play_button(v)]);
+    t("pattern levels button", &[super::pattern::levels_button(v)]);
+    for n in [2, 3, 4] {
+        t("pattern answers", &super::pattern::button_rects(v, n));
+    }
     t("memory levels", &memory::Memory::tiles(v));
     let mut p = |what: &str, r: Rect, inside: &[Rect]| out.extend(panel(v, what, r, inside));
     p(

@@ -246,6 +246,17 @@ fn count_opens_a_level_from_a_scripted_tap() {
 }
 
 #[test]
+fn pattern_opens_a_level_from_a_scripted_tap() {
+    use super::pattern::*;
+    fresh();
+    let mut g = Pattern::new();
+    g.mode = Mode::Levels;
+    let tiles = level_tiles(&view());
+    tap_rect(&mut g, tiles[0]);
+    assert_eq!(g.mode, Mode::Play);
+}
+
+#[test]
 fn mathpop_pops_the_balloon_under_a_scripted_tap() {
     use super::mathpop::*;
     fresh();
