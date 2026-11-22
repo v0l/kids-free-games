@@ -712,6 +712,30 @@ mod tests {
     }
 
     #[test]
+    fn every_clip_the_game_asks_for_is_in_the_word_pack_and_decodes() {
+        let pack = crate::sfx::words();
+        assert!(!pack.is_empty());
+        for level in 0..LEVEL_NAMES.len() {
+            for clip in level_clips(level) {
+                let key = sfx::Say::Word(clip).key();
+                let data = crate::sfx::find(pack, &format!("{key}.0"))
+                    .or_else(|| crate::sfx::find(pack, &key))
+                    .unwrap_or_else(|| panic!("{key} is not packed"));
+                let (_, samples) = crate::sfx::decode(data).unwrap();
+                assert!(samples.len() > 2000, "{key} is too short");
+            }
+        }
+        for clip in CLIPS {
+            let key = sfx::Say::Word(clip).key();
+            assert!(
+                crate::sfx::find(pack, &key).is_some()
+                    || crate::sfx::find(pack, &format!("{key}.0")).is_some(),
+                "{key}"
+            );
+        }
+    }
+
+    #[test]
     fn every_sound_has_a_clip_and_every_clip_is_a_sound() {
         for level in 0..LEVEL_NAMES.len() {
             for s in level_pool(level) {
