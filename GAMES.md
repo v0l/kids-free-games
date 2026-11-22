@@ -63,7 +63,7 @@ Math Pop stays as the mixed warm-up. Each operation also gets a game of its own,
 
 | Game | Purpose | How it plays | Levels |
 |---|---|---|---|
-| **Phonics Pop** | Letter sounds before spelling | The voice says a sound; pop the balloon with the matching letter | Single sounds (s a t p i n), then the rest of the alphabet, digraphs (sh ch th), blends |
+| **Phonics Pop** (built, letter voices pending) | Letter sounds before spelling | The voice says a sound; pop the balloon with the matching letter | Single sounds (s a t p i n), then the rest of the alphabet, digraphs (sh ch th), blends |
 | **Word Builder** | Reading short words | A picture appears with a word to finish (c_t); drag the missing letter in. Feeds into Spell It | Missing first letter, then last, then middle, then two letters |
 
 ### Arcade still to do
