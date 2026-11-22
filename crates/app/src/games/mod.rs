@@ -22,6 +22,7 @@ pub mod merge;
 pub mod paper;
 pub mod pattern;
 pub mod runner;
+pub mod slide;
 pub mod share;
 pub mod snake;
 pub mod spell;
@@ -96,6 +97,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         phonics::KEY => Some(|| Box::new(phonics::PhonicsPlay::new())),
         pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
         bonds::KEY => Some(|| Box::new(bonds::BondsPlay::new())),
+        slide::KEY => Some(|| Box::new(slide::SlidePlay::new())),
         _ => None,
     }
 }

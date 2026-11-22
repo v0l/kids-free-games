@@ -169,6 +169,13 @@ pub const CATALOG: [Info; 26] = [
         (40, 190, 180),
     ),
     info(
+        "slide",
+        "Sliding Tiles",
+        Kind::Arcade,
+        "Sliding tile puzzles",
+        (255, 150, 60),
+    ),
+    info(
         "blocks",
         "Block Drop",
         Kind::Arcade,
@@ -230,13 +237,6 @@ pub const CATALOG: [Info; 26] = [
         Kind::Learn,
         "Addition games for kids",
         (70, 150, 230),
-    ),
-    info(
-        "slide",
-        "Sliding Tiles",
-        Kind::Arcade,
-        "Sliding tile puzzles",
-        (255, 150, 60),
     ),
     info(
         "phonics",
