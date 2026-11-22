@@ -521,6 +521,7 @@ impl Pattern {
         self.prompt_bump.kick();
         self.t = 0.0;
         self.session.start_question();
+        sfx::say(sfx::Say::Line(sfx::Line::PatternNext));
     }
 
     fn next_question(&mut self) {
@@ -631,6 +632,9 @@ impl Pattern {
             }
             Tap::Wrong => {
                 sfx::play(Sfx::Wrong);
+                if let Token::Number(n) = self.question.options[slot] {
+                    sfx::say(sfx::number(n));
+                }
                 self.shake.add(0.25);
                 self.popups
                     .add(at - vec2(0.0, 90.0), "Try again", orange, 48.0);
@@ -954,6 +958,28 @@ mod tests {
         }
         assert_eq!(seen.last(), Some(&(n - 1)));
         assert!(seen.windows(2).all(|w| w[1] == w[0] + 1));
+    }
+
+    #[test]
+    fn each_new_question_is_asked_aloud_and_a_wrong_number_is_spoken() {
+        fresh_player();
+        let mut g = Pattern::new();
+        assert_eq!(
+            sfx::take_voice(),
+            Some(sfx::Say::Line(sfx::Line::PatternNext))
+        );
+        g.question = Question::generate(4);
+        g.load();
+        sfx::take_voice();
+        let slot = (0..g.question.options.len())
+            .find(|i| *i != g.question.slot_of_answer())
+            .unwrap();
+        let tap = g.pick(slot);
+        g.react(&View::ipad_landscape(), slot, tap);
+        let Token::Number(n) = g.question.options[slot] else {
+            panic!()
+        };
+        assert_eq!(sfx::take_voice(), Some(sfx::number(n)));
     }
 
     #[test]
