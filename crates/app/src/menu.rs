@@ -257,6 +257,13 @@ impl App {
         self.scroll = self.max_scroll(view);
     }
 
+    pub fn scroll_to_game(&mut self, view: &View, key: &str) {
+        if let Some(i) = self.entries.iter().position(|e| e.info.key == key) {
+            let r = self.layout(view).tiles[i];
+            self.scroll = (r.y - view.h * 0.3).clamp(0.0, self.max_scroll(view));
+        }
+    }
+
     pub fn max_scroll(&self, view: &View) -> f32 {
         let rects = self.layout(view).tiles;
         let bottom = rects.last().map(|r| r.y + r.h + 30.0).unwrap_or(0.0);

@@ -44,6 +44,7 @@ pub const SCENES: &[(u32, &str)] = &[
     (0, "menu"),
     (1, "menu scrolled to Learn"),
     (2, "menu with the second tile focused"),
+    (9, "menu scrolled to Jigsaw and Sliding Tiles"),
     (3, "who's playing"),
     (4, "new player"),
     (5, "link: show code"),
@@ -501,7 +502,7 @@ fn crossy_scene(n: u32, view: &View) -> Stage {
 fn setup(n: u32, view: &View) -> Stage {
     kg_core::rng::srand(7);
     match n {
-        0..=2 | 7 => {
+        0..=2 | 7 | 9 => {
             players();
             let mut app = App::new();
             match n {
@@ -518,6 +519,7 @@ fn setup(n: u32, view: &View) -> Stage {
                     });
                 }
                 1 => app.scroll_to_end(view),
+                9 => app.scroll_to_game(view, "jigsaw"),
                 2 => {
                     app.update(&Input::key(kg_core::engine::Dir::Right), view, DT);
                     app.update(&Input::key(kg_core::engine::Dir::Right), view, DT);
