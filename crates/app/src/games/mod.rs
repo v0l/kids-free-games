@@ -19,6 +19,7 @@ pub mod mathpop;
 pub mod memory;
 pub mod merge;
 pub mod paper;
+pub mod pattern;
 pub mod runner;
 pub mod share;
 pub mod snake;
@@ -91,6 +92,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         trains::KEY => Some(|| Box::new(trains::TrainsPlay::new())),
         share::KEY => Some(|| Box::new(share::SharePlay::new())),
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
+        pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
         bonds::KEY => Some(|| Box::new(bonds::BondsPlay::new())),
         _ => None,
     }

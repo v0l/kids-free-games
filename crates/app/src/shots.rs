@@ -28,6 +28,7 @@ mod mathpop_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
+mod pattern_scene;
 mod runner_scene;
 mod share_scene;
 mod snake_scene;
@@ -221,15 +222,24 @@ pub const SCENES: &[(u32, &str)] = &[
     (267, "garden every bed in bloom, board"),
     (268, "garden bed bloom"),
     (269, "garden round report"),
-    (270, "bonds first scale with the hint"),
-    (271, "bonds beads to ten"),
-    (272, "bonds wrong weight tips the scale"),
-    (273, "bonds right weight balances"),
-    (274, "bonds make 20 with weights"),
-    (275, "bonds tens to 100"),
-    (276, "bonds level picker"),
-    (277, "bonds level report"),
-    (278, "bonds finished with the board"),
+    (290, "bonds first scale with the hint"),
+    (291, "bonds beads to ten"),
+    (292, "bonds wrong weight tips the scale"),
+    (293, "bonds right weight balances"),
+    (294, "bonds make 20 with weights"),
+    (295, "bonds tens to 100"),
+    (296, "bonds level picker"),
+    (297, "bonds level report"),
+    (298, "bonds finished with the board"),
+    (270, "pattern first launch with the hint"),
+    (271, "pattern right answer, frog hopping"),
+    (272, "pattern shapes"),
+    (273, "pattern counting on"),
+    (274, "pattern shape and colour"),
+    (275, "pattern first wrong stone"),
+    (276, "pattern level picker"),
+    (277, "pattern level done report"),
+    (278, "pattern cleared with the board"),
     (280, "share first launch with the hint"),
     (281, "share cookies on plates"),
     (282, "share fifteen between five, asking"),
@@ -530,7 +540,8 @@ fn setup(n: u32, view: &View) -> Stage {
         200..=219 => runner_scene::setup(n, view),
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
-        270..=279 => bonds_scene::setup(n, view),
+        270..=278 => pattern_scene::setup(n, view),
+        290..=299 => bonds_scene::setup(n, view),
         280..=289 => share_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
@@ -816,6 +827,11 @@ mod tests {
     #[test]
     fn garden_scenes_land_in_the_state_they_are_named_for() {
         garden_scene::check();
+    }
+
+    #[test]
+    fn pattern_scenes_land_in_the_state_they_are_named_for() {
+        pattern_scene::check();
     }
 
     #[test]
