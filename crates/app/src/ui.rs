@@ -61,12 +61,18 @@ impl Tone {
 }
 
 fn game_sheet(game: &str) -> &'static str {
-    match game {
-        "share" => "share",
-        "build" => "build",
-        "phonics" => "phonics",
-        "jigsaw" => "jigsaw",
-        _ => "icons",
+    crate::art::LATER
+        .iter()
+        .copied()
+        .find(|s| *s == game)
+        .unwrap_or("icons")
+}
+
+fn icon_sheet(game: &str) -> &'static str {
+    if crate::art::frame("icons", &format!("icon_{game}")).is_some() {
+        "icons"
+    } else {
+        game_sheet(game)
     }
 }
 
@@ -442,11 +448,7 @@ impl Pen {
 
     pub fn game_icon(&mut self, game: &str, r: Rect, d: Draw) {
         let name = format!("icon_{game}");
-        let sheet = if crate::art::frame("icons", &name).is_some() {
-            "icons"
-        } else {
-            game_sheet(game)
-        };
+        let sheet = icon_sheet(game);
         self.sprite(sheet, &name, r, d);
     }
 
@@ -917,6 +919,25 @@ impl Pen {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_game_icon_resolves_to_a_sheet_that_holds_it() {
+        for n in ["share", "build", "phonics", "jigsaw"] {
+            assert!(crate::art::LATER.contains(&n), "LATER lacks {n}");
+        }
+        for g in kg_core::games::CATALOG {
+            let name = format!("icon_{}", g.key);
+            let sheet = icon_sheet(g.key);
+            assert!(
+                crate::art::frame(sheet, &name).is_some(),
+                "{} resolves to sheet {sheet} which lacks {name}",
+                g.key
+            );
+            if crate::art::frame("icons", &name).is_some() {
+                assert_eq!(sheet, "icons");
+            }
+        }
+    }
 
     #[test]
     fn the_win_sheet_parts_never_overlap_each_other_or_home_on_any_view() {

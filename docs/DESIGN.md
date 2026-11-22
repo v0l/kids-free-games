@@ -73,9 +73,8 @@ The 15 repaints ran as five agent sessions, three games each, in separate worktr
 
 ## Checking the result
 
-- `assets/art/icons.kga` is one binary that every new game rebuilds, so parallel game branches conflict on it and git cannot merge it.
-- When it conflicts: merge the text files by hand, `git checkout --ours assets/art/icons.kga`, then rebuild it once from the merged `art/icons.txt` with `scripts/assets.py`. Icon sources that are not in git (`iconr_*.png`) can be cropped back out of the old sheet.
-- Lasting fix: one art sheet per game, as share, pattern and the other newer games do.
+- `assets/art/icons.kga` is frozen: it holds the menu icons of the games that existed before #1005. Do not edit `art/icons.txt` for a new game.
+- A new game puts `icon_<key>` in its own sheet `art/<key>.txt` and lists it in `art::LATER`; nothing else is edited.
 
 - `cargo test --lib`: every manifest's sprites exist, every page decodes, every sound decodes and sits at its tier's loudness.
 - `scripts/shots.sh` in both orientations, looked at by a person (or the agent) every time.
