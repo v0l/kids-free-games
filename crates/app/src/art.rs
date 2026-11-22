@@ -16,7 +16,7 @@ pub static EMBEDDED: &[(&str, &[u8])] = &[
 pub const LATER: &[&str] = &[
     "flappy", "crossy", "snake", "clash", "merge", "fruit", "stack", "breakout", "jumper",
     "blocks", "mathpop", "count", "paper", "memory", "hotel", "helix", "runner", "spell", "trains",
-    "ballsort", "garden", "phonics",
+    "ballsort", "garden", "share", "pattern", "phonics",
 ];
 
 pub fn all_sheets() -> impl Iterator<Item = &'static str> {
@@ -334,12 +334,12 @@ mod tests {
             assert!(have.iter().any(|h| h == n), "ui sheet lacks {n}");
         }
         for g in kg_core::games::CATALOG {
-            let found = if g.key == "phonics" {
-                frame("phonics", "icon")
-            } else {
-                frame("icons", &format!("icon_{}", g.key))
-            };
-            assert!(found.is_some(), "no icon for {}", g.key);
+            assert!(
+                frame("icons", &format!("icon_{}", g.key)).is_some()
+                    || frame(g.key, &format!("icon_{}", g.key)).is_some(),
+                "no icon for {}",
+                g.key
+            );
         }
     }
 }

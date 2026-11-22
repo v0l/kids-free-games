@@ -943,8 +943,12 @@ impl Garden {
             Pick::Wrong | Pick::Reveal => {
                 sfx::play(Sfx::Wrong);
                 self.shake.add(0.22);
-                self.popups
-                    .add_still(retry_popup_pos(view), "Count and try again", orange, retry_popup_size(view));
+                self.popups.add_still(
+                    retry_popup_pos(view),
+                    "Count and try again",
+                    orange,
+                    retry_popup_size(view),
+                );
                 if self.slips + 1 >= SLIPS_DOWN || self.wrong >= 2 {
                     sfx::say(Say::Steady);
                 }

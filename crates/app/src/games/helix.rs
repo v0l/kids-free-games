@@ -249,7 +249,9 @@ pub fn draw(g: &Helix, pen: &mut Pen, view: &View, results_age: f32) {
             pen.hint("Tap, then drag sideways to spin the tower", at, pulse);
             levels_pill(pen, view);
         }
-        State::Playing if !g.taught => pen.hint("Line up the hole to drop through!", at_play, pulse),
+        State::Playing if !g.taught => {
+            pen.hint("Line up the hole to drop through!", at_play, pulse)
+        }
         State::Dead if g.end_t > 0.5 => {
             let line = format!("Level {}, score {}", g.level, g.score);
             pen.results_actions(

@@ -60,6 +60,14 @@ impl Tone {
     }
 }
 
+fn game_sheet(game: &str) -> &'static str {
+    match game {
+        "share" => "share",
+        "phonics" => "phonics",
+        _ => "icons",
+    }
+}
+
 pub fn medal_for(score: u32, best: u32) -> Option<&'static str> {
     if best == 0 || score == 0 {
         return None;
@@ -427,7 +435,17 @@ impl Pen {
     }
 
     pub fn icon(&mut self, game: &str, r: Rect) {
-        self.sprite("icons", &format!("icon_{game}"), r, Draw::default());
+        self.game_icon(game, r, Draw::default());
+    }
+
+    pub fn game_icon(&mut self, game: &str, r: Rect, d: Draw) {
+        let name = format!("icon_{game}");
+        let sheet = if crate::art::frame("icons", &name).is_some() {
+            "icons"
+        } else {
+            game_sheet(game)
+        };
+        self.sprite(sheet, &name, r, d);
     }
 
     pub fn spark(&mut self, c: Vec2, size: f32, angle: f32, color: Color) {
@@ -615,12 +633,7 @@ impl Pen {
                 let st = sr.h * 0.9 * kk;
                 self.ui(
                     "p_star",
-                    Rect::new(
-                        sr.center().x - st / 2.0,
-                        sr.center().y - st / 2.0,
-                        st,
-                        st,
-                    ),
+                    Rect::new(sr.center().x - st / 2.0, sr.center().y - st / 2.0, st, st),
                     Draw::rot(wob),
                 );
                 self.text_outline(
@@ -907,9 +920,18 @@ mod tests {
     fn the_win_sheet_parts_never_overlap_each_other_or_home_on_any_view() {
         for (name, v) in kg_core::sizing::test_views() {
             for rows in [1usize, 5] {
-                for labels in [&["Next level", "Levels"][..], &["Next level", "Skip ahead", "Levels"][..]] {
+                for labels in [
+                    &["Next level", "Levels"][..],
+                    &["Next level", "Skip ahead", "Levels"][..],
+                ] {
                     let lay = kg_core::sizing::results_layout_ex(
-                        &v, "Sorted!", "Level 7 done, score 540", labels, rows, true, true,
+                        &v,
+                        "Sorted!",
+                        "Level 7 done, score 540",
+                        labels,
+                        rows,
+                        true,
+                        true,
                     );
                     let ribbon = lay.sheet.ribbon.unwrap().0;
                     let stars = lay.stars_rect().unwrap();
@@ -940,7 +962,10 @@ mod tests {
                         lay.trophy_rect().x + lay.trophy_rect().w <= lay.best_star_rect().x,
                         "{name}: trophy and star collide"
                     );
-                    assert!(lay.sheet.fits, "{name}: win sheet does not fit with {rows} rows");
+                    assert!(
+                        lay.sheet.fits,
+                        "{name}: win sheet does not fit with {rows} rows"
+                    );
                 }
             }
         }
