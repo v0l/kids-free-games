@@ -66,7 +66,8 @@ const DROPPED: &[&str] = &[
     "beans", "jeans", "shorts", "shower", "trash", "chimp", "church", "branch", "bunch", "thumb",
     "father", "whisk", "shrimp", "squid", "quilt", "sponge", "chain", "chalk", "cherry", "brush",
     "clock", "jacket", "pocket", "ticket", "bucket", "chunk", "tennis", "carpet", "bridge",
-    "sunset", "photo", "stove", "shell", "shelf", "swing", "string",
+    "sunset", "photo", "stove", "shell", "shelf", "swing", "string", "bow", "ice", "oil",
+    "fly", "tie", "toy", "zoo", "tea", "arm", "ear", "sky",
 ];
 
 fn dictionary() -> &'static std::collections::HashSet<&'static str> {
@@ -81,7 +82,7 @@ pub fn is_word(s: &str) -> bool {
 
 pub fn pool(level: usize) -> Vec<&'static str> {
     let (bands, lens): (&[u8], (usize, usize)) = match level {
-        0..=2 => (&[0], (3, 3)),
+        0..=2 => (&[0, 3, 4], (3, 3)),
         3 => (&[0, 1], (4, 5)),
         _ => (&[1, 2, 3], (5, 6)),
     };
@@ -858,6 +859,13 @@ mod tests {
             for w in DROPPED {
                 assert!(!pool(l).contains(w), "{w}");
             }
+        }
+    }
+
+    #[test]
+    fn the_three_letter_levels_keep_thirty_seven_words() {
+        for l in 0..3 {
+            assert!(pool(l).len() >= 37, "level {l}: {}", pool(l).len());
         }
     }
 
