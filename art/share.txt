@@ -7,4 +7,3 @@ bear   | gen:share_bear_cut.png | max=320
 fox    | gen:share_fox_cut.png | max=320
 panda  | gen:share_panda_cut.png | max=320
 frog   | gen:share_frog_cut.png | max=320
-icon_share | gen:iconr_share.png | max=256
