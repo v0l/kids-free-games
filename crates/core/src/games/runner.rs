@@ -1776,7 +1776,9 @@ mod tests {
         g.state = State::Playing;
         let cam = Cam::new(&g, &view);
         let feet = cam.project(&view, g.player_world()).unwrap();
-        let head = cam.project(&view, g.player_world() + Vec3::Y * 1.4).unwrap();
+        let head = cam
+            .project(&view, g.player_world() + Vec3::Y * 1.4)
+            .unwrap();
         let share = (feet.y - head.y) / view.full().h;
         assert!(share > 0.075, "runner is {share} of the screen height");
     }

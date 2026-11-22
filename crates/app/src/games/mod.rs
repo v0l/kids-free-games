@@ -20,6 +20,7 @@ pub mod merge;
 pub mod paper;
 pub mod pattern;
 pub mod runner;
+pub mod share;
 pub mod snake;
 pub mod spell;
 pub mod stack;
@@ -88,6 +89,7 @@ fn maker(key: &str) -> Option<fn() -> Box<dyn Play>> {
         helix::KEY => Some(|| Box::new(helix::HelixPlay::new())),
         spell::KEY => Some(|| Box::new(spell::SpellPlay::new())),
         trains::KEY => Some(|| Box::new(trains::TrainsPlay::new())),
+        share::KEY => Some(|| Box::new(share::SharePlay::new())),
         garden::KEY => Some(|| Box::new(garden::GardenPlay::new())),
         pattern::KEY => Some(|| Box::new(pattern::PatternPlay::new())),
         _ => None,

@@ -29,6 +29,7 @@ mod merge_scene;
 mod paper_scene;
 mod pattern_scene;
 mod runner_scene;
+mod share_scene;
 mod snake_scene;
 mod spell_scene;
 mod stack_scene;
@@ -229,6 +230,15 @@ pub const SCENES: &[(u32, &str)] = &[
     (276, "pattern level picker"),
     (277, "pattern level done report"),
     (278, "pattern cleared with the board"),
+    (280, "share first launch with the hint"),
+    (281, "share cookies on plates"),
+    (282, "share fifteen between five, asking"),
+    (283, "share answer only"),
+    (284, "share missing friends"),
+    (285, "share leftovers answered"),
+    (286, "share level picker"),
+    (287, "share finished with the board"),
+    (288, "share full plate refuses a cookie"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -521,6 +531,7 @@ fn setup(n: u32, view: &View) -> Stage {
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
         270..=278 => pattern_scene::setup(n, view),
+        280..=289 => share_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -805,6 +816,11 @@ mod tests {
     #[test]
     fn pattern_scenes_land_in_the_state_they_are_named_for() {
         pattern_scene::check();
+    }
+
+    #[test]
+    fn share_scenes_land_in_the_state_they_are_named_for() {
+        share_scene::check();
     }
 
     #[test]

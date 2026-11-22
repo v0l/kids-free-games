@@ -597,13 +597,16 @@ pub fn win_levels_button(view: &View) -> Rect {
 }
 
 pub fn dead_levels_button(view: &View, game: &str, title: &str, rank: Option<usize>) -> Rect {
-    crate::sizing::results_for(view, game, rank, title, "Level 1, score 0", &DEAD_LABELS)
-        .buttons()[1]
+    crate::sizing::results_for(view, game, rank, title, "Level 1, score 0", &DEAD_LABELS).buttons()
+        [1]
 }
 
 pub fn select_layout(view: &View) -> SelectLayout {
     let stacked = select_try(view, false);
-    let fits = stacked.cells.iter().all(|c| c.y >= select_ribbon_bottom(view))
+    let fits = stacked
+        .cells
+        .iter()
+        .all(|c| c.y >= select_ribbon_bottom(view))
         && stacked.play.y + stacked.play.h <= view.h;
     if fits {
         stacked
@@ -616,7 +619,11 @@ fn select_try(view: &View, tucked: bool) -> SelectLayout {
     let n = MAX_LEVEL as usize;
     let gap = 10.0f32.max(view.from_mm(0.6));
     let ph = view.tap(76.0);
-    let m = if view.portrait() { view.edge().clamp(8.0, 16.0) } else { 8.0 };
+    let m = if view.portrait() {
+        view.edge().clamp(8.0, 16.0)
+    } else {
+        8.0
+    };
     let pw0 = (320.0 * view.text_k()).min(view.w - 2.0 * view.edge());
     let grid_w = view.w - 2.0 * m;
     let below = if tucked { 0.0 } else { 24.0 + ph };
@@ -667,7 +674,8 @@ fn select_try(view: &View, tucked: bool) -> SelectLayout {
 pub fn select_ribbon(view: &View) -> (Vec2, f32) {
     let full = crate::sizing::ribbon_h(view, "Pick a level", 1.0);
     if view.portrait() {
-        let at = crate::sizing::ribbon_clear_of_home(view, "Pick a level", vec2(view.w / 2.0, 84.0));
+        let at =
+            crate::sizing::ribbon_clear_of_home(view, "Pick a level", vec2(view.w / 2.0, 84.0));
         (at, 1.0)
     } else {
         let k = (view.h * 0.11 / full).min(1.0);

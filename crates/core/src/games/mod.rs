@@ -16,6 +16,7 @@ pub mod merge;
 pub mod paper;
 pub mod pattern;
 pub mod runner;
+pub mod share;
 pub mod snake;
 pub mod spell;
 pub mod spell_words;
@@ -64,7 +65,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 22] = [
+pub const CATALOG: [Info; 23] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -205,6 +206,13 @@ pub const CATALOG: [Info; 22] = [
         Kind::Learn,
         "Multiplication games for kids",
         (90, 190, 90),
+    ),
+    info(
+        "share",
+        "Share the Treats",
+        Kind::Learn,
+        "Division games for kids",
+        (240, 160, 70),
     ),
     info(
         "pattern",
