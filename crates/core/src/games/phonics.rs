@@ -47,10 +47,9 @@ pub const PAIRS: [&str; 3] = ["sh", "ch", "th"];
 pub const BLENDS: [&str; 6] = ["st", "bl", "tr", "cl", "fl", "gr"];
 
 pub const CLIPS: [&str; 34] = [
-    "ph_s", "ph_a", "ph_t", "ph_p", "ph_i", "ph_n", "ph_m", "ph_d", "ph_g", "ph_o", "ph_c",
-    "ph_e", "ph_u", "ph_r", "ph_h", "ph_b", "ph_f", "ph_l", "ph_j", "ph_v", "ph_w", "ph_x",
-    "ph_y", "ph_z", "ph_q", "ph_sh", "ph_ch", "ph_th", "ph_st", "ph_bl", "ph_tr", "ph_cl",
-    "ph_fl", "ph_gr",
+    "ph_s", "ph_a", "ph_t", "ph_p", "ph_i", "ph_n", "ph_m", "ph_d", "ph_g", "ph_o", "ph_c", "ph_e",
+    "ph_u", "ph_r", "ph_h", "ph_b", "ph_f", "ph_l", "ph_j", "ph_v", "ph_w", "ph_x", "ph_y", "ph_z",
+    "ph_q", "ph_sh", "ph_ch", "ph_th", "ph_st", "ph_bl", "ph_tr", "ph_cl", "ph_fl", "ph_gr",
 ];
 
 pub fn clip_of(letters: &str) -> &'static str {
@@ -109,7 +108,11 @@ fn misses(sound: &str) -> i64 {
 fn note(sound: &str, right_first: bool) {
     let key = format!("miss.{}", clip_of(sound));
     let now = profile::get(KEY, &key);
-    let next = if right_first { (now - 1).max(0) } else { (now + 2).min(8) };
+    let next = if right_first {
+        (now - 1).max(0)
+    } else {
+        (now + 2).min(8)
+    };
     profile::set(KEY, &key, next);
 }
 

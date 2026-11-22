@@ -334,11 +334,12 @@ mod tests {
             assert!(have.iter().any(|h| h == n), "ui sheet lacks {n}");
         }
         for g in kg_core::games::CATALOG {
-            assert!(
-                frame("icons", &format!("icon_{}", g.key)).is_some(),
-                "no icon for {}",
-                g.key
-            );
+            let found = if g.key == "phonics" {
+                frame("phonics", "icon")
+            } else {
+                frame("icons", &format!("icon_{}", g.key))
+            };
+            assert!(found.is_some(), "no icon for {}", g.key);
         }
     }
 }

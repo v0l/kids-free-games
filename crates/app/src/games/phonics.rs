@@ -199,7 +199,12 @@ fn draw_question(g: &Phonics, pen: &mut Pen, view: &View) {
     };
     let icon = base.h * 0.62 * pop;
     let pulse = 1.0 + 0.08 * (g.t * 5.0).sin().max(0.0) * (g.since_said < 1.2) as i32 as f32;
-    let words = if g.solved {
+    let spoken = kg_core::sfx::find(
+        kg_core::sfx::words(),
+        &g.question.clip().replace("ph_", "word_ph_"),
+    )
+    .is_some();
+    let words = if g.solved || !spoken {
         g.question.target.to_string()
     } else {
         "Which sound?".to_string()
