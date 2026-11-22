@@ -69,7 +69,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 26] = [
+pub const CATALOG: [Info; 27] = [
     info(
         "flappy",
         "Flappy Bird",

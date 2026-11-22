@@ -33,6 +33,7 @@ mod pattern_scene;
 mod runner_scene;
 mod build_scene;
 mod share_scene;
+mod slide_scene;
 mod snake_scene;
 mod spell_scene;
 mod stack_scene;
@@ -265,6 +266,12 @@ pub const SCENES: &[(u32, &str)] = &[
     (303, "build level picker"),
     (304, "build finished with the board"),
     (305, "build stuck, answer glowing"),
+    (320, "slide first launch with the hint"),
+    (321, "slide pieces moving"),
+    (322, "slide four by four"),
+    (323, "slide five by five"),
+    (324, "slide solved with the board"),
+    (325, "slide level picker"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -563,6 +570,7 @@ fn setup(n: u32, view: &View) -> Stage {
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         310..=319 => phonics_scene::setup(n, view),
+        320..=329 => slide_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
         150..=159 => paper_scene::setup(n, view),
         90..=99 => memory_scene::setup(n, view),
@@ -790,6 +798,11 @@ mod tests {
     #[test]
     fn blocks_scenes_land_in_the_state_they_are_named_for() {
         blocks_scene::check();
+    }
+
+    #[test]
+    fn slide_scenes_land_in_the_state_they_are_named_for() {
+        slide_scene::check();
     }
 
     #[test]
