@@ -22,6 +22,7 @@ impl Better {
 
 pub const GAMES: &[(&str, Better)] = &[
     ("blocks", Better::Higher),
+    ("bonds", Better::Higher),
     ("ballsort", Better::Higher),
     ("breakout", Better::Higher),
     ("clash", Better::Higher),
@@ -46,6 +47,7 @@ pub const GAMES: &[(&str, Better)] = &[
 
 pub const NAMES: &[(&str, &str)] = &[
     ("blocks", "Block Drop"),
+    ("bonds", "Number Bonds"),
     ("ballsort", "Ball Sort"),
     ("breakout", "Brick Breaker"),
     ("clash", "Snake Clash"),

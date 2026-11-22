@@ -14,6 +14,7 @@ use kg_core::profile;
 pub const IDLE: u32 = 1000;
 
 mod ballsort_scene;
+mod bonds_scene;
 mod blocks_scene;
 mod breakout_scene;
 mod clash_scene;
@@ -219,6 +220,15 @@ pub const SCENES: &[(u32, &str)] = &[
     (267, "garden every bed in bloom, board"),
     (268, "garden bed bloom"),
     (269, "garden round report"),
+    (270, "bonds first scale with the hint"),
+    (271, "bonds beads to ten"),
+    (272, "bonds wrong weight tips the scale"),
+    (273, "bonds right weight balances"),
+    (274, "bonds make 20 with weights"),
+    (275, "bonds tens to 100"),
+    (276, "bonds level picker"),
+    (277, "bonds level report"),
+    (278, "bonds finished with the board"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -510,6 +520,7 @@ fn setup(n: u32, view: &View) -> Stage {
         200..=219 => runner_scene::setup(n, view),
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
+        270..=279 => bonds_scene::setup(n, view),
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
@@ -784,6 +795,11 @@ mod tests {
     #[test]
     fn ballsort_scenes_land_in_the_state_they_are_named_for() {
         ballsort_scene::check();
+    }
+
+    #[test]
+    fn bonds_scenes_land_in_the_state_they_are_named_for() {
+        bonds_scene::check();
     }
 
     #[test]
