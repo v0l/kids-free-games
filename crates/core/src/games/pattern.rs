@@ -336,6 +336,10 @@ pub fn path_area(view: &View) -> Rect {
     Rect::new(40.0, top, view.w - 80.0, bottom - top)
 }
 
+pub fn hint_fits(view: &View, n: usize) -> bool {
+    hint_pos(view, n).y - 40.0 >= path_area(view).bottom()
+}
+
 pub fn hint_pos(view: &View, n: usize) -> Vec2 {
     let top = button_rects(view, n)[0].y;
     let half = 32.0 * view.text_k() * 1.05;
@@ -357,7 +361,7 @@ pub fn stone_cells(view: &View, n: usize) -> Vec<Rect> {
     let gap = 14.0;
     let max = 170.0 * ui_scale(view);
     let one_row = ((area.w - gap * (n as f32 - 1.0)) / n as f32).min(max);
-    let (rows, cols) = if one_row >= 90.0 * ui_scale(view).min(1.2) || n < 2 {
+    let (rows, cols) = if one_row >= 130.0 * ui_scale(view).min(1.2) || n < 2 {
         (1, n)
     } else {
         (2, n.div_ceil(2))

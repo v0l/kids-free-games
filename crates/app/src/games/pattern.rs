@@ -79,8 +79,12 @@ pub fn sprite_names() -> Vec<String> {
     v
 }
 
+fn fitted(name: &str, size: f32) -> f32 {
+    let s = crate::art::size(SHEET, name);
+    (size * 0.95 * s.y / s.x.max(0.001)).min(size * 0.95)
+}
+
 fn draw_token(pen: &mut Pen, token: Token, c: Vec2, size: f32) {
-    let h = size * 0.92;
     let plain = |pen: &mut Pen| {
         pen.ui(
             "p_round",
@@ -89,18 +93,36 @@ fn draw_token(pen: &mut Pen, token: Token, c: Vec2, size: f32) {
         )
     };
     match token {
-        Token::Colour(k) => pen.sprite_at(SHEET, &stone_sprite(k), c, h, Draw::default()),
+        Token::Colour(k) => {
+            let n = stone_sprite(k);
+            pen.sprite_at(SHEET, &n, c, fitted(&n, size), Draw::default())
+        }
         Token::Shape(s) => {
             plain(pen);
-            pen.sprite_at(SHEET, &shape_sprite(s), c, h * 0.62, Draw::default());
+            pen.sprite_at(SHEET, &shape_sprite(s), c, size * 0.5, Draw::default());
         }
         Token::Pair(k, s) => {
-            pen.sprite_at(SHEET, &stone_sprite(k), c, h, Draw::default());
-            pen.sprite_at(SHEET, &shape_sprite(s), c, h * 0.5, Draw::default());
+            let n = stone_sprite(k);
+            let h = fitted(&n, size);
+            pen.sprite_at(SHEET, &n, c, h, Draw::default());
+            pen.sprite_at(
+                SHEET,
+                &shape_sprite(s),
+                c - vec2(0.0, h * 0.08),
+                h * 0.8,
+                Draw::default(),
+            );
         }
         Token::Number(n) => {
             plain(pen);
-            pen.text_outline(&n.to_string(), c.x, c.y + size * 0.04, size * 0.46, WHITE, BLUE_INK);
+            pen.text_outline(
+                &n.to_string(),
+                c.x,
+                c.y + size * 0.04,
+                size * 0.46,
+                WHITE,
+                BLUE_INK,
+            );
         }
     }
 }
@@ -295,9 +317,16 @@ fn draw_prompt(g: &Pattern, pen: &mut Pen, view: &View) {
 fn draw_path(g: &Pattern, pen: &mut Pen, view: &View) {
     let q = &g.question;
     let cells = stone_cells(view, q.seq.len());
-    let area = path_area(view);
+    let (mut lo, mut hi) = (f32::MAX, f32::MIN);
+    let (mut left, mut right) = (f32::MAX, f32::MIN);
+    for c in &cells {
+        lo = lo.min(c.y);
+        hi = hi.max(c.bottom());
+        left = left.min(c.x);
+        right = right.max(c.right());
+    }
     pen.painted_panel(
-        Rect::new(area.x - 16.0, area.y - 10.0, area.w + 32.0, area.h + 20.0),
+        Rect::new(left - 20.0, lo - 40.0, right - left + 40.0, hi - lo + 80.0),
         with_alpha(WHITE, 0.3),
     );
     let last = q.seq.len() - 1;
@@ -306,7 +335,12 @@ fn draw_path(g: &Pattern, pen: &mut Pen, view: &View) {
         let intro = ease_out_back((g.t * 2.5 - i as f32 * 0.12).clamp(0.0, 1.0));
         let c = cell.center();
         let size = cell.w * intro;
-        pen.soft_shadow(c + vec2(0.0, cell.w * 0.35), cell.w * 0.45, cell.w * 0.1, 0.5);
+        pen.soft_shadow(
+            c + vec2(0.0, cell.w * 0.35),
+            cell.w * 0.45,
+            cell.w * 0.1,
+            0.5,
+        );
         if i == last && g.celebrate.is_none() {
             let wob = 1.0 + (g.t * 4.0).sin() * 0.05;
             pen.round_rect(
@@ -401,7 +435,7 @@ pub fn draw(g: &Pattern, pen: &mut Pen, view: &View) {
     draw_prompt(g, pen, view);
     draw_path(g, pen, view);
     draw_buttons(g, pen, view);
-    if g.first_time && g.mode == Mode::Play {
+    if g.first_time && g.mode == Mode::Play && hint_fits(view, g.question.options.len()) {
         let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
         pen.hint(
             "Find the pattern, then pick the next stone",
@@ -442,7 +476,14 @@ mod tests {
             assert!(have.iter().any(|h| *h == n), "missing {n}");
         }
         let ui = crate::art::names("ui");
-        for n in ["icon_lock", "p_round", "cloud1", "cloud2", "cloud6", "cloud8"] {
+        for n in [
+            "icon_lock",
+            "p_round",
+            "cloud1",
+            "cloud2",
+            "cloud6",
+            "cloud8",
+        ] {
             assert!(ui.iter().any(|h| h == n), "missing {n}");
         }
         assert!(crate::art::frame("icons", "icon_pattern").is_some());
