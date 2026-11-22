@@ -85,7 +85,10 @@ pub fn words_ready() -> bool {
 }
 
 pub fn ready(key: &str) -> bool {
-    crate::art::ready(key) && (key != kg_core::games::spell::KEY || words_ready())
+    let spoken = key == kg_core::games::spell::KEY || key == kg_core::games::build::GAME;
+    crate::art::ready(key)
+        && (key != kg_core::games::build::GAME || crate::art::ready("spell"))
+        && (!spoken || words_ready())
 }
 
 pub fn settled() -> bool {
