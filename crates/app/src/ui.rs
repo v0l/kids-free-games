@@ -66,6 +66,7 @@ fn game_sheet(game: &str) -> &'static str {
         "build" => "build",
         "phonics" => "phonics",
         "slide" => "slide",
+        "jigsaw" => "jigsaw",
         _ => "icons",
     }
 }

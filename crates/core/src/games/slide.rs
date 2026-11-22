@@ -19,6 +19,9 @@ pub const PAD: f32 = 12.0;
 pub const WIN_LABELS: [&str; 2] = ["Next level", "Levels"];
 pub const WIN_SKIP_LABELS: [&str; 3] = ["Next level", "Skip ahead", "Levels"];
 const SLIDE_RATE: f32 = 20.0;
+pub const LIMIT_SLACK_PCT: usize = 30;
+pub const LIMIT_SLACK_FLAT: usize = 3;
+const AWAY_PCT: usize = 100;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spec {
@@ -166,6 +169,43 @@ pub struct Puzzle {
     pub tiles: Vec<u8>,
     pub trail: Vec<usize>,
     pub par: usize,
+    pub limit: usize,
+}
+
+pub fn manhattan(tiles: &[u8]) -> usize {
+    let n = side_of(tiles.len());
+    tiles
+        .iter()
+        .enumerate()
+        .filter(|(_, v)| **v != 0)
+        .map(|(i, v)| {
+            let home = *v as usize - 1;
+            (i % n).abs_diff(home % n) + (i / n).abs_diff(home / n)
+        })
+        .sum()
+}
+
+pub fn star_limit(par: usize, lower_bound: usize) -> usize {
+    par + lower_bound * LIMIT_SLACK_PCT / 100 + LIMIT_SLACK_FLAT
+}
+
+fn pick_next(rng: &mut Lcg, tiles: &[u8], blank: usize, options: &[usize], n: usize) -> usize {
+    if n >= 4 && rng.below(100) < AWAY_PCT {
+        let before = manhattan(tiles);
+        let away: Vec<usize> = options
+            .iter()
+            .copied()
+            .filter(|o| {
+                let mut u = tiles.to_vec();
+                u.swap(blank, *o);
+                manhattan(&u) > before
+            })
+            .collect();
+        if !away.is_empty() {
+            return away[rng.below(away.len())];
+        }
+    }
+    options[rng.below(options.len())]
 }
 
 pub fn scramble(n: usize, depth: usize, seed: u64) -> Puzzle {
@@ -183,42 +223,47 @@ pub fn scramble(n: usize, depth: usize, seed: u64) -> Puzzle {
             .into_iter()
             .filter(|o| Some(*o) != back)
             .collect();
-        let next = options[rng.below(options.len())];
+        let next = pick_next(&mut rng, &tiles, blank, &options, n);
         tiles.swap(blank, next);
         blank = next;
         trail.push(blank);
     }
-    let par = distance(&tiles).unwrap_or(trail.len() - 1);
+    let lower = manhattan(&tiles);
+    let par = distance(&tiles).unwrap_or(lower);
     Puzzle {
         n,
         tiles,
         trail,
         par,
+        limit: star_limit(par, lower),
     }
 }
 
 pub fn make(level: u32, variant: u32) -> Puzzle {
     let level = level.clamp(1, MAX_LEVEL);
     let s = spec(level);
-    let mut last = None;
-    for attempt in 0..60u64 {
+    let mut best: Option<Puzzle> = None;
+    for attempt in 0..300u64 {
         let seed = level as u64 * 7919 + variant as u64 * 104729 + attempt * 31 + 17;
         let p = scramble(s.n, s.depth, seed);
-        if is_solved(&p.tiles) {
+        if is_solved(&p.tiles) || p.par < s.min_par.max(1) {
             continue;
         }
-        if p.par >= s.min_par.max(1) {
+        if p.trail.len() - 1 <= p.limit {
             return p;
         }
-        last = Some(p);
+        let over = |q: &Puzzle| q.trail.len() - 1 - q.limit.min(q.trail.len() - 1);
+        if best.as_ref().is_none_or(|b| over(&p) < over(b)) {
+            best = Some(p);
+        }
     }
-    last.unwrap_or_else(|| scramble(s.n, s.depth.max(2), 99))
+    best.unwrap_or_else(|| scramble(s.n, s.depth.max(2), 99))
 }
 
-pub fn stars_for(moves: usize, par: usize) -> u8 {
-    if moves <= par + par / 4 + 1 {
+pub fn stars_for(moves: usize, limit: usize) -> u8 {
+    if moves <= limit {
         3
-    } else if moves <= par * 2 + 4 {
+    } else if moves <= limit * 2 {
         2
     } else {
         1
@@ -254,6 +299,7 @@ pub struct Slide {
     pub n: usize,
     pub picture: usize,
     pub par: usize,
+    pub limit: usize,
     pub tiles: Vec<u8>,
     pub start: Vec<u8>,
     pub start_trail: Vec<usize>,
@@ -306,6 +352,7 @@ impl Slide {
             n: 2,
             picture: 0,
             par: 0,
+            limit: 0,
             tiles: vec![],
             start: vec![],
             start_trail: vec![],
@@ -343,6 +390,7 @@ impl Slide {
         let p = make(level, self.variant);
         self.n = p.n;
         self.par = p.par;
+        self.limit = p.limit;
         self.picture = (level as usize - 1 + self.variant as usize) % PICTURES.len();
         self.start = p.tiles;
         self.start_trail = p.trail;
@@ -391,7 +439,7 @@ impl Slide {
     }
 
     pub fn stars_now(&self) -> u8 {
-        stars_for(self.moves, self.par)
+        stars_for(self.moves, self.limit)
     }
 
     pub fn can_skip(&self) -> bool {
@@ -483,7 +531,7 @@ impl Slide {
     fn hint_delay(&self) -> f32 {
         if self.level <= 2 && !self.taught {
             3.0
-        } else if self.moves > self.par * 3 + 8 || self.restarts > 0 {
+        } else if self.moves > self.limit * 2 || self.restarts > 0 {
             6.0
         } else {
             14.0
@@ -493,7 +541,7 @@ impl Slide {
     fn finish_level(&mut self, view: &View) {
         self.state = State::Won;
         self.end_t = 0.0;
-        self.stars = stars_for(self.moves, self.par);
+        self.stars = stars_for(self.moves, self.limit);
         crate::profile::award_stars(GAME, self.level, self.stars);
         let skip = if self.stars == 3 { 2 } else { 1 };
         crate::profile::unlock(GAME, (self.level + skip).min(MAX_LEVEL));
@@ -832,16 +880,80 @@ mod tests {
 
     #[test]
     fn stars_fall_as_the_move_count_rises() {
-        for par in [2, 6, 22, 60] {
-            assert_eq!(stars_for(par, par), 3);
-            assert_eq!(stars_for(par * 2 + 4, par), 2);
-            assert_eq!(stars_for(par * 3 + 10, par), 1);
+        for limit in [2, 6, 22, 60] {
+            assert_eq!(stars_for(limit, limit), 3);
+            assert_eq!(stars_for(limit + 1, limit), 2);
+            assert_eq!(stars_for(limit * 2, limit), 2);
+            assert_eq!(stars_for(limit * 2 + 1, limit), 1);
             let mut last = 3;
-            for m in 0..par * 4 {
-                let s = stars_for(m, par);
+            for m in 0..limit * 4 {
+                let s = stars_for(m, limit);
                 assert!(s <= last);
                 last = s;
             }
+        }
+    }
+
+    fn random_walk(g: &mut Slide, steps: usize, seed: u64) {
+        let mut rng = Lcg(seed);
+        for _ in 0..steps {
+            let opts = neighbours(g.n, g.blank_at());
+            let to = opts[rng.below(opts.len())];
+            g.slide_to(to);
+        }
+    }
+
+    #[test]
+    fn an_optimal_solution_always_earns_three_stars_and_a_wandering_one_does_not() {
+        for level in 1..=6 {
+            for variant in 0..4 {
+                let p = make(level, variant);
+                assert!(p.limit >= p.par, "level {level}");
+                assert_eq!(stars_for(p.par, p.limit), 3, "level {level}");
+                assert!(
+                    p.limit <= p.par + p.par * LIMIT_SLACK_PCT / 100 + LIMIT_SLACK_FLAT,
+                    "level {level} limit {} par {}",
+                    p.limit,
+                    p.par
+                );
+                assert!(stars_for(p.par * 3, p.limit) < 3 || p.par * 3 <= p.limit);
+            }
+        }
+        for level in [4, 5, 6] {
+            let p = make(level, 0);
+            assert!(stars_for(p.par * 3, p.limit) < 3, "level {level}");
+        }
+    }
+
+    #[test]
+    fn the_star_limit_on_big_boards_tracks_the_manhattan_lower_bound() {
+        for level in 7..=MAX_LEVEL {
+            for variant in 0..4 {
+                let p = make(level, variant);
+                let lower = manhattan(&p.tiles);
+                assert_eq!(p.par, lower);
+                assert_eq!(p.limit, star_limit(lower, lower));
+                assert!(p.trail.len() - 1 >= lower, "scramble is no shorter than the bound");
+                assert!(
+                    p.limit * 2 <= (lower + 3) * 3,
+                    "level {level}: limit {} for bound {lower}",
+                    p.limit
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn aimlessly_wandering_costs_stars_on_every_board_size() {
+        setup();
+        for level in [3, 7, 10] {
+            let mut g = Slide::with_level(level);
+            let limit = g.limit;
+            random_walk(&mut g, limit * 3 + 10, 11);
+            if g.pending_win {
+                continue;
+            }
+            assert!(g.stars_now() < 3, "level {level}: {} moves, limit {limit}", g.moves);
         }
     }
 

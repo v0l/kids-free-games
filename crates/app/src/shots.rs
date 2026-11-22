@@ -29,6 +29,7 @@ mod phonics_scene;
 mod memory_scene;
 mod merge_scene;
 mod paper_scene;
+mod jigsaw_scene;
 mod pattern_scene;
 mod runner_scene;
 mod build_scene;
@@ -242,6 +243,13 @@ pub const SCENES: &[(u32, &str)] = &[
     (296, "bonds level picker"),
     (297, "bonds level report"),
     (298, "bonds finished with the board"),
+    (320, "jigsaw first launch with the hint"),
+    (321, "jigsaw three pieces placed"),
+    (322, "jigsaw level picker"),
+    (323, "jigsaw sixteen pieces, no ghost"),
+    (324, "jigsaw thirty-six pieces"),
+    (325, "jigsaw level done report"),
+    (326, "jigsaw cleared with the board"),
     (270, "pattern first launch with the hint"),
     (271, "pattern right answer, frog hopping"),
     (272, "pattern shapes"),
@@ -266,12 +274,15 @@ pub const SCENES: &[(u32, &str)] = &[
     (303, "build level picker"),
     (304, "build finished with the board"),
     (305, "build stuck, answer glowing"),
-    (320, "slide first launch with the hint"),
-    (321, "slide pieces moving"),
-    (322, "slide four by four"),
-    (323, "slide five by five"),
-    (324, "slide solved with the board"),
-    (325, "slide level picker"),
+    (340, "slide first launch with the hint"),
+    (341, "slide pieces moving"),
+    (342, "slide four by four"),
+    (343, "slide five by five"),
+    (344, "slide solved with the board"),
+    (345, "slide level picker"),
+    (346, "slide peek"),
+    (347, "slide two by two first level"),
+    (348, "slide level picker, all unlocked"),
     (110, "helix level select"),
     (111, "helix ready"),
     (112, "helix first drop with the hint"),
@@ -563,6 +574,7 @@ fn setup(n: u32, view: &View) -> Stage {
         200..=219 => runner_scene::setup(n, view),
         250..=259 => ballsort_scene::setup(n, view),
         260..=269 => garden_scene::setup(n, view),
+        320..=326 => jigsaw_scene::setup(n, view),
         270..=278 => pattern_scene::setup(n, view),
         290..=299 => bonds_scene::setup(n, view),
         280..=289 => share_scene::setup(n, view),
@@ -570,7 +582,7 @@ fn setup(n: u32, view: &View) -> Stage {
         120..=129 => blocks_scene::setup(n, view),
         130..=139 => mathpop_scene::setup(n, view),
         310..=319 => phonics_scene::setup(n, view),
-        320..=329 => slide_scene::setup(n, view),
+        340..=349 => slide_scene::setup(n, view),
         140..=149 => count_scene::setup(n, view),
         150..=159 => paper_scene::setup(n, view),
         90..=99 => memory_scene::setup(n, view),
@@ -863,6 +875,11 @@ mod tests {
     #[test]
     fn garden_scenes_land_in_the_state_they_are_named_for() {
         garden_scene::check();
+    }
+
+    #[test]
+    fn jigsaw_scenes_land_in_the_state_they_are_named_for() {
+        jigsaw_scene::check();
     }
 
     #[test]
