@@ -354,12 +354,13 @@ mod tests {
     #[test]
     fn share_sprites_all_exist() {
         let have = crate::art::names(SHEET);
-        for n in ["bg", "cookie", "plate", "icon_share"]
+        for n in ["bg", "cookie", "plate"]
             .into_iter()
             .chain(ANIMALS)
         {
             assert!(have.iter().any(|h| h == n), "missing {n}");
         }
+        assert!(crate::art::frame("icons", "icon_share").is_some());
     }
 
     #[test]
