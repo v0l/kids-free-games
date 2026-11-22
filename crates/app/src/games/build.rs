@@ -316,9 +316,10 @@ pub fn draw(g: &Build, pen: &mut Pen, view: &View) {
     draw_picture(g, pen, l.picture);
     draw_word(g, pen, &l);
     draw_tiles(g, pen, &l);
-    if g.first_time && g.mode == Mode::Play && g.celebrate.is_none() && g.held.is_none() {
+    let wide = view.w > view.h * 1.6;
+    if g.first_time && !wide && g.mode == Mode::Play && g.celebrate.is_none() && g.held.is_none() {
         let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
-        let y = l.slots[0].y - view.gap() - 40.0;
+        let y = l.picture.bottom() + (l.slots[0].y - l.picture.bottom()) / 2.0;
         let x = l.slots[0].x + (l.slots.last().map_or(0.0, |r| r.right()) - l.slots[0].x) / 2.0;
         pen.hint("Drag the missing letter in, or tap it", vec2(x, y), pulse);
     }
