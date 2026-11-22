@@ -81,7 +81,7 @@ pub fn is_word(s: &str) -> bool {
 
 pub fn pool(level: usize) -> Vec<&'static str> {
     let (bands, lens): (&[u8], (usize, usize)) = match level {
-        0..=2 => (&[0], (3, 3)),
+        0..=2 => (&[0, 3, 4], (3, 3)),
         3 => (&[0, 1], (4, 5)),
         _ => (&[1, 2, 3], (5, 6)),
     };
