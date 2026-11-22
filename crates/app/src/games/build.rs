@@ -318,7 +318,7 @@ pub fn draw(g: &Build, pen: &mut Pen, view: &View) {
     draw_tiles(g, pen, &l);
     if g.first_time && g.mode == Mode::Play && g.celebrate.is_none() && g.held.is_none() {
         let pulse = 1.0 + (g.t * 4.0).sin() * 0.03;
-        let y = l.slots[0].y - view.gap() - 24.0;
+        let y = l.slots[0].y - view.gap() - 40.0;
         let x = l.slots[0].x + (l.slots.last().map_or(0.0, |r| r.right()) - l.slots[0].x) / 2.0;
         pen.hint("Drag the missing letter in, or tap it", vec2(x, y), pulse);
     }
@@ -356,6 +356,16 @@ mod tests {
             }
         }
         assert!(crate::art::names("build").iter().any(|h| h == "icon_build"));
+    }
+
+    #[test]
+    fn the_picture_sheet_has_a_painted_picture_for_every_pool_word() {
+        let have = crate::art::names("spell");
+        for l in 0..LEVELS {
+            for w in pool(l) {
+                assert!(have.iter().any(|h| h == w), "no picture for {w}");
+            }
+        }
     }
 
     #[test]

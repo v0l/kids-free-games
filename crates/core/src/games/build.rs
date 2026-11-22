@@ -52,6 +52,33 @@ pub fn stars_score(s: i64) -> String {
     format!("{s} stars")
 }
 
+const DROPPED: &[&str] = &[
+    "bat", "ram", "cob", "cot", "cab", "vet", "yam", "elf", "gem", "hog", "rib", "saw", "fin",
+    "peg", "tap", "hug", "can", "cap", "tub", "cub", "pup", "bib", "ink", "jet", "net", "mat",
+    "lid", "bun", "yak", "zip", "wig", "web", "nut", "bin", "rug", "mop", "gum", "cob", "hut",
+    "swim", "jump", "drink", "drop", "trap", "thick", "bright", "flight", "night", "three",
+    "climb", "knock", "write", "crack", "track", "check", "chunk", "crumb", "match", "patch",
+    "ditch", "punch", "lunch", "spring", "splash", "float", "quack", "bloom", "blast", "stamp",
+    "clamp", "stump", "plank", "ramp", "glass", "sink", "golf", "wand", "crisp", "scoop", "flask",
+    "drill", "grill", "slug", "clam", "crib", "tusk", "blimp", "skunk", "trunk", "tram", "raft",
+    "twig", "stem", "stick", "snack", "block", "plug", "plate", "tank", "bank", "gift", "belt",
+    "witch", "gnome", "chess", "shrub", "wrist", "finch", "sloth", "prince", "knight", "beads",
+    "beans", "jeans", "shorts", "shower", "trash", "chimp", "church", "branch", "bunch", "thumb",
+    "father", "whisk", "shrimp", "squid", "quilt", "sponge", "chain", "chalk", "cherry", "brush",
+    "clock", "jacket", "pocket", "ticket", "bucket", "chunk", "tennis", "carpet", "bridge",
+    "sunset", "photo", "stove", "shell", "shelf", "swing", "string",
+];
+
+fn dictionary() -> &'static std::collections::HashSet<&'static str> {
+    static D: std::sync::OnceLock<std::collections::HashSet<&'static str>> =
+        std::sync::OnceLock::new();
+    D.get_or_init(|| spell::words().iter().map(|w| w.text).collect())
+}
+
+pub fn is_word(s: &str) -> bool {
+    dictionary().contains(s)
+}
+
 pub fn pool(level: usize) -> Vec<&'static str> {
     let (bands, lens): (&[u8], (usize, usize)) = match level {
         0..=2 => (&[0], (3, 3)),
@@ -62,8 +89,23 @@ pub fn pool(level: usize) -> Vec<&'static str> {
         .iter()
         .filter(|w| bands.contains(&w.band) && (lens.0..=lens.1).contains(&w.text.len()))
         .filter(|w| w.text.chars().all(|c| c.is_ascii_lowercase()))
+        .filter(|w| !DROPPED.contains(&w.text))
         .map(|w| w.text)
         .collect()
+}
+
+pub fn completes_a_word(letters: &[char], gaps: &[usize], gap: usize, c: char) -> bool {
+    let mut l = letters.to_vec();
+    l[gaps[gap]] = c;
+    let s: String = l.into_iter().collect();
+    is_word(&s)
+}
+
+pub fn crosses_into_a_word(letters: &[char], gaps: &[usize]) -> bool {
+    (0..gaps.len()).any(|k| {
+        let other = letters[gaps[1 - k]];
+        other != letters[gaps[k]] && completes_a_word(letters, gaps, k, other)
+    })
 }
 
 pub fn gaps_for(level: usize, word: &str) -> Vec<usize> {
@@ -81,7 +123,7 @@ pub fn gaps_for(level: usize, word: &str) -> Vec<usize> {
             let mut g = vec![a, b];
             g.sort_unstable();
             let l: Vec<char> = word.chars().collect();
-            if l[g[0]] != l[g[1]] {
+            if l[g[0]] != l[g[1]] && !crosses_into_a_word(&l, &g) {
                 return g;
             }
         },
@@ -134,7 +176,10 @@ impl Question {
     pub fn with_gaps(level: usize, word: &'static str, gaps: Vec<usize>) -> Self {
         let letters: Vec<char> = word.chars().collect();
         let mut tiles: Vec<char> = gaps.iter().map(|g| letters[*g]).collect();
-        let mut spare: Vec<char> = ('a'..='z').filter(|c| !tiles.contains(c)).collect();
+        let mut spare: Vec<char> = ('a'..='z')
+            .filter(|c| !tiles.contains(c))
+            .filter(|c| !(0..gaps.len()).any(|k| completes_a_word(&letters, &gaps, k, *c)))
+            .collect();
         for _ in 0..decoys(level) {
             let i = rand::gen_range(0, spare.len());
             tiles.push(spare.swap_remove(i));
@@ -256,7 +301,7 @@ pub fn layout(view: &View, letters: usize, tiles: usize) -> Layout {
     let tiles_h = rows as f32 * tile + (rows as f32 - 1.0) * gap;
     let tiles_top = view.h - view.edge() - tiles_h;
     let slots_top = tiles_top - 36.0 * k - slot;
-    let band = (slots_top - 24.0 * k - top).max(80.0);
+    let band = (slots_top - 64.0 * k - top).max(80.0);
     let side = band.min(view.w - 80.0).max(80.0);
     let picture = Rect::new((view.w - side) / 2.0, top + (band - side) / 2.0, side, side);
     let row = |count: usize, size: f32, y: f32| -> Vec<Rect> {
@@ -781,6 +826,38 @@ mod tests {
         while let Mode::Report(_) = g.mode {
             g.update(&Input::press_at(Vec2::ZERO), v, 1.0);
             g.update(&Input::press_at(Vec2::ZERO), v, 1.0);
+        }
+    }
+
+    #[test]
+    fn exactly_one_tile_completes_a_real_word() {
+        rand::srand(21);
+        for l in 0..LEVELS {
+            for w in pool(l) {
+                for _ in 0..6 {
+                    let q = Question::new(l, w);
+                    let letters = q.letters();
+                    for k in 0..q.gaps.len() {
+                        let good: Vec<char> = q
+                            .tiles
+                            .iter()
+                            .copied()
+                            .filter(|c| completes_a_word(&letters, &q.gaps, k, *c))
+                            .collect();
+                        assert_eq!(good, vec![q.answer_at(k)], "{w} level {l} gap {k}");
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_filter_keeps_thirty_words_a_level_and_drops_the_doubtful_ones() {
+        for l in 0..LEVELS {
+            assert!(pool(l).len() >= 30, "level {l}");
+            for w in DROPPED {
+                assert!(!pool(l).contains(w), "{w}");
+            }
         }
     }
 
