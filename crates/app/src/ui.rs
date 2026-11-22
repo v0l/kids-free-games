@@ -64,6 +64,7 @@ fn game_sheet(game: &str) -> &'static str {
     match game {
         "share" => "share",
         "phonics" => "phonics",
+        "jigsaw" => "jigsaw",
         _ => "icons",
     }
 }

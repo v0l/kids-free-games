@@ -10,6 +10,7 @@ pub mod fruit;
 pub mod garden;
 pub mod helix;
 pub mod hotel;
+pub mod jigsaw;
 pub mod jumper;
 pub mod mathpop;
 pub mod memory;
@@ -67,7 +68,7 @@ const fn info(
     }
 }
 
-pub const CATALOG: [Info; 25] = [
+pub const CATALOG: [Info; 26] = [
     info(
         "flappy",
         "Flappy Bird",
@@ -166,6 +167,13 @@ pub const CATALOG: [Info; 25] = [
         Kind::Arcade,
         "Color Bump, ball sort puzzles",
         (40, 190, 180),
+    ),
+    info(
+        "jigsaw",
+        "Jigsaw",
+        Kind::Arcade,
+        "Jigsaw puzzle games",
+        (240, 150, 70),
     ),
     info(
         "blocks",

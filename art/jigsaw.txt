@@ -1,0 +1,10 @@
+# Pictures are the painted backgrounds and icons the other games already ship
+icon_jigsaw | gen:iconr_jigsaw.png | max=256
+p0 | gen:iconr_memory.png | solo max=512 keep crop=30,30,324,324
+p1 | gen:menu_bg.png | solo max=512 keep
+p2 | gen:iconr_crossy.png | solo max=512 keep crop=30,30,324,324
+p3 | gen:garden_bg.png | solo max=512 keep
+p4 | gen:iconr_jumper.png | solo max=512 keep crop=30,30,324,324
+p5 | gen:iconr_snake.png | solo max=512 keep crop=30,30,324,324
+p6 | gen:iconr_count.png | solo max=512 keep crop=30,30,324,324
+p7 | gen:iconr_fruit.png | solo max=512 keep crop=30,30,324,324
