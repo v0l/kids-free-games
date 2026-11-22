@@ -326,7 +326,11 @@ fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
     for (name, v) in test_views() {
         let home = v.home();
         let cases = [
-            ("jumper steer hint", pill(&v, jumper::steer_hint_pos(&v)), vec![home]),
+            (
+                "jumper steer hint",
+                pill(&v, jumper::steer_hint_pos(&v)),
+                vec![home],
+            ),
             (
                 "helix ready hint",
                 pill(&v, helix::ready_hint_pos(&v)),
@@ -337,14 +341,10 @@ fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
                 pill(&v, count::hint_pos(&v, 3)),
                 count::button_rects(&v, 3),
             ),
-            (
-                "merge hint",
-                pill(&v, merge::hint_pos(&v)),
-                {
-                    let (a, b) = merge::bottom_buttons(&v);
-                    vec![a, b]
-                },
-            ),
+            ("merge hint", pill(&v, merge::hint_pos(&v)), {
+                let (a, b) = merge::bottom_buttons(&v);
+                vec![a, b]
+            }),
         ];
         for (what, p, others) in cases {
             for o in others {
@@ -354,7 +354,12 @@ fn hints_never_cover_the_home_button_or_the_bottom_buttons() {
             }
         }
     }
-    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]
@@ -372,7 +377,12 @@ fn garden_question_clears_the_beds_button_and_home_on_every_view() {
             bad.push(format!("{name}: play region {region:?} under beds {b:?}"));
         }
     }
-    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]
@@ -392,13 +402,17 @@ fn garden_retry_popup_stays_between_the_question_and_the_bed() {
             if top < stage_bottom || bottom > region.y {
                 bad.push(format!(
                     "{name}: retry popup {top:.0}..{bottom:.0} outside {:.0}..{:.0}",
-                    stage_bottom,
-                    region.y
+                    stage_bottom, region.y
                 ));
             }
         }
     }
-    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]
@@ -413,12 +427,19 @@ fn long_results_lines_fit_the_sheet_on_every_view() {
     for (name, v) in test_views() {
         for line in lines {
             let r = results_layout(&v, "Nice try!", line, &["Try again", "Levels"], 5, true);
-            if let Err(e) = check_sheet_text(&v, dpr_of(name), &format!("{name} {line:?}"), &r.sheet) {
+            if let Err(e) =
+                check_sheet_text(&v, dpr_of(name), &format!("{name} {line:?}"), &r.sheet)
+            {
                 bad.push(e);
             }
         }
     }
-    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]
@@ -441,7 +462,12 @@ fn the_2048_board_clears_the_hint_and_buttons_on_every_view() {
             bad.push(format!("{name}: board {board:?} under home"));
         }
     }
-    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]
@@ -452,18 +478,37 @@ fn level_pickers_start_below_their_ribbon_on_every_view() {
         let h = helix::select_ribbon_bottom(&v);
         let mut check = |what: &str, top: f32, floor: f32| {
             if top < floor - 6.0 {
-                bad.push(format!("{name}: {what} starts at {top:.0}, ribbon ends at {floor:.0}"));
+                bad.push(format!(
+                    "{name}: {what} starts at {top:.0}, ribbon ends at {floor:.0}"
+                ));
             }
         };
         let top_of = |cells: &[Rect]| cells.iter().map(|r| r.y).fold(f32::MAX, f32::min);
         let hl = helix::select_layout(&v);
         check("helix picker", top_of(&hl.cells), h);
-        check("ballsort picker", top_of(&ballsort::select_layout(&v).cells), h);
+        check(
+            "ballsort picker",
+            top_of(&ballsort::select_layout(&v).cells),
+            h,
+        );
         check("stack picker", top_of(&stack::picker_layout(&v)), h);
-        check("memory picker", top_of(&memory::Memory::tiles(&v)), memory::Memory::title_bottom(&v));
-        check("garden picker", top_of(&garden::bed_tiles(&v)), garden::beds_ribbon_bottom(&v));
+        check(
+            "memory picker",
+            top_of(&memory::Memory::tiles(&v)),
+            memory::Memory::title_bottom(&v),
+        );
+        check(
+            "garden picker",
+            top_of(&garden::bed_tiles(&v)),
+            garden::beds_ribbon_bottom(&v),
+        );
     }
-    assert!(bad.is_empty(), "{} problems:\n{}", bad.len(), bad.join("\n"));
+    assert!(
+        bad.is_empty(),
+        "{} problems:\n{}",
+        bad.len(),
+        bad.join("\n")
+    );
 }
 
 #[test]
