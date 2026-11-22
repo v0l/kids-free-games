@@ -66,7 +66,8 @@ const DROPPED: &[&str] = &[
     "beans", "jeans", "shorts", "shower", "trash", "chimp", "church", "branch", "bunch", "thumb",
     "father", "whisk", "shrimp", "squid", "quilt", "sponge", "chain", "chalk", "cherry", "brush",
     "clock", "jacket", "pocket", "ticket", "bucket", "chunk", "tennis", "carpet", "bridge",
-    "sunset", "photo", "stove", "shell", "shelf", "swing", "string",
+    "sunset", "photo", "stove", "shell", "shelf", "swing", "string", "bow", "ice", "oil",
+    "fly", "tie", "toy", "zoo", "tea",
 ];
 
 fn dictionary() -> &'static std::collections::HashSet<&'static str> {
@@ -858,6 +859,13 @@ mod tests {
             for w in DROPPED {
                 assert!(!pool(l).contains(w), "{w}");
             }
+        }
+    }
+
+    #[test]
+    fn the_three_letter_levels_keep_forty_words() {
+        for l in 0..3 {
+            assert!(pool(l).len() >= 40, "level {l}: {}", pool(l).len());
         }
     }
 
