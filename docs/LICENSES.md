@@ -26,7 +26,7 @@ cargo metadata --format-version 1 --filter-platform aarch64-linux-android | pyth
 | Font Fredoka SemiBold (`assets/Fredoka-SemiBold.ttf`) | Google Fonts | SIL Open Font License 1.1 (`assets/OFL.txt`) | Yes; OFL fonts may ship with GPL software, the font keeps its own licence |
 | Bot brains (`assets/brains/*.kgb`) | Trained in-house (`crates/core/src/brain`, `tools/rl`) | Our own work | Yes |
 | Hero, props, road, buildings (`assets/models/*.gcad`) | Modelled in-house in gcad | Our own work | Yes |
-| Hero animation clips (`art/3d/hero/motion.gcad`, from `art/3d/motion/bvh/*.bvh`) | Generated with NVIDIA Kimodo (`kimodo-soma-rp-v1.2`, code Apache-2.0, model NVIDIA Open Model License), retargeted by `art/3d/hero/retarget.py` | The model licence says NVIDIA claims no ownership of outputs; no notice is required for shipping outputs (only for redistributing the model). Not Mixamo or captured data | Yes |
+| Hero animation clips (`art/3d/hero/motion.gcad`, from `art/3d/motion/bvh/*.bvh`) | Generated with NVIDIA Kimodo (`kimodo-soma-rp-v1.2`, code Apache-2.0, model NVIDIA Open Model License), retargeted by gcad's `tools/bvh-retarget` | The model licence says NVIDIA claims no ownership of outputs; no notice is required for shipping outputs (only for redistributing the model). Not Mixamo or captured data | Yes |
 | Old Hunyuan3D-2 hero and props (`git log` before 2026-11-06) | Tencent Hunyuan 3D 2.0 Community License: excludes the EU, UK and South Korea, needs a NOTICE file for distribution | Not shipped any more: every model was rebuilt in gcad. `art/3d/props.py`, `art/3d/prop_build.py` and `art/3d/hero/build.py` are the old pipeline, kept for history | n/a |
 
 Things for the owner to decide (not resolved here):
