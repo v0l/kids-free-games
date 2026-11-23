@@ -12,6 +12,10 @@ mesh-shell = []
 name = "shell_text"
 required-features = ["mesh-shell"]
 
+[[example]]
+name = "shell_old"
+required-features = ["mesh-shell"]
+
 [dependencies]
 fontdue = "0.9"
 glam.workspace = true
