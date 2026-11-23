@@ -1,6 +1,8 @@
 pub mod layout;
 pub mod nav;
 pub mod run;
+#[cfg(feature = "mesh-shell")]
+pub mod shell;
 pub mod sim;
 
 use crate::engine::*;

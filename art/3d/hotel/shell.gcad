@@ -1,0 +1,27 @@
+units mm
+level L0 0 "Ground"
+level L1 1200 "Walls"
+wall_type wall block:240
+building "shell"
+lobbyl: wall -6000,8000 -6000,0 type=wall base=L0 top=L1 justify=centre
+lobbyr: wall 6000,0 6000,8000 type=wall base=L0 top=L1 justify=centre
+sidel: door on=lobbyl at=4000 w=1400 h=1100
+sider: door on=lobbyr at=4000 w=1400 h=1100
+frontl: wall -6000,8000 -1600,8000 type=wall base=L0 top=L1 justify=centre
+frontr: wall 1600,8000 6000,8000 type=wall base=L0 top=L1 justify=centre
+backl: wall -6000,0 -1600,0 type=wall base=L0 top=L1 justify=centre
+backr: wall 1600,0 6000,0 type=wall base=L0 top=L1 justify=centre
+wing1l: wall -6000,0 -6000,-12000 type=wall base=L0 top=L1 justify=centre
+wing1r: wall 6000,0 6000,-12000 type=wall base=L0 top=L1 justify=centre
+end1: wall -6000,-12000 -1600,-12000 type=wall base=L0 top=L1 justify=centre
+end2: wall 1600,-12000 6000,-12000 type=wall base=L0 top=L1 justify=centre
+mid1: wall -6000,-6000 -1600,-6000 type=wall base=L0 top=L1 justify=centre
+mid2: wall 1600,-6000 6000,-6000 type=wall base=L0 top=L1 justify=centre
+d1: wall -1600,0 -1600,-6000 type=wall base=L0 top=L1 justify=centre
+d2: wall 1600,0 1600,-6000 type=wall base=L0 top=L1 justify=centre
+d3: wall -1600,-6000 -1600,-12000 type=wall base=L0 top=L1 justify=centre
+d4: wall 1600,-6000 1600,-12000 type=wall base=L0 top=L1 justify=centre
+door1: door on=d1 at=3000 w=1400 h=1100
+door2: door on=d2 at=3000 w=1400 h=1100
+door3: door on=d3 at=3000 w=1400 h=1100
+door4: door on=d4 at=3000 w=1400 h=1100
