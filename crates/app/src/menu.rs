@@ -25,6 +25,8 @@ pub const TITLE: &str = "Learn and Play Kids Games";
 pub const LABEL_H: f32 = 46.0;
 pub const SCROLL_ROOM: f32 = 1.3;
 pub const TILE_MM: f32 = 22.0;
+const PHONE_TILE_MM: f32 = 16.0;
+const PHONE_MAX_MM: f32 = 100.0;
 
 pub fn mute_rect(view: &View) -> Rect {
     view.top_right(0)
@@ -98,16 +100,30 @@ pub fn layout(view: &View, kinds: &[Kind]) -> Layout {
     let top = header(view).bottom + pad * 0.5;
     let secs = sections(kinds);
     let label_space = secs.len() as f32 * label_h(view);
-    let min_tile = view.from_mm(TILE_MM).max(view.short() * 0.16);
+    let phone = view.portrait() && view.to_mm(view.w) < PHONE_MAX_MM;
+    let min_tile = if phone {
+        view.from_mm(PHONE_TILE_MM).max(44.0)
+    } else {
+        view.from_mm(TILE_MM).max(view.short() * 0.16)
+    };
     let by_w = |cols: usize| (view.w - pad * (cols as f32 + 1.0)) / cols as f32;
     let fit = |cols: usize| {
+        if phone {
+            return by_w(cols);
+        }
         let rows: usize = secs.iter().map(|(_, n)| n.div_ceil(cols)).sum();
         let by_h = ((view.h * SCROLL_ROOM - top - label_space - pad) / rows as f32 - pad) / 1.18;
         by_w(cols).min(by_h.max(min_tile))
     };
-    let cols = (2..=6)
+    let cols = (2..=if phone { 3 } else { 6 })
         .filter(|c| *c == 2 || by_w(*c) >= min_tile)
-        .max_by(|a, b| fit(*a).total_cmp(&fit(*b)))
+        .max_by(|a, b| {
+            if phone {
+                a.cmp(b)
+            } else {
+                fit(*a).total_cmp(&fit(*b))
+            }
+        })
         .unwrap();
     let tw = fit(cols);
     let th = tw * 1.18;
@@ -192,7 +208,8 @@ impl Default for App {
 
 impl App {
     pub fn new() -> Self {
-        let entries = games::all();
+        let mut entries = games::all();
+        entries.sort_by_key(|e| e.info.kind != Kind::Learn);
         let n = entries.len();
         Self {
             entries,
@@ -917,7 +934,7 @@ fn draw_tile(pen: &mut Pen, r: Rect, e: &Entry, shine: Option<f32>) {
             "Learn to unlock",
             c.x,
             ir.y + ir.h - u * 1.2,
-            (ir.w * 0.13).min(26.0),
+            (ir.w * 0.13).min(26.0).min(ir.w * 0.84 / measure("Learn to unlock", 10.0) * 10.0),
             WHITE,
             Color::from_rgba(50, 15, 80, 255),
         );
@@ -1114,13 +1131,64 @@ mod tests {
             let lay = app.layout(&v);
             assert_eq!(
                 lay.labels.iter().map(|l| l.1).collect::<Vec<_>>(),
-                vec![Kind::Arcade, Kind::Learn]
+                vec![Kind::Learn, Kind::Arcade]
             );
-            let learn = lay.labels[1].0;
+            let play = lay.labels[1].0;
             for (r, e) in lay.tiles.iter().zip(&app.entries) {
                 match e.info.kind {
-                    Kind::Arcade => assert!(r.y + r.h <= learn.y),
-                    Kind::Learn => assert!(r.y >= learn.y + learn.h),
+                    Kind::Learn => assert!(r.y + r.h <= play.y),
+                    Kind::Arcade => assert!(r.y >= play.y + play.h),
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn learn_tiles_come_before_play_tiles_on_every_screen() {
+        for v in [
+            View::ipad_landscape(),
+            View::ipad_portrait(),
+            View::fit(390.0, 844.0),
+            kg_core::sizing::pixel_9_pro_xl(),
+        ] {
+            let app = App::new();
+            let first_play = app
+                .entries
+                .iter()
+                .position(|e| e.info.kind == Kind::Arcade)
+                .unwrap();
+            assert!(app.entries[..first_play]
+                .iter()
+                .all(|e| e.info.kind == Kind::Learn));
+            let tiles = app.layout(&v).tiles;
+            assert!(tiles[..first_play]
+                .iter()
+                .all(|l| tiles[first_play..].iter().all(|p| l.y < p.y)));
+        }
+    }
+
+    #[test]
+    fn phones_get_three_columns_with_big_safe_tiles() {
+        for (v, cols) in [
+            (kg_core::sizing::pixel_9_pro_xl(), 3),
+            (View::fit(390.0, 844.0), 3),
+            (View::fit(360.0, 800.0), 3),
+            (View::fit(320.0, 640.0), 2),
+        ] {
+            let tiles = App::new().layout(&v).tiles;
+            let first_row = tiles.iter().filter(|t| t.y == tiles[0].y).count();
+            assert_eq!(first_row, cols, "{}x{}", v.w, v.h);
+            for (i, a) in tiles.iter().enumerate() {
+                assert!(a.w >= 44.0 && a.w >= v.from_mm(9.0));
+                assert!(a.x >= 0.0 && a.x + a.w <= v.w);
+                for b in &tiles[i + 1..] {
+                    assert!(
+                        a.x + a.w <= b.x
+                            || b.x + b.w <= a.x
+                            || a.y + a.h <= b.y
+                            || b.y + b.h <= a.y,
+                        "{a:?} {b:?}"
+                    );
                 }
             }
         }
@@ -1223,7 +1291,8 @@ mod tests {
     }
 
     fn app_index(key: &str) -> usize {
-        crate::games::all()
+        App::new()
+            .entries
             .iter()
             .position(|e| e.info.key == key)
             .unwrap()
@@ -1375,7 +1444,12 @@ mod tests {
         let mut app = menu();
         app.update(&Input::default(), &v, 1.0 / 60.0);
         assert_eq!(sfx::wanted_music(), Some(sfx::Mood::Menu));
-        app.open(0);
+        let i = app
+            .entries
+            .iter()
+            .position(|e| e.info.kind == Kind::Arcade && e.ready())
+            .unwrap();
+        app.open(i);
         app.update(&Input::default(), &v, 1.0 / 60.0);
         assert_eq!(sfx::wanted_music(), Some(sfx::Mood::Arcade));
     }
